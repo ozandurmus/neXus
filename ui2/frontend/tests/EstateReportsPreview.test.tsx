@@ -1,12 +1,13 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   generateReport,
   getReportCatalogue,
+  getReportRun,
   listReportRuns,
   previewReport,
   type ReportCatalogue,
-  type ReportDocumentView,
+  type ReportRunView,
 } from "../src/auth/adminApi";
 import { EstateReportsScreen } from "../src/estate/EstateReportsScreen";
 
@@ -15,6 +16,7 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => {
   return {
     ...actual,
     getReportCatalogue: vi.fn(),
+    getReportRun: vi.fn(),
     listReportRuns: vi.fn(),
     previewReport: vi.fn(),
     generateReport: vi.fn(),
@@ -25,7 +27,7 @@ const CATALOGUE: ReportCatalogue = {
   templates: [
     {
       template_id: "TPL-SYNTH-01",
-      title: "Synthetic estate summary",
+      title: "FW-TANGO-04 readiness summary",
       audience: "Operations",
       question: "Is the synthetic estate healthy?",
       formats: ["PDF", "CSV"],
@@ -34,6 +36,15 @@ const CATALOGUE: ReportCatalogue = {
     },
     {
       template_id: "TPL-SYNTH-02",
+      title: "FW-JULIET-06 backup posture",
+      audience: "Resilience",
+      question: "Are synthetic backups current?",
+      formats: ["PDF"],
+      framework_parameter: false,
+      missing_reads: [],
+    },
+    {
+      template_id: "TPL-SYNTH-03",
       title: "Synthetic refused pack",
       audience: "Audit",
       question: "Who may read this?",
@@ -47,98 +58,87 @@ const CATALOGUE: ReportCatalogue = {
   retention_days: 7,
 };
 
-const DOC: ReportDocumentView = {
+const SYNTH_RUN: ReportRunView = {
+  run_id: "run-tango-04",
   template_id: "TPL-SYNTH-01",
-  title: "Synthetic estate summary",
-  audience: "Operations",
-  question: "Is the synthetic estate healthy?",
-  generated_at: new Date().toISOString(),
+  title: "FW-TANGO-04 readiness summary",
+  state: "SUCCEEDED",
   projection: "MASKED",
+  format: "PDF",
   parameters: {},
-  data_as_of: [
-    {
-      plane: "SYNTH_PLANE",
-      newest: new Date(Date.now() - 5 * 60_000).toISOString(),
-      oldest: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-      covered: 2,
-      total: 2,
-      stale: 0,
-      unit: "devices",
-    },
-  ],
-  kpis: [],
-  notices: [],
-  sections: [],
-} as unknown as ReportDocumentView;
+  data_as_of: { planes: [] },
+  plaintext_bytes: 128,
+  error_code: null,
+  requested_at: "2026-11-22T10:00:00.000Z",
+  finished_at: "2026-11-22T10:01:00.000Z",
+  expires_at: "2026-11-29T10:00:00.000Z",
+  downloadable: true,
+  mine: true,
+};
 
-function bootScreen() {
+function bootScreen(runs: readonly ReportRunView[] = []) {
   vi.mocked(getReportCatalogue).mockResolvedValue(CATALOGUE);
-  vi.mocked(listReportRuns).mockResolvedValue({ runs: [], permissions: {} as never });
+  vi.mocked(listReportRuns).mockResolvedValue({ runs: [...runs], permissions: {} as never });
+  vi.mocked(getReportRun).mockResolvedValue(SYNTH_RUN);
   render(<EstateReportsScreen />);
   return screen.findByText("Templates");
 }
 
-describe("Estate reports preview", () => {
+describe("Estate reports preview link to standard view", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("Preview calls previewReport once with the template request and renders the document", async () => {
-    vi.mocked(previewReport).mockResolvedValue(DOC);
-    await bootScreen();
-
-    const card = screen.getByText("Synthetic estate summary", { selector: "div" }).closest("[data-report-template]") as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Preview Synthetic estate summary" }));
-
-    await waitFor(() => expect(screen.getByText("TPL-SYNTH-01 · Synthetic estate summary", { selector: "h5" })).toBeTruthy());
-    expect(previewReport).toHaveBeenCalledTimes(1);
-    const [request] = vi.mocked(previewReport).mock.calls[0];
-    expect(request).toMatchObject({ template_id: "TPL-SYNTH-01", projection: "MASKED", framework: "ALL" });
-    expect(request.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(request.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(document.querySelector("[data-preview-state='ok']")).not.toBeNull();
-    expect(screen.getByText("Read-only: the document is built from stored evidence. Nothing is saved, generated or downloaded.")).toBeTruthy();
+  afterEach(() => {
+    cleanup();
   });
 
-  it("a failed preview renders a failure message, not an empty document", async () => {
-    vi.mocked(previewReport).mockRejectedValue({ status: 500, body: { reason: "SYNTH_BACKEND_DOWN" } });
+  it("links each available template row to the standard view with standard=1 and makes no previewReport call", async () => {
     await bootScreen();
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview Synthetic estate summary" }));
+    for (const templateId of ["TPL-SYNTH-01", "TPL-SYNTH-02"]) {
+      const card = document.querySelector(`[data-report-template='${templateId}']`) as HTMLElement;
+      expect(card).not.toBeNull();
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("The preview for TPL-SYNTH-01 failed: SYNTH_BACKEND_DOWN");
-    expect(alert.textContent).toContain("No document is shown.");
-    expect(document.querySelector("[data-report-document]")).toBeNull();
-    expect(document.querySelector("[data-preview-state='ok']")).toBeNull();
-  });
+      const previewLink = within(card).getByRole("link", { name: "Preview in standard view" });
+      expect(previewLink.getAttribute("href")).toBe("?screen=reports&standard=1");
+      expect(previewLink.getAttribute("href")).toContain("standard=1");
 
-  it("Preview issues no generateReport call and creates no run", async () => {
-    vi.mocked(previewReport).mockResolvedValue(DOC);
-    await bootScreen();
+      const generateLink = within(card).getByRole("link", { name: "Generate in standard Reports" });
+      expect(generateLink.getAttribute("href")).toBe("?screen=reports&standard=1");
+      expect(generateLink.getAttribute("href")).toContain("standard=1");
+    }
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview Synthetic estate summary" }));
-    await screen.findByText("TPL-SYNTH-01 · Synthetic estate summary", { selector: "h5" });
-
+    expect(previewReport).not.toHaveBeenCalled();
     expect(generateReport).not.toHaveBeenCalled();
-    expect(previewReport).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("[data-preview-state]")).toBeNull();
   });
 
-  it("the standard view link carries standard=1", async () => {
-    vi.mocked(previewReport).mockResolvedValue(DOC);
-    await bootScreen();
+  it("contains no Preview button and no button that calls a POST", async () => {
+    await bootScreen([SYNTH_RUN]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview Synthetic estate summary" }));
-    await screen.findByText("TPL-SYNTH-01 · Synthetic estate summary", { selector: "h5" });
+    expect(screen.queryByRole("button", { name: /Preview/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Generate/i })).toBeNull();
 
-    const link = screen.getByRole("link", { name: "Open in standard view" });
-    expect(link.getAttribute("href")).toContain("standard=1");
-    expect(link.getAttribute("href")).toContain("screen=reports");
+    for (const card of Array.from(document.querySelectorAll("[data-report-template]"))) {
+      expect(card.querySelectorAll("button")).toHaveLength(0);
+    }
+
+    for (const button of screen.queryAllByRole("button")) {
+      fireEvent.click(button);
+    }
+    await waitFor(() => expect(getReportRun).toHaveBeenCalledTimes(1));
+
+    expect(previewReport).not.toHaveBeenCalled();
+    expect(generateReport).not.toHaveBeenCalled();
   });
 
-  it("a refused template offers no Preview action", async () => {
+  it("a refused template offers no preview or generate link or button", async () => {
     await bootScreen();
-    const refused = document.querySelector("[data-report-template='TPL-SYNTH-02']") as HTMLElement;
-    expect(within(refused).queryByRole("button", { name: /Preview/ })).toBeNull();
+    const refused = document.querySelector("[data-report-template='TPL-SYNTH-03']") as HTMLElement;
+    expect(refused).not.toBeNull();
+    expect(within(refused).queryByRole("link", { name: /Preview|Generate/i })).toBeNull();
+    expect(within(refused).queryByRole("button")).toBeNull();
+    expect(previewReport).not.toHaveBeenCalled();
   });
 });

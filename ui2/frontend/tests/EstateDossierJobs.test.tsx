@@ -7,6 +7,7 @@ import {
   DOSSIER_JOBS_CAP,
   DOSSIER_JOBS_FAILED_TEXT,
   DOSSIER_JOBS_NOT_EVALUABLE_TEXT,
+  DOSSIER_JOBS_STANDARD_HREF,
 } from "../src/estate/estateDossierJobsModel";
 
 vi.mock("../src/auth/adminApi", async (importOriginal) => {
@@ -32,8 +33,8 @@ function job(n: number, overrides: Partial<JobEventView> = {}): JobEventView {
   } as JobEventView;
 }
 
-function page(items: JobEventView[], total: number): JobPageView {
-  return { items, total, page: 1, page_size: DOSSIER_JOBS_CAP };
+function page(items: JobEventView[], total?: number): JobPageView {
+  return { items, total: total as number, page: 1, page_size: DOSSIER_JOBS_CAP };
 }
 
 beforeEach(() => {
@@ -42,14 +43,15 @@ beforeEach(() => {
 
 describe("EstateDossierJobsBlock", () => {
   it("renders type and state for up to five jobs and prints the +N more remainder", async () => {
-    const six = Array.from({ length: 5 }, (_, i) => job(i + 1));
-    mockedList.mockResolvedValue(page(six, 9));
+    const five = Array.from({ length: 5 }, (_, i) => job(i + 1));
+    mockedList.mockResolvedValue(page(five, 9));
     render(<EstateDossierJobsBlock deviceId={DEVICE} clusterUnit={false} />);
     await waitFor(() => expect(screen.getByTestId("dossier-jobs")).toBeTruthy());
     expect(screen.getAllByText("CONFIG_SNAPSHOT")).toHaveLength(3);
     expect(screen.getAllByText("CERTIFICATE_READ")).toHaveLength(2);
     expect(screen.getAllByText("FAILED")).toHaveLength(3);
     expect(screen.getByTestId("dossier-jobs-more").textContent).toBe("+4 more jobs");
+    expect(screen.queryByTestId("dossier-jobs-total-unknown")).toBeNull();
     expect(mockedList).toHaveBeenCalledWith({ device_id: DEVICE, page_size: DOSSIER_JOBS_CAP });
   });
 
@@ -58,15 +60,45 @@ describe("EstateDossierJobsBlock", () => {
     render(<EstateDossierJobsBlock deviceId={DEVICE} clusterUnit={false} />);
     await waitFor(() => expect(screen.getByTestId("dossier-jobs")).toBeTruthy());
     expect(screen.queryByTestId("dossier-jobs-more")).toBeNull();
+    expect(screen.queryByTestId("dossier-jobs-total-unknown")).toBeNull();
   });
 
-  it("says the read could not be read, never No jobs, when the call is rejected", async () => {
-    mockedList.mockRejectedValue(new Error("synthetic failure"));
+  it("renders an UNKNOWN total notice instead of hiding overflow when total is omitted or non-finite", async () => {
+    const five = Array.from({ length: 5 }, (_, i) => job(i + 1));
+    mockedList.mockResolvedValue(page(five, undefined));
     render(<EstateDossierJobsBlock deviceId={DEVICE} clusterUnit={false} />);
+    await waitFor(() => expect(screen.getByTestId("dossier-jobs")).toBeTruthy());
+    const notice = screen.getByTestId("dossier-jobs-total-unknown");
+    expect(notice.textContent).toContain("UNKNOWN");
+    expect(screen.queryByTestId("dossier-jobs-more")).toBeNull();
+  });
+
+  it("renders UNKNOWN for missing or blank job_type and state", async () => {
+    mockedList.mockResolvedValue(
+      page(
+        [
+          job(1, { job_type: "" as unknown as string, state: "   " as unknown as string }),
+          job(2, { job_type: undefined as unknown as string, state: null as unknown as string }),
+        ],
+        2,
+      ),
+    );
+    render(<EstateDossierJobsBlock deviceId={DEVICE} clusterUnit={false} />);
+    await waitFor(() => expect(screen.getByTestId("dossier-jobs")).toBeTruthy());
+    expect(screen.getAllByText("UNKNOWN")).toHaveLength(4);
+  });
+
+  it("says the read could not be read with an UNKNOWN badge and a0 stamp, never No jobs or a1, when the call is rejected", async () => {
+    mockedList.mockRejectedValue(new Error("synthetic failure"));
+    const { container } = render(<EstateDossierJobsBlock deviceId={DEVICE} clusterUnit={false} />);
     await waitFor(() => expect(screen.getByTestId("dossier-jobs-failed")).toBeTruthy());
     expect(screen.getByText(/could not be read/)).toBeTruthy();
     expect(screen.queryByText(/No jobs/i)).toBeNull();
     expect(screen.queryByTestId("dossier-jobs")).toBeNull();
+    const failedBox = screen.getByTestId("dossier-jobs-failed");
+    expect(failedBox.querySelector('[data-state-badge="unk"]')).not.toBeNull();
+    expect(failedBox.querySelector('[data-evidence-stamp="a0"]')).not.toBeNull();
+    expect(container.querySelector('[data-evidence-stamp="a1"]')).toBeNull();
   });
 
   it("is not evaluable for a cluster unit and makes no listJobs call", () => {
@@ -75,11 +107,15 @@ describe("EstateDossierJobsBlock", () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
-  it("links to the standard job view carrying standard=1", async () => {
+  it("links to the unfiltered standard job log carrying standard=1 and tab=jobs without state=FAILED", async () => {
     mockedList.mockResolvedValue(page([], 0));
     render(<EstateDossierJobsBlock deviceId={DEVICE} clusterUnit={false} />);
     const link = await screen.findByText("Open job log (standard view)");
-    expect(link.closest("a")?.getAttribute("href")).toContain("standard=1");
+    const href = link.closest("a")?.getAttribute("href") ?? "";
+    expect(href).toBe(DOSSIER_JOBS_STANDARD_HREF);
+    expect(href).toContain("standard=1");
+    expect(href).toContain("tab=jobs");
+    expect(href).not.toContain("state=FAILED");
   });
 });
 
@@ -93,9 +129,35 @@ describe("buildDossierJobs", () => {
     expect(m.remainder).toBe(7);
   });
 
-  it("uses the shown row count when total is not reported", () => {
-    const m = buildDossierJobs({ ok: true, items: [job(1)] }, false);
-    expect(m.status === "ok" && m.remainder).toBe(0);
+  it("returns remainder: null when total is omitted, non-finite, or smaller than shown rows", () => {
+    const omitted = buildDossierJobs({ ok: true, items: [job(1)] }, false);
+    expect(omitted.status === "ok" && omitted.remainder).toBeNull();
+
+    const nonFinite = buildDossierJobs({ ok: true, items: [job(1)], total: Number.NaN }, false);
+    expect(nonFinite.status === "ok" && nonFinite.remainder).toBeNull();
+
+    const smaller = buildDossierJobs({ ok: true, items: [job(1), job(2)], total: 1 }, false);
+    expect(smaller.status === "ok" && smaller.remainder).toBeNull();
+  });
+
+  it("maps missing or blank job_type and state to UNKNOWN", () => {
+    const m = buildDossierJobs(
+      {
+        ok: true,
+        items: [
+          job(1, { job_type: "" as unknown as string, state: "  " as unknown as string }),
+          job(2, { job_type: undefined as unknown as string, state: null as unknown as string }),
+        ],
+        total: 2,
+      },
+      false,
+    );
+    expect(m.status).toBe("ok");
+    if (m.status !== "ok") return;
+    expect(m.rows[0].jobType).toBe("UNKNOWN");
+    expect(m.rows[0].state).toBe("UNKNOWN");
+    expect(m.rows[1].jobType).toBe("UNKNOWN");
+    expect(m.rows[1].state).toBe("UNKNOWN");
   });
 
   it("maps a failed or malformed read to failed, and a cluster unit to not evaluable", () => {
