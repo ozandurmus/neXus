@@ -98,8 +98,9 @@ def run_main(monkeypatch, capsys, mode, extra=()):
     monkeypatch.setattr(deploy, "validate_targets", lambda v: v.split())
     monkeypatch.setattr("release_snapshot.load_snapshot", lambda d: {"runtime": {}}, raising=False)
     monkeypatch.setattr(deploy, "prepare_policy_public_trust", lambda: None)
+    monkeypatch.setattr(deploy, "ownership_preflight", lambda targets, transfer, authorization: targets)
 
-    def replace(target, image, snapshot, limit=0, commit=None, authorization=None, rollback=False, defer_e2e=False):
+    def replace(target, image, snapshot, limit=0, commit=None, authorization=None, rollback=False, defer_e2e=False, **kw):
         calls.append((target, defer_e2e))
         return {"module": target, "e2e": "PASS"}
     monkeypatch.setattr(deploy, "replace", replace)
@@ -133,8 +134,9 @@ def run_rollback(monkeypatch, extra=()):
                         raising=False)
     monkeypatch.setattr(deploy, "prepare_policy_public_trust", lambda: None)
     monkeypatch.setattr(deploy, "rollback_image", lambda manifest, target: "old-" + target)
+    monkeypatch.setattr(deploy, "ownership_preflight", lambda targets, transfer, authorization: targets)
 
-    def replace(target, image, snapshot, limit=0, commit=None, authorization=None, rollback=False, defer_e2e=False):
+    def replace(target, image, snapshot, limit=0, commit=None, authorization=None, rollback=False, defer_e2e=False, **kw):
         calls.append((target, image, rollback, defer_e2e))
         return {"module": target, "e2e": "PASS"}
     monkeypatch.setattr(deploy, "replace", replace)

@@ -333,7 +333,7 @@ class AuditRedactionPolicyTest {
             // job_steps
             "job_steps.job_id", "job_steps.job_step_id", "job_steps.step_index",
             // jobs
-            "jobs.action_class", "jobs.admission_deferrals", "jobs.admission_not_before",
+            "jobs.action_class", "jobs.admission_deferrals", "jobs.admission_not_before", "jobs.admitted_window_end",
             "jobs.business_hours_ack_at", "jobs.business_hours_ack_by",
             "jobs.cancel_requested", "jobs.capability_id", "jobs.diagnostic_exit_status",
             "jobs.diagnostic_gate_id", "jobs.diagnostic_gate_revision",
@@ -342,7 +342,7 @@ class AuditRedactionPolicyTest {
             "jobs.diagnostic_viewed_by", "jobs.finished_at", "jobs.idempotency_key", "jobs.job_id",
             "jobs.job_type", "jobs.last_heartbeat_at", "jobs.lease_epoch", "jobs.lease_expires_at",
             "jobs.lease_owner_generation", "jobs.lease_worker_id", "jobs.outcome",
-            "jobs.precheck_results", "jobs.reconciliation_ref", "jobs.ssh_identity_unverified",
+            "jobs.precheck_results", "jobs.reconciliation_ref", "jobs.resume_eligible_until", "jobs.ssh_identity_unverified",
             "jobs.state", "jobs.submitted_at", "jobs.submitted_by_actor_fingerprint",
             "jobs.submitted_in_business_hours",
             "jobs.target_device_id", "jobs.target_kind", "jobs.target_ref", "jobs.terminal_reason",

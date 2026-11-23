@@ -47,6 +47,21 @@ OLD_POD_POLL_S = 2
 # rollout status plus the heartbeat/handover checks, and the e2e of the last step covers the finished release. The ship's
 # own production e2e after the deploy is unaffected. Measured 2026-11-17: about 30 s per skipped e2e, four per full ship.
 MODULE_E2E_MODES = ("each", "edges")
+# Deploy-freeze Phase 1 (PO 2026-11-23). Job types whose running jobs yield to a drain within seconds (policy before
+# every command; inventory, configuration and discovery reads at a unit boundary) or are bounded reads. While a drain
+# waits ONLY on these, the wait is capped at YIELD_WAIT_LIMIT_S instead of --wait-limit; one job of any other type in
+# flight (backup, MDS export, failover, script, diagnostics, support bundle, ...) keeps the long limit. An allowlist:
+# an unknown job type keeps the long limit.
+YIELDABLE_JOB_TYPES = {
+    "policy": POLICY_TYPES,
+    "worker": ("cp_inventory_collect", "pan_inventory_collect", "https_inventory_collect", "asa_inventory_collect",
+               "fgt_inventory_collect",
+               "cp_configuration_collect", "pan_configuration_collect", "fgt_configuration_collect",
+               "asa_configuration_collect", "proxysg_configuration_collect",
+               "cp_discovery_enumerate", "pan_discovery_enumerate", "rdw_discovery_enumerate",
+               "fmg_discovery_enumerate", "bcmc_discovery_enumerate"),
+}
+YIELD_WAIT_LIMIT_S = 900
 _print_lock = threading.Lock()
 
 
@@ -183,15 +198,79 @@ def barrier(target, generation, why=None):
     return ready
 
 
+def _exists(count_sql):
+    return "exists(" + count_sql.replace("select count(*)", "select 1", 1) + ")"
+
+
+def quarantine_sql(target, generation):
+    """SQL boolean (on the target's module_runtime_control row): a QUARANTINED admission that still holds the barrier
+    (same rule as the barrier: one whose job ended without a write does not) or any QUARANTINED task lease."""
+    conditions = dict(barrier_conditions(target, generation))
+    admissions = conditions["admissions"].replace("(state='LEASED' or (state='QUARANTINED'", "((state='QUARANTINED'", 1)
+    return "(" + _exists(admissions) + " or " + _exists(conditions["quarantined_task_leases"]) + ")"
+
+
+def only_yieldable_work_holds(target, generation):
+    """True only while the barrier is held by yield-capable jobs and nothing else (review D2): at least one job in flight,
+    every in-flight job of a YIELDABLE_JOB_TYPES type, the drain acknowledged, the owner live, no task lease (leased or
+    quarantined) and no quarantined admission. Flags only; no identity. Unreadable counts as false (long limit)."""
+    c = dict(barrier_conditions(target, generation))
+    allowed = ",".join(literal(t) for t in YIELDABLE_JOB_TYPES[target])
+    sql = ("select " + c["drain_ack"] + " and " + c["owner_live"] + " and " + _exists(c["busy_jobs"])
+           + " and not " + _exists(c["busy_jobs"] + " and j.capability_id <> all(array[" + allowed + "])")
+           + " and not " + _exists(c["task_leases"]) + " and not " + quarantine_sql(target, generation)
+           + " from module_runtime_control where module=" + literal(ROLES[target]))
+    try:
+        return query(sql) == "t"
+    except Blocked:
+        return False
+
+
+def prior_drain_requested(target):
+    """Whether the module was already drained (fenced) before this release asked; unreadable counts as yes."""
+    try:
+        return query("select drain_requested from module_runtime_control where module=" + literal(ROLES[target])) != "f"
+    except Blocked:
+        return True
+
+
+def quarantine_holds(target, generation):
+    try:
+        return query("select " + quarantine_sql(target, generation) + " from module_runtime_control where module="
+                     + literal(ROLES[target])) != "f"
+    except Blocked:
+        return True
+
+
+def yield_wait_limit(target, limit):
+    """The short wait for a yield-capable module, or None when it does not apply (no allowlist, disabled, or not shorter
+    than the long limit)."""
+    if target not in YIELDABLE_JOB_TYPES or not YIELD_WAIT_LIMIT_S or YIELD_WAIT_LIMIT_S >= limit:
+        return None
+    return YIELD_WAIT_LIMIT_S
+
+
 def wait_drain(target, generation, limit, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + limit
+    short = yield_wait_limit(target, limit)
+    yield_since = None  # When "only yield-capable work holds the barrier" was first seen without a break (review D2).
     while True:
         why = []
         if barrier(target, generation, why):
             return
         if clock() >= deadline:
-            raise Blocked("bounded drain expired; old digest and audited drain retained"
+            raise Blocked("bounded drain expired; old digest retained"
                           + ("; " + why[-1] if why else ""), continuable=True)
+        if short is not None:
+            if not only_yieldable_work_holds(target, generation):
+                yield_since = None
+            elif yield_since is None:
+                yield_since = clock()
+            elif clock() - yield_since >= short:
+                # Only yield-capable work has held the barrier for the whole short limit and did not yield: stop waiting
+                # (claims are paused while a drain waits). The caller decides whether the drain may be lifted.
+                raise Blocked("yield-capable drain did not finish within " + str(short) + " s; old digest retained"
+                              + ("; " + why[-1] if why else ""), continuable=True)
         print("Module waiting: " + target + "; generation=" + str(generation) +
               ("; " + why[-1] if why else "; barrier state unavailable"), flush=True)
         sleep(min(DRAIN_POLL_S, max(0, deadline - clock())))
@@ -205,6 +284,39 @@ def cancel_general_drain(target, generation, snapshot):
     query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
           "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null"
           " where module=" + literal(role) + " and effective_owner='general' and drain_generation=" + str(generation) + ";commit;")
+
+
+def cancel_drain(target, generation, snapshot):
+    """Undo this release's drain after a bounded wait expired, before anything was replaced or handed over: the old pod
+    keeps running and claims again at once, so a slow drain never leaves a module's collection paused. Never touches
+    generation, owner, fallback or the owner instance; a newer drain (another drain_generation) is left alone."""
+    role = ROLES[target]
+    query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
+          "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null"
+          " where module=" + literal(role) + " and drain_generation=" + str(generation) + ";commit;")
+
+
+def resume_dedicated(target, generation, snapshot):
+    """Routine image replacement of a module that already owns itself (fallback off): the new pod heartbeats, then this
+    release's drain is lifted. No generation bump and no owner/fallback change -- the barrier proved zero work and the
+    old pod is gone, and the job-validity fence also requires owner_instance = the claiming pod. Only an explicit
+    ownership transfer (handover_policy / handover_backup / reset_to_general) changes the generation."""
+    role = ROLES[target]
+    result = query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
+          "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null"
+          " where module=" + literal(role) + " and effective_owner=" + literal(role) + " and not fallback_enabled"
+          " and drain_requested and drain_generation=" + str(generation) +
+          " and owner_instance is not null and owner_heartbeat_at>now()-interval '60 seconds' returning module;commit;")
+    if role not in result.splitlines():
+        raise Blocked(target + " drain release fence or heartbeat changed")
+
+
+def fence_dedicated(target, snapshot):
+    """A routine replacement of a self-owned module failed after its new pod started. Stop new claims (a fresh drain)
+    and keep everything else: owner, fallback, generation and the running pod. The module stays on its own pod, fenced
+    and visible as a drained module, until the operator restores the previous digest with --rollback (which drains,
+    replaces and lifts the drain the same routine way). It is never handed to the general worker here."""
+    return request_drain(target, snapshot)
 
 
 def clear_drain(target, generation, snapshot):
@@ -634,12 +746,18 @@ def replace_image(target, image, sync_manifest=False):
     run("kubectl", "-n", "ui2", "patch", "deployment/ui2-worker", "--type=strategic", "-p", json.dumps(patch))
 
 
-def replace(target, image, snapshot, limit=14400, commit=None, authorization=None, rollback=False, defer_e2e=False):
+def replace(target, image, snapshot, limit=14400, commit=None, authorization=None, rollback=False, defer_e2e=False,
+            allow_transfer=True):
     """Replace one module. With `defer_e2e` the module e2e and the result line are left to the caller (a concurrent
     group runs one e2e after all of its members); the result dict is returned instead."""
-    if target in ("policy", "backup") and query("select (owner_heartbeat_at>now()-interval '60 seconds') from module_runtime_control where module='general'") != "t":
-        raise Blocked("compatible general worker bootstrap required before " + target + " cutover")
+    # Deploy-freeze Phase 1 (PO 2026-11-23): a module still on the general fallback is an ownership TRANSFER (audited
+    # handover, generation bump, recovery to general on failure); a module that already owns itself gets a ROUTINE
+    # image replacement (drain, replace, lift the drain; generation, owner and fallback untouched; never reset to general).
     fallback = target in ("policy", "backup") and query("select fallback_enabled from module_runtime_control where module=" + literal(target)) == "t"
+    if fallback and not allow_transfer:
+        raise Blocked(target + " is on the general fallback; ownership transfer needs --ownership-transfer")
+    if fallback and query("select (owner_heartbeat_at>now()-interval '60 seconds') from module_runtime_control where module='general'") != "t":
+        raise Blocked("compatible general worker bootstrap required before " + target + " cutover")
     if fallback and (not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization)):
         raise Blocked(target + " ownership transfer requires an opaque PO authorization reference")
     old = (ensure_policy(image) if target == "policy" else ensure_backup(image) if target == "backup"
@@ -667,15 +785,37 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
     # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
     if target in ROLES and not (target in ("packet-analysis", "script-runner") and old is None):
+        # Review D1: a module already fenced before this release (a failed routine release, an operator drain) stays
+        # fenced whatever happens here.
+        prior_drain = prior_drain_requested(target)
         try:
             with phase(target, "drain"):
                 generation = request_drain(target, snapshot)
                 wait_drain(target, generation, limit)
-        except Blocked:
-            if target == "backup" and generation is not None:
-                # Drain timeout while the general worker still owns backup: give claims back at once.
-                cancel_general_drain(target, generation, snapshot)
-            raise
+        except Blocked as expired:
+            if generation is None:
+                raise
+            # Drain timeout before anything changed. A ROUTINE FORWARD release gives claims back at once (a waiting
+            # drain pauses the module's collection): old digest, owner and generation stay. Never on --rollback, never
+            # over an earlier fence, never while a quarantine holds the barrier: then the drain stays (BLOCKED).
+            # Consequence (docs/operations/DEPLOY_FREEZE_PHASE1_ROLLOUT.md): the old image keeps claiming beside newer
+            # modules until the next release; acceptable only because every release's schema change is additive.
+            lift = not rollback and not prior_drain and not quarantine_holds(target, generation)
+            if lift:
+                try:
+                    if target == "backup" and fallback:
+                        cancel_general_drain(target, generation, snapshot)
+                    else:
+                        cancel_drain(target, generation, snapshot)
+                except Blocked as unavailable:
+                    print("drain release after timeout failed: " + str(unavailable), flush=True)
+                    lift = False
+            raise Blocked(str(expired) + ("; drain lifted, old owner claims again" if lift else
+                                          "; drain retained (" + ("rollback" if rollback else "earlier fence" if prior_drain
+                                                                  else "quarantine holds the barrier"
+                                                                  if quarantine_holds(target, generation)
+                                                                  else "release failed") + ")"),
+                          continuable=expired.continuable) from None
     old_pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
     old_uids = {pod["metadata"]["uid"] for pod in old_pods["items"]}
     try:
@@ -705,7 +845,9 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
             run("kubectl", "-n", "ui2", "rollout", "status", "deployment/ui2-" + target, "--timeout=600s")
             if target in ROLES:
                 wait_heartbeat(target)
-            if target == "policy":
+            if target in ("policy", "backup") and not fallback:
+                resume_dedicated(target, generation, snapshot)
+            elif target == "policy":
                 handover_policy(generation, snapshot, authorization or "snapshot-rollback")
             elif target == "backup":
                 handover_backup(generation, snapshot, authorization or "snapshot-rollback")
@@ -713,7 +855,12 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
             with phase(target, "e2e"):
                 module_e2e(commit)
     except Blocked:
-        if target in ("policy", "backup"):
+        if target in ("policy", "backup") and not fallback:
+            # Routine replacement failed: fence new claims, keep the pod, owner and generation; never reset to general.
+            fence_dedicated(target, snapshot)
+            print(target + ": routine replacement failed; ownership and generation kept, module fenced (drain "
+                  "requested); restore the previous digest with --rollback", flush=True)
+        elif target in ("policy", "backup"):
             # Fence before stopping, then recover fallback only after zero-work evidence.
             recovery = request_drain(target, snapshot)
             handed_over = target == "backup" and query(
@@ -843,7 +990,27 @@ def return_backup_to_general(snapshot, authorization):
     reset_to_general(snapshot, "backup", generation, authorization)
 
 
+def ownership_preflight(targets, transfer, authorization):
+    """Separates routine releases from ownership transfers (deploy-freeze Phase 1, PO 2026-11-23). A policy/backup
+    target still on the general fallback is an ownership transfer: without --ownership-transfer it is skipped with a
+    note (the general worker keeps running that module's jobs); with it, the transfer is the only thing this run does
+    and needs an opaque PO authorization reference. Returns the targets to roll out."""
+    on_fallback = [t for t in ("policy", "backup") if t in targets
+                   and query("select fallback_enabled from module_runtime_control where module=" + literal(t)) == "t"]
+    if transfer:
+        if not on_fallback or set(targets) != set(on_fallback):
+            raise Blocked("--ownership-transfer accepts only policy/backup targets that are still on the general fallback")
+        if not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization):
+            raise Blocked("ownership transfer requires an opaque PO authorization reference")
+        return targets
+    for target in on_fallback:
+        print(target + ": still on the general fallback; routine release skips it (ownership transfer is a separate, "
+              "audited step: --ownership-transfer --authorization-ref)", flush=True)
+    return [t for t in targets if t not in on_fallback]
+
+
 def main():
+    global YIELD_WAIT_LIMIT_S
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument("--targets")
@@ -868,6 +1035,14 @@ def main():
     parser.add_argument("--return-policy-to-general", action="store_true")
     parser.add_argument("--return-backup-to-general", action="store_true")
     parser.add_argument("--authorization-ref")
+    parser.add_argument("--ownership-transfer", action="store_true",
+                        help="explicit, audited cutover of policy/backup from the general fallback to its own pod "
+                             "(needs --authorization-ref; only those modules may be targets). Without it a module still "
+                             "on the fallback is skipped: a routine release never changes ownership")
+    parser.add_argument("--yield-wait-limit", type=int,
+                        default=int(os.environ.get("NEXUS_YIELD_WAIT_LIMIT_S") or YIELD_WAIT_LIMIT_S),
+                        help="drain wait (s) for worker/policy while only yield-capable jobs hold the barrier; "
+                             "0 disables (then --wait-limit applies throughout)")
     parser.add_argument("--snapshot")
     parser.add_argument("--wait-limit", type=int, default=14400)
     args = parser.parse_args()
@@ -917,6 +1092,13 @@ def main():
                 raise Blocked("compatible snapshot required for fallback")
             return_backup_to_general(directory.name, args.authorization_ref)
             return
+        YIELD_WAIT_LIMIT_S = max(0, args.yield_wait_limit)
+        if args.ownership_transfer and args.rollback:
+            raise Blocked("--ownership-transfer cannot be combined with --rollback")
+        targets = ownership_preflight(targets, args.ownership_transfer, args.authorization_ref)
+        if not targets:
+            print("Nothing to roll out: every selected target is still on the general fallback.", flush=True)
+            return
         if "policy" in targets or "backup" in targets:
             prepare_policy_public_trust()
         failures = []
@@ -950,10 +1132,11 @@ def main():
             try:
                 if run_e2e:
                     replace(target, image_for(target), directory.name, args.wait_limit, args.commit,
-                            args.authorization_ref, rollback=args.rollback)
+                            args.authorization_ref, rollback=args.rollback, allow_transfer=args.ownership_transfer)
                 else:
                     result = replace(target, image_for(target), directory.name, args.wait_limit, args.commit,
-                                     args.authorization_ref, rollback=args.rollback, defer_e2e=True)
+                                     args.authorization_ref, rollback=args.rollback, defer_e2e=True,
+                                     allow_transfer=args.ownership_transfer)
                     result["e2e"] = "BATCHED"
                     print(json.dumps(result), flush=True)
             except Blocked as error:

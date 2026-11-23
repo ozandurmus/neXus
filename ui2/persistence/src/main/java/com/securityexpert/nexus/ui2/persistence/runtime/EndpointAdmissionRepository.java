@@ -145,9 +145,25 @@ public final class EndpointAdmissionRepository {
         return transaction("endpoint_owner_check", db -> validOwner(db, owner, true));
     }
 
+    /**
+     * Resume grace after a defer (V263): thirty minutes past the later of the admitted window's end and now, never more
+     * than two hours past the admitted window's end (PO 2026-11-23: a scheduled backup admitted 02:00-02:59 can never
+     * be claimed after 05:00, and a polling job never reaches the next six-hour slot). The claim statement keeps the
+     * admitted window end only for a claim made through an active grace, so a later in-window claim starts afresh. A job claimed without a window (an administrator's bypass job,
+     * claimable at any time anyway) has no admitted window end and gets no grace value.
+     */
+    static final String RESUME_ELIGIBLE_UNTIL_SQL = "case when admitted_window_end is null then null "
+        + "else least(greatest(admitted_window_end, now()) + interval '30 minutes', "
+        + "admitted_window_end + interval '2 hours') end";
+
+    /**
+     * Returns a claimed job that crossed no mutation boundary to REQUESTED (drain yield or admission contention) without
+     * consuming retry budget; it stays claimable after its window closes for the bounded resume grace.
+     */
     public void defer(String job, long epoch) {
         transaction("admission_wait", db -> {
             int deferred = db.execute("update jobs set state='REQUESTED',admission_not_before=now()+interval '10 seconds',admission_deferrals=admission_deferrals+1,"
+                + "resume_eligible_until=" + RESUME_ELIGIBLE_UNTIL_SQL + ","
                 + "lease_worker_id=null,lease_expires_at=null where job_id={0} and lease_epoch={1} "
                 + "and state in ('CLAIMED','EXECUTING') and not exists(select 1 from job_step_attempt a "
                 + "where a.job_id=jobs.job_id and a.lease_epoch=jobs.lease_epoch and a.mutation_boundary_crossed)", job, epoch);

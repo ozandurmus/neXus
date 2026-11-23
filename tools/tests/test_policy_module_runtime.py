@@ -37,21 +37,28 @@ def test_selected_modules_are_independent_and_never_wait_on_policy_for_general(m
     assert "ui2_job_module(j.capability_id)='backup'" not in queries[-1]
 
 
-def test_bounded_wait_retains_old_digest_and_the_drain(monkeypatch):
+def test_bounded_wait_retains_old_digest_and_gives_claims_back(monkeypatch):
     now, calls = [0], []
     monkeypatch.setattr(deploy, "barrier", lambda *args: False)
     def sleep(seconds):
         now[0] += seconds
     with pytest.raises(deploy.Blocked, match="old digest"):
         deploy.wait_drain("policy", 1, 20, sleep=sleep, clock=lambda: now[0])
-    monkeypatch.setattr(deploy, "query", lambda sql: "f" if "fallback_enabled" in sql else "t")
+    monkeypatch.setattr(deploy, "query", lambda sql: "f" if "fallback_enabled" in sql or sql.startswith("select drain_requested")
+                        or sql.startswith("select (exists") else "t")
     monkeypatch.setattr(deploy, "run", lambda *args: calls.append(args) or OLD)
     monkeypatch.setattr(deploy, "ensure_policy", lambda *args: OLD)
     monkeypatch.setattr(deploy, "request_drain", lambda *args: 1)
     monkeypatch.setattr(deploy, "wait_drain", lambda *args: (_ for _ in ()).throw(deploy.Blocked("bounded drain")))
+    lifted = []
+    monkeypatch.setattr(deploy, "cancel_drain", lambda *args: lifted.append(args))
+    monkeypatch.setattr(deploy, "check_synced_manifest", lambda *args: None)
     with pytest.raises(deploy.Blocked):
         deploy.replace("policy", IMAGE, "synthetic-snapshot", 20)
     assert not any("set" in args or "scale" in args for args in calls)
+    # Deploy-freeze Phase 1: the audited drain is lifted at once (MODULE_POD_RUNTIME_CONTRACT.md section 3), so the
+    # old owner resumes claiming; owner and generation are untouched.
+    assert lifted == [("policy", 1, "synthetic-snapshot")]
 
 
 @pytest.mark.parametrize("target,role", [("worker", "general"), ("policy", "policy")])
@@ -87,7 +94,9 @@ def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monk
     monkeypatch.setattr(deploy, "ensure_policy", lambda *args: OLD)
     monkeypatch.setattr(deploy, "kubectl_diff", lambda manifest: False)
     monkeypatch.setattr(deploy, "wait_heartbeat", lambda *args: events.append(("heartbeat",)))
-    monkeypatch.setattr(deploy, "handover_policy", lambda *args: events.append(("handover",)))
+    monkeypatch.setattr(deploy, "handover_policy", lambda *args: events.append(("transfer",)))
+    # Fallback off: a routine replacement lifts the drain without a handover (deploy-freeze Phase 1).
+    monkeypatch.setattr(deploy, "resume_dedicated", lambda *args: events.append(("handover",)))
     monkeypatch.setattr(deploy, "request_drain", lambda *args: events.append(("drain",)) or 7)
     monkeypatch.setattr(deploy, "wait_drain", lambda *args: events.append(("barrier",)))
     original_query = deploy.query
@@ -101,6 +110,7 @@ def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monk
     assert any("pods" in event for event in events[changed + 1:cleared])
     assert all("ui2-worker" not in event for event in events)
     assert events.index(("heartbeat",)) < events.index(("handover",)) < events.index(("e2e",))
+    assert ("transfer",) not in events
 
 
 def test_rollback_requires_a_compatible_snapshot_and_uses_its_exact_module_digest():

@@ -13,21 +13,14 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
   getProjectPlan,
-  type ApiError,
   type ProjectPlanBacklogItem,
   type ProjectPlanBuild,
   type ProjectPlanFeature,
   type ProjectPlanTrack,
   type ProjectPlanView,
 } from "../auth/adminApi";
+import { describeApiError } from "../shell/apiErrorText";
 import type { Tone } from "../shell/tone";
-
-function describeApiError(err: unknown): string {
-  const apiErr = err as Partial<ApiError>;
-  const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
-  if (serverError) return serverError;
-  return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
-}
 
 // Automated and real-environment validation remain open until delivery is closed.
 const TERMINAL_BACKLOG_STATUSES = new Set(["done", "complete", "complete_with_followup", "deferred"]);

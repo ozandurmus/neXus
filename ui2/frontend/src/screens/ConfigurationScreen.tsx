@@ -10,18 +10,12 @@ import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { PLANE_COLLECT } from "../shell/actionAccess";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
+import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
+import { describeApiError } from "../shell/apiErrorText";
 import { DeviceList, deviceMatchesSearch, isDeviceLive, useListView, vendorLabel } from "./InventoryScreen";
 import { useListSearch } from "../shell/listSearch";
 import { FilterBar, FilterRow, ListSettingsMenu } from "./DeviceShared";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
-
-function describeApiError(err: unknown): string {
-  const apiErr = err as Partial<ApiError>;
-  const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
-  if (serverError) return serverError;
-  return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
-}
 
 /**
  * Design language section 2/3: the list presents operational units. Members of a cluster

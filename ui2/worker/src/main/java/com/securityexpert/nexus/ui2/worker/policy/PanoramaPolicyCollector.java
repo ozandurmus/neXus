@@ -183,6 +183,8 @@ public final class PanoramaPolicyCollector {
                     PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
                     String version = contentVersion(document, members.toString(), parents.toString());
                     observedVersion = lineageVersion(config, parents, name);
+                    // The resumed-unit check cannot move before this DG's download: its checkpoint key hashes the DG's
+                    // own XML, and descendants need that XML for inheritance (deploy-freeze Phase 1 review, 2026-11-23).
                     var resumed = repository.resumedUnit(scope, container, version);
                     if (resumed.isPresent()) {
                         var previous = checkpoint(resumed.get());

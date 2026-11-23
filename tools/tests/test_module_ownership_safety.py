@@ -264,6 +264,8 @@ def _backup_replace_harness(monkeypatch, owner, fail_at, drain_fails=False):
     def query(sql):
         if 'select effective_owner' in sql:
             return owner[0]
+        if sql.startswith('select drain_requested') or sql.startswith('select (exists'):
+            return 'f'  # no earlier fence, no quarantine (deploy-freeze Phase 1 review D1)
         return 't'
     monkeypatch.setattr(deploy, 'run', run)
     monkeypatch.setattr(deploy, 'query', query)

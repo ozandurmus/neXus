@@ -70,12 +70,22 @@ final class CpDomainReuse {
     List<PolicySnapshot> decide(String container, JsonNode root) {
         Domain domain = domains.get(container);
         domain.signal = root == null ? null : signal(root);
-        if (domain.sameRequest && domain.previous != null && domain.previous.signalJson() != null && !"[]".equals(domain.previous.snapshotsJson())) {
-            try {
-                Signal previous = domain.previous.signalJson() == null ? null : JSON.readValue(domain.previous.signalJson(), Signal.class);
-                if (previous == null || domain.signal == null || !domain.signal.equals(previous))
-                    throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE");
-            } catch (java.io.IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE"); }
+        boolean recollect = false;
+        // Finished (snapshots stored) and partial (COLLECTING, "[]") resumed domains alike: a changed signal means a re-read.
+        if (domain.sameRequest && domain.previous != null && domain.previous.signalJson() != null) {
+            Signal previous;
+            try { previous = JSON.readValue(domain.previous.signalJson(), Signal.class); }
+            catch (java.io.IOException | RuntimeException invalid) { previous = null; }
+            // Deploy-freeze Phase 1: the domain published a change (or its version is unprovable) between a drain yield and
+            // this resume. Its checkpointed evidence belongs to the old version, so it is discarded -- the domain row is
+            // rewritten below as COLLECTING with the current signal and no snapshots, and package checkpoints are keyed by
+            // the old signal so resumedPackage never returns them (saveUnit overwrites them) -- and the domain is read
+            // again in full, instead of failing the whole run with CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE.
+            if (previous == null || domain.signal == null || !domain.signal.equals(previous)) {
+                recollect = true;
+                domain.sameRequest = false;
+                domain.previous = null;
+            }
         }
         boolean changedOnly = changedOnly(container);
         domain.decision = domain.sameRequest ? "RESUMED" : request.mode() == PolicyCollectionRepository.Mode.FULL ? "READ_FULL_MODE"
@@ -108,6 +118,7 @@ final class CpDomainReuse {
             // Only a resumed request may keep partial previous evidence (e.g. a complete run with UNKNOWN parts).
             if (!domain.reused && !domain.sameRequest) domain.snapshots.clear();
         }
+        if (recollect) domain.decision = "RESUMED_SIGNAL_CHANGED_RECOLLECT";
         if (domain.reused) domain.decision = "REUSED";
         if (domain.reused) {
             save(container, domain, "REUSED", true);

@@ -178,7 +178,7 @@ public final class AuditPresentationAllowlist {
             Map.entry("job_steps", Set.of(
                     "job_id", "job_step_id", "step_index")),
             Map.entry("jobs", Set.of(
-                    "action_class", "admission_deferrals", "admission_not_before",
+                    "action_class", "admission_deferrals", "admission_not_before", "admitted_window_end",
                     "business_hours_ack_at", "business_hours_ack_by",
                     "cancel_requested", "capability_id", "diagnostic_exit_status",
                     "diagnostic_gate_id", "diagnostic_gate_revision", "diagnostic_line_count",
@@ -186,7 +186,7 @@ public final class AuditPresentationAllowlist {
                     "diagnostic_viewed_at", "diagnostic_viewed_by", "finished_at",
                     "idempotency_key", "job_id", "job_type", "last_heartbeat_at", "lease_epoch",
                     "lease_expires_at", "lease_owner_generation", "lease_worker_id", "outcome",
-                    "precheck_results", "reconciliation_ref", "ssh_identity_unverified", "state",
+                    "precheck_results", "reconciliation_ref", "resume_eligible_until", "ssh_identity_unverified", "state",
                     "submitted_at", "submitted_by_actor_fingerprint", "submitted_in_business_hours",
                     "target_device_id", "target_kind", "target_ref", "terminal_reason",
                     "window_bypass_role")),

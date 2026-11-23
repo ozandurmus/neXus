@@ -9,18 +9,12 @@ import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { navigateTo } from "../shell/urlParams";
-import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
+import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary } from "../auth/adminApi";
+import { describeApiError } from "../shell/apiErrorText";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { Ts } from "../shell/States";
 import { DeviceLifecycleLine } from "./LifecycleScreen";
-
-function describeApiError(err: unknown): string {
-  const apiErr = err as Partial<ApiError>;
-  const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
-  if (serverError) return serverError;
-  return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
-}
 
 function vendorLabel(vendorHint: string): string {
   return ({ check_point: "Check Point", palo_alto: "Palo Alto", infoblox: "Infoblox", radware: "Radware" } as Record<string, string>)[vendorHint] ?? vendorHint;
