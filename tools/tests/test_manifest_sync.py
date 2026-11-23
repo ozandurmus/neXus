@@ -72,7 +72,7 @@ def test_the_policy_manifest_is_rendered_with_the_candidate_image_and_the_finger
     assert any(v['name'] == 'hostname-fingerprint-key' for v in workload['spec']['template']['spec']['volumes'])
     assert container['resources']['limits']['memory'] == '8Gi'
     assert workload['spec']['replicas'] == 0, 'without a live count the first-release value stays'
-    assert {d['kind'] for d in yaml.safe_load_all(manifest)} == {'ServiceAccount', 'Deployment', 'NetworkPolicy'}
+    assert {d['kind'] for d in yaml.safe_load_all(manifest)} == {'PriorityClass', 'ServiceAccount', 'Deployment', 'NetworkPolicy'}
 
 
 def test_the_rendered_replica_count_is_the_live_one():
@@ -179,7 +179,7 @@ def test_the_worker_is_rendered_like_the_others_with_its_committed_env_unchanged
     # Only the image and the replica count differ from the committed file: no env is added, dropped or rewritten.
     assert container['env'] == committed['spec']['template']['spec']['containers'][0]['env']
     assert [c['name'] for c in rendered['spec']['template']['spec']['containers']] == ['worker']
-    assert {d['kind'] for d in yaml.safe_load_all(deploy.render_manifest('worker', IMAGE))} == {'Deployment'}
+    assert {d['kind'] for d in yaml.safe_load_all(deploy.render_manifest('worker', IMAGE))} == {'PriorityClass', 'Deployment'}
 
 
 def test_a_worker_release_applies_the_manifest_after_the_drain_and_not_the_runtime_patch(monkeypatch):

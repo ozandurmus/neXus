@@ -89,6 +89,28 @@ subprojects {
             lockAllConfigurations()
         }
 
+        // Container dependency layer (ui2/Containerfile, build stage): `./gradlew resolveBuildDependencies` needs only
+        // the build scripts, lockfiles and gradle/, no sources, so the image build downloads and verifies what
+        // `:service:bootJar` needs in a layer that changes only when those files change. Resolution goes through the
+        // same lockfiles and gradle/verification-metadata.xml as every build; nothing is relaxed. Only external
+        // modules are fetched: project dependencies would need their jars built, which is bootJar's job.
+        val buildConfigurations = listOf("compileClasspath", "runtimeClasspath", "annotationProcessor",
+            "productionRuntimeClasspath", "developmentOnly")
+        val resolvable = provider {
+            buildConfigurations.mapNotNull { configurations.findByName(it) }.filter { it.isCanBeResolved }
+        }
+        tasks.register("resolveBuildDependencies") {
+            group = "build setup"
+            description = "Downloads and verifies the external dependencies the main build needs (container layer)."
+            doLast {
+                resolvable.get().forEach { configuration ->
+                    configuration.incoming.artifactView {
+                        componentFilter { it is org.gradle.api.artifacts.component.ModuleComponentIdentifier }
+                    }.files.files
+                }
+            }
+        }
+
         val testSourceSet = extensions.getByType<SourceSetContainer>()["test"]
 
         // architecture-tests and integration-tests each get their own

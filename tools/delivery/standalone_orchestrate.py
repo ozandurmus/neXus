@@ -963,6 +963,7 @@ def _preview_e2e(repo: Path, commit: str) -> None:
         for line in result.stdout.splitlines():
             if (re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line)
                     or re.fullmatch(r"PREVIEW IMAGES: tree=[0-9a-f]{40} service=sha256:[0-9a-f]{64} e2e=sha256:[0-9a-f]{64}", line)
+                    or re.fullmatch(r"PREVIEW DB SOURCE: (golden|live) reason=[A-Z_]+", line)
                     or line.startswith(("PREVIEW STEP: ", "PREVIEW E2E: FAIL"))):
                 print(line, flush=True)
         if result.returncode != 0 or "PREVIEW E2E: PASS" not in result.stdout.splitlines():

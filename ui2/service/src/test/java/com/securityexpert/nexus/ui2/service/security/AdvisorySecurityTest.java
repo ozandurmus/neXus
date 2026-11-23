@@ -49,7 +49,10 @@ class AdvisorySecurityTest {
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/infoblox"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("GET /internal/advisories/paloalto"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/machine-session"));
-        assertEquals(12 + 10 + 6 + 3 + 3, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source, the three SAML handshake routes and the three script-run broker routes");
+        assertEquals(12 + 10 + 6 + 3 + 3 + 4, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source, the three SAML handshake routes, the three script-run broker routes and GET/HEAD /livez and /readyz");
+        for (String probe : List.of("GET /livez", "HEAD /livez", "GET /readyz", "HEAD /readyz")) {
+            assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains(probe), probe);
+        }
         for (String path : List.of("start", "finish", "abort")) {
             assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/script-runs/" + path), path);
         }
