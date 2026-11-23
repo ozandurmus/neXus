@@ -436,11 +436,33 @@ public final class WorkerClaimLoop {
         stopRequested = true;
     }
 
+    /** Kubelet liveness marker (WorkerHealth): ticked every iteration, busy while a claimed job runs. No DB call. */
+    private volatile com.securityexpert.nexus.ui2.worker.health.LoopBeat liveness = com.securityexpert.nexus.ui2.worker.health.LoopBeat.NONE;
+
+    public WorkerClaimLoop withLiveness(com.securityexpert.nexus.ui2.worker.health.LoopBeat beat) {
+        this.liveness = Objects.requireNonNull(beat);
+        return this;
+    }
+
     /** Runs until the thread is interrupted or {@link #requestStop()} was called, sleeping {@code pollInterval} whenever the queue was empty. */
     public void runUntilInterrupted(Duration pollInterval) {
+        try {
+            runLoop(pollInterval);
+        } finally {
+            liveness.stopped();
+        }
+    }
+
+    private void runLoop(Duration pollInterval) {
         while (!Thread.currentThread().isInterrupted() && !stopRequested) {
             try {
-                boolean claimed = claimAndExecuteOnce();
+                boolean claimed;
+                liveness.tick();
+                try {
+                    claimed = claimAndExecuteOnce();
+                } finally {
+                    liveness.idle();
+                }
                 if (!claimed) {
                     try {
                         Thread.sleep(pollInterval.toMillis());
@@ -469,6 +491,7 @@ public final class WorkerClaimLoop {
             return false;
         }
         ClaimedJob claimed = claim.get();
+        liveness.jobStarted();
         // C2 "lease, heartbeat, execute, release": the lease is renewed while the job runs. Measured
         // live 2026-09-22: a 1.4 GB Gaia backup outlived the 10-minute lease, the reconciler requeued
         // it while it was still running, a second thread started the same backup on the same device,

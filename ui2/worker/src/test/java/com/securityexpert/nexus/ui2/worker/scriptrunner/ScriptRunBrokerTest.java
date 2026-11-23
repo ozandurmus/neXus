@@ -499,6 +499,40 @@ class ScriptRunBrokerTest {
     }
 
     @Test
+    void claimLoopReportsItsProgressToTheKubeletLivenessMarker() {
+        service.bundle = bundle(JOB_ID, "sh", "sleep 100\n".getBytes(), List.of(), List.of(), 100);
+        k8s.terminal = null;
+        List<String> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        AtomicBoolean claimed = new AtomicBoolean();
+        ScriptRunnerClaimLoop[] self = new ScriptRunnerClaimLoop[1];
+        JobLeaseRepository lossy = new Leases() {
+            @Override
+            public Optional<ClaimedJob> claimNext(String workerId, List<String> ids, Duration d) {
+                if (claimed.compareAndSet(false, true)) return Optional.of(new ClaimedJob(JOB_ID, 9L));
+                self[0].requestStop();
+                return Optional.empty();
+            }
+
+            @Override
+            public boolean heartbeat(String jobId, long epoch, Duration d) {
+                return false;
+            }
+        };
+        ScriptRunJobExecutor realTime = new ScriptRunJobExecutor(lossy, attempts, service, new ScriptRunKubernetes(k8s),
+                host -> List.of(), IMAGE, null, Clock.systemUTC(), Duration.ofMillis(20), null);
+        self[0] = new ScriptRunnerClaimLoop("script_runner-t", lossy, realTime, Duration.ofSeconds(30),
+                Duration.ofMillis(20), Duration.ofMillis(10), () -> false)
+                .withLiveness(new com.securityexpert.nexus.ui2.worker.health.LoopBeat() {
+                    @Override public void tick() { events.add("tick"); }
+                    @Override public void jobStarted() { events.add("job"); }
+                    @Override public void idle() { events.add("idle"); }
+                    @Override public void stopped() { events.add("stopped"); }
+                });
+        self[0].runLoop();
+        assertEquals(List.of("tick", "job", "idle", "tick", "idle", "stopped"), events);
+    }
+
+    @Test
     void consecutiveRunsShareNothingEachGetsFreshObjectsAndLeavesNone() throws Exception {
         String second = "7a1c2d3e-0000-4000-8000-00000000abce";
         service.bundle = bundle(JOB_ID, "sh", "nohup sleep 999 &\n".getBytes(), List.of(), List.of(), 30);

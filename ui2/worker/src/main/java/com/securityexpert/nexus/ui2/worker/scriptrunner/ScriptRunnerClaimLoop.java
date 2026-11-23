@@ -103,6 +103,7 @@ public final class ScriptRunnerClaimLoop {
             return false;
         }
         ClaimedJob claimed = claimedOpt.get();
+        liveness.jobStarted();
         // A lease the broker can no longer renew kills the run (review finding 9): the executor polls this flag.
         java.util.concurrent.atomic.AtomicBoolean leaseLost = new java.util.concurrent.atomic.AtomicBoolean(false);
         AtomicReference<Instant> leaseValidUntil = new AtomicReference<>(clock.instant().plus(leaseDuration));
@@ -138,10 +139,32 @@ public final class ScriptRunnerClaimLoop {
         return true;
     }
 
+    /** Kubelet liveness marker (WorkerHealth): ticked every iteration, busy while a run is supervised. No DB call. */
+    private volatile com.securityexpert.nexus.ui2.worker.health.LoopBeat liveness = com.securityexpert.nexus.ui2.worker.health.LoopBeat.NONE;
+
+    public ScriptRunnerClaimLoop withLiveness(com.securityexpert.nexus.ui2.worker.health.LoopBeat beat) {
+        this.liveness = Objects.requireNonNull(beat);
+        return this;
+    }
+
     public void runLoop() {
+        try {
+            loop();
+        } finally {
+            liveness.stopped();
+        }
+    }
+
+    private void loop() {
         while (running) {
             try {
-                boolean claimed = runSingleIteration();
+                boolean claimed;
+                liveness.tick();
+                try {
+                    claimed = runSingleIteration();
+                } finally {
+                    liveness.idle();
+                }
                 if (!claimed && running) {
                     Thread.sleep(idlePollInterval.toMillis());
                 }

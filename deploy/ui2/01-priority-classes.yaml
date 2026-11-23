@@ -1,0 +1,60 @@
+# Pod hygiene (2026-11-23): neXus's own PriorityClasses, replacing system-cluster-critical on the application pods.
+#
+# system-cluster-critical (2000000000) is reserved for cluster add-ons; with it, any neXus pod could preempt DNS, the
+# ingress controller or the image registry. These classes sit far below every system class (user classes may not
+# exceed 1000000000) and keep one order inside the application:
+#
+#   ui2-db      1000000  the database: everything else needs it
+#   ui2-core     900000  the service and its HTTP microservices (configuration, compliance)
+#   ui2-worker   800000  the device-job workers (general worker, backup, policy, script runner)
+#   ui2-low        -100  packet analysis and preview namespaces: below the default (0), never preempts anything
+#
+# Cluster-scoped. Each Deployment/StatefulSet manifest that names a class carries an identical copy of its definition
+# (tools/tests/test_ui2_deployment_manifests.py asserts the copies equal this file), so applying any one manifest on its
+# own never leaves a pod template naming a class the cluster does not have. A class's `value` is immutable: change it
+# only by deleting and re-creating the class.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-db
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "neXus database: highest neXus class, below every system class."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-core
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: 900000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "neXus service and its HTTP microservices: below the database, above the workers."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-worker
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: 800000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "neXus device-job workers: below the service, above packet analysis and previews."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-low
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+# Below the default priority (0) and every other neXus pod: under pressure, analysis and previews are evicted or wait
+# first. They never preempt anything.
+value: -100
+globalDefault: false
+preemptionPolicy: Never
+description: "neXus Packet Analysis worker: lower than device jobs and every other neXus pod (decision record 2026-10-15 §4)."

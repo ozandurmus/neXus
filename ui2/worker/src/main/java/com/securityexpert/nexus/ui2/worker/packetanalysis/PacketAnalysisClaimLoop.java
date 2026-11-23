@@ -51,14 +51,33 @@ public final class PacketAnalysisClaimLoop {
         stopRequested = true;
     }
 
+    /** Kubelet liveness marker (WorkerHealth): ticked every iteration, busy while an analysis runs. No DB call. */
+    private volatile com.securityexpert.nexus.ui2.worker.health.LoopBeat liveness = com.securityexpert.nexus.ui2.worker.health.LoopBeat.NONE;
+
+    public PacketAnalysisClaimLoop withLiveness(com.securityexpert.nexus.ui2.worker.health.LoopBeat beat) {
+        this.liveness = Objects.requireNonNull(beat);
+        return this;
+    }
+
     public void runUntilInterrupted(Duration pollInterval) {
+        try {
+            runLoop(pollInterval);
+        } finally {
+            liveness.stopped();
+        }
+    }
+
+    private void runLoop(Duration pollInterval) {
         while (!Thread.currentThread().isInterrupted() && !stopRequested) {
             boolean claimed;
+            liveness.tick();
             try {
                 claimed = claimAndExecuteOnce();
             } catch (RuntimeException unexpected) {
                 LOG.log(System.Logger.Level.ERROR, "[PACKET_ANALYSIS] claim loop error: " + unexpected.getClass().getSimpleName());
                 claimed = false;
+            } finally {
+                liveness.idle();
             }
             if (!claimed) {
                 try {
@@ -76,6 +95,7 @@ public final class PacketAnalysisClaimLoop {
         Optional<ClaimedJob> claim = leases.claimNext(workerId, CLAIMS, leaseDuration);
         if (claim.isEmpty()) return false;
         ClaimedJob claimed = claim.get();
+        liveness.jobStarted();
         long period = Math.max(5, leaseDuration.toSeconds() / 3);
         var heartbeat = HEARTBEATS.scheduleAtFixedRate(() -> {
             try {

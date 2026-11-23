@@ -6,6 +6,8 @@ Kubectl failures retain bounded, masked API diagnostics in the step log.
 Build Jobs use the existing Kaniko/proxy/CA setup with their own emptyDir contexts.
 The 60 s database-copy target is UNKNOWN until the reviewer's live run;
 TIMING preview_db_copy measures the complete snapshot/dump/filtered-copy phase.
+A preview without new migrations copies the nightly golden database instead (TIMING preview_db_golden);
+`refresh-golden` refreshes it (docs/operations/PREVIEW_GOLDEN_DATABASE.md).
 """
 import argparse
 import base64
@@ -38,6 +40,20 @@ LABEL = "nexus/preview-run"
 # Preview pods are disposable: a long production drain grace only stalls namespace deletion.
 PREVIEW_GRACE_SECONDS = 60
 NAMESPACE_DELETE_SECONDS = 600
+# Pod hygiene (2026-11-23): every preview pod runs at the lowest neXus priority (deploy/ui2/01-priority-classes.yaml),
+# so under pressure a preview is evicted or waits before any production pod. Set per run only when the class exists;
+# a cluster without it keeps the default priority rather than failing the gate.
+PREVIEW_PRIORITY_CLASS = "ui2-low"
+PREVIEW_PRIORITY = None
+# Per-run namespace ceilings. Sized from the manifests the preview applies (database, service, every worker role,
+# e2e job; 2026-11-23: 2.6 CPU and 6.5 GiB requested, 66.5 GiB memory limits, 10 pods) with headroom;
+# tools/tests/test_preview_e2e.py recomputes the sums and fails when a manifest outgrows them. No CPU-limit quota:
+# module pods carry no CPU limit (MODULE_POD_RUNTIME_CONTRACT.md), and a limits.cpu quota would force one on them.
+PREVIEW_QUOTA = {"requests.cpu": "6", "requests.memory": "16Gi", "limits.memory": "96Gi", "pods": "20"}
+# Defaults only for a container that states none (every current template states its own), and a per-container
+# memory ceiling above the largest current limit (packet analysis, 24Gi).
+PREVIEW_LIMIT_RANGE = {"type": "Container", "default": {"memory": "2Gi"},
+                       "defaultRequest": {"cpu": "100m", "memory": "256Mi"}, "max": {"memory": "32Gi"}}
 REGISTRY = "registry.kube-system.svc.cluster.local/"
 AUDIT_SELECT = "SELECT * FROM public.audit_log WHERE occurred_at >= now() - interval '7 days'"
 ENTRY_SELECT = """SELECT e.* FROM public.backup_artefact_entry e
@@ -48,6 +64,24 @@ JOIN (SELECT DISTINCT ON (device_id) artefact_id FROM public.backup_artefact
 CHUNK_SELECT = """SELECT c.* FROM public.cp_policy_json_chunk c
 WHERE c.generation IN (SELECT chunk_generation FROM public.cp_policy_object_inventory WHERE chunk_generation IS NOT NULL
                        UNION SELECT chunk_generation FROM public.cp_policy_domain_run WHERE chunk_generation IS NOT NULL)"""
+# Golden preview database (docs/operations/PREVIEW_GOLDEN_DATABASE.md): a nightly copy of the live database, served
+# read-only to previews by a PostgreSQL in its own namespace. A preview whose candidate brings no migration the golden
+# lacks streams it with pg_basebackup (physical, no restore) instead of reading the live database.
+GOLDEN_NS = "ui2-preview-golden"
+GOLDEN_LABEL = "nexus/preview-golden"
+GOLDEN_MARKER = "golden-marker"
+GOLDEN_SLOTS = ("a", "b")
+GOLDEN_MAX_AGE_SECONDS = 36 * 3600
+GOLDEN_REPL_USER = "ui2_golden_repl"
+# The sclorg image's data directory under the "data" mount.
+GOLDEN_PGDATA = "/var/lib/pgsql/data/userdata"
+GOLDEN_COPY_SECONDS = 240
+GOLDEN_READY_SECONDS = 300
+# A preview that read the previous marker finishes its copy within GOLDEN_READY_SECONDS; only then is that slot removed.
+GOLDEN_RETIRE_GRACE_SECONDS = GOLDEN_READY_SECONDS + 120
+# Collection windows (00/06/12/18, from :20 of the hour before) and the 02:00 backup window stay free of the refresh.
+GOLDEN_BLOCKED_HOURS = (0, 2, 6, 12, 18)
+MIGRATIONS = "ui2/service/src/main/resources/db/migration"
 # Values stay in the pod's environment, never in argv or logs. Source commands are read-only.
 PG_ENV = 'unset PGPASSWORD; export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-ui2_migrate}}"; export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; '
 
@@ -55,6 +89,13 @@ PG_ENV = 'unset PGPASSWORD; export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-u
 PHASE = "preview_setup"
 STEP = "get namespace"
 LOG = None
+# The PostgreSQL pod a copy writes into: the preview's own database pod unless a golden refresh names its staging pod.
+DB_POD = None
+INTERRUPTED = False
+
+
+def target_db_pod():
+    return DB_POD or preview_name("ui2-preview-db")
 # chmod: images built from this context must not depend on the host tree's file modes (a 0640 file is unreadable
 # to an image's runtime user; e2e EACCES 2026-11-13).
 LOAD_CONTEXT = """set -e
@@ -102,7 +143,9 @@ def run_concurrently(*branches):
     the preview namespace when cleanup() starts. Threads are daemons so an interrupted run can still exit."""
     results = [None] * len(branches)
     errors = [None] * len(branches)
-    start_phase, start_step = PHASE, STEP
+    # _where(), not the globals: a nested call (the two image builds inside the build branch) starts its branches
+    # from the calling branch's phase/step. On the main thread this is the same PHASE/STEP as before.
+    start_phase, start_step = _where()
 
     def worker(index, branch):
         _branch.active, _branch.phase, _branch.step = True, start_phase, start_step
@@ -388,24 +431,27 @@ def policies(workers):
             policy("e2e-only", "e2e", [], [peer("service", [8080, 8086], "to")])]
 
 
-def preview_references(value):
+def preview_references(value, rename=None):
+    rename = rename or preview_name
     if isinstance(value, dict):
         for key, item in value.items():
             if key in {"secret", "configMap", "secretKeyRef", "configMapKeyRef", "secretRef", "configMapRef"}:
                 for name_key in ("name", "secretName"):
                     if name_key in item:
-                        item[name_key] = preview_name(item[name_key])
+                        item[name_key] = rename(item[name_key])
             else:
-                preview_references(item)
+                preview_references(item, rename)
     elif isinstance(value, list):
         for item in value:
-            preview_references(item)
+            preview_references(item, rename)
 
 
 def pod_spec(template):
     spec = copy.deepcopy(template["spec"]["template"]["spec"])
     for key in ("priorityClassName", "tolerations", "serviceAccountName"):
         spec.pop(key, None)
+    if PREVIEW_PRIORITY:
+        spec["priorityClassName"] = PREVIEW_PRIORITY
     spec["automountServiceAccountToken"] = False
     spec["terminationGracePeriodSeconds"] = min(spec.get("terminationGracePeriodSeconds", 30), PREVIEW_GRACE_SECONDS)
     spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
@@ -419,13 +465,44 @@ def pod_spec(template):
     return spec
 
 
-def database_manifest(template):
+GOLDEN_COPY_SCRIPT = ("set -eu\n"
+                      "test ! -e " + GOLDEN_PGDATA + "/PG_VERSION\n"
+                      "exec timeout " + str(GOLDEN_COPY_SECONDS) + " pg_basebackup --host=\"$GOLDEN_HOST\" --port=5432"
+                      " --username=" + GOLDEN_REPL_USER + " --no-password --pgdata=" + GOLDEN_PGDATA
+                      + " --wal-method=stream --checkpoint=fast --no-sync --no-manifest\n")
+
+
+def golden_copy_container(container, host):
+    """Init container: a physical copy of the golden cluster into this pod's own data volume. No source credential."""
+    data = next(m for m in container["volumeMounts"] if m["name"] == "data")
+    return dict(name="golden-copy", image=container["image"], command=["bash", "-c", GOLDEN_COPY_SCRIPT],
+                env=[dict(name="GOLDEN_HOST", value=str(ipaddress.ip_address(host))),
+                     dict(name="PGCONNECT_TIMEOUT", value="10"),
+                     dict(name="PGPASSWORD", valueFrom=dict(secretKeyRef=dict(
+                         name=preview_name("ui2-golden-copy"), key="repl-password")))],
+                securityContext=copy.deepcopy(container["securityContext"]),
+                resources=copy.deepcopy(container["resources"]),
+                volumeMounts=[dict(name="data", mountPath=data["mountPath"])])
+
+
+def namespace_limits():
+    """The run namespace's ResourceQuota and LimitRange: created before any pod, removed with the namespace."""
+    return [dict(apiVersion="v1", kind="LimitRange", metadata=metadata("ui2-preview-limits"),
+                 spec=dict(limits=[copy.deepcopy(PREVIEW_LIMIT_RANGE)])),
+            dict(apiVersion="v1", kind="ResourceQuota", metadata=metadata("ui2-preview-quota"),
+                 spec=dict(hard=dict(PREVIEW_QUOTA)))]
+
+
+def database_manifest(template, golden=None):
     spec = pod_spec(template)
-    spec["containers"][0].setdefault("env", []).extend([
-        dict(name=name, valueFrom=dict(secretKeyRef=dict(
-            name=preview_name("ui2-db-source"), key=key)))
-        for name, key in (("SOURCE_DB_USER", "migrate-user"), ("SOURCE_DB_PASSWORD", "migrate-password"))
-    ])
+    if golden is None:
+        spec["containers"][0].setdefault("env", []).extend([
+            dict(name=name, valueFrom=dict(secretKeyRef=dict(
+                name=preview_name("ui2-db-source"), key=key)))
+            for name, key in (("SOURCE_DB_USER", "migrate-user"), ("SOURCE_DB_PASSWORD", "migrate-password"))
+        ])
+    else:
+        spec["initContainers"] = [golden_copy_container(spec["containers"][0], golden["ip"])]
     size = os.environ.get("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", "32Gi")
     if not re.fullmatch(r"[1-9][0-9]*Gi", size):
         raise ValueError("Preview database size limit must be positive whole Gi")
@@ -503,6 +580,26 @@ def wait_job(namespace, name, timeout=1800):
     raise RuntimeError("Preview job timed out")
 
 
+# Kaniko layer cache for the preview builds (default on; NEXUS_PREVIEW_KANIKO_CACHE=0 restores --cache=false).
+# Why this cannot mix contexts: kaniko keys every cached layer by a composite of the base image digest, all
+# preceding layers' keys and the instruction itself. A RUN layer's key adds the command text and the build
+# args/env in scope; a COPY/ADD layer's key adds a hash of the copied files' content and metadata. A layer is
+# therefore reused only when the same instruction runs on a byte-identical chain from the same pinned base; any
+# changed file in a COPY changes that layer's key and every key after it. The cache repository is in the same
+# cluster-local registry, behind the same access control, as the images themselves.
+# The 12 h TTL bounds how old a reused layer may be. It matters for the runtime OS package update step
+# (PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md): that RUN step's key does not change when Red Hat
+# publishes a fix, so it is re-run at least every 12 h; the security gate scans every deployed image regardless.
+KANIKO_CACHE_REPO = REGISTRY + "nexus-ui2-build-cache"
+KANIKO_CACHE_TTL = "12h"
+
+
+def kaniko_cache_args():
+    if os.environ.get("NEXUS_PREVIEW_KANIKO_CACHE", "1").strip() == "0":
+        return ["--cache=false"]
+    return ["--cache=true", "--cache-repo=" + KANIKO_CACHE_REPO, "--cache-ttl=" + KANIKO_CACHE_TTL]
+
+
 def build_manifest(template, loader, name, commit, owner, dockerfile, destination):
     job = copy.deepcopy(template)
     job["metadata"] = dict(name=name, namespace=BUILD_NS, labels={LABEL: owner},
@@ -517,10 +614,11 @@ def build_manifest(template, loader, name, commit, owner, dockerfile, destinatio
     spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
     builder = spec["containers"][0]
     builder["args"] = [a for a in builder["args"] if not a.startswith(
-        ("--context=", "--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--image-download-retry="))] + [
+        ("--context=", "--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--cache-repo=",
+         "--cache-ttl=", "--image-download-retry="))] + [
         "--context=dir:///workspace" + ("/ui2/frontend" if dockerfile.endswith("Dockerfile.e2e") else ""),
         "--dockerfile=/workspace/" + dockerfile, "--destination=" + destination,
-        "--cache=false", "--image-download-retry=5",
+        *kaniko_cache_args(), "--image-download-retry=5",
         "--digest-file=/dev/termination-log"]
     builder["terminationMessagePath"] = "/dev/termination-log"
     builder["terminationMessagePolicy"] = "File"
@@ -568,7 +666,7 @@ def database_copy_cause(stderr):
 def check_preview_database():
     """Inspect pod health; only fixed cause tokens leave the status projection."""
     try:
-        pod = json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"),
+        pod = json.loads(k(NS, "get", "pod", target_db_pod(),
                            "-o", "json", timeout=10))
     except PreviewFailure as error:
         if error.reason == "NOT_FOUND":
@@ -621,7 +719,7 @@ def database_stream(source, target, timeout):
               'test "${status[0]}" = 0 && test "${status[1]}" = 0')
     check_preview_database()
     process = subprocess.Popen(
-        ["kubectl", "-n", NS, "exec", preview_name("ui2-preview-db"), "--", "bash", "-c", script],
+        ["kubectl", "-n", NS, "exec", target_db_pod(), "--", "bash", "-c", script],
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     deadline = time.monotonic() + timeout
     try:
@@ -650,53 +748,67 @@ def database_stream(source, target, timeout):
         raise PreviewFailure("DB_COPY_FAILED" + ("_" + cause if cause else ""))
 
 
+def build_one_image(template, loader, repo, commit, owner, role, dockerfile):
+    """One kaniko Job: create it, stream the context into its own loader, wait, return image@digest."""
+    with timing("preview_build_" + role):
+        name = "ui2-preview-build-" + role + "-" + owner
+        image = REGISTRY + "nexus-ui2-" + role
+        create(BUILD_NS, build_manifest(template, loader, name, commit, owner, dockerfile,
+                                       image + ":preview-" + commit[:12]))
+        deadline = time.monotonic() + 120
+        pod = None
+        while time.monotonic() < deadline:
+            pods = json.loads(k(BUILD_NS, "get", "pods", "-l", "job-name=" + name, "-o", "json"))["items"]
+            pod = next((p for p in pods if any(s.get("state", {}).get("running") is not None
+                for s in p.get("status", {}).get("initContainerStatuses", []) if s["name"] == "context-loader")), None)
+            if pod:
+                break
+            time.sleep(2)
+        if not pod:
+            raise RuntimeError("Preview context loader unavailable")
+        pod_name = pod["metadata"]["name"]
+        pipe_commands(["tar", "-C", str(repo), "-cf", "-", "ui2", "project", "docs"],
+                      ["kubectl", "-n", BUILD_NS, "exec", "-i", pod_name, "-c", "context-loader", "--",
+                       "sh", "-c", LOAD_CONTEXT], timeout=120)
+        job = wait_job(BUILD_NS, name)
+        if (job.get("metadata", {}).get("annotations", {}).get("nexus/commit") != commit
+                or job.get("metadata", {}).get("labels", {}).get(LABEL) != owner):
+            raise RuntimeError("Preview build was replaced")
+        builder_name = job["spec"]["template"]["spec"]["containers"][0]["name"]
+        pods = json.loads(k(BUILD_NS, "get", "pods", "-l", "job-name=" + name, "-o", "json"))["items"]
+        digests = set()
+        for pod in pods:
+            if not any(o.get("uid") == job["metadata"]["uid"] for o in pod["metadata"].get("ownerReferences", [])):
+                continue
+            for status in pod.get("status", {}).get("containerStatuses", []):
+                ended = status.get("state", {}).get("terminated", {})
+                if (status["name"] == builder_name and ended.get("exitCode") == 0
+                        and re.fullmatch(r"sha256:[0-9a-f]{64}", ended.get("message", "").strip())):
+                    digests.add(ended["message"].strip())
+        if len(digests) != 1:
+            raise RuntimeError("Preview candidate digest missing or ambiguous")
+        return image + "@" + digests.pop()
+
+
+IMAGE_ROLES = (("service", "ui2/Containerfile"), ("e2e", "ui2/frontend/Dockerfile.e2e"))
+
+
 def build_images(repo, commit, owner):
+    """Build the service and e2e runner images at the same time; return [service, e2e].
+
+    Measured 2026-11-22: service 182 s then e2e 94 s, one after the other. The two Jobs share nothing but the
+    read-only template, so they run side by side and the phase takes about as long as the service build. Each Job
+    keeps its own context-loader wait and tar stream. run_concurrently waits for both and re-raises the first
+    failure in role order, so any failed build fails the whole phase, as before."""
     prepare_build_context(repo, commit)
     template = json.loads(k(None, "create", "--dry-run=client", "-f",
                             str(Path.home() / "build-job-proxy.yaml"), "-o", "json"))
     loader = next(o for o in load(repo, "deploy/ui2-image-build/20-context-loader.yaml")["items"]
                   if o["kind"] == "Pod")
-    images = []
-    for role, dockerfile in (("service", "ui2/Containerfile"), ("e2e", "ui2/frontend/Dockerfile.e2e")):
-        with timing("preview_build_" + role):
-            name = "ui2-preview-build-" + role + "-" + owner
-            image = REGISTRY + "nexus-ui2-" + role
-            create(BUILD_NS, build_manifest(template, loader, name, commit, owner, dockerfile,
-                                           image + ":preview-" + commit[:12]))
-            deadline = time.monotonic() + 120
-            pod = None
-            while time.monotonic() < deadline:
-                pods = json.loads(k(BUILD_NS, "get", "pods", "-l", "job-name=" + name, "-o", "json"))["items"]
-                pod = next((p for p in pods if any(s.get("state", {}).get("running") is not None
-                    for s in p.get("status", {}).get("initContainerStatuses", []) if s["name"] == "context-loader")), None)
-                if pod:
-                    break
-                time.sleep(2)
-            if not pod:
-                raise RuntimeError("Preview context loader unavailable")
-            pod_name = pod["metadata"]["name"]
-            pipe_commands(["tar", "-C", str(repo), "-cf", "-", "ui2", "project", "docs"],
-                          ["kubectl", "-n", BUILD_NS, "exec", "-i", pod_name, "-c", "context-loader", "--",
-                           "sh", "-c", LOAD_CONTEXT], timeout=120)
-            job = wait_job(BUILD_NS, name)
-            if (job.get("metadata", {}).get("annotations", {}).get("nexus/commit") != commit
-                    or job.get("metadata", {}).get("labels", {}).get(LABEL) != owner):
-                raise RuntimeError("Preview build was replaced")
-            builder_name = job["spec"]["template"]["spec"]["containers"][0]["name"]
-            pods = json.loads(k(BUILD_NS, "get", "pods", "-l", "job-name=" + name, "-o", "json"))["items"]
-            digests = set()
-            for pod in pods:
-                if not any(o.get("uid") == job["metadata"]["uid"] for o in pod["metadata"].get("ownerReferences", [])):
-                    continue
-                for status in pod.get("status", {}).get("containerStatuses", []):
-                    ended = status.get("state", {}).get("terminated", {})
-                    if (status["name"] == builder_name and ended.get("exitCode") == 0
-                            and re.fullmatch(r"sha256:[0-9a-f]{64}", ended.get("message", "").strip())):
-                        digests.add(ended["message"].strip())
-            if len(digests) != 1:
-                raise RuntimeError("Preview candidate digest missing or ambiguous")
-            images.append(image + "@" + digests.pop())
-    return images
+    return run_concurrently(*(
+        (lambda role=role, dockerfile=dockerfile:
+         build_one_image(template, loader, repo, commit, owner, role, dockerfile))
+        for role, dockerfile in IMAGE_ROLES))
 
 
 @contextmanager
@@ -782,7 +894,7 @@ def database_ingress_allowed(policies, source, target, namespace_labels):
 @contextmanager
 def database_network_access():
     source = json.loads(k("ui2", "get", "pod", "ui2-db-0", "-o", "json"))
-    target = json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"), "-o", "json"))
+    target = json.loads(k(NS, "get", "pod", target_db_pod(), "-o", "json"))
     namespace = json.loads(k(NS, "get", "namespace", NS, "-o", "json"))
     existing = json.loads(k("ui2", "get", "networkpolicy", "-o", "json"))["items"]
     db_selector = dict(matchLabels={"statefulset.kubernetes.io/pod-name": "ui2-db-0"})
@@ -843,13 +955,19 @@ def copy_secret(name, target_name=None, keys=None):
                     data={key: secret["data"][key] for key in keys} if keys else secret["data"]))
 
 
-def setup_database(repo):
+def database_template(repo):
+    """The pinned PostgreSQL template; refused when production runs a different image."""
     objects = load(repo, "deploy/ui2/40-database-statefulset.yaml")["items"]
     template = next(o for o in objects if o["kind"] == "StatefulSet")
+    # Kubernetes API only (the pod spec); never a database connection.
     live = json.loads(k("ui2", "get", "pod", "ui2-db-0", "-o", "json"))
     pinned = template["spec"]["template"]["spec"]["containers"][0]["image"]
     if live["spec"]["containers"][0]["image"] != pinned:
         raise RuntimeError("Production PostgreSQL differs from the pinned bootstrap; preview refused")
+    return objects, template, pinned
+
+
+def database_configs(repo, objects):
     config = next(o for o in load(repo, "deploy/ui2/10-configmap.yaml")["items"]
                   if o["kind"] == "ConfigMap")
     create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=metadata("ui2-config"),
@@ -858,16 +976,369 @@ def setup_database(repo):
         if obj["kind"] == "ConfigMap":
             create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=metadata(obj["metadata"]["name"]),
                             data=obj["data"]))
+
+
+def random_db_secret(name, extra=()):
     values = {"migrate-user": "ui2_migrate", "app-user": "ui2_app",
               "migrate-password": secrets.token_urlsafe(32), "app-password": secrets.token_urlsafe(32)}
-    create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata("ui2-db"), type="Opaque",
-                    data={name: base64.b64encode(value.encode()).decode() for name, value in values.items()}))
+    values.update({key: secrets.token_urlsafe(32) for key in extra})
+    return dict(apiVersion="v1", kind="Secret", metadata=metadata(name), type="Opaque",
+                data={key: base64.b64encode(value.encode()).decode() for key, value in values.items()})
+
+
+def setup_database(repo):
+    objects, template, pinned = database_template(repo)
+    source, reason, golden = select_database_source(repo, pinned)
+    print(f"PREVIEW DB SOURCE: {source} reason={reason}", flush=True)
+    database_configs(repo, objects)
+    create(NS, random_db_secret("ui2-db"))
+    if golden is not None:
+        try:
+            with timing("preview_db_golden"):
+                golden_database(template, golden)
+            return json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"), "-o", "json"))["status"]["podIP"]
+        except PreviewFailure:
+            if INTERRUPTED:
+                raise
+            # A golden problem never blocks a ship: discard the partial pod and take today's live copy.
+            print("PREVIEW DB SOURCE: live reason=GOLDEN_COPY_FAILED", flush=True)
+            discard_golden_attempt()
     copy_secret("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))
     create(NS, database_manifest(template))
     k(NS, "wait", "--for=condition=Ready", "pod/" + preview_name("ui2-preview-db"), "--timeout=120s", timeout=130)
     with timing("preview_db_copy"):
         copy_database()
     return json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"), "-o", "json"))["status"]["podIP"]
+
+
+# ------------------------------------------------------------------------------------------ golden preview database
+
+def golden_pod(slot):
+    return "golden-" + slot + "-0"
+
+
+def candidate_migrations(repo):
+    """Flyway versions the candidate ships (V<version>__*.sql; Flyway reads '_' in a version as '.')."""
+    versions = set()
+    for path in (repo / MIGRATIONS).glob("V*__*.sql"):
+        match = re.fullmatch(r"V([0-9]+(?:[._][0-9]+)*)__.+\.sql", path.name)
+        if not match:
+            raise ValueError("Unrecognised migration file name")
+        versions.add(match.group(1).replace("_", "."))
+    if not versions:
+        raise ValueError("Candidate migrations missing")
+    return versions
+
+
+def parse_golden_marker(data):
+    """The marker's fields, or None when any is missing or malformed."""
+    try:
+        slot, created, image = data["slot"], int(data["created"]), data["image"]
+        versions = json.loads(data["migrations"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if (slot not in GOLDEN_SLOTS or not isinstance(image, str) or not image
+            or not isinstance(versions, list) or not versions
+            or not all(isinstance(v, str) and re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", v) for v in versions)):
+        return None
+    return dict(slot=slot, created=created, image=image, migrations=set(versions))
+
+
+def read_golden_marker():
+    """(marker, None) or (None, reason) with reason GOLDEN_MISSING or GOLDEN_INVALID."""
+    try:
+        raw = k(GOLDEN_NS, "get", "configmap", GOLDEN_MARKER, "--ignore-not-found", "-o", "json", timeout=30)
+    except PreviewFailure:
+        return None, "GOLDEN_MISSING"
+    if not raw.strip():
+        return None, "GOLDEN_MISSING"
+    try:
+        data = json.loads(raw).get("data")
+    except (ValueError, AttributeError):
+        return None, "GOLDEN_INVALID"
+    if not isinstance(data, dict):
+        return None, "GOLDEN_MISSING"
+    marker = parse_golden_marker(data)
+    return (marker, None) if marker else (None, "GOLDEN_INVALID")
+
+
+def golden_server(slot, pinned):
+    """The serving golden pod's address, or None unless it is Ready on the pinned image with the slot's labels."""
+    try:
+        pod = json.loads(k(GOLDEN_NS, "get", "pod", golden_pod(slot), "--ignore-not-found", "-o", "json",
+                           timeout=30) or "null")
+    except (PreviewFailure, ValueError):
+        return None
+    if not isinstance(pod, dict):
+        return None
+    labels = pod.get("metadata", {}).get("labels", {})
+    ready = any(c.get("type") == "Ready" and c.get("status") == "True"
+                for c in pod.get("status", {}).get("conditions", []))
+    images = [c.get("image") for c in pod.get("spec", {}).get("containers", [])]
+    if (labels.get(GOLDEN_LABEL) != slot or not ready or images[:1] != [pinned]
+            or pod["metadata"].get("deletionTimestamp")):
+        return None
+    try:
+        return str(ipaddress.ip_address(pod["status"]["podIP"]))
+    except (KeyError, ValueError):
+        return None
+
+
+def select_database_source(repo, pinned, now=None):
+    """("golden" | "live", reason, golden). Golden only when the candidate would run no migration on it.
+
+    The marker records every Flyway version applied in the golden copy. Equal sets mean the candidate's Flyway has
+    nothing to apply; a version only the candidate has (a new migration, or one shipped after the refresh) takes a
+    fresh live copy, as before. Deciding this needs no live-database read."""
+    marker, reason = read_golden_marker()
+    if marker is None:
+        return "live", reason, None
+    age = (time.time() if now is None else now) - marker["created"]
+    if not 0 <= age <= GOLDEN_MAX_AGE_SECONDS:
+        return "live", "GOLDEN_STALE", None
+    if marker["image"] != pinned:
+        return "live", "GOLDEN_IMAGE_MISMATCH", None
+    candidate = candidate_migrations(repo)
+    if candidate - marker["migrations"]:
+        return "live", "NEW_MIGRATION", None
+    if marker["migrations"] - candidate:
+        return "live", "GOLDEN_SCHEMA_AHEAD", None
+    ip = golden_server(marker["slot"], pinned)
+    if ip is None:
+        return "live", "GOLDEN_UNAVAILABLE", None
+    return "golden", "GOLDEN_CURRENT", dict(slot=marker["slot"], ip=ip)
+
+
+def golden_copy_policy(slot):
+    """Temporary egress from this preview's database pod to the serving golden pod only. No DNS, no other peer."""
+    return dict(apiVersion="networking.k8s.io/v1", kind="NetworkPolicy", metadata=metadata("golden-copy"),
+                spec=dict(podSelector=dict(matchLabels={LABEL: NS, "app.kubernetes.io/component": "database"}),
+                          policyTypes=["Egress"], egress=[dict(to=[dict(
+                              namespaceSelector=dict(matchLabels={"kubernetes.io/metadata.name": GOLDEN_NS}),
+                              podSelector=dict(matchLabels={GOLDEN_LABEL: slot}))],
+                              ports=[dict(protocol="TCP", port=5432)])]))
+
+
+# Runs as the local superuser on the preview's own socket. Values come from the pod environment (this run's random
+# Secret), never from argv; the golden replication role does not survive into the preview.
+GOLDEN_ROLE_RESET_SQL = r"""\getenv mu POSTGRESQL_USER
+\getenv mp POSTGRESQL_PASSWORD
+\getenv au UI2_DB_APP_USER
+\getenv ap UI2_DB_APP_PASSWORD
+SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', :'mu', :'mp') \gexec
+SELECT format('ALTER ROLE %I LOGIN PASSWORD %L', :'au', :'ap') \gexec
+DROP ROLE IF EXISTS """ + GOLDEN_REPL_USER + ";\n"
+SUPERUSER_ENV = "unset PGPASSWORD; export PGUSER=postgres; "
+
+
+def golden_database(template, golden):
+    """The preview database from the golden copy: pg_basebackup in an init container, then this run's passwords."""
+    secret = json.loads(k(GOLDEN_NS, "get", "secret", "golden-" + golden["slot"], "-o", "json", timeout=30))
+    create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata("ui2-golden-copy"), type="Opaque",
+                    data={"repl-password": secret["data"]["repl-password"]}))
+    try:
+        create(NS, golden_copy_policy(golden["slot"]))
+        create(NS, database_manifest(template, golden))
+        k(NS, "wait", "--for=condition=Ready", "pod/" + preview_name("ui2-preview-db"),
+          "--timeout=" + str(GOLDEN_READY_SECONDS) + "s", timeout=GOLDEN_READY_SECONDS + 10)
+        k(NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c",
+          SUPERUSER_ENV + "exec psql -Xq --set=ON_ERROR_STOP=1 -d postgres", input=GOLDEN_ROLE_RESET_SQL)
+    finally:
+        # The namespace teardown removes both anyway; the copy path closes as soon as it is no longer needed.
+        k(NS, "delete", "networkpolicy", preview_name("golden-copy"), "--ignore-not-found", timeout=60)
+        k(NS, "delete", "secret", preview_name("ui2-golden-copy"), "--ignore-not-found", timeout=60)
+
+
+def discard_golden_attempt():
+    for kind, name in (("pod", "ui2-preview-db"), ("networkpolicy", "golden-copy"), ("secret", "ui2-golden-copy")):
+        k(NS, "delete", kind, preview_name(name), "--ignore-not-found", "--wait=true", "--timeout=120s", timeout=130)
+
+
+def refresh_window_allowed(now):
+    """False inside a collection window (from :20 of the hour before) or the 02:00 backup hour."""
+    return now.hour not in GOLDEN_BLOCKED_HOURS and not (
+        (now.hour + 1) % 24 in GOLDEN_BLOCKED_HOURS and now.minute >= 20)
+
+
+@contextmanager
+def golden_lock():
+    import fcntl
+    directory = Path.home() / ".local/state/nexus-preview"
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (directory / "golden.lock").open("a+") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise PreviewFailure("GOLDEN_REFRESH_RUNNING") from None
+        yield
+
+
+def golden_policies():
+    """Deny everything in the golden namespace except PostgreSQL from preview database pods."""
+    deny = dict(apiVersion="networking.k8s.io/v1", kind="NetworkPolicy", metadata=metadata("deny-all"),
+                spec=dict(podSelector={}, policyTypes=["Ingress", "Egress"], ingress=[], egress=[]))
+    serve = dict(apiVersion="networking.k8s.io/v1", kind="NetworkPolicy", metadata=metadata("serve-previews"),
+                 spec=dict(podSelector=dict(matchLabels={LABEL: GOLDEN_NS, "app.kubernetes.io/component": "database"}),
+                           policyTypes=["Ingress"], ingress=[{"from": [dict(
+                               namespaceSelector=dict(matchExpressions=[
+                                   dict(key=LABEL, operator="Exists"),
+                                   dict(key=GOLDEN_LABEL, operator="DoesNotExist")]),
+                               podSelector=dict(matchLabels={"app.kubernetes.io/component": "database"},
+                                                matchExpressions=[dict(key=LABEL, operator="Exists")]))],
+                               "ports": [dict(protocol="TCP", port=5432)]}]))
+    return [deny, serve]
+
+
+def ensure_golden_namespace():
+    namespace = json.loads(k(GOLDEN_NS, "get", "namespace", GOLDEN_NS, "--ignore-not-found", "-o", "json") or "{}")
+    if namespace and namespace.get("metadata", {}).get("labels", {}).get(GOLDEN_LABEL) != "true":
+        raise RuntimeError("Golden namespace ownership differs; refresh refused")
+    if not namespace:
+        create(GOLDEN_NS, dict(apiVersion="v1", kind="Namespace", metadata=dict(
+            name=GOLDEN_NS, labels={LABEL: "golden", GOLDEN_LABEL: "true"})))
+    for item in golden_policies():
+        create(GOLDEN_NS, item)
+
+
+def golden_manifests(template, slot, size):
+    """PVC + single-replica StatefulSet of the pinned PostgreSQL for one slot. Called with NS == GOLDEN_NS."""
+    owner = "golden-" + slot
+    spec = copy.deepcopy(template["spec"]["template"]["spec"])
+    for key in ("priorityClassName", "tolerations", "serviceAccountName"):
+        spec.pop(key, None)
+    spec["automountServiceAccountToken"] = False
+    spec["terminationGracePeriodSeconds"] = min(spec.get("terminationGracePeriodSeconds", 30), PREVIEW_GRACE_SECONDS)
+    spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
+    for volume in spec.get("volumes", []):
+        if "persistentVolumeClaim" in volume or "hostPath" in volume:
+            volume.pop("persistentVolumeClaim", None)
+            volume.pop("hostPath", None)
+            if volume["name"] == "data":
+                volume["persistentVolumeClaim"] = dict(claimName=owner + "-data")
+            else:
+                volume["emptyDir"] = {"sizeLimit": "8Gi"}
+    preview_references(spec, lambda name: owner if name == "ui2-db" else preview_name(name))
+    spec["containers"][0].setdefault("env", []).extend(
+        [dict(name=name, valueFrom=dict(secretKeyRef=dict(name=preview_name("ui2-db-source"), key=key,
+                                                          optional=True)))
+         for name, key in (("SOURCE_DB_USER", "migrate-user"), ("SOURCE_DB_PASSWORD", "migrate-password"))]
+        + [dict(name="GOLDEN_REPL_PASSWORD", valueFrom=dict(secretKeyRef=dict(name=owner, key="repl-password")))])
+    labels = {LABEL: GOLDEN_NS, GOLDEN_LABEL: slot, "app.kubernetes.io/component": "database"}
+    claim = dict(apiVersion="v1", kind="PersistentVolumeClaim",
+                 metadata=dict(name=owner + "-data", namespace=GOLDEN_NS, labels={GOLDEN_LABEL: slot}),
+                 spec=dict(accessModes=["ReadWriteOnce"], resources=dict(requests=dict(storage=size))))
+    workload = dict(apiVersion="apps/v1", kind="StatefulSet",
+                    metadata=dict(name=owner, namespace=GOLDEN_NS, labels=labels),
+                    spec=dict(serviceName=owner, replicas=1,
+                              selector=dict(matchLabels={LABEL: GOLDEN_NS, GOLDEN_LABEL: slot}),
+                              template=dict(metadata=dict(labels=labels), spec=spec)))
+    return claim, workload
+
+
+def retire_slot(slot):
+    name = "golden-" + slot
+    for kind, item in (("statefulset", name), ("pvc", name + "-data"), ("secret", name)):
+        k(GOLDEN_NS, "delete", kind, item, "--ignore-not-found", "--cascade=foreground", "--wait=true",
+          "--timeout=300s", timeout=310)
+
+
+def golden_versions():
+    """Every applied Flyway version of the staged copy; refused when a failed migration row exists."""
+    rows = k(GOLDEN_NS, "exec", "-i", target_db_pod(), "--", "sh", "-c",
+             PG_ENV + "exec psql -XAtq --set=ON_ERROR_STOP=1",
+             input="SELECT count(*) FROM flyway_schema_history WHERE NOT success;\n"
+                   "SELECT version FROM flyway_schema_history WHERE success AND version IS NOT NULL "
+                   "ORDER BY installed_rank;\n").split()
+    if not rows or rows[0] != "0":
+        raise PreviewFailure("GOLDEN_SCHEMA_FAILED_MIGRATION")
+    versions = rows[1:]
+    if not versions or not all(re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", v) for v in versions):
+        raise PreviewFailure("GOLDEN_SCHEMA_UNREADABLE")
+    return versions
+
+
+# "md5" accepts both md5 and SCRAM stored passwords. Only preview database pods reach the port (golden_policies()).
+GOLDEN_HBA_LINE = "host replication " + GOLDEN_REPL_USER + " all md5"
+GOLDEN_REPLICATION_SQL = (r"\getenv rp GOLDEN_REPL_PASSWORD" + "\n"
+                          "SELECT format('%s ROLE %I REPLICATION LOGIN PASSWORD %L', CASE WHEN EXISTS ("
+                          "SELECT 1 FROM pg_roles WHERE rolname = '" + GOLDEN_REPL_USER + "') THEN 'ALTER' "
+                          "ELSE 'CREATE' END, '" + GOLDEN_REPL_USER + "', :'rp') " + r"\gexec" + "\n"
+                          "SELECT pg_reload_conf();\n")
+
+
+def enable_golden_replication():
+    """Open the staged copy to pg_basebackup through one replication role, then prove a replication login works."""
+    hba = GOLDEN_PGDATA + "/pg_hba.conf"
+    line = shlex.quote(GOLDEN_HBA_LINE)
+    k(GOLDEN_NS, "exec", "-i", target_db_pod(), "--", "sh", "-c",
+      "set -e; grep -qxF " + line + " " + hba + " || printf '%s\\n' " + line + " >> " + hba + "; "
+      + SUPERUSER_ENV + "exec psql -Xq --set=ON_ERROR_STOP=1 -d postgres", input=GOLDEN_REPLICATION_SQL)
+    probe = k(GOLDEN_NS, "exec", target_db_pod(), "--", "sh", "-c",
+              'PGPASSWORD="$GOLDEN_REPL_PASSWORD" exec psql -XAtq "host=127.0.0.1 user=' + GOLDEN_REPL_USER
+              + ' dbname=postgres replication=database" -c IDENTIFY_SYSTEM', timeout=60)
+    if not probe.strip():
+        raise PreviewFailure("GOLDEN_REPLICATION_UNAVAILABLE")
+
+
+def refresh_golden(repo, now=None):
+    """Stage a fresh copy of the live database in the idle slot, then promote it with one marker write.
+
+    The serving slot stays untouched until the new one is complete; any failure removes only the staging slot."""
+    global NS, DB_POD
+    if not refresh_window_allowed(now or datetime.now(ZoneInfo("Europe/Istanbul"))):
+        raise PreviewFailure("GOLDEN_REFRESH_WINDOW")
+    size = os.environ.get("NEXUS_PREVIEW_GOLDEN_SIZE", "48Gi")
+    if not re.fullmatch(r"[1-9][0-9]*Gi", size):
+        raise ValueError("Golden volume size must be positive whole Gi")
+    with golden_lock():
+        previous = NS, DB_POD
+        NS = GOLDEN_NS
+        try:
+            objects, template, pinned = database_template(repo)
+            ensure_golden_namespace()
+            marker, _ = read_golden_marker()
+            active = marker["slot"] if marker else None
+            staging = "b" if active == "a" else "a"
+            DB_POD = golden_pod(staging)
+            promoted = False
+            try:
+                retire_slot(staging)  # leftovers of an interrupted refresh
+                database_configs(repo, objects)
+                slot_secret = random_db_secret("ui2-db", extra=("repl-password",))
+                slot_secret["metadata"] = dict(name="golden-" + staging, namespace=NS, labels={GOLDEN_LABEL: staging})
+                create(NS, slot_secret)
+                copy_secret("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))
+                for item in golden_manifests(template, staging, size):
+                    create(NS, item)
+                k(NS, "rollout", "status", "statefulset/golden-" + staging, "--timeout=300s", timeout=310)
+                with timing("preview_golden_copy"):
+                    copy_database()
+                k(NS, "delete", "secret", preview_name("ui2-db-source"), "--ignore-not-found", timeout=60)
+                with timing("preview_golden_vacuum"):
+                    k(NS, "exec", target_db_pod(), "--", "sh", "-c", SUPERUSER_ENV
+                      + 'exec vacuumdb --quiet --analyze --jobs=4 --dbname="${POSTGRESQL_DATABASE:-ui2}"',
+                      timeout=3600)
+                versions = golden_versions()
+                enable_golden_replication()
+                # The promotion: one ConfigMap write. Previews read only this object to choose a slot.
+                create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=dict(
+                    name=GOLDEN_MARKER, namespace=NS, labels={GOLDEN_LABEL: "marker"}), data=dict(
+                    slot=staging, created=str(int(time.time())), image=pinned,
+                    migrations=json.dumps(versions), flyway_version=versions[-1])))
+                promoted = True
+                print(f"PREVIEW GOLDEN: PROMOTED slot={staging} flyway_version={versions[-1]}", flush=True)
+            finally:
+                # Source credentials and the temporary live-database allowance never outlive the copy.
+                k(NS, "delete", "secret", preview_name("ui2-db-source"), "--ignore-not-found", timeout=60)
+                k("ui2", "delete", "networkpolicy", "-l", LABEL + "=" + GOLDEN_NS, "--ignore-not-found", timeout=60)
+                if not promoted:
+                    retire_slot(staging)
+            for slot in (s for s in GOLDEN_SLOTS if s != staging):
+                if slot == active:
+                    time.sleep(GOLDEN_RETIRE_GRACE_SECONDS)
+                retire_slot(slot)
+        finally:
+            NS, DB_POD = previous
 
 
 def worker_templates(repo):
@@ -1151,13 +1622,13 @@ def record_reusable_images(tree, commit, images):
 
 
 def run(repo, commit, tree=None):
-    global NS, PHASE, STEP
+    global NS, PHASE, STEP, PREVIEW_PRIORITY
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Invalid candidate commit")
     if tree is not None and not re.fullmatch(r"[0-9a-f]{40}", tree):
         raise ValueError("Invalid candidate tree")
     images = None
-    previous_ns, owner = NS, secrets.token_hex(6)
+    previous_ns, previous_priority, owner = NS, PREVIEW_PRIORITY, secrets.token_hex(6)
     NS = "ui2-preview-" + owner
     PHASE = "preview_setup"
     STEP = "get namespace"
@@ -1168,6 +1639,12 @@ def run(repo, commit, tree=None):
             with timing("preview_setup"):
                 STEP = "create namespace"
                 create(NS, dict(apiVersion="v1", kind="Namespace", metadata=dict(name=NS, labels={LABEL: owner})))
+                STEP = "namespace limits"
+                for item in namespace_limits():
+                    create(NS, item)
+                STEP = "priority class"
+                PREVIEW_PRIORITY = PREVIEW_PRIORITY_CLASS if k(
+                    None, "get", "priorityclass", PREVIEW_PRIORITY_CLASS, "--ignore-not-found", "-o", "name").strip() else None
                 STEP = "load templates"
                 workers = worker_templates(repo)
                 STEP = "policies"
@@ -1218,7 +1695,7 @@ def run(repo, commit, tree=None):
         finally:
             cleanup(owner)
     finally:
-        NS = previous_ns
+        NS, PREVIEW_PRIORITY = previous_ns, previous_priority
     # Only after a complete pass with a verified teardown.
     line = record_reusable_images(tree, commit, images) if tree and images else None
     if line:
@@ -1227,10 +1704,31 @@ def run(repo, commit, tree=None):
 
 
 def interrupted(signum, frame):
+    global INTERRUPTED
+    INTERRUPTED = True
     raise RuntimeError("Preview interrupted")
 
 
+def refresh_main(argv):
+    parser = argparse.ArgumentParser(prog="hosta_preview_e2e.py refresh-golden",
+                                     description="Refresh the golden preview database (nightly, host-side).")
+    parser.add_argument("--repo", type=Path, required=True, help="the deployed tree (production's templates)")
+    args = parser.parse_args(argv)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, interrupted)
+    try:
+        with private_log():
+            refresh_golden(args.repo)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        print(failure_line(error), flush=True)
+        return 1
+    print("PREVIEW GOLDEN: PASS", flush=True)
+    return 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["refresh-golden"]:
+        sys.exit(refresh_main(sys.argv[2:]))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--commit", required=True)

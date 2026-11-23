@@ -123,14 +123,20 @@ public final class Ui2WorkerMain {
             }
         }
 
+        // Kubelet probes (deploy/ui2 startupProbe/livenessProbe/readinessProbe): /livez and /readyz on UI2_HEALTH_PORT
+        // (default 9405), independent of UI2_METRICS_ENABLED. Liveness reads in-process loop timestamps only; readiness
+        // reads the outcome of the module heartbeat below. Started before the ownership wait so a waiting pod is live.
+        com.securityexpert.nexus.ui2.worker.health.WorkerHealth health = com.securityexpert.nexus.ui2.worker.health.WorkerHealth.fromEnvironment(OverwatchEnv::get);
+        com.securityexpert.nexus.ui2.worker.health.WorkerHealthServer.startFromEnvironment(OverwatchEnv::get, health);
+
         if (com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE.equals(role)) {
             // The analysis worker needs the database and the analysis volume only: no credential store, no artefact
             // store, no device transport (decision record 2026-10-15 §4).
-            startPacketAnalysis();
+            startPacketAnalysis(health);
             return;
         }
         if (com.securityexpert.nexus.ui2.platform.ScriptExecutionJob.MODULE.equals(role)) {
-            com.securityexpert.nexus.ui2.worker.scriptrunner.Ui2ScriptRunnerMain.main(new String[0]);
+            com.securityexpert.nexus.ui2.worker.scriptrunner.Ui2ScriptRunnerMain.run(health);
             return;
         }
 
@@ -194,13 +200,13 @@ public final class Ui2WorkerMain {
         com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.install(endpointAdmission);
         var moduleRuntime = new com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository(transactionBoundary);
         String instance = role + "-" + UUID.randomUUID();
-        WorkerOwnershipWait.await(role, () -> moduleRuntime.heartbeat(role, instance));
+        WorkerOwnershipWait.await(role, () -> health.observeHeartbeat(() -> moduleRuntime.heartbeat(role, instance)));
         if ("policy".equals(role)) {
             if (!moduleRuntime.compatibleGeneralLive()) throw new IllegalStateException("COMPATIBLE_GENERAL_BOOTSTRAP_REQUIRED");
             startPolicy(transactionBoundary, databasePool, moduleRuntime, endpointAdmission, instance, leaseRepository,
                 attemptRepository, deviceRepository, strictFailoverSsh, panTransport, panCredentialResolverFor(resolverComponents),
                 artefactStoreRoot, artefactStoreKeyBase64, HostnameFingerprint.fromBase64Key(hostnameFingerprintKeyBase64),
-                checkPointTrustRuleRef, paloAltoTrustRuleRef, policyFallback);
+                checkPointTrustRuleRef, paloAltoTrustRuleRef, policyFallback, health);
             return;
         }
         if ("backup".equals(role)) {
@@ -209,7 +215,7 @@ public final class Ui2WorkerMain {
                 attemptRepository, deviceRepository, deviceEnrollmentReadPort, sshTransport, panTransport,
                 panCredentialResolverFor(resolverComponents), artefactStoreRoot, artefactStoreKeyBase64,
                 HostnameFingerprint.fromBase64Key(hostnameFingerprintKeyBase64), checkPointTrustRuleRef,
-                paloAltoTrustRuleRef, backupFallback);
+                paloAltoTrustRuleRef, backupFallback, health);
             return;
         }
 
@@ -551,7 +557,8 @@ public final class Ui2WorkerMain {
                     .withStaticRoutePreview(staticRoutePreviewExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback, backupFallback)
-                    .withRuntimeAdmission(endpointAdmission, moduleRuntime);
+                    .withRuntimeAdmission(endpointAdmission, moduleRuntime)
+                    .withLiveness(health.register("general-" + i));
             claimLoop.withPlatformFacts(platformFactsRepository);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
@@ -573,13 +580,15 @@ public final class Ui2WorkerMain {
                     moduleRuntime.poolStats(role, instance, stats.getActiveConnections(), stats.getIdleConnections(),
                         stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
                 }
-                if (!moduleRuntime.heartbeat(role, instance)) {
+                if (!health.observeHeartbeat(() -> moduleRuntime.heartbeat(role, instance))) {
+                    health.markDraining();
                     claimLoops.forEach(WorkerClaimLoop::requestStop); executor.shutdown(); ownerHeartbeat.shutdown();
                 }
             } catch (RuntimeException unavailable) {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        health.markStarted();
 
         // Graceful drain on SIGTERM (a rollout): stop claiming, finish what is running, up to
         // UI2_WORKER_DRAIN_SECONDS (default 840 s -- the deployment's terminationGracePeriodSeconds
@@ -591,6 +600,8 @@ public final class Ui2WorkerMain {
             System.Logger log = System.getLogger(Ui2WorkerMain.class.getName());
             log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] stop requested; finishing in-flight jobs (up to "
                     + drainSeconds + " s)");
+            // A draining pod stays live (the kubelet must not kill the drain) and leaves readiness.
+            health.markDraining();
             claimLoops.forEach(WorkerClaimLoop::requestStop);
             executor.shutdown();
             reconcilerExecutor.shutdown();
@@ -793,7 +804,8 @@ public final class Ui2WorkerMain {
             com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository admission, String instance,
             JobLeaseRepository leases, JobStepAttemptRepository attempts, JooqDeviceRepository devices,
             SshExecTransport ssh, PanXmlApiTransport pan, StoreBackedPanCredentialResolver credentials,
-            Path root, String key, HostnameFingerprint fingerprint, String cpTrust, String panTrust, boolean fallback) {
+            Path root, String key, HostnameFingerprint fingerprint, String cpTrust, String panTrust, boolean fallback,
+            com.securityexpert.nexus.ui2.worker.health.WorkerHealth health) {
         var gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(boundary));
         var runs = new JooqDiscoveryRunRepository(boundary);
         var policies = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(boundary);
@@ -815,7 +827,8 @@ public final class Ui2WorkerMain {
             .withTranscript(store, jobs);
         // Policy composition has no enrollment, backup, inventory, configuration or failover executors.
         var loop = WorkerClaimLoop.policy(leases, jobs, devices, policy, instance, cpTrust, panTrust, fallback)
-            .withRuntimeAdmission(admission, runtime);
+            .withRuntimeAdmission(admission, runtime)
+            .withLiveness(health.register("policy"));
         var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
         executor.submit(() -> loop.runUntilInterrupted(Duration.ofSeconds(2)));
         var heartbeat = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
@@ -826,13 +839,17 @@ public final class Ui2WorkerMain {
                     runtime.poolStats("policy", instance, stats.getActiveConnections(), stats.getIdleConnections(),
                         stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
                 }
-                if (!runtime.heartbeat("policy", instance)) { loop.requestStop(); executor.shutdown(); heartbeat.shutdown(); }
+                if (!health.observeHeartbeat(() -> runtime.heartbeat("policy", instance))) {
+                    health.markDraining(); loop.requestStop(); executor.shutdown(); heartbeat.shutdown();
+                }
             }
             catch (RuntimeException unavailable) {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        health.markStarted();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            health.markDraining();
             loop.requestStop();
             executor.shutdown();
             try { executor.awaitTermination(840, java.util.concurrent.TimeUnit.SECONDS); }
@@ -851,7 +868,7 @@ public final class Ui2WorkerMain {
             JobLeaseRepository leases, JobStepAttemptRepository attempts, JooqDeviceRepository devices,
             PersistenceDeviceEnrollmentReadPort enrollment, SshExecTransport ssh, PanXmlApiTransport pan,
             StoreBackedPanCredentialResolver credentials, Path root, String key, HostnameFingerprint fingerprint,
-            String cpTrust, String panTrust, boolean fallback) {
+            String cpTrust, String panTrust, boolean fallback, com.securityexpert.nexus.ui2.worker.health.WorkerHealth health) {
         var gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(boundary));
         var transportRegistry = WorkerBootstrap.buildTransportRegistry(ssh, pan);
         WorkerBootstrap.boot(CapabilityRegistry.of(BackupCapabilities.all(gates)), transportRegistry);
@@ -916,7 +933,8 @@ public final class Ui2WorkerMain {
                     cpTrust, panTrust, backupCredentialRef, fallback)
                 .withCredentialCanary(canary)
                 .withPlatformFacts(platformFacts)
-                .withRuntimeAdmission(admission, runtime);
+                .withRuntimeAdmission(admission, runtime)
+                .withLiveness(health.register("backup-" + i));
             loops.add(loop);
             executor.submit(() -> loop.runUntilInterrupted(Duration.ofSeconds(2)));
         }
@@ -971,15 +989,18 @@ public final class Ui2WorkerMain {
                     runtime.poolStats("backup", instance, stats.getActiveConnections(), stats.getIdleConnections(),
                         stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
                 }
-                if (!runtime.heartbeat("backup", instance)) {
+                if (!health.observeHeartbeat(() -> runtime.heartbeat("backup", instance))) {
+                    health.markDraining();
                     loops.forEach(WorkerClaimLoop::requestStop); executor.shutdown(); maintenance.shutdown(); heartbeat.shutdown();
                 }
             } catch (RuntimeException unavailable) {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        health.markStarted();
         long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            health.markDraining();
             loops.forEach(WorkerClaimLoop::requestStop);
             executor.shutdown();
             maintenance.shutdown();
@@ -1001,7 +1022,7 @@ public final class Ui2WorkerMain {
      * {@code packet_analysis} module row, claims {@code packet_analysis_run} only, one analysis at a time, and runs
      * the 7-day retention pruner under a runtime task lease.
      */
-    private static void startPacketAnalysis() {
+    private static void startPacketAnalysis(com.securityexpert.nexus.ui2.worker.health.WorkerHealth health) {
         String role = com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE;
         String dbUser = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "worker.db_user");
         String dbPassword = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "worker.db_password");
@@ -1017,7 +1038,7 @@ public final class Ui2WorkerMain {
         TransactionBoundary boundary = TransactionBoundaryFactory.fromDataSource(pool);
         var runtime = new com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository(boundary);
         String instance = role + "-" + UUID.randomUUID();
-        WorkerOwnershipWait.await(role, () -> runtime.heartbeat(role, instance));
+        WorkerOwnershipWait.await(role, () -> health.observeHeartbeat(() -> runtime.heartbeat(role, instance)));
 
         var leases = new PersistenceJobLeaseRepository(new JooqJobLeaseDao(boundary));
         var attempts = new PersistenceJobStepAttemptRepository(new JooqJobStepAttemptDao(boundary));
@@ -1026,7 +1047,8 @@ public final class Ui2WorkerMain {
         var executor = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisJobExecutor(
                 leases, attempts, repository, engine, root);
         var loop = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisClaimLoop(
-                leases, new JooqJobRecordDao(boundary), executor, instance, Duration.ofMinutes(10));
+                leases, new JooqJobRecordDao(boundary), executor, instance, Duration.ofMinutes(10))
+                .withLiveness(health.register(role));
         var pruner = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisRetentionPruner(repository, root);
 
         // One analysis at a time per pod: a single claiming thread.
@@ -1040,7 +1062,9 @@ public final class Ui2WorkerMain {
                     runtime.poolStats(role, instance, stats.getActiveConnections(), stats.getIdleConnections(),
                         stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
                 }
-                if (!runtime.heartbeat(role, instance)) { loop.requestStop(); claims.shutdown(); }
+                if (!health.observeHeartbeat(() -> runtime.heartbeat(role, instance))) {
+                    health.markDraining(); loop.requestStop(); claims.shutdown();
+                }
             } catch (RuntimeException unavailable) {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
@@ -1053,8 +1077,10 @@ public final class Ui2WorkerMain {
                         "Packet analysis retention error: " + t.getClass().getSimpleName());
             }
         }, 60, pruneSeconds, java.util.concurrent.TimeUnit.SECONDS);
+        health.markStarted();
         long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            health.markDraining();
             loop.requestStop();
             claims.shutdown();
             try { claims.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS); }

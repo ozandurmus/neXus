@@ -9,6 +9,18 @@
 # built for exactly that. The contract records the concrete image as U-5 and
 # the check that settles it is a pod admitted with an arbitrary assigned id;
 # the reference is pinned by manifest-index digest either way (OS-10).
+# A copy of deploy/ui2/01-priority-classes.yaml's ui2-db (identical; tests assert it), so this file applies on its own.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-db
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "neXus database: highest neXus class, below every system class."
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -38,7 +50,7 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      priorityClassName: system-cluster-critical
+      priorityClassName: ui2-db
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
           operator: "Exists"
