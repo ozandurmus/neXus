@@ -146,6 +146,88 @@ describe("buildDeviceLogsSummary", () => {
     expect(missing?.evidenceAt).toBe(iso(HOUR)); // falls back to the source's last run, not a count
   });
 
+  it("never shows OK when a source omits stored lines (chunks reported): the block is UNKNOWN", () => {
+    const noLines = { ...source("cp_fwd_elg", 2, HOUR), stored: { chunks: 2, bytes: 200, newest_chunk_at: iso(HOUR) } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([source("cp_messages", 3, 2 * HOUR), noLines]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.chunkCount).toBe(5);
+    expect(s.lineCount).toBeNull();
+    expect(s.state).toBe("unknown");
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.badge).not.toBe("ok");
+    expect(s.headline).toContain("UNKNOWN");
+  });
+
+  it("never shows OK when a source omits stored bytes (chunks reported): the block is UNKNOWN", () => {
+    const noBytes = { ...source("cp_fwd_elg", 2, HOUR), stored: { chunks: 2, lines: 20, newest_chunk_at: iso(HOUR) } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([source("cp_messages", 3, 2 * HOUR), noBytes]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.byteCount).toBeNull();
+    expect(s.state).toBe("unknown");
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.headline).toContain("UNKNOWN");
+  });
+
+  it("zero chunks with lines missing is UNKNOWN, not 'Not yet'", () => {
+    const noLines = { ...source("cp_messages", 0, null), stored: { chunks: 0, bytes: 0, newest_chunk_at: null } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([noLines]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.state).toBe("unknown");
+  });
+
+  it("real zeros (chunks, lines, bytes all 0) stay 'No logs collected yet'", () => {
+    const zeros = { ...source("cp_messages", 0, null), stored: { chunks: 0, lines: 0, bytes: 0, newest_chunk_at: null } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([zeros]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.state).toBe("no_logs_yet");
+    expect(s.badgeWord).toBe("Not yet");
+  });
+
+  it("never shows OK when a source omits stored lines (chunks reported): the block is UNKNOWN", () => {
+    const noLines = { ...source("cp_fwd_elg", 2, HOUR), stored: { chunks: 2, bytes: 200, newest_chunk_at: iso(HOUR) } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([source("cp_messages", 3, 2 * HOUR), noLines]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.chunkCount).toBe(5);
+    expect(s.lineCount).toBeNull();
+    expect(s.state).toBe("unknown");
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.badge).not.toBe("ok");
+    expect(s.headline).toContain("UNKNOWN");
+  });
+
+  it("never shows OK when a source omits stored bytes (chunks reported): the block is UNKNOWN", () => {
+    const noBytes = { ...source("cp_fwd_elg", 2, HOUR), stored: { chunks: 2, lines: 20, newest_chunk_at: iso(HOUR) } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([source("cp_messages", 3, 2 * HOUR), noBytes]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.byteCount).toBeNull();
+    expect(s.state).toBe("unknown");
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.headline).toContain("UNKNOWN");
+  });
+
+  it("zero chunks with lines missing is UNKNOWN, not 'Not yet'", () => {
+    const noLines = { ...source("cp_messages", 0, null), stored: { chunks: 0, bytes: 0, newest_chunk_at: null } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([noLines]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.state).toBe("unknown");
+  });
+
+  it("real zeros (chunks, lines, bytes all 0) stay 'No logs collected yet'", () => {
+    const zeros = { ...source("cp_messages", 0, null), stored: { chunks: 0, lines: 0, bytes: 0, newest_chunk_at: null } } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([zeros]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.state).toBe("no_logs_yet");
+    expect(s.badgeWord).toBe("Not yet");
+  });
+
   it("builds the standard-view link with standard=1 for this device", () => {
     const href = standardDeviceLogsHref(DEVICE);
     const params = new URLSearchParams(href.slice(1));
