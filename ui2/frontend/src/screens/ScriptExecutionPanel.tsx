@@ -60,9 +60,11 @@ import {
   SCRIPT_KIND_LABELS,
   SCRIPT_NOTIFY_OPTIONS,
   describeApiError,
+  describeRunNotification,
   extractAliasWarnings,
   formatRunAs,
   inferScriptKindFromExtension,
+  notifySendsMail,
   parseEgressInput,
   readFileAsBase64,
   resolveRunAsOptions,
@@ -79,9 +81,10 @@ export {
   resolveScheduleZone,
 } from "./ScriptFormHelpers";
 
-function notifyLabel(mode: string | null | undefined): string {
+function notifyLabel(mode: string | null | undefined, mailOnFailureOnly?: boolean): string {
   const found = SCRIPT_NOTIFY_OPTIONS.find(([val]) => val === mode);
-  return found ? found[1] : mode || "None";
+  const label = found ? found[1] : mode || "None";
+  return mailOnFailureOnly && notifySendsMail(mode) ? `${label}; mail on failure only` : label;
 }
 
 function formatDurationMs(durationMs: number | null | undefined): string {
@@ -652,6 +655,7 @@ function ScriptRunsSection({
                   <TableCell>Status</TableCell>
                   <TableCell>Exit</TableCell>
                   <TableCell>Duration</TableCell>
+                  <TableCell>Notified</TableCell>
                   <TableCell>Requested by</TableCell>
                   <TableCell>Requested at</TableCell>
                   <TableCell align="right">Details</TableCell>
@@ -660,6 +664,7 @@ function ScriptRunsSection({
               <TableBody>
                 {runs.map((run) => {
                   const pill = runStatusPillProps(run);
+                  const notified = describeRunNotification(run);
                   const isSelected = selectedRunId === run.run_id;
                   return (
                     <TableRow key={run.run_id} hover selected={isSelected} data-run-id={run.run_id}>
@@ -691,6 +696,9 @@ function ScriptRunsSection({
                       </TableCell>
                       <TableCell sx={{ ...TYPE.mono, whiteSpace: "nowrap" }}>
                         {formatDurationMs(run.duration_ms)}
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap" }} data-testid="script-run-notified">
+                        <StatusPill tone={notified.tone} word={notified.word} title={notified.title} dense />
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{actorLabel(run.requested_by).label}</TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>
@@ -933,6 +941,7 @@ function ScriptSettingsAndDetailCard({
   const [notify, setNotify] = useState<ScriptNotifyMode>(
     (SCRIPT_NOTIFY_OPTIONS.some(([m]) => m === script.notify) ? script.notify : "none") as ScriptNotifyMode,
   );
+  const [mailOnFailureOnly, setMailOnFailureOnly] = useState(Boolean(script.notify_mail_on_failure_only));
   const [runAs, setRunAs] = useState(
     runAsOptions.includes(script.run_as) ? script.run_as : defaultRunAs,
   );
@@ -947,6 +956,7 @@ function ScriptSettingsAndDetailCard({
     setTimeoutSeconds(String(script.timeout_s));
     setEgressText(script.egress.join("\n"));
     setNotify((SCRIPT_NOTIFY_OPTIONS.some(([m]) => m === script.notify) ? script.notify : "none") as ScriptNotifyMode);
+    setMailOnFailureOnly(Boolean(script.notify_mail_on_failure_only));
     setRunAs(runAsOptions.includes(script.run_as) ? script.run_as : defaultRunAs);
     setCredentialRefs([...script.credential_refs]);
     setError(null);
@@ -976,6 +986,7 @@ function ScriptSettingsAndDetailCard({
         egress: parseEgressInput(egressText),
         credential_refs: credentialRefs,
         notify,
+        notify_mail_on_failure_only: notifySendsMail(notify) && mailOnFailureOnly,
         run_as: effectiveRunAs,
       });
       setSavedNote(
@@ -1182,6 +1193,22 @@ function ScriptSettingsAndDetailCard({
                   </MenuItem>
                 ))}
               </TextField>
+              <FormControlLabel
+                sx={{ minWidth: 220 }}
+                control={
+                  <Switch
+                    checked={notifySendsMail(notify) && mailOnFailureOnly}
+                    onChange={(e) => setMailOnFailureOnly(e.target.checked)}
+                    disabled={busy || !notifySendsMail(notify)}
+                    inputProps={{ "aria-label": "Mail on failure only" }}
+                  />
+                }
+                label={
+                  <Typography sx={{ ...TYPE.body }} title="The syslog line is sent on every run end; only the mail is narrowed.">
+                    {notifySendsMail(notify) ? "Mail on failure only" : "Mail on failure only (needs SMTP or Both)"}
+                  </Typography>
+                }
+              />
               <TextField
                 select
                 size="small"
@@ -1266,7 +1293,7 @@ function ScriptSettingsAndDetailCard({
               </Box>
               <Box>
                 <Typography sx={{ ...LABEL_UPPER, color: m3.onSurfaceVar }}>Notify</Typography>
-                <Typography sx={{ ...TYPE.body }}>{notifyLabel(script.notify)}</Typography>
+                <Typography sx={{ ...TYPE.body }}>{notifyLabel(script.notify, script.notify_mail_on_failure_only)}</Typography>
               </Box>
               <Box>
                 <Typography sx={{ ...LABEL_UPPER, color: m3.onSurfaceVar }}>Run as</Typography>
