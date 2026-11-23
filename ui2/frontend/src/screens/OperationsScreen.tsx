@@ -1,13 +1,14 @@
 import { SshHostKeyPanel } from "./SshHostKeyPanel";
-import { canRunReadiness, haReadinessItems, HaReadinessList, type ReadinessProgress } from "./HaReadinessList";
-import { ReadinessCard } from "./ReadinessChecksTable";
+import { canRunReadiness, haReadinessItems, HaReadinessList, type ReadinessError, type ReadinessProgress } from "./HaReadinessList";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { FailoverIncidentsPanel } from "./FailoverIncidentsPanel";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Card from "@mui/material/Card";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Drawer from "@mui/material/Drawer";
+import IconButton from "@mui/material/IconButton";
+import { Icon } from "../shell/Icon";
 
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs } from "../shell/M3Widgets";
@@ -20,9 +21,10 @@ import { ScriptExecutionPanel } from "./ScriptExecutionPanel";
 import { SystemHealthPanel } from "./SystemHealthPanel";
 import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { useJobWindow } from "../shell/JobWindow";
-import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, newBusinessHoursAckScope, runCpFailoverReadiness, type BusinessHoursAckScope, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
+import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, listFailoverIncidents, newBusinessHoursAckScope, runCpFailoverReadiness, type BusinessHoursAckScope, type CpFailoverSummary, type DeviceSummary, type FailoverIncidents } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
-import { readinessReasonLabel } from "../shell/presenters";
+import { readinessReasonLabel, requestFailure } from "../shell/presenters";
+import Button from "@mui/material/Button";
 
 /**
  * The three Operations tabs; Queue and History (roadmap 2.4) are state pills on Jobs, their old routes still land there.
@@ -114,19 +116,43 @@ export function OperationsScreen() {
     .filter(d => (cpRows[`fgt-single|${d.device_id}`] ?? []).length > 0)
     .map(d => ({ ref: `fgt-single|${d.device_id}`, title: deriveClusterTitle(`fgt-single|${d.device_id}`, [d]), members: [d] }))];
   const selected = clusters?.find((c) => c.ref === selectedCluster) ?? null;
-  useEffect(() => {
-    let mounted = true;
+  // A failed summary read is said so and every status becomes UNKNOWN: "could not be read" is never shown as "not ready".
+  const [summaryFailure, setSummaryFailure] = useState<string | null>(null);
+  // Whether the summary has answered (or failed) once: the list is drawn only after that and the incidents read have settled.
+  const [summaryRead, setSummaryRead] = useState(false);
+  const loadSummary = useCallback((alive: () => boolean = () => true) => {
     void listCpFailoverSummary().then(rows => {
-      if (!mounted) return;
+      if (!alive()) return;
       const byRef: Record<string, CpFailoverSummary[]> = {};
       for (const row of rows) (byRef[row.cluster_member_ref] ??= []).push(row);
-      setCpRows(byRef);
-    }).catch(() => { if (mounted) setCpRows({}); });
-    return () => { mounted = false; };
+      setCpRows(byRef); setSummaryFailure(null); setSummaryRead(true);
+    }).catch(error => { if (alive()) { setSummaryFailure(requestFailure(error as Parameters<typeof requestFailure>[0])); setSummaryRead(true); } });
   }, []);
+  useEffect(() => {
+    let mounted = true;
+    loadSummary(() => mounted);
+    return () => { mounted = false; };
+  }, [loadSummary]);
+  // The incidents are read once here; the list, the top panel and the detail all use this one read.
+  const [incidents, setIncidents] = useState<FailoverIncidents | null>(null);
+  // A failed read is not an empty list: with the incidents unknown, no row is shown Ready and no failover is offered.
+  const [incidentsFailed, setIncidentsFailed] = useState(false);
+  const loadIncidents = useCallback((alive: () => boolean = () => true) => {
+    void (async () => listFailoverIncidents())().then(value => {
+      if (alive()) setIncidents({ canRelease: value?.canRelease === true, roleNote: value?.roleNote ?? null,
+        incidents: Array.isArray(value?.incidents) ? value.incidents : [] });
+      if (alive()) setIncidentsFailed(false);
+    }).catch(() => { if (alive()) { setIncidents(null); setIncidentsFailed(true); } });
+  }, []);
+  useEffect(() => {
+    let mounted = true;
+    loadIncidents(() => mounted);
+    return () => { mounted = false; };
+  }, [loadIncidents]);
+  const sharedIncidents = { data: incidents, failed: incidentsFailed, reload: loadIncidents };
   const [isRunning, setIsRunning] = useState<string | null>(null);
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
-  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [readinessError, setReadinessError] = useState<ReadinessError | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [readinessProgress, setReadinessProgress] = useState<ReadinessProgress>({});
   const runLock = useRef(false);
@@ -191,9 +217,11 @@ export function OperationsScreen() {
       return state === "DONE";
     } catch (error) {
       const body = (error as { body?: { code?: string; message?: string } })?.body;
-      setReadinessError(body?.code === "OUTSIDE_JOB_WINDOW" || body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED"
-        ? body.message ?? "Device jobs are outside the scheduled window."
-        : "Could not start or refresh the readiness run.");
+      // Declining the business-hours question is a decision, not a failure: the row says the pre-checks were not started.
+      setReadinessError({ unitId: row.unitId, cancelled: body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED",
+        text: body?.code === "OUTSIDE_JOB_WINDOW" || body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED"
+          ? body.message ?? "Device jobs are outside the scheduled window."
+          : "Could not start or refresh the readiness run." });
       return false;
     } finally {
       runLock.current = false;
@@ -227,14 +255,8 @@ export function OperationsScreen() {
     }
   };
 
-  const reloadSummary = () => {
-    void listCpFailoverSummary().then(rows => {
-      const byRef: Record<string, CpFailoverSummary[]> = {};
-      for (const row of rows) (byRef[row.cluster_member_ref] ??= []).push(row);
-      setCpRows(byRef);
-    }).catch(() => {});
-  };
-  // UI review 2026-11-05, B3: the job figures belong to the Jobs tab, the readiness figure to HA and readiness.
+  const reloadSummary = () => { loadSummary(); };
+  // UI review 2026-11-05, B3: the job figures belong to the Jobs tab, the readiness figure to HA and failover.
   const jobKpis = (
     <MetricGrid>
       {/* One window with the Overview: jobs FINISHED in 24 h, every terminal state counted (review 2026-09-23). */}
@@ -279,27 +301,30 @@ export function OperationsScreen() {
   const renderHaPanel = () => <>
     {readinessKpi}
     {/* PO 2026-10-20 item 1: every open incident and estate-wide unresolved send, with its release (security_admin). */}
-    <FailoverIncidentsPanel onReleased={reloadSummary} />
+    <FailoverIncidentsPanel onReleased={reloadSummary} shared={sharedIncidents} />
+    {summaryFailure && <Box role="status" data-readiness-summary-failed sx={{ mb: 1.5, px: 1.5, py: 1, borderRadius: 1, bgcolor: m3.warningContainer, color: m3.onWarningContainer, fontSize: 14 }}>
+      Readiness could not be read ({summaryFailure}). Statuses below are unknown, not bad.
+      <Button size="small" onClick={reloadSummary} sx={{ ml: 1.5, textTransform: "none" }}>Retry</Button></Box>}
     {clusters === null ? <StatePanel variant="empty" title="Reading the enrolled clusters…" />
       : clusters.length === 0 ? <StatePanel variant="empty" title="No HA pair or cluster enrolled"
         body="Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed." />
       : <HaReadinessList clusters={clusters} rows={cpRows} running={isRunning} busy={bulkRunning || isRunning !== null}
-        progress={readinessProgress} error={readinessError}
+        progress={readinessProgress} error={readinessError} incidents={incidents?.incidents ?? []} summaryFailed={summaryFailure !== null} incidentsFailed={incidentsFailed}
+        settled={summaryRead && (incidents !== null || incidentsFailed)}
         onOpen={(ref, unitId) => { setSelectedCluster(ref); setExpandedUnit(unitId); }}
+        onFailover={(ref, unitId) => { setSelectedCluster(ref); setExpandedUnit(unitId); }}
         onRun={row => { if (!batchLock.current) void handleRunReadiness(row); }}
         onBulkRun={units => { void handleBulkReadiness(units); }} onChanged={reloadSummary} />}
     <Drawer anchor="right" open={selectedCluster !== null} onClose={() => setSelectedCluster(null)}
       PaperProps={{ role: "dialog", "aria-modal": true, "aria-label": "HA readiness detail", sx: { width: "min(100vw, 1000px)", p: 2, bgcolor: m3.scLowest } }}>
       {selectedCluster && <>
-        <M3Button emphasis="text" onClick={() => setSelectedCluster(null)}>Close detail</M3Button>
-        <ReadinessCard checks={selectedReadinessRow?.readiness?.checks ?? []}
-          members={selectedReadinessRow?.members} cluster={selected?.title ?? "Masked unit"} vendor={selectedReadinessRow?.vendor}
-          masked={selectedReadinessRow?.masked} status={selectedReadinessRow?.readiness?.status}
-          observedAt={selectedReadinessRow?.readiness?.observedAt} canRun={false} onRun={() => {}} />
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <IconButton aria-label="Close detail" onClick={() => setSelectedCluster(null)}><Icon name="close" size={20} /></IconButton></Box>
         {selected?.members[0] && (["check_point", "palo_alto"].includes(selected.members[0].vendor_hint)
           || (["cisco_asa", "fortinet"].includes(selected.members[0].vendor_hint) && selectedReadinessRow?.readinessAvailable !== false)) ?
           <CpFailoverPanel key={selectedCluster} memberDeviceId={selected.members[0].device_id}
-            vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto" | "cisco_asa" | "fortinet"} initialUnitId={expandedUnit} />
+            vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto" | "cisco_asa" | "fortinet"} initialUnitId={expandedUnit}
+            summaryRows={selectedReadinessRows} incidents={sharedIncidents} />
           : <StatePanel variant="empty" title={readinessReasonLabel("UNSUPPORTED_MODE")} body={selected?.members[0]?.vendor_hint === "fortinet" && selectedReadinessRow?.readinessAvailable ? "FortiGate clusters are evaluated for readiness only, from the enrolled address (as the primary reports); failover is not offered." : selected?.members[0]?.vendor_hint === "cisco_asa" ? (selectedReadinessRow?.readinessAvailable ? "Cisco ASA pairs are evaluated for readiness only; failover is not offered." : "Readiness is not available yet for Cisco ASA pairs.") : "Failover and readiness detail are offered for Check Point and Palo Alto clusters only."} code="UNSUPPORTED_MODE" />}
       </>}
     </Drawer>
@@ -320,7 +345,7 @@ export function OperationsScreen() {
         onChange={setTab}
         tabs={[
           {
-            label: "HA and readiness",
+            label: "HA and failover",
             panel: renderHaPanel(),
           },
           { label: "Jobs", panel: <Box>{jobKpis}<Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>All jobs</Typography><JobLogsPanel

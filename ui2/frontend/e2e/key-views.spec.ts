@@ -42,10 +42,13 @@ test("Inventory: Check Point failover units use the device list's VS names", asy
   const tabs = page.getByRole("tablist", { name: "Cluster detail", exact: true });
   await tabs.getByRole("tab", { name: "Failover", exact: true }).click();
   const failover = page.getByLabel("Check Point failover");
+  // The chassis detail lists each Virtual System with an Open action named after it; opening one shows its own detail.
+  const virtualSystems = failover.getByRole("region", { name: "Virtual systems", exact: true });
   for (const name of names) {
-    await expect(failover.getByRole("button", { name: `Virtual System · ${name}`, exact: true })).toBeVisible();
+    await expect(virtualSystems.getByRole("button", { name: `Open Virtual System · ${name}`, exact: true })).toBeVisible();
   }
-  await failover.getByRole("button", { name: `Virtual System · ${names[0]}`, exact: true }).click();
+  await virtualSystems.getByRole("button", { name: `Open Virtual System · ${names[0]}`, exact: true }).click();
+  await expect(failover.getByRole("heading", { name: `Virtual System · ${names[0]}`, exact: true })).toBeVisible();
   await safety.checkpoint();
   await expect(failover.getByText(/CLUSTER_NOT_FOUND|UNIT_NOT_FOUND|Request failed/)).toHaveCount(0);
 });
