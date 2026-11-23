@@ -2,8 +2,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import {
   getJobStats,
+  getNotificationSettings,
   getScheduledJobs,
   getSystemHealth,
+  getSystemLogSettings,
   getSystemPods,
   getSystemStorage,
   listAuditEvents,
@@ -18,12 +20,14 @@ import {
   type DeviceSummary,
   type JobStatsView,
   type LocalIdentityView,
+  type NotificationSettingsView,
   type PodsView,
   type ScheduledJobsView,
   type ScriptSummary,
   type SessionView,
   type StorageView,
   type SystemHealth,
+  type SystemLogSettingsView,
 } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
 import type { SourceRead } from "../screens/overview/attentionRules";
@@ -41,6 +45,7 @@ import {
   type SystemSection,
   type TimedRead,
 } from "./estateSystemModel";
+import { EstateSystemNotifications } from "./EstateSystemNotifications";
 import { EstateSystemPodsStorage } from "./EstateSystemPodsStorage";
 import { EstateSystemRoles } from "./EstateSystemRoles";
 import { ESTATE_MONO, ev } from "./estateTokens";
@@ -74,6 +79,8 @@ function useSystemReads() {
   const [pods, setPods] = useState<Settled<PodsView>>(SKIPPED);
   const [storage, setStorage] = useState<Settled<StorageView>>(SKIPPED);
   const [jobStats, setJobStats] = useState<Settled<JobStatsView>>(SKIPPED);
+  const [notifications, setNotifications] = useState<Settled<NotificationSettingsView>>(SKIPPED);
+  const [systemLogs, setSystemLogs] = useState<Settled<SystemLogSettingsView>>(SKIPPED);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -96,6 +103,8 @@ function useSystemReads() {
       .then((r) => { if (active) setScripts(r); });
     void settle(getSystemPods()).then((r) => { if (active) setPods(r); });
     void settle(getSystemStorage()).then((r) => { if (active) setStorage(r); });
+    void settle(getNotificationSettings()).then((r) => { if (active) setNotifications(r); });
+    void settle(getSystemLogSettings()).then((r) => { if (active) setSystemLogs(r); });
     return () => { active = false; };
   }, [tick]);
 
@@ -114,6 +123,7 @@ function useSystemReads() {
 
   return {
     jobs, jobStats, devices, health, audit, identities, sessions, pods, storage, credentials,
+    notifications, systemLogs,
     scripts, scriptRuns,
     refresh: () => setTick((n) => n + 1),
   };
@@ -271,6 +281,7 @@ export function EstateSystemScreen() {
         {sections.slice(0, 1).map(renderSection)}
         <JobQueueCard jobs={reads.jobStats} now={now} />
         {sections.slice(1).map(renderSection)}
+        <EstateSystemNotifications notifications={reads.notifications} systemLogs={reads.systemLogs} now={now} />
         <EstateSystemPodsStorage pods={reads.pods} storage={reads.storage} now={now} />
       </Box>
       {transcriptJob ? (

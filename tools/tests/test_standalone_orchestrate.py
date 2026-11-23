@@ -169,7 +169,7 @@ def test_preamble_standing_facts(fact):
 @pytest.mark.parametrize("timeout", [False, True])
 def test_ship_waits_for_other_process(tmp_path, monkeypatch, capsys, timeout):
     monkeypatch.setattr(sa, "STATE_DIR", tmp_path)
-    lock_path = tmp_path / "ship.lock"
+    lock_path = tmp_path / "ship-preview.lock"  # 2026-11-23: the pre-merge part is the serialised one
     holder = subprocess.Popen([
         sys.executable, "-c",
         "import fcntl, sys; "
@@ -207,7 +207,7 @@ def test_ship_waits_for_other_process(tmp_path, monkeypatch, capsys, timeout):
         assert holder.stdout.readline().strip() == "ready"
         assert sa.cmd_ship(_args(task="second-task")) == (3 if timeout else 0)
         assert sleeps == [60] * (45 if timeout else 1)
-        assert capsys.readouterr().out.splitlines() == ["waiting for first-task ship"] * len(sleeps)
+        assert capsys.readouterr().out.splitlines() == ["waiting for first-task preview"] * len(sleeps)
         assert shipped == ([] if timeout else ["second-task"])
     finally:
         if holder.poll() is None:

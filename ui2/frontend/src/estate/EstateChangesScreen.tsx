@@ -4,16 +4,23 @@ import Typography from "@mui/material/Typography";
 import {
   downloadPolicyChanges,
   getChangeFeed,
+  getPolicyActorCandidates,
   getPolicyChanges,
   type ChangeFeedPage,
   type ChangeKind,
+  type PolicyChangeRow,
   type PolicyChangesPage,
 } from "../auth/adminApi";
 import { PRODUCT_NAME } from "../brand/product";
 import { sourceLabel } from "../screens/ChangeFeedPanel";
 import type { SourceRead } from "../screens/overview/attentionRules";
+import { plural } from "../shell/plural";
 import { isRestricted } from "../shell/States";
 import { formatStamp } from "../shell/time";
+import {
+  ambiguousRevisionsForSet,
+  summarisePolicyRuleRevisions,
+} from "./estateChangesRuleParityModel";
 import {
   EstateCard,
   EvidenceStamp,
@@ -59,6 +66,7 @@ function ChangeSetBlock({
   now,
   unitsById,
   unitsByName,
+  policyRows = [],
 }: {
   readonly changeSet: EstateChangeSet;
   readonly open: boolean;
@@ -66,8 +74,50 @@ function ChangeSetBlock({
   readonly now: Date;
   readonly unitsById: ReadonlyMap<string, import("./estateModel").EstateUnit>;
   readonly unitsByName: ReadonlyMap<string, import("./estateModel").EstateUnit>;
+  readonly policyRows?: readonly PolicyChangeRow[];
 }) {
   const catMeta = categoryBadgeMeta(changeSet.category);
+  const ambiguousRevisions = useMemo(
+    () => ambiguousRevisionsForSet(changeSet, policyRows),
+    [changeSet, policyRows],
+  );
+  const targetRevision = ambiguousRevisions[0] ?? null;
+  const [candidatesState, setCandidatesState] = useState<
+    | { readonly status: "idle" }
+    | { readonly status: "loading" }
+    | { readonly status: "ok"; readonly names: readonly string[] }
+    | { readonly status: "withheld" }
+    | { readonly status: "failed" }
+  >({ status: "idle" });
+
+  useEffect(() => {
+    setCandidatesState({ status: "idle" });
+  }, [targetRevision]);
+
+  const handleLoadCandidates = () => {
+    if (!targetRevision || candidatesState.status === "loading") return;
+    setCandidatesState({ status: "loading" });
+    getPolicyActorCandidates(targetRevision).then(
+      (res) => {
+        const names = Array.isArray(res?.candidates)
+          ? res.candidates.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+          : null;
+        if (!names) {
+          setCandidatesState({ status: "failed" });
+          return;
+        }
+        setCandidatesState({ status: "ok", names });
+      },
+      (err: unknown) => {
+        const status = (err as { status?: number } | null)?.status;
+        if (status === 403 || isRestricted(err)) {
+          setCandidatesState({ status: "withheld" });
+        } else {
+          setCandidatesState({ status: "failed" });
+        }
+      },
+    );
+  };
   const resolvedUnits = useMemo(() => {
     const out: import("./estateModel").EstateUnit[] = [];
     const seen = new Set<string>();
@@ -340,6 +390,43 @@ function ChangeSetBlock({
           </Box>
         )}
 
+        {changeSet.actorIsAmbiguous && ambiguousRevisions.length > 0 ? (
+          candidatesState.status === "idle" || candidatesState.status === "loading" ? (
+            <Box
+              component="button"
+              type="button"
+              data-testid="change-set-show-candidates"
+              disabled={candidatesState.status === "loading"}
+              onClick={handleLoadCandidates}
+              sx={{
+                background: "none",
+                border: `1px solid ${ev.lineStrong}`,
+                borderRadius: "6px",
+                px: "8px",
+                py: "2px",
+                color: ev.accent,
+                fontWeight: 620,
+                fontSize: "11.5px",
+                cursor: candidatesState.status === "loading" ? "default" : "pointer",
+                fontFamily: ESTATE_SANS,
+                "&:hover": { borderColor: ev.accent },
+              }}
+            >
+              Show candidates
+            </Box>
+          ) : candidatesState.status === "ok" ? (
+            <Typography sx={{ fontFamily: ESTATE_MONO, fontSize: "11.5px", color: ev.ink2 }}>
+              Candidates: {candidatesState.names.join(", ") || "none"}
+            </Typography>
+          ) : candidatesState.status === "withheld" ? (
+            <Typography sx={{ fontFamily: ESTATE_SANS, fontSize: "11.5px", color: ev.ink3 }}>
+              Withheld in AIView
+            </Typography>
+          ) : (
+            <StateBadge state="unk" word="Candidates UNKNOWN" dense />
+          )
+        ) : null}
+
         {resolvedUnits.length > 0 ? (
           <Box sx={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
             {resolvedUnits.slice(0, 8).map((u) => (
@@ -483,6 +570,16 @@ export function EstateChangesScreen({
     [changesModel.changeSets],
   );
 
+  const ruleSummary = useMemo(
+    () => summarisePolicyRuleRevisions(policyRead),
+    [policyRead],
+  );
+
+  const policyRows = useMemo(
+    () => (policyRead.state === "ok" && Array.isArray(policyRead.value.rows) ? policyRead.value.rows : []),
+    [policyRead],
+  );
+
   const firstDiffSetId = useMemo(
     () => changesModel.changeSets.find((s) => s.diffs.length > 0)?.id ?? null,
     [changesModel.changeSets],
@@ -605,6 +702,49 @@ export function EstateChangesScreen({
             </Box>{" "}
             and stay UNKNOWN; {PRODUCT_NAME}’s own jobs stay apart unless selected.
           </Typography>
+          {policyRead.state === "ok" ? (
+            <Box
+              data-testid="changes-rule-summary-breakdown"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                flexWrap: "wrap",
+                mt: "6px",
+                fontSize: "12.5px",
+                color: ev.ink2,
+              }}
+            >
+              <span>
+                Rule revisions:{" "}
+                <Box
+                  component="b"
+                  sx={{
+                    fontFamily: ESTATE_MONO,
+                    color: ruleSummary.distinctRulesText === "UNKNOWN" ? ev.unk : ev.ink,
+                  }}
+                >
+                  {ruleSummary.distinctRulesText}
+                </Box>
+                {" · "}
+                <Box
+                  component="span"
+                  sx={{
+                    fontFamily: ESTATE_MONO,
+                    color: ruleSummary.breakdownText === "UNKNOWN" ? ev.unk : ev.ink2,
+                  }}
+                >
+                  {ruleSummary.breakdownText}
+                </Box>
+              </span>
+              <EvidenceStamp
+                at={changesModel.newestAt}
+                source="policy rule history"
+                now={now}
+                missingLabel="UNKNOWN"
+              />
+            </Box>
+          ) : null}
         </Box>
 
         <Box sx={{ display: "flex", gap: "8px", flexWrap: "wrap", ml: "auto" }}>
@@ -795,6 +935,18 @@ export function EstateChangesScreen({
           <span>
             {feedRead.value.events.length} events shown, more exist in this range. Narrow the range or filter to see the rest;
             the counts on this screen cover only the shown events.
+          </span>
+        </Box>
+      ) : null}
+
+      {ruleSummary.truncated ? (
+        <Box
+          data-testid="changes-policy-truncated"
+          sx={{ display: "flex", alignItems: "center", gap: "8px", mb: "14px", fontSize: "12.5px", color: ev.ink2 }}
+        >
+          <StateBadge state="watch" word="Partial rule history" dense />
+          <span>
+            {plural(ruleSummary.shownRowsCount, "rule revision", "rule revisions")} shown on this page; more exist in this window (open Standard Changes to page through the rest).
           </span>
         </Box>
       ) : null}
@@ -1273,6 +1425,7 @@ export function EstateChangesScreen({
                       now={now}
                       unitsById={unitsById}
                       unitsByName={unitsByName}
+                      policyRows={policyRows}
                     />
                   ))}
                   <MoreFooter shown={15} total={grp.sets.length} noun="change sets" />
@@ -1288,6 +1441,7 @@ export function EstateChangesScreen({
                   now={now}
                   unitsById={unitsById}
                   unitsByName={unitsByName}
+                  policyRows={policyRows}
                 />
               ))
             )}
