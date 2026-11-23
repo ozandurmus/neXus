@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { listJobs, type JobEventView } from "../auth/adminApi";
-import { EstateCard, EvidenceStamp, MoreFooter } from "./EstatePrimitives";
-import { standardJobsHref } from "./estateRouting";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import {
   buildDossierJobs,
   DOSSIER_JOBS_CAP,
   DOSSIER_JOBS_FAILED_TEXT,
   DOSSIER_JOBS_NOT_EVALUABLE_TEXT,
+  DOSSIER_JOBS_STANDARD_HREF,
+  DOSSIER_JOBS_TOTAL_UNKNOWN_TEXT,
   type DossierJobsRead,
 } from "./estateDossierJobsModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
@@ -64,7 +65,7 @@ function JobsLoader({ deviceId }: { readonly deviceId: string }) {
 function JobsView({ state, clusterUnit }: { readonly state: JobsState | null; readonly clusterUnit: boolean }) {
   const model = buildDossierJobs(state?.read ?? null, clusterUnit);
   const link = (
-    <Box component="a" href={standardJobsHref()} sx={{ fontSize: "13px", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}>
+    <Box component="a" href={DOSSIER_JOBS_STANDARD_HREF} sx={{ fontSize: "13px", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}>
       Open job log (standard view)
     </Box>
   );
@@ -89,9 +90,12 @@ function JobsView({ state, clusterUnit }: { readonly state: JobsState | null; re
   } else if (model.status === "failed") {
     body = (
       <Box sx={{ px: "18px", pb: "14px" }} data-testid="dossier-jobs-failed">
-        <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>{DOSSIER_JOBS_FAILED_TEXT}</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <StateBadge state="unk" word="UNKNOWN" dense />
+          <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>{DOSSIER_JOBS_FAILED_TEXT}</Typography>
+        </Box>
         <Box sx={{ mt: "4px" }}>
-          <EvidenceStamp at={state.readAt} source="jobs read" missingLabel="UNKNOWN" />
+          <EvidenceStamp at={null} source="jobs read" missingLabel="UNKNOWN" />
         </Box>
       </Box>
     );
@@ -99,6 +103,11 @@ function JobsView({ state, clusterUnit }: { readonly state: JobsState | null; re
     body = (
       <Box sx={{ px: "18px", pb: "14px" }} data-testid="dossier-jobs-empty">
         <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>The job read returned no records for this unit.</Typography>
+        {model.remainder === null ? (
+          <Typography data-testid="dossier-jobs-total-unknown" sx={{ fontSize: "12px", color: ev.unk, mt: "4px" }}>
+            {DOSSIER_JOBS_TOTAL_UNKNOWN_TEXT}
+          </Typography>
+        ) : null}
         <Box sx={{ mt: "4px" }}>
           <EvidenceStamp at={state.readAt} source="jobs read" />
         </Box>
@@ -121,7 +130,13 @@ function JobsView({ state, clusterUnit }: { readonly state: JobsState | null; re
           </Box>
         ))}
         <Box sx={{ pt: "4px" }}>
-          <MoreFooter shown={model.rows.length} total={model.rows.length + model.remainder} noun="jobs" testId="dossier-jobs-more" />
+          {model.remainder === null ? (
+            <Typography component="span" data-testid="dossier-jobs-total-unknown" sx={{ fontSize: "12px", color: ev.unk, ml: "4px" }}>
+              {DOSSIER_JOBS_TOTAL_UNKNOWN_TEXT}
+            </Typography>
+          ) : model.remainder > 0 ? (
+            <MoreFooter shown={model.rows.length} total={model.rows.length + model.remainder} noun="jobs" testId="dossier-jobs-more" />
+          ) : null}
         </Box>
         <Box sx={{ mt: "4px" }}>
           <EvidenceStamp at={state.readAt} source="jobs read" />

@@ -261,6 +261,23 @@ const CREDENTIALS_STANDARD_LINKS: readonly { readonly href: string; readonly lab
   { href: "?screen=administration&tab=registry&section=credentials&standard=1", label: "Open credentials (standard)" },
 ];
 
+function credentialKind(kind: unknown): string {
+  const trimmed = typeof kind === "string" ? kind.trim() : "";
+  return trimmed.length > 0 ? trimmed : "UNKNOWN";
+}
+
+function credentialHasSecret(c: CredentialView): boolean {
+  const k = credentialKind(c.kind);
+  if (k === "snmp_v3") return c.auth_secret === "set" || c.priv_secret === "set";
+  if (k === "snmp_v1_v2c") return c.community === "set";
+  return (
+    (typeof c.secret_set_at === "string" && c.secret_set_at.trim().length > 0) ||
+    c.auth_secret === "set" ||
+    c.priv_secret === "set" ||
+    c.community === "set"
+  );
+}
+
 /**
  * Credentials lines for the Access section: the total of credential references as read, one line per kind (largest
  * first, capped at SYSTEM_LIST_CAP, "+N more" for the rest), the count with a secret set, and the read instant that
@@ -275,19 +292,28 @@ export function credentialLines(read: TimedRead<readonly CredentialView[]>): { l
   }
   const list = (read.read as { state: "ok"; value: readonly CredentialView[] }).value;
   const counts = new Map<string, number>();
-  for (const c of list) counts.set(c.kind, (counts.get(c.kind) ?? 0) + 1);
+  for (const c of list) {
+    const k = credentialKind(c.kind);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const rest = sorted.slice(SYSTEM_LIST_CAP);
   const restTotal = rest.reduce((sum, [, n]) => sum + n, 0);
-  const withSecret = list.filter((c) => c.auth_secret === "set" || c.priv_secret === "set").length;
+  const withSecret = list.filter(credentialHasSecret).length;
   return {
     lines: [
       { label: "Credentials (total as read)", value: plural(list.length, "credential", "credentials") },
-      ...sorted.slice(0, SYSTEM_LIST_CAP).map(([k, n]) => ({ label: `Credentials of kind ${k}`, value: String(n) })),
+      ...sorted.slice(0, SYSTEM_LIST_CAP).map(([k, n]) => ({
+        label: `Credentials of kind ${k}`,
+        value: plural(n, "credential", "credentials"),
+      })),
       { label: "Credentials with a secret set", value: plural(withSecret, "credential", "credentials") },
       { label: "Credential list read at", value: read.readAt ? formatUtc(read.readAt, false) : "not read" },
     ],
-    more: rest.length > 0 ? `+${rest.length} more kinds (${restTotal} credentials)` : null,
+    more:
+      rest.length > 0
+        ? `+${plural(rest.length, "more kind", "more kinds")} (${plural(restTotal, "credential", "credentials")})`
+        : null,
   };
 }
 

@@ -251,22 +251,59 @@ describe("Estate System summary: Access credentials", () => {
       ok([]),
       ok([]),
       ok([
-        credential("ssh_password", { auth_secret: "set" }),
-        credential("ssh_password", { auth_secret: "not set" }),
-        credential("snmp_v3", { auth_secret: "not set", priv_secret: "set" }),
+        credential("ssh_password", { secret_set_at: AT }),
+        credential("ssh_password", { secret_set_at: "" }),
+        credential("snmp_v3", { auth_secret: "not set", priv_secret: "set", secret_set_at: AT }),
         credential("api_password", {}),
       ]),
     );
     const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
     expect(byLabel["Credentials (total as read)"]).toBe("4 credentials");
-    expect(byLabel["Credentials of kind ssh_password"]).toBe("2");
-    expect(byLabel["Credentials of kind snmp_v3"]).toBe("1");
-    expect(byLabel["Credentials of kind api_password"]).toBe("1");
+    expect(byLabel["Credentials of kind ssh_password"]).toBe("2 credentials");
+    expect(byLabel["Credentials of kind snmp_v3"]).toBe("1 credential");
+    expect(byLabel["Credentials of kind api_password"]).toBe("1 credential");
     expect(byLabel["Credentials with a secret set"]).toBe("2 credentials");
     expect(byLabel["Credential list read at"]).toBeTruthy();
     expect(s.source).toContain("credential list");
     expect(s.extraLinks?.[0].href).toBe("?screen=administration&tab=registry&section=credentials&standard=1");
     expect(s.badge).toBe("na");
+  });
+
+  it("counts secret-set credentials across the real /credentials wire shapes and names every per-kind unit", () => {
+    const s = summariseAccess(
+      ok([]),
+      ok([]),
+      ok([
+        credential("ssh_password", { secret_set_at: AT }),
+        credential("snmp_v1_v2c", { community: "set", secret_set_at: AT }),
+        credential("snmp_v3", { auth_secret: "not set", priv_secret: "not set", secret_set_at: AT }),
+        credential("api_password", { secret_set_at: "" }),
+      ]),
+    );
+    const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
+    expect(byLabel["Credentials (total as read)"]).toBe("4 credentials");
+    expect(byLabel["Credentials of kind ssh_password"]).toBe("1 credential");
+    expect(byLabel["Credentials of kind snmp_v1_v2c"]).toBe("1 credential");
+    expect(byLabel["Credentials of kind snmp_v3"]).toBe("1 credential");
+    expect(byLabel["Credentials of kind api_password"]).toBe("1 credential");
+    expect(byLabel["Credentials with a secret set"]).toBe("2 credentials");
+    for (const line of s.lines.filter((l) => l.label.startsWith("Credentials of kind"))) {
+      expect(line.value).toMatch(/^\d+ credentials?$/);
+    }
+  });
+
+  it("groups missing or blank credential kind under UNKNOWN", () => {
+    const s = summariseAccess(
+      ok([]),
+      ok([]),
+      ok([
+        credential(undefined as unknown as CredentialView["kind"]),
+        credential("   " as unknown as CredentialView["kind"]),
+      ]),
+    );
+    const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
+    expect(byLabel["Credentials of kind UNKNOWN"]).toBe("2 credentials");
+    expect(byLabel["Credentials of kind undefined"]).toBeUndefined();
   });
 
   it("caps kinds at the list cap with +N more and keeps the total exact", () => {
@@ -275,7 +312,7 @@ describe("Estate System summary: Access credentials", () => {
     const s = summariseAccess(ok([]), ok([]), ok(list));
     const kindLines = s.lines.filter((l) => l.label.startsWith("Credentials of kind"));
     expect(kindLines).toHaveLength(4);
-    expect(s.more).toBe("+1 more kinds (1 credentials)");
+    expect(s.more).toBe("+1 more kind (1 credential)");
     expect(s.lines.find((l) => l.label === "Credentials (total as read)")?.value).toBe("5 credentials");
   });
 

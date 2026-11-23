@@ -8,12 +8,14 @@ import {
   getScheduledJobs,
   getSystemHealth,
   listAuditEvents,
+  listCredentials,
   listDevices,
   listLocalIdentities,
   listPacketCases,
   listReportRuns,
   listSessions,
   listSupportBundles,
+  type CredentialView,
   type ReportCatalogue,
   type ReportRunView,
 } from "../src/auth/adminApi";
@@ -32,6 +34,7 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => {
     getScheduledJobs: vi.fn(),
     getSystemHealth: vi.fn(),
     listAuditEvents: vi.fn(),
+    listCredentials: vi.fn(),
     listDevices: vi.fn(),
     listLocalIdentities: vi.fn(),
     listSessions: vi.fn(),
@@ -175,6 +178,19 @@ function mockReportsReads() {
   vi.mocked(listReportRuns).mockResolvedValue({ runs: RUNS } as never);
 }
 
+const credential = (id: string, kind: CredentialView["kind"], over: Partial<CredentialView> = {}): CredentialView => ({
+  credential_id: id,
+  credential_reference_id: `ref-${id}`,
+  display_name: "FW-TANGO-04 credential",
+  kind,
+  username: "FW-TANGO-04-svc",
+  allows_check_point: true,
+  allows_palo_alto: false,
+  created_at: AT_NEW,
+  secret_set_at: AT_NEW,
+  ...over,
+});
+
 function mockSystemReads() {
   vi.mocked(getScheduledJobs).mockResolvedValue({
     master_enabled: true, master_env: "SYNTHETIC_MASTER", can_write: false, masked: true, business_hours: null, families: [],
@@ -188,6 +204,14 @@ function mockSystemReads() {
   } as never);
   vi.mocked(listSessions).mockResolvedValue({
     sessions: [session("SES-SYNTH-0001")], identity_labels: {}, idle_timeout_seconds: 900, absolute_lifetime_seconds: 3600,
+  } as never);
+  vi.mocked(listCredentials).mockResolvedValue({
+    credentials: [
+      credential("cred-tango-ssh-1", "ssh_password"),
+      credential("cred-tango-ssh-2", "ssh_password"),
+      credential("cred-tango-snmp2", "snmp_v1_v2c", { community: "set" }),
+      credential("cred-tango-snmp3", "snmp_v3", { auth_secret: "set", priv_secret: "not set" }),
+    ],
   } as never);
 }
 
@@ -254,8 +278,8 @@ const SCREEN_CASES: readonly ScreenCase[] = [
     screen: "System",
     render: () => render(<EstateSystemScreen />),
     mockReads: mockSystemReads,
-    expectedCountText: /2 local identities/,
-    // Access counts carry the identity and session reads' own time; every dl value names its unit.
+    expectedCountText: /2 local identities[\s\S]*Credentials of kind ssh_password/,
+    // Access counts carry the identity, session and credential reads' own time; every dl value names its unit.
     knownOpen: {},
   },
 ];
