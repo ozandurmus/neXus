@@ -1317,18 +1317,6 @@ export function getDeviceInventory(deviceId: string): Promise<DeviceInventory> {
   return call(`/devices/${encodeURIComponent(deviceId)}/inventory`, "GET");
 }
 
-export interface DiagnosticPreview {
-  readonly templateId: string;
-  readonly deviceId: string;
-  readonly target: string;
-  readonly port: string;
-  readonly command: string;
-  readonly gateRevision: number;
-  readonly timeoutSeconds: number;
-  readonly retry: string;
-  readonly frequency: string;
-}
-
 export interface DiagnosticTarget {
   readonly deviceId: string;
   readonly target: string;
@@ -1340,10 +1328,6 @@ export interface DiagnosticTarget {
 
 export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[]; canExecute: boolean }> {
   return call("/api/v2/diagnostics/targets", "GET");
-}
-
-export function getFmgDiagnosticPorts(deviceId: string): Promise<{ ports: string[] }> {
-  return call(`/api/v2/diagnostics/ports?device_id=${encodeURIComponent(deviceId)}`, "GET");
 }
 
 export interface DiagnosticHistoryRow {
@@ -1375,14 +1359,6 @@ export interface DiagnosticResult extends DiagnosticHistoryRow {
   readonly lineCount: number | null;
   readonly shapeId: string | null;
   readonly maskedOutput: string | null;
-}
-
-export function previewFmgDiagnostic(deviceId: string, port: string): Promise<DiagnosticPreview> {
-  return call(`/api/v2/diagnostics/preview?device_id=${encodeURIComponent(deviceId)}&port=${encodeURIComponent(port)}`, "GET");
-}
-
-export function runFmgDiagnostic(deviceId: string, port: string, requestId: string): Promise<{ job_id: string }> {
-  return call("/api/v2/diagnostics", "POST", { device_id: deviceId, port, request_id: requestId });
 }
 
 export function getFmgDiagnostic(jobId: string): Promise<DiagnosticResult> {
@@ -2423,7 +2399,6 @@ export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: str
 export type CpFailoverOperation = "FAILOVER" | "FAILOVER_ALL_VIRTUAL_SYSTEMS";
 export const secondApproveCpFailover = (unit: CpFailoverUnit, requestId: string, revision: number) =>
   call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals/${encodeURIComponent(requestId)}/approve`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, revision });
-export const revokeCpFailover = (approvalId: string, vendor?: string) => call<{ revoked: boolean }>(`${failoverPath(vendor)}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");
 export const startCpFailover = (unit: CpFailoverUnit, binding: { requestId: string; revision: number; executionNonce: string; warningConfirmed: true }) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor: null, ...binding });
 /** {@code scope}: only the bulk readiness run passes one, so its units share one business-hours confirmation. */
@@ -2605,10 +2580,6 @@ export type PolicyCollectionMode = "CHANGED_ONLY" | "FULL";
 export const collectPolicies = (sourceId: string, domainRef = "", mode: PolicyCollectionMode = "CHANGED_ONLY") => call<{ jobId: string }>(
   `/api/v2/policy/sources/${encodeURIComponent(sourceId)}/collect`, "POST", { domainRef, mode });
 
-export type PolicyContainer = { containerId: string; containerName: string };
-export const getPolicyTree = (source = "", container = "", device = "") => call<{
-  sources?: PolicyCollectionSource[]; devices?: PolicyTarget[]; containers?: PolicyContainer[]; policies?: PolicyMetadata[];
-}>(`/api/v2/policy/tree?source=${encodeURIComponent(source)}&container=${encodeURIComponent(container)}&device=${encodeURIComponent(device)}`, "GET");
 export type PolicyUnknownPart = { part: "NAT" | "UNKNOWN"; reasonCode: "VENDOR_NAME_NOT_UNIQUE" | "UNKNOWN"; units: number };
 export type PolicyCollectionStatus = { domainsReused?: number; domainsCollected?: number; rulesReused?: number; domains?: { containerId: string; status: "COLLECTING" | "COLLECTED" | "REUSED"; complete?: boolean; rules: number; publishTime?: string; hitsCollectedAt?: string }[]; unknownParts?: PolicyUnknownPart[]; cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; packagesDone?: number; packagesTotal?: number; domainsDone?: number; domainsTotal?: number; startedAt?: string; lastActivityAt?: string; readTimeoutSeconds?: number; gapUnits?: number; unitFailureCodes?: string[]; collectedAt?: string; hasTranscript?: boolean };
 export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionStatus>(`/api/v2/policy/collections/${encodeURIComponent(id)}`, "GET");
@@ -2861,7 +2832,6 @@ export const createPacketCase = (title: string, payloadZeroing: boolean) =>
 export const getPacketCase = (caseId: string) => call<PacketCaseDetail>(`${PA}/cases/${encodeURIComponent(caseId)}`, "GET");
 export const analyzePacketCase = (caseId: string) =>
   call<{ job_id: string; state: string }>(`${PA}/cases/${encodeURIComponent(caseId)}/analyze`, "POST", {});
-export const getPacketRun = (jobId: string) => call<PacketRun>(`${PA}/runs/${encodeURIComponent(jobId)}`, "GET");
 export const getPacketReport = (jobId: string) => call<PacketReport>(`${PA}/runs/${encodeURIComponent(jobId)}/report`, "GET");
 export async function deletePacketCase(caseId: string): Promise<{ deleted: boolean }> {
   const token = await csrfToken();

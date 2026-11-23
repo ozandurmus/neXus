@@ -1,8 +1,6 @@
 package com.securityexpert.nexus.ui2.service.packetanalysis;
 
 import java.io.IOException;
-import java.math.BigInteger;
-import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,6 +51,7 @@ import com.securityexpert.nexus.ui2.policy.PolicySnapshot.PolicyObject;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot.Rule;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot.Section;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot.Target;
+import com.securityexpert.nexus.ui2.service.packetanalysis.PacketCorrelationAddressMath.ParsedAddress;
 import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
 
 /**
@@ -408,8 +407,8 @@ public final class PacketAnalysisCorrelationService {
         }
 
         // Parse observed addresses into IpIntervals
-        List<ParsedAddress> parsedExplicit = parseAddressList(explicitAddresses);
-        List<ParsedAddress> parsedPacket = parseAddressList(packetIps);
+        List<ParsedAddress> parsedExplicit = PacketCorrelationAddressMath.parseAddressList(explicitAddresses);
+        List<ParsedAddress> parsedPacket = PacketCorrelationAddressMath.parseAddressList(packetIps);
 
         List<HopCandidateMatch> candidateMatches = new ArrayList<>();
         boolean sawOuiOnlySimilarity = !rejectedOuiMacs.isEmpty();
@@ -446,45 +445,45 @@ public final class PacketAnalysisCorrelationService {
             for (ParsedAddress invAddr : candidate.parsedAddresses) {
                 // Check explicit hop addresses/CIDRs first
                 for (ParsedAddress obs : parsedExplicit) {
-                    if (!invAddr.family.equals(obs.family)) continue;
-                    if (!obs.cidrNotation && invAddr.hostAddress.equals(obs.hostAddress)) {
+                    if (!invAddr.family().equals(obs.family())) continue;
+                    if (!obs.cidrNotation() && invAddr.hostAddress().equals(obs.hostAddress())) {
                         evidences.add(EVIDENCE_INTERFACE_ADDRESS);
-                        matchedAddresses.add(invAddr.raw);
-                    } else if (obs.cidrNotation && obs.prefixLength == invAddr.maxBits
-                            && invAddr.hostAddress.equals(obs.hostAddress)) {
+                        matchedAddresses.add(invAddr.raw());
+                    } else if (obs.cidrNotation() && obs.prefixLength() == invAddr.maxBits()
+                            && invAddr.hostAddress().equals(obs.hostAddress())) {
                         evidences.add(EVIDENCE_INTERFACE_ADDRESS);
-                        matchedAddresses.add(invAddr.raw);
-                    } else if (obs.cidrNotation && invAddr.hostAddress.equals(obs.hostAddress)
-                            && !obs.hostAddress.equals(obs.networkStart)) {
+                        matchedAddresses.add(invAddr.raw());
+                    } else if (obs.cidrNotation() && invAddr.hostAddress().equals(obs.hostAddress())
+                            && !obs.hostAddress().equals(obs.networkStart())) {
                         // e.g. hop specified 192.0.2.1/24 (host address + prefix) matching 192.0.2.1/24
                         evidences.add(EVIDENCE_INTERFACE_ADDRESS);
                         evidences.add(EVIDENCE_INTERFACE_SUBNET);
-                        matchedAddresses.add(invAddr.raw);
-                    } else if (invAddr.prefixLength > 0
-                            && invAddr.networkStart.equals(obs.networkStart)
-                            && invAddr.networkEnd.equals(obs.networkEnd)) {
+                        matchedAddresses.add(invAddr.raw());
+                    } else if (invAddr.prefixLength() > 0
+                            && invAddr.networkStart().equals(obs.networkStart())
+                            && invAddr.networkEnd().equals(obs.networkEnd())) {
                         evidences.add(EVIDENCE_INTERFACE_SUBNET);
-                        matchedAddresses.add(invAddr.raw);
-                    } else if (invAddr.prefixLength > 0 && invAddr.prefixLength < invAddr.maxBits
-                            && !obs.cidrNotation
-                            && obs.hostAddress.compareTo(invAddr.networkStart) >= 0
-                            && obs.hostAddress.compareTo(invAddr.networkEnd) <= 0) {
+                        matchedAddresses.add(invAddr.raw());
+                    } else if (invAddr.prefixLength() > 0 && invAddr.prefixLength() < invAddr.maxBits()
+                            && !obs.cidrNotation()
+                            && obs.hostAddress().compareTo(invAddr.networkStart()) >= 0
+                            && obs.hostAddress().compareTo(invAddr.networkEnd()) <= 0) {
                         evidences.add(EVIDENCE_INTERFACE_SUBNET);
-                        matchedAddresses.add(invAddr.raw);
+                        matchedAddresses.add(invAddr.raw());
                     }
                 }
                 // Check packet IPs if no explicit address matched yet
                 if (parsedExplicit.isEmpty()) {
                     for (ParsedAddress pkt : parsedPacket) {
-                        if (!invAddr.family.equals(pkt.family)) continue;
-                        if (invAddr.hostAddress.equals(pkt.hostAddress)) {
+                        if (!invAddr.family().equals(pkt.family())) continue;
+                        if (invAddr.hostAddress().equals(pkt.hostAddress())) {
                             evidences.add(EVIDENCE_INTERFACE_ADDRESS);
-                            matchedAddresses.add(invAddr.raw);
-                        } else if (invAddr.prefixLength > 0 && invAddr.prefixLength < invAddr.maxBits
-                                && pkt.hostAddress.compareTo(invAddr.networkStart) >= 0
-                                && pkt.hostAddress.compareTo(invAddr.networkEnd) <= 0) {
+                            matchedAddresses.add(invAddr.raw());
+                        } else if (invAddr.prefixLength() > 0 && invAddr.prefixLength() < invAddr.maxBits()
+                                && pkt.hostAddress().compareTo(invAddr.networkStart()) >= 0
+                                && pkt.hostAddress().compareTo(invAddr.networkEnd()) <= 0) {
                             evidences.add(EVIDENCE_INTERFACE_SUBNET);
-                            matchedAddresses.add(invAddr.raw);
+                            matchedAddresses.add(invAddr.raw());
                         }
                     }
                 }
@@ -710,8 +709,8 @@ public final class PacketAnalysisCorrelationService {
                 }
             }
         }
-        ParsedAddress flowSrcAddr = parseSingleAddress(preNat.src);
-        ParsedAddress flowDstAddr = parseSingleAddress(effectiveTuple.dst);
+        ParsedAddress flowSrcAddr = PacketCorrelationAddressMath.parseSingleAddress(preNat.src);
+        ParsedAddress flowDstAddr = PacketCorrelationAddressMath.parseSingleAddress(effectiveTuple.dst);
         if (targetDeviceIds.isEmpty()) {
             // Check if any inventory interface subnet contains the flow's src or dst
             for (FlatInterface flat : allInterfaces) {
@@ -875,8 +874,8 @@ public final class PacketAnalysisCorrelationService {
         }
 
         // Supplement ingress/egress interface & zone from subnet containment on this device if not set by hop side
-        ParsedAddress srcAddr = parseSingleAddress(preNat.src);
-        ParsedAddress dstAddr = parseSingleAddress(effectiveTuple.dst);
+        ParsedAddress srcAddr = PacketCorrelationAddressMath.parseSingleAddress(preNat.src);
+        ParsedAddress dstAddr = PacketCorrelationAddressMath.parseSingleAddress(effectiveTuple.dst);
         List<FlatInterface> devIfaces = allInterfaces.stream()
                 .filter(f -> deviceId.equals(f.device.deviceId()))
                 .toList();
@@ -1140,8 +1139,8 @@ public final class PacketAnalysisCorrelationService {
             String sourceZone,
             String destinationZone,
             boolean natConfirmed) {
-        ParsedAddress srcAddr = parseSingleAddress(tuple.src);
-        ParsedAddress dstAddr = parseSingleAddress(tuple.dst);
+        ParsedAddress srcAddr = PacketCorrelationAddressMath.parseSingleAddress(tuple.src);
+        ParsedAddress dstAddr = PacketCorrelationAddressMath.parseSingleAddress(tuple.dst);
         if (srcAddr == null || dstAddr == null) {
             return new RuleEvaluationResult(null, true, "Flow source or destination IP is invalid");
         }
@@ -1267,7 +1266,7 @@ public final class PacketAnalysisCorrelationService {
         }
         PolicyObject obj = objects.get(id);
         if (obj == null) {
-            ParsedAddress inlineAddr = parseAddressOrRange(id);
+            ParsedAddress inlineAddr = PacketCorrelationAddressMath.parseAddressOrRange(id);
             if (inlineAddr != null) {
                 visited.remove(id);
                 return new ObjectEval(inlineAddr.containsAddress(target), false, null, id);
@@ -1302,7 +1301,7 @@ public final class PacketAnalysisCorrelationService {
         }
 
         // Leaf address / host / network / address-range object (supports IPv4 and IPv6)
-        List<ParsedAddress> intervals = parsePolicyAddressObject(obj);
+        List<ParsedAddress> intervals = PacketCorrelationAddressMath.parsePolicyAddressObject(obj);
         if (intervals.isEmpty()) {
             visited.remove(id);
             return new ObjectEval(false, true, "Policy object " + obj.name() + " has no parseable address values", obj.name());
@@ -1472,9 +1471,9 @@ public final class PacketAnalysisCorrelationService {
         boolean matchesFlow(Tuple5 other) {
             return other != null
                     && proto.equalsIgnoreCase(other.proto)
-                    && ipEquals(src, other.src)
+                    && PacketCorrelationAddressMath.ipEquals(src, other.src)
                     && sport == other.sport
-                    && ipEquals(dst, other.dst)
+                    && PacketCorrelationAddressMath.ipEquals(dst, other.dst)
                     && dport == other.dport;
         }
     }
@@ -1700,159 +1699,11 @@ public final class PacketAnalysisCorrelationService {
                     List<String> rawAddrs = iface.addresses().stream()
                             .map(InventoryAddress::address)
                             .toList();
-                    List<ParsedAddress> parsed = parseAddressList(rawAddrs);
+                    List<ParsedAddress> parsed = PacketCorrelationAddressMath.parseAddressList(rawAddrs);
                     out.add(new FlatInterface(dev, ctx.context(), iface, rawAddrs, parsed));
                 }
             }
         }
         return out;
-    }
-
-    private record ParsedAddress(
-            String raw,
-            String family,
-            int maxBits,
-            int prefixLength,
-            boolean cidrNotation,
-            BigInteger hostAddress,
-            BigInteger networkStart,
-            BigInteger networkEnd) {
-        boolean containsAddress(ParsedAddress target) {
-            if (target == null || !family.equals(target.family)) {
-                return false;
-            }
-            return target.networkStart.compareTo(networkStart) >= 0
-                    && target.networkEnd.compareTo(networkEnd) <= 0;
-        }
-    }
-
-    private static List<ParsedAddress> parseAddressList(Collection<String> rawStrings) {
-        List<ParsedAddress> out = new ArrayList<>();
-        for (String raw : rawStrings) {
-            ParsedAddress p = parseAddressOrRange(raw);
-            if (p != null) {
-                out.add(p);
-            }
-        }
-        return out;
-    }
-
-    private static List<ParsedAddress> parsePolicyAddressObject(PolicyObject obj) {
-        List<ParsedAddress> out = new ArrayList<>();
-        Map<String, String> fields = new LinkedHashMap<>();
-        for (String v : obj.values()) {
-            int split = v.indexOf(": ");
-            if (split >= 0) {
-                String k = v.substring(0, split).strip();
-                String val = v.substring(split + 2).strip();
-                fields.put(k, val);
-                if (Set.of("ipv4-address", "ipv6-address", "ip-netmask", "ip-range", "address").contains(k)) {
-                    ParsedAddress p = parseAddressOrRange(val);
-                    if (p != null) out.add(p);
-                }
-            } else {
-                ParsedAddress p = parseAddressOrRange(v.strip());
-                if (p != null) out.add(p);
-            }
-        }
-        if (fields.containsKey("subnet4") && fields.containsKey("mask-length4")) {
-            ParsedAddress p = parseAddressOrRange(fields.get("subnet4") + "/" + fields.get("mask-length4"));
-            if (p != null) out.add(p);
-        }
-        if (fields.containsKey("subnet6") && fields.containsKey("mask-length6")) {
-            ParsedAddress p = parseAddressOrRange(fields.get("subnet6") + "/" + fields.get("mask-length6"));
-            if (p != null) out.add(p);
-        }
-        if (fields.containsKey("ip-address-first") && fields.containsKey("ip-address-last")) {
-            ParsedAddress p = parseAddressOrRange(fields.get("ip-address-first") + "-" + fields.get("ip-address-last"));
-            if (p != null) out.add(p);
-        }
-        return out;
-    }
-
-    private static ParsedAddress parseSingleAddress(String raw) {
-        return parseAddressOrRange(raw);
-    }
-
-    private static boolean ipEquals(String a, String b) {
-        if (Objects.equals(a, b)) return true;
-        ParsedAddress pa = parseSingleAddress(a);
-        ParsedAddress pb = parseSingleAddress(b);
-        return pa != null && pb != null && pa.family.equals(pb.family) && pa.hostAddress.equals(pb.hostAddress);
-    }
-
-    private static ParsedAddress parseAddressOrRange(String raw) {
-        if (raw == null || raw.isBlank()) return null;
-        String text = raw.strip();
-        if (text.contains("-")) {
-            String[] parts = text.split("-", 2);
-            ParsedAddress start = parseCidrOrHost(parts[0].strip());
-            ParsedAddress end = parseCidrOrHost(parts[1].strip());
-            if (start == null || end == null || !start.family.equals(end.family)
-                    || start.hostAddress.compareTo(end.hostAddress) > 0) {
-                return null;
-            }
-            return new ParsedAddress(
-                    text, start.family, start.maxBits, start.maxBits, false,
-                    start.hostAddress, start.hostAddress, end.hostAddress);
-        }
-        return parseCidrOrHost(text);
-    }
-
-    private static ParsedAddress parseCidrOrHost(String text) {
-        String[] parts = text.split("/", -1);
-        if (parts.length > 2) return null;
-        String addrPart = parts[0].strip();
-        boolean isIpv6 = addrPart.contains(":");
-        int maxBits = isIpv6 ? 128 : 32;
-        String family = isIpv6 ? "ipv6" : "ipv4";
-
-        BigInteger host = isIpv6 ? parseIpv6Literal(addrPart) : parseIpv4Literal(addrPart);
-        if (host == null) return null;
-
-        boolean hasPrefix = parts.length == 2;
-        int prefix = maxBits;
-        if (hasPrefix) {
-            try {
-                prefix = Integer.parseInt(parts[1].strip());
-                if (prefix < 0 || prefix > maxBits) return null;
-            } catch (NumberFormatException invalid) {
-                return null;
-            }
-        }
-
-        BigInteger allOnes = BigInteger.ONE.shiftLeft(maxBits).subtract(BigInteger.ONE);
-        BigInteger hostMask = prefix == maxBits
-                ? BigInteger.ZERO
-                : BigInteger.ONE.shiftLeft(maxBits - prefix).subtract(BigInteger.ONE);
-        BigInteger netMask = allOnes.xor(hostMask);
-        BigInteger netStart = host.and(netMask);
-        BigInteger netEnd = netStart.or(hostMask);
-
-        return new ParsedAddress(text, family, maxBits, prefix, hasPrefix, host, netStart, netEnd);
-    }
-
-    private static BigInteger parseIpv4Literal(String ip) {
-        String[] octets = ip.split("\\.", -1);
-        if (octets.length != 4) return null;
-        long result = 0;
-        for (String octet : octets) {
-            if (!octet.matches("0|[1-9][0-9]{0,2}")) return null;
-            int val = Integer.parseInt(octet);
-            if (val < 0 || val > 255) return null;
-            result = (result << 8) | val;
-        }
-        return BigInteger.valueOf(result);
-    }
-
-    private static BigInteger parseIpv6Literal(String ip) {
-        if (!ip.matches("[0-9a-fA-F:.]+")) return null;
-        try {
-            byte[] bytes = InetAddress.getByName(ip).getAddress();
-            if (bytes.length != 16) return null;
-            return new BigInteger(1, bytes);
-        } catch (Exception invalid) {
-            return null;
-        }
     }
 }

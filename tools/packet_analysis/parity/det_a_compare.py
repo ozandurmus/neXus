@@ -21,6 +21,9 @@ import time
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from core_compare import _sorted_by, default_classpath, json_diff, mask  # noqa: E402
+
 DET_A_INPUTS = [
     # Core + onset / loss / delay / stall / reset scenarios
     ("demo", "demo", {}),
@@ -246,7 +249,6 @@ for _case in ("pilot", "pilot_healthy", "pilot_ipv6", "real_case_2", "incident_r
         "Java appends syn_frame (smallest frame), the reference takes the first row it scans"
     )
 
-HEX32 = re.compile(r"\b[0-9a-f]{32}\b")
 # Integrity finding ids end in a per-run counter that follows the output order of integrity.sql endpoint_packets;
 # the reference has no outer ORDER BY there, Java orders by corrected, frame (DETERMINISM.md, deliberate
 # differences). A findings difference that disappears when only those counters are masked is that tie-break.
@@ -336,20 +338,6 @@ def compare_tables(ref, java):
     return "differs", detail
 
 
-def mask(value):
-    if isinstance(value, str):
-        return HEX32.sub("<id>", value)
-    if isinstance(value, list):
-        return [mask(v) for v in value]
-    if isinstance(value, dict):
-        return {mask(k): mask(v) for k, v in value.items()}
-    return value
-
-
-def _sorted_by(items, *keys):
-    return sorted(items, key=lambda x: json.dumps([x.get(k) for k in keys], sort_keys=True, default=str))
-
-
 def canon_section(name, value, capture_names):
     def names(v):
         if isinstance(v, str):
@@ -425,36 +413,6 @@ def canon_section(name, value, capture_names):
             for q in (s.get("endpoint_quality") or {}).values():
                 q["excluded"] = dict(sorted(q["excluded"].items()))
     return mask(value)
-
-
-def json_diff(a, b, path="", out=None, limit=12):
-    out = [] if out is None else out
-    if len(out) >= limit:
-        return out
-    if type(a) is not type(b) and not (isinstance(a, (int, float)) and isinstance(b, (int, float)) and type(a) is type(b)):
-        out.append(f"{path}: type {type(a).__name__} {json.dumps(a)[:160]} != {type(b).__name__} {json.dumps(b)[:160]}")
-    elif isinstance(a, dict):
-        if list(a) != list(b):
-            missing = [k for k in a if k not in b]
-            extra = [k for k in b if k not in a]
-            if missing or extra:
-                out.append(f"{path}: keys missing_in_java={missing[:8]} extra_in_java={extra[:8]}")
-            else:
-                out.append(f"{path}: key order ref={list(a)[:12]} java={list(b)[:12]}")
-        for k in a:
-            if k in b:
-                json_diff(a[k], b[k], f"{path}.{k}", out, limit)
-    elif isinstance(a, list):
-        if len(a) != len(b):
-            out.append(f"{path}: length {len(a)} != {len(b)}")
-        for i, (x, y) in enumerate(zip(a, b)):
-            json_diff(x, y, f"{path}[{i}]", out, limit)
-    elif isinstance(a, float) and isinstance(b, float):
-        if repr(a) != repr(b) and not (math.isnan(a) and math.isnan(b)):
-            out.append(f"{path}: {a!r} != {b!r}")
-    elif a != b:
-        out.append(f"{path}: {json.dumps(a)[:200]} != {json.dumps(b)[:200]}")
-    return out
 
 
 def force_single_thread():
@@ -756,17 +714,6 @@ def java_run(case_dir: Path, classpath: str, check_retrans: bool = False):
     formatting_ok = text == json.dumps(report, indent=2)
     retrans_pages = json.loads(retrans_path.read_text(encoding="utf-8")) if check_retrans and retrans_path.exists() else None
     return dict(dumps=dumps, report=report, seconds=elapsed, formatting_ok=formatting_ok, retrans_pages=retrans_pages)
-
-
-def default_classpath(repo: Path):
-    out = subprocess.run(
-        ["./gradlew", "-q", ":packet-analysis:printRuntimeClasspath"],
-        cwd=repo / "ui2",
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip().splitlines()
-    return out[-1]
 
 
 def compare_case(name, ref, java, verbose):

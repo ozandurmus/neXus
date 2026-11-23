@@ -80,6 +80,10 @@ public final class BackgroundSnapshot<T> {
         current = null;
     }
 
+    boolean isRefreshing() {
+        return refreshing.get();
+    }
+
     private Value<T> computeNow() {
         Instant started = clock.instant();
         Value<T> value = new Value<>(compute.get(), started);

@@ -212,8 +212,19 @@ public final class AsaPolicyMapper {
             // An ACL with no access-group binding and no use found is listed too, with the use "none": it is not
             // enforced as an access rule (A0-ASA-2) and hygiene reports it. It is no collection failure: every rule is
             // in the snapshot, and any failure would make lookup and hygiene treat the whole policy as incomplete.
+            // ACL_NOT_BOUND (PO 2026-11-23): "none" only when no parsed feature uses it AND no configuration line the
+            // parser does not read names it; an ACL named only by such a line is "unknown" (never "unused", never OK).
             Set<String> found = c.aclUses().getOrDefault(aclName, Set.of());
-            Set<String> uses = found.isEmpty() ? Set.of("none") : found;
+            Set<String> uses;
+            if (found.isEmpty()) {
+                uses = Set.of("none");
+            } else if (found.size() == 1 && found.contains(AsaConfigPolicyParser.UNPARSED_REFERENCE)) {
+                uses = new LinkedHashSet<>();
+                uses.add("unknown");
+                uses.addAll(found);
+            } else {
+                uses = found;
+            }
             {
                 emittedNotEvaluated.add(aclName);
                 int num = notEvaluatedRules.size() + 1;

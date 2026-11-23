@@ -49,6 +49,9 @@ public final class AsaConfigPolicyParser {
             "anc", "cts", "ScanSafe", "regex", "url-server", "filter", "wccp", "botnet", "fragment",
             "conns", "clear", "end", "service", "auto-update", " key", "key", "policy-list", "priority-queue");
 
+    /** ACL use recorded when an ACL name appears on a configuration line this parser does not interpret. */
+    public static final String UNPARSED_REFERENCE = "unparsed_reference";
+
     public static AsaPolicyConfig parse(String runningConfig) {
         return parse(runningConfig, false);
     }
@@ -83,6 +86,8 @@ public final class AsaConfigPolicyParser {
         List<AccessGroup> accessGroups = new ArrayList<>();
         List<NatRule> natRules = new ArrayList<>();
         Map<String, Set<String>> aclUses = new LinkedHashMap<>();
+        // Lines whose ACL references no parsed feature accounts for (scanned after the loop, once every ACL is known).
+        List<RawLine> unparsedLines = new ArrayList<>();
 
         int parsedAces = 0;
         int unparsedAces = 0;
@@ -119,9 +124,7 @@ public final class AsaConfigPolicyParser {
 
         for (int lineIdx = 0; lineIdx <= rawLines.size(); lineIdx++) {
             RawLine rl = lineIdx < rawLines.size() ? rawLines.get(lineIdx) : null;
-            if (rl != null) {
-                scanAclUses(rl.tokens(), rl.indented(), currentBlock, aclUses);
-            }
+            boolean recognisedUse = rl != null && scanAclUses(rl.tokens(), rl.indented(), currentBlock, aclUses);
 
             if (rl != null && rl.indented()) {
                 List<String> w = rl.tokens();
@@ -145,6 +148,9 @@ public final class AsaConfigPolicyParser {
                             ifShutdown = true;
                         } else if ("no".equals(kw) && w.size() >= 2 && "shutdown".equals(w.get(1))) {
                             ifShutdown = false;
+                        } else if (!recognisedUse && !"description".equals(kw)) {
+                            // e.g. 'igmp access-group X': an interface sub-command this parser does not read
+                            unparsedLines.add(rl);
                         }
                     }
                     case "object network" -> {
@@ -207,7 +213,10 @@ public final class AsaConfigPolicyParser {
                         }
                     }
                     default -> {
-                        // non-policy block children are ignored
+                        // non-policy block children are not interpreted: an ACL named there may be in use (UNKNOWN)
+                        if (!recognisedUse && !"description".equals(w.get(0))) {
+                            unparsedLines.add(rl);
+                        }
                     }
                 }
                 continue;
@@ -402,14 +411,21 @@ public final class AsaConfigPolicyParser {
                     accessGroups.add(ag);
                 } else {
                     unknownTopLevelPolicyLines++;
+                    unparsedLines.add(rl);
                 }
                 continue;
             }
             if ("nat".equals(first)) {
+                // Parsed NAT carries no ACL name; a legacy policy NAT ('nat (if) N access-list X') is not read and
+                // therefore stays an unparsed rule whose line may name an ACL.
                 NatRule nat = parseManualNat(w);
                 natRules.add(nat);
-                if (nat.unparsed()) unparsedNatRules++;
-                else parsedNatRules++;
+                if (nat.unparsed()) {
+                    unparsedNatRules++;
+                    if (!recognisedUse) unparsedLines.add(rl);
+                } else {
+                    parsedNatRules++;
+                }
                 continue;
             }
 
@@ -417,7 +433,12 @@ public final class AsaConfigPolicyParser {
             if (!NON_POLICY_TOP_LEVEL_COMMANDS.contains(first)) {
                 unknownTopLevelPolicyLines++;
             }
+            if (!recognisedUse) {
+                unparsedLines.add(rl);
+            }
         }
+
+        scanUnparsedAclReferences(unparsedLines, acls.keySet(), aclUses);
 
         Counters counters = new Counters(
                 parsedAces,
@@ -1247,48 +1268,71 @@ public final class AsaConfigPolicyParser {
         return null;
     }
 
-    private static void scanAclUses(List<String> w, boolean indented, String currentBlock, Map<String, Set<String>> aclUses) {
-        if (w.isEmpty()) return;
+    /** Records the recognised uses on one line; true when at least one use was recorded for this line. */
+    private static boolean scanAclUses(List<String> w, boolean indented, String currentBlock, Map<String, Set<String>> aclUses) {
+        if (w.isEmpty()) return false;
         String first = w.get(0);
+        boolean recorded = false;
         // crypto_map: crypto map M n match address X (or crypto dynamic-map M n match address X)
         if (!indented && "crypto".equals(first) && w.size() >= 7
                 && ("map".equals(w.get(1)) || "dynamic-map".equals(w.get(1)))) {
             for (int i = 2; i + 2 < w.size(); i++) {
                 if ("match".equals(w.get(i)) && "address".equals(w.get(i + 1))) {
                     addAclUse(aclUses, w.get(i + 2), "crypto_map");
+                    recorded = true;
                 }
             }
-            return;
+            return recorded;
         }
         // capture: capture ... access-list X
         if (!indented && "capture".equals(first)) {
             for (int i = 1; i + 1 < w.size(); i++) {
                 if ("access-list".equals(w.get(i))) {
                     addAclUse(aclUses, w.get(i + 1), "capture");
+                    recorded = true;
                 }
             }
-            return;
+            return recorded;
         }
         // vpn_filter: vpn-filter value X | ipv6-vpn-filter value X
         if (("vpn-filter".equals(first) || "ipv6-vpn-filter".equals(first)) && w.size() >= 3 && "value".equals(w.get(1))) {
             addAclUse(aclUses, w.get(2), "vpn_filter");
-            return;
+            return true;
         }
         // split_tunnel: split-tunnel-network-list value X
         if ("split-tunnel-network-list".equals(first) && w.size() >= 3 && "value".equals(w.get(1))) {
             addAclUse(aclUses, w.get(2), "split_tunnel");
-            return;
+            return true;
         }
         // class_map: match access-list X
         if ("match".equals(first) && w.size() >= 3 && "access-list".equals(w.get(1))) {
             addAclUse(aclUses, w.get(2), "class_map");
-            return;
+            return true;
         }
         // route_map: match ip address X ...
         if ("match".equals(first) && w.size() >= 4 && "ip".equals(w.get(1)) && "address".equals(w.get(2))) {
             if (!"prefix-list".equals(w.get(3))) {
                 for (int i = 3; i < w.size(); i++) {
                     addAclUse(aclUses, w.get(i), "route_map");
+                }
+                recorded = true;
+            }
+        }
+        return recorded;
+    }
+
+    /**
+     * ACL_NOT_BOUND (PO 2026-11-23): an ACL named as a whole token (exact, case-sensitive, no normalisation) on a
+     * configuration line the parser does not interpret is possibly in use by a feature this model does not read; it is
+     * recorded as use {@value #UNPARSED_REFERENCE}, so the mapper reports it UNKNOWN, never "unused".
+     */
+    private static void scanUnparsedAclReferences(
+            List<RawLine> unparsedLines, Set<String> definedAcls, Map<String, Set<String>> aclUses) {
+        if (definedAcls.isEmpty()) return;
+        for (RawLine rl : unparsedLines) {
+            for (String tok : rl.tokens()) {
+                if (definedAcls.contains(tok)) {
+                    addAclUse(aclUses, tok, UNPARSED_REFERENCE);
                 }
             }
         }
