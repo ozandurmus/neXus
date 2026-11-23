@@ -133,8 +133,8 @@ describe("client-side pushState navigation", () => {
     expect(window.location.search).toBe("?screen=inventory");
     expect(await screen.findByText("No device to show")).toBeInTheDocument();
 
-    if (!within(rail).queryByRole("link", { name: "HA and readiness" })) fireEvent.click(within(rail).getByRole("button", { name: "Operations" }));
-    fireEvent.click(within(rail).getByRole("link", { name: "HA and readiness" }));
+    if (!within(rail).queryByRole("link", { name: "HA and failover" })) fireEvent.click(within(rail).getByRole("button", { name: "Operations" }));
+    fireEvent.click(within(rail).getByRole("link", { name: "HA and failover" }));
     expect(window.location.search).toBe("?screen=operations");
     expect(await screen.findByText("No HA pair or cluster enrolled")).toBeInTheDocument();
 
@@ -311,8 +311,8 @@ describe("shared shell-level cache deduplication, staleness and invalidation", (
 
     // Navigate to Operations (which also calls listDevices() on mount) within 30 s
     now += 5_000;
-    if (!within(rail).queryByRole("link", { name: "HA and readiness" })) fireEvent.click(within(rail).getByRole("button", { name: "Operations" }));
-    fireEvent.click(within(rail).getByRole("link", { name: "HA and readiness" }));
+    if (!within(rail).queryByRole("link", { name: "HA and failover" })) fireEvent.click(within(rail).getByRole("button", { name: "Operations" }));
+    fireEvent.click(within(rail).getByRole("link", { name: "HA and failover" }));
     expect(await screen.findByText("CLS-ROMEO-01")).toBeInTheDocument();
 
     expect(fetchMock.mock.calls.filter(([u]) => String(u) === "/devices")).toHaveLength(1);

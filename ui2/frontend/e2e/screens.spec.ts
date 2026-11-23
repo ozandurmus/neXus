@@ -65,12 +65,12 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       await expect(page.getByRole("checkbox", { name: /^Backup target / }).or(page.getByRole("img", { name: /^Backup target / })).first()).toBeVisible();
       break;
     case "operations": {
-      await expect(page.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
+      await expect(page.getByRole("group", { name: "Readiness segments" }).getByRole("button")).toHaveCount(5);
       const table = page.getByRole("table", { name: "HA clusters", exact: true });
-      for (const name of ["Status", "Cluster", "Active ↔ Standby members", "Primary reason", "Last evaluated"]) {
+      for (const name of ["Status", "Cluster", "Roles", "Reason", "Checked", "Action"]) {
         await expect(table.getByRole("columnheader", { name, exact: true })).toBeVisible();
       }
-      const firstRow = table.locator("tbody tr[aria-expanded]").first();
+      const firstRow = table.locator("tbody tr[data-readiness-row]").first();
       await expect(firstRow).toBeVisible();
       // Summary reads may reorder rows by status; keep inspecting the same opaque identity.
       const identity = await firstRow.getAttribute("data-readiness-row");
@@ -79,16 +79,12 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       // aiview may start read-only readiness (AGENTS.md, PO decision 2026-10-04) when the server grants it, so the controls
       // are offered -- or locked with the role reason -- and this read-only run never clicks them (a POST is blocked anyway).
       await expect(page.getByTestId("toolbar-run-readiness")).toBeVisible();
-      await expect(page.getByText(/Not ready: a pre-check found a blocking condition/)).toBeVisible();
       await expect(page.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveCount(0);
       const before = page.url();
-      await expect(row.getByRole("checkbox")).toBeVisible();
-      await expect(row).toHaveAttribute("aria-expanded", "false");
-      await row.getByRole("button", { name: /^Checks for / }).click();
-      await expect(row).toHaveAttribute("aria-expanded", "true");
-      await page.getByRole("region", { name: /^Checks for / }).getByRole("button", { name: "Open full detail" }).click();
+      // A row click opens the one detail drawer (no inline expansion, no second verdict card).
+      await row.getByRole("cell").nth(2).click();
       const drawer = page.getByRole("dialog", { name: "HA readiness detail" });
-      await expect(drawer.getByRole("table", { name: "Readiness results" })).toBeVisible();
+      await expect(drawer.getByRole("button", { name: "Close detail" })).toBeVisible();
       expect(page.url()).toBe(before);
       await drawer.getByRole("button", { name: "Close detail" }).click();
       await expect(table).toBeVisible();
