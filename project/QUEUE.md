@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T05:11:52Z
+Build: NXS-LOCAL-0398 · Track: PCP.x · Generated: 2026-11-23T09:49:36Z
 
 ## Now
-- NXS-LOCAL-0397 — Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence (automated_validated)
+- NXS-LOCAL-0398 — Window-preserving requeue (V263), checkpoint-and-yield hardening, Estate view review fixes and debt splits (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -48,6 +48,7 @@ Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T05:11:52Z
 - P3/planned add_device_discovery_failure_class_visible
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
 - P3/planned backup_claim_time_authorization_recheck
+- P3/planned backup_module_cutover_authorization
 - P3/planned corporate_inspection_ca_verify_with_it
 - P3/planned cp_policy_chunked_hits_acceptance
 - P3/planned cp_vsx_config_collected_without_vs_context
@@ -144,8 +145,8 @@ Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T05:11:52Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0398 (automated_validated)
 - NXS-LOCAL-0397 (automated_validated)
 - NXS-LOCAL-0396 (automated_validated)
 - NXS-LOCAL-0395 (automated_validated)
 - NXS-LOCAL-0394 (automated_validated)
-- NXS-LOCAL-0393 (automated_validated)

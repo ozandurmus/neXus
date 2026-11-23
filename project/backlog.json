@@ -567,6 +567,15 @@
       "priority": "P3",
       "target": "PR 384 closed 2026-11-23; worker already writes failure_reason_class:<CLASS>; dialog shows only SSH trust copy",
       "note": ""
+    },
+    {
+      "id": "backup_module_cutover_authorization",
+      "category": "deploy",
+      "title": "Backup module cutover to ui2-backup: prepared, not performed; needs a PO authorization reference",
+      "status": "planned",
+      "priority": "P3",
+      "target": "docs/operations/BACKUP_MODULE_CUTOVER.md; tools/delivery/module_deploy.py --ownership-transfer (a4b00131)",
+      "note": ""
     }
   ]
 }

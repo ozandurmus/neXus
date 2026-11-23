@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0398",
+      "status": "automated_validated",
+      "title": "Window-preserving requeue (V263), checkpoint-and-yield hardening, Estate view review fixes and debt splits",
+      "summary": "Deferred in-window jobs stay claimable for a bounded grace after the window ends (a4b00131, V263), Check Point resume recollects a changed domain and read jobs yield at unit boundaries, and module_deploy keeps ownership on routine replacement with the backup cutover prepared, not performed. Nine ship batches (7f8c3a40 through c039ff22) add the Estate dossier Policy hygiene, Configuration and logs blocks, System Roles and queue fixes and Reports standard-view links, and make missing or non-finite counts UNKNOWN instead of zero.",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0398.md"
+    },
+    {
       "build": "NXS-LOCAL-0397",
       "status": "automated_validated",
       "title": "Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence",
