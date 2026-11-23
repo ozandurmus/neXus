@@ -111,6 +111,17 @@ describe("attention rules: overview sources", () => {
     expect(row.href).toBe("?screen=operations&tab=jobs&state=FAILED&since_hours=24");
   });
 
+  it("failed-jobs: a failed job without a target device (cluster-level) does not crash the overview", () => {
+    const o = overview([dev(1)], {
+      attention: { ...overview([]).attention, failed_jobs_24h: { count: 1, terminal_24h: 1, state: "OK", last_at: ago(0.5) } },
+      exceptions: { ...overview([]).exceptions, failed_jobs: { total: 1, rows: [
+        { job_id: "j1", job_type: "policy", device_id: null, label: null, terminal_reason: "collect_failed", finished_at: ago(0.5) },
+      ], reasons: [] } },
+    });
+    const row = find(buildAttention(inputs(o), undefined).rows, "failed-jobs");
+    expect(row).toMatchObject({ count: 1, names: ["no device"] });
+  });
+
   it("not-read and read-ageing follow the one freshness scale (24 h / 72 h)", () => {
     const rows = buildAttention(inputs(overview([dev(1, { last_read_at: ago(23) }), dev(2, { last_read_at: ago(30) }), dev(3, { last_read_at: ago(80) }),
       dev(4, { last_read_at: null })])), undefined).rows;

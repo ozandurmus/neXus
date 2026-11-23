@@ -162,7 +162,7 @@ function row(key: RuleKey, items: readonly Affected[], what: string, at: string 
     detail: extra.detail ?? null, at, atKind: extra.atKind ?? "age", atLabel, href: spec.href, linkLabel: spec.linkLabel };
 }
 
-const deviceName = (d: { hostname: string | null; device_id: string }) => d.hostname?.trim() || d.device_id.slice(0, 8);
+const deviceName = (d: { hostname: string | null; device_id: string | null }) => d.hostname?.trim() || (d.device_id ? d.device_id.slice(0, 8) : "unknown device");
 
 type EstateDevice = NonNullable<OverviewView["estate"]>["devices"][number];
 
@@ -202,7 +202,8 @@ function overviewRows(o: OverviewView, controls: readonly ComplianceControlItem[
   const failed = o.exceptions?.failed_jobs;
   if (failed && failed.total > 0) {
     const reasons = [...(failed.reasons ?? [])].sort((a, b) => b.count - a.count);
-    const labels = [...new Set(failed.rows.map((r) => r.label?.trim() || r.device_id.slice(0, 8)))];
+    // A job without a target device (e.g. a cluster-level policy collection) has device_id null (crash 2026-11-23 13:15).
+    const labels = [...new Set(failed.rows.map((r) => r.label?.trim() || (r.device_id ? r.device_id.slice(0, 8) : "no device")))];
     out.push(row("failed-jobs", [], `${plural(failed.total, "job", "jobs")} failed in the last 24 h`,
       o.attention?.failed_jobs_24h?.last_at ?? newest(failed.rows.map((r) => r.finished_at)), "latest",
       { count: failed.total, names: labels.slice(0, MAX_NAMES), more: 0, namesLead: labels.length ? "latest on" : undefined,

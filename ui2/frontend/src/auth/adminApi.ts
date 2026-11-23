@@ -2271,7 +2271,7 @@ export interface OverviewView {
     state?: EvidenceState;
   };
   readonly exceptions: {
-    failed_jobs: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }>; reasons?: FailureReason[] };
+    failed_jobs: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string | null; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }>; reasons?: FailureReason[] };
     config_changes: { total: number; rows: Array<{ device_id: string; label: string | null; cluster?: string | null; run_id: string; sections_latest: number; collected_at: string }> };
     cluster_diff: { total: number; unknown: number; all_refs: string[]; rows: Array<{ cluster_ref: string; diff_section_count: number; diff_setting_count: number; diff_sections: string[]; computed_at: string }> };
     state?: EvidenceState;

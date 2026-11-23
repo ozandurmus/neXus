@@ -295,7 +295,7 @@ function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
                 <Link key={r.job_id} href={q({ screen: "operations", tab: "jobs", q: r.job_id })} underline="none"
                   sx={{ color: "inherit", display: "block", py: 0.75, borderTop: `1px solid ${m3.outlineVar}` }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                    <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.label ?? r.device_id.slice(0, 8)} <Box component="span" title={r.job_type} sx={{ fontWeight: 400, color: m3.onSurfaceVar }}>· {jobTypeLabel(r.job_type)}</Box></Typography>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.label ?? (r.device_id ? r.device_id.slice(0, 8) : "no device")} <Box component="span" title={r.job_type} sx={{ fontWeight: 400, color: m3.onSurfaceVar }}>· {jobTypeLabel(r.job_type)}</Box></Typography>
                     <Typography sx={{ fontSize: 12 }}><Ts at={r.finished_at} seconds={false} /></Typography>
                   </Box>
                   <Typography noWrap title={r.terminal_reason ?? ""} sx={{ fontSize: 11.5, color: m3.onSurfaceVar }}>{r.terminal_reason ?? "—"}</Typography>
