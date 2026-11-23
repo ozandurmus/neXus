@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-11-23",
-  "reviewed_current_build": "NXS-LOCAL-0397",
+  "reviewed_current_build": "NXS-LOCAL-0398",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -391,7 +391,8 @@
     "backup_claim_time_authorization_recheck": "java_debt",
     "cve_acceptances_review_2026_11_28": "java_debt",
     "script_run_launcher_stdout_race": "java_debt",
-    "estate_view_review_open_points": "java_feature"
+    "estate_view_review_open_points": "java_feature",
+    "backup_module_cutover_authorization": "java_debt"
   },
   "converted_lessons": [
     {

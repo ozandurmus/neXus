@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `685910d2`; ships through 2026-11-23 are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `c039ff22`; ships through 2026-11-23 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V262** (live version not re-checked since V242).
+UI2 is the maintained Java/React product; repository schema is **V263** (live version not re-checked since V242).
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -20,9 +20,9 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0397` — **AUTOMATED_VALIDATED** (started 2026-11-23): policy chunk
-garbage collection and the Flyway expand/contract fence; ships since 2026-11-18
-are `NXS-LOCAL-0392`-`0396`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0398` — **AUTOMATED_VALIDATED** (2026-11-23): window-preserving
+requeue (V263), checkpoint-and-yield hardening and Estate view review fixes;
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0397`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
@@ -30,11 +30,9 @@ Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.
 
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
 
-Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-2 (V251, V258), static route phase R0 reads only (V252, zero writes; write carve-out ratified), ASA saved-state relation (V253), VSX chassis failover (V255/V256), Check Point per-VS policy gate (V254), failover authority recheck at worker start (V260), database roles step 0 (V261), aiview masked read-only admin switch (default off), Overwatch rename R1 (text, env dual-read), notification mail templates, and policy chunk garbage collection plus a narrowed telemetry audit (V262, hourly, `UI2_POLICY_CHUNK_GC=off` disables). The alternative Estate view (Brief, Wall, Dossier, Failover, Changes, Compliance, Backups, Ask, Rewind, Cases, Reports, System, Lifecycle) is read-only and carries evidence stamps; unreadable evidence shows UNKNOWN. Not real-environment validated.
+Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-2 (V251, V258), static route phase R0 reads only (V252, zero writes; write carve-out ratified), ASA saved-state relation (V253), VSX chassis failover (V255/V256), Check Point per-VS policy gate (V254), failover authority recheck at worker start (V260), database roles step 0 (V261), aiview masked read-only admin switch (default off), Overwatch rename R1 (text, env dual-read), notification mail templates, and policy chunk garbage collection plus a narrowed telemetry audit (V262, hourly, `UI2_POLICY_CHUNK_GC=off` disables), and window-preserving requeue (V263; read jobs yield at unit boundaries). Backup module cutover prepared, not performed. The alternative Estate view (Brief, Wall, Dossier, Failover, Changes, Compliance, Backups, Ask, Rewind, Cases, Reports, System, Lifecycle) is read-only and carries evidence stamps; unreadable evidence shows UNKNOWN. Not real-environment validated.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
-
-Earlier builds `NXS-LOCAL-0374`-`0390`: see `project/build_history.json`.
 
 Failover execution plan PRs 1–10 landed (V133–V143). The Check Point and Palo
 Alto pilot runs finished DONE/SUCCEEDED on 2026-10-22 (`failover_run`). The
