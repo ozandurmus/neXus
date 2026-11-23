@@ -363,13 +363,56 @@ class CpFailoverChecksTest {
         check(first.status().equals("PASS") && Boolean.TRUE.equals(first.derived().get("baselineRecorded")));
         var at=java.time.Instant.parse("2026-09-30T12:00:00Z");
         check(CpFailoverChecks.readinessSync(measured,first.derived(),at).status().equals("PASS"));
-        var increased=CpFailoverChecks.readinessSync(measured.replace("853745","853747"),first.derived(),at);
-        check(increased.status().equals("FAIL") && increased.derived().get("lostUpdatesIncrease").toString().equals("2"));
+        // PO 2026-11-23: +2 in an hour is a non-blocking warning; +2000 in the same hour is a failure.
+        var increased=CpFailoverChecks.readinessSync(measured.replace("853745","853747"),first.derived(),at,at.plusSeconds(3600));
+        check(increased.status().equals("WARN") && increased.derived().get("lostUpdatesIncrease").toString().equals("2"));
+        var surge=CpFailoverChecks.readinessSync(measured.replace("853745","855745"),first.derived(),at,at.plusSeconds(3600));
+        check(surge.status().equals("FAIL") && surge.derived().get("lostUpdatesIncrease").toString().equals("2000"));
         var reset=CpFailoverChecks.readinessSync(SYNC,first.derived(),at);
         check(reset.status().equals("PASS") && Boolean.TRUE.equals(reset.derived().get("counterReset")));
         check(CpFailoverChecks.readinessSync("unsupported",first.derived(),at).status().equals("UNKNOWN"));
         check(CpFailoverChecks.readinessSync(measured.replace("Sync status: OK","Sync status: Off - disabled"),
             first.derived(),at).status().equals("FAIL"));
+    }
+    @Test void smallLostUpdateRateIsAWarningAndLargeOrOtherCountersFail() {
+        var base=java.time.Instant.parse("2026-11-20T00:00:00Z");
+        var baseline=CpFailoverChecks.readinessSync(SYNC,Map.of(),null,base).derived();
+        check(CpFailoverChecks.LOST_UPDATES_WARN_PER_HOUR==10);
+        // +1 in 4.1 h and +35 in 6 h: warning, non-blocking, with the elapsed time recorded.
+        var one=CpFailoverChecks.readinessSync(lost(1),baseline,base,base.plusSeconds(14760));
+        check(one.status().equals("WARN") && one.derived().get("elapsedSeconds").equals(14760L)
+            && one.derived().get("warnPerHour").equals(10));
+        check(CpFailoverChecks.readinessSync(lost(35),baseline,base,base.plusSeconds(6*3600)).status().equals("WARN"));
+        // Less than one hour is assumed to be one hour: +10 in 5 min is still a warning, +11 is not.
+        check(CpFailoverChecks.readinessSync(lost(10),baseline,base,base.plusSeconds(300)).status().equals("WARN"));
+        check(CpFailoverChecks.readinessSync(lost(11),baseline,base,base.plusSeconds(300)).status().equals("FAIL"));
+        // +1551 in 45.6 h (34 per hour), +958741 in 6 h: failure as before.
+        check(CpFailoverChecks.readinessSync(lost(1551),baseline,base,base.plusSeconds(164160)).status().equals("FAIL"));
+        check(CpFailoverChecks.readinessSync(lost(958741),baseline,base,base.plusSeconds(6*3600)).status().equals("FAIL"));
+        // Exactly 10 per hour is the limit: +60 in 6 h warns, +61 fails.
+        check(CpFailoverChecks.readinessSync(lost(60),baseline,base,base.plusSeconds(6*3600)).status().equals("WARN"));
+        check(CpFailoverChecks.readinessSync(lost(61),baseline,base,base.plusSeconds(6*3600)).status().equals("FAIL"));
+        // Any bulk or unsynchronized increase, even with a tiny lostUpdates rate, fails.
+        String bulk=SYNC.replace("Lost bulk update events...................... 0","Lost bulk update events...................... 1");
+        check(CpFailoverChecks.readinessSync(bulk,baseline,base,base.plusSeconds(6*3600)).status().equals("FAIL"));
+        check(CpFailoverChecks.readinessSync(lost(1).replace("Lost bulk update events...................... 0",
+            "Lost bulk update events...................... 1"),baseline,base,base.plusSeconds(6*3600)).status().equals("FAIL"));
+        String unsynchronized=SYNC+"Unsynchronized updates.......................... 0\n";
+        var withUnsynchronized=CpFailoverChecks.readinessSync(unsynchronized,Map.of(),null,base).derived();
+        check(CpFailoverChecks.readinessSync(unsynchronized.replace("Unsynchronized updates.......................... 0",
+            "Unsynchronized updates.......................... 1"),withUnsynchronized,base,base.plusSeconds(3600)).status().equals("FAIL"));
+        // Sync status not OK and unparsable output are not softened.
+        check(CpFailoverChecks.readinessSync(lost(1).replace("Sync status: OK","Sync status: Off - disabled"),
+            baseline,base,base.plusSeconds(3600)).status().equals("FAIL"));
+        check(CpFailoverChecks.readinessSync("unsupported",baseline,base,base.plusSeconds(3600)).status().equals("UNKNOWN"));
+        // A counter reset is as before: PASS with the reset flagged; no baseline: PASS with a baseline recorded.
+        var reset=CpFailoverChecks.readinessSync(SYNC,CpFailoverChecks.readinessSync(lost(500),Map.of(),null,base).derived(),
+            base,base.plusSeconds(3600));
+        check(reset.status().equals("PASS") && Boolean.TRUE.equals(reset.derived().get("counterReset")));
+        check(CpFailoverChecks.readinessSync(lost(5),Map.of(),null,base).status().equals("PASS"));
+    }
+    private static String lost(int count) {
+        return SYNC.replace("Lost updates................................. 0","Lost updates................................. "+count);
     }
     @Test void measuredTableOrderingAndLocalMarkerDoNotChangeEquality() throws Exception {
         var json=new com.fasterxml.jackson.databind.ObjectMapper();

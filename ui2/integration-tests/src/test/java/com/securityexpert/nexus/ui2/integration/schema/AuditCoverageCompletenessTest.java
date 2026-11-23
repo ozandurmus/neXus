@@ -143,6 +143,8 @@ class AuditCoverageCompletenessTest {
             Map.entry("policy_unit_checkpoint", "V128: collection resume checkpoints"),
             Map.entry("runtime_instance_heartbeat", "V131: process liveness telemetry"),
             Map.entry("notification_state", "V100: delivery cursors written by the notification router"),
+            Map.entry("script_run_notification", "V264: append-only run-end delivery outcome written by the "
+                    + "notification forwarder; UPDATE and DELETE refused by trigger"),
             Map.entry("root_identity", "V19: insert-once first-boot marker (ui2_app: SELECT/INSERT only); the "
                     + "root local identity's creation is audited on local_credentials"),
             Map.entry("failover_schedules", "V31/V135: every transition is appended, in the same transaction, to "

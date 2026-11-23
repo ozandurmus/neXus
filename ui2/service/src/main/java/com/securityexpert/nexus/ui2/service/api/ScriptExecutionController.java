@@ -73,7 +73,17 @@ public final class ScriptExecutionController {
             @JsonProperty("egress") List<String> egress,
             @JsonProperty("credential_refs") @JsonAlias("credentialRefs") List<String> credentialRefs,
             @JsonProperty("notify") @JsonAlias("notifyMode") String notifyMode,
-            @JsonProperty("run_as") @JsonAlias("runAs") String runAs) {
+            @JsonProperty("run_as") @JsonAlias("runAs") String runAs,
+            @JsonProperty("notify_mail_on_failure_only") @JsonAlias("notifyMailOnFailureOnly")
+            Boolean notifyMailOnFailureOnly) {
+
+        /** Without the V264 "mail on failure only" option. */
+        public CreateScriptRequest(String name, String fileName, String kind, String body, String contentBase64,
+                String schedule, Boolean enabled, Integer timeoutSeconds, List<String> egress,
+                List<String> credentialRefs, String notifyMode, String runAs) {
+            this(name, fileName, kind, body, contentBase64, schedule, enabled, timeoutSeconds, egress, credentialRefs,
+                    notifyMode, runAs, null);
+        }
     }
 
     public record NewVersionRequest(
@@ -92,7 +102,15 @@ public final class ScriptExecutionController {
             @JsonProperty("egress") List<String> egress,
             @JsonProperty("credential_refs") @JsonAlias("credentialRefs") List<String> credentialRefs,
             @JsonProperty("notify") @JsonAlias("notifyMode") String notifyMode,
-            @JsonProperty("run_as") @JsonAlias("runAs") String runAs) {
+            @JsonProperty("run_as") @JsonAlias("runAs") String runAs,
+            @JsonProperty("notify_mail_on_failure_only") @JsonAlias("notifyMailOnFailureOnly")
+            Boolean notifyMailOnFailureOnly) {
+
+        /** Without the V264 "mail on failure only" option (left unchanged). */
+        public PatchSettingsRequest(String schedule, Boolean clearSchedule, Boolean enabled, Integer timeoutSeconds,
+                List<String> egress, List<String> credentialRefs, String notifyMode, String runAs) {
+            this(schedule, clearSchedule, enabled, timeoutSeconds, egress, credentialRefs, notifyMode, runAs, null);
+        }
     }
 
     private final ScriptExecutionService service;
@@ -217,7 +235,8 @@ public final class ScriptExecutionController {
                 body.egress(),
                 body.credentialRefs(),
                 body.notifyMode(),
-                body.runAs());
+                body.runAs(),
+                body.notifyMailOnFailureOnly());
         Outcome outcome = service.create(command, actor(request));
         return toOutcomeResponse(outcome, HttpStatus.CREATED);
     }
@@ -275,7 +294,8 @@ public final class ScriptExecutionController {
                 Optional.ofNullable(body.egress()),
                 Optional.ofNullable(body.credentialRefs()),
                 Optional.ofNullable(body.notifyMode()),
-                Optional.ofNullable(body.runAs()));
+                Optional.ofNullable(body.runAs()),
+                Optional.ofNullable(body.notifyMailOnFailureOnly()));
         Outcome outcome = service.updateSettings(id, command, actor(request));
         return toOutcomeResponse(outcome, HttpStatus.OK);
     }
@@ -438,6 +458,7 @@ public final class ScriptExecutionController {
         out.put("egress_device_targets", s.egressDeviceTargets());
         out.put("credential_refs", s.credentialRefs());
         out.put("notify", s.notifyMode());
+        out.put("notify_mail_on_failure_only", s.notifyMailOnFailureOnly());
         out.put("run_as", maskRunAs(s.runAs(), masked));
         out.put("created_by_actor_fingerprint", maskActor(s.createdByActorFingerprint(), masked));
         out.put("created_at", s.createdAt().toString());
@@ -503,6 +524,15 @@ public final class ScriptExecutionController {
         out.put("egress_device_targets", r.egressDeviceTargets());
         out.put("credential_refs_used", r.credentialRefsUsed());
         out.put("failure_reason", r.failureReason().orElse(null));
+        out.put("notification", r.notification().map(n -> {
+            Map<String, Object> nm = new LinkedHashMap<>();
+            nm.put("syslog", n.syslog());
+            nm.put("syslog_code", n.syslogCode().orElse(null));
+            nm.put("smtp", n.smtp());
+            nm.put("smtp_code", n.smtpCode().orElse(null));
+            nm.put("notified_at", n.notifiedAt().toString());
+            return nm;
+        }).orElse(null));
         return out;
     }
 

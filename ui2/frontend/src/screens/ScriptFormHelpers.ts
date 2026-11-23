@@ -3,6 +3,7 @@ import type {
   ScriptKind,
   ScriptListResponse,
   ScriptNotifyMode,
+  ScriptRunSummary,
   ScriptSummary,
 } from "../auth/adminApi";
 import { actorLabel } from "../shell/presenters";
@@ -50,6 +51,70 @@ export const SCRIPT_NOTIFY_OPTIONS: readonly [ScriptNotifyMode, string][] = [
   ["smtp", "SMTP mail relay"],
   ["both", "Both (syslog and SMTP)"],
 ] as const;
+
+/** True when the notify choice sends the run-end mail, so "mail on failure only" applies (V264). */
+export function notifySendsMail(mode: string | null | undefined): boolean {
+  return mode === "smtp" || mode === "both";
+}
+
+const NOTIFICATION_CODE_LABELS: Readonly<Record<string, string>> = {
+  syslog_not_configured: "syslog is not configured in Settings > Notifications",
+  smtp_not_configured: "the SMTP relay is not configured in Settings > Notifications",
+  no_recipients: "no mail recipients are configured in Settings > Notifications",
+  failure_only: "mail on failure only, and the run succeeded",
+  send_failed: "the send failed",
+};
+
+export interface RunNotificationView {
+  readonly tone: "bad" | "warn" | "ok" | "neutral" | "unknown";
+  readonly word: string;
+  readonly title: string;
+}
+
+function channelPart(channel: string, state: string, code: string | null): string | null {
+  if (state === "NOT_REQUESTED") return null;
+  const reason = code ? `: ${NOTIFICATION_CODE_LABELS[code] ?? code}` : "";
+  if (state === "SENT") return `${channel} sent`;
+  if (state === "FAILED") return `${channel} failed${reason}`;
+  if (state === "SKIPPED") return `${channel} skipped${reason}`;
+  return `${channel} ${state || "UNKNOWN"}`;
+}
+
+/**
+ * The run-end notification outcome of one run (V264), for the run history row. No record is never shown as sent: a
+ * finished run without one says so ("Not recorded"); an unknown state is UNKNOWN.
+ */
+export function describeRunNotification(run: ScriptRunSummary): RunNotificationView {
+  const n = run.notification;
+  if (!n) {
+    if (!run.finished_at) {
+      return { tone: "neutral", word: "—", title: "The run has not finished; notifications are sent at run end." };
+    }
+    return {
+      tone: "unknown",
+      word: "Not recorded",
+      title: "No notification outcome is recorded for this run (not processed yet, or the run finished before run notifications existed).",
+    };
+  }
+  const parts = [channelPart("Syslog", n.syslog, n.syslog_code), channelPart("Mail", n.smtp, n.smtp_code)].filter(
+    (p): p is string => p !== null,
+  );
+  const states = [n.syslog, n.smtp];
+  const known = states.every((st) => ["SENT", "FAILED", "SKIPPED", "NOT_REQUESTED"].includes(st));
+  const recordedAt = `Recorded ${n.notified_at}.`;
+  if (!known) {
+    return { tone: "unknown", word: "UNKNOWN", title: `${parts.join(" · ")}. ${recordedAt}` };
+  }
+  if (parts.length === 0) {
+    return { tone: "neutral", word: "Not requested", title: `The script asks for no notification. ${recordedAt}` };
+  }
+  const failed = states.includes("FAILED");
+  const skippedForAProblem =
+    (n.syslog === "SKIPPED") || (n.smtp === "SKIPPED" && n.smtp_code !== "failure_only");
+  const tone = failed ? "bad" : skippedForAProblem ? "warn" : "ok";
+  const word = parts.map((p) => p.split(":")[0]).join(" · ");
+  return { tone, word, title: `${parts.join(" · ")}. ${recordedAt}` };
+}
 
 export const DEFAULT_RUN_AS_OPTIONS: readonly string[] = ["operator", "viewer", "replay_viewer"].map(
   (name) => `role:${name}`,

@@ -400,9 +400,20 @@ public final class CpFailoverChecks {
         }
         return lost?"FAIL":"PASS";
     }
+    /** PO 2026-11-23: lost updates up to this many per hour since the previous readiness run are a warning, not a failure. */
+    public static final int LOST_UPDATES_WARN_PER_HOUR=10;
     public record SyncAssessment(String status,Map<String,Object> derived) {}
     /** Readiness compares cumulative counters only within the same member and VS. */
     public static SyncAssessment readinessSync(String output,Map<String,Object> previous,Instant observedAt) {
+        return readinessSync(output,previous,observedAt,Instant.now());
+    }
+    /**
+     * PO 2026-11-23: with sync status OK and only lostUpdates up, at most {@link #LOST_UPDATES_WARN_PER_HOUR} per hour
+     * since the baseline (at least one hour assumed) is a non-blocking WARN. Any lostBulkUpdateEvents or
+     * unsynchronizedUpdates increase, a faster lostUpdates rate or a sync status other than OK stays FAIL.
+     * {@code observedAt} is the baseline time; {@code now} is the time of this read.
+     */
+    public static SyncAssessment readinessSync(String output,Map<String,Object> previous,Instant observedAt,Instant now) {
         var derived=new HashMap<>(syncInformation(output));
         String state=(String)derived.get("syncStatus");
         if(state==null || "UNKNOWN".equals(syncStatus(output))) return new SyncAssessment("UNKNOWN",Map.copyOf(derived));
@@ -428,7 +439,24 @@ public final class CpFailoverChecks {
         derived.put("baselineRecorded",!baseline);
         derived.put("counterReset",reset);
         if(baseline) derived.put("baselineAt",observedAt.toString());
-        return new SyncAssessment(increased?"FAIL":"PASS",Map.copyOf(derived));
+        if(!increased) return new SyncAssessment("PASS",Map.copyOf(derived));
+        boolean onlyLostUpdates=positive(derived.get("lostUpdatesIncrease"))
+            && !positive(derived.get("lostBulkUpdateEventsIncrease")) && !positive(derived.get("unsynchronizedUpdatesIncrease"));
+        if(onlyLostUpdates && now!=null && !now.isBefore(observedAt)) {
+            long seconds=Duration.between(observedAt,now).getSeconds();
+            // increase/hours <= limit with at least one hour assumed, in exact integer arithmetic.
+            var increase=(java.math.BigInteger)derived.get("lostUpdatesIncrease");
+            if(increase.multiply(java.math.BigInteger.valueOf(3600))
+                    .compareTo(java.math.BigInteger.valueOf(LOST_UPDATES_WARN_PER_HOUR).multiply(java.math.BigInteger.valueOf(Math.max(3600,seconds))))<=0) {
+                derived.put("elapsedSeconds",seconds);
+                derived.put("warnPerHour",LOST_UPDATES_WARN_PER_HOUR);
+                return new SyncAssessment("WARN",Map.copyOf(derived));
+            }
+        }
+        return new SyncAssessment("FAIL",Map.copyOf(derived));
+    }
+    private static boolean positive(Object value) {
+        return value instanceof java.math.BigInteger number && number.signum()>0;
     }
 
     public static Map<String,Object> syncInformation(String output) {

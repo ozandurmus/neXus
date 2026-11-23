@@ -4812,6 +4812,8 @@ export interface ScriptSummary {
   readonly egress_device_targets: readonly string[];
   readonly credential_refs: readonly string[];
   readonly notify: ScriptNotifyMode | string;
+  /** V264: the run-end mail only for a run that did not succeed (with notify smtp or both). */
+  readonly notify_mail_on_failure_only?: boolean;
   readonly run_as: string;
   readonly created_by_actor_fingerprint: string;
   readonly created_at: string;
@@ -4865,6 +4867,18 @@ export interface ScriptRunSummary {
   readonly egress_device_targets: readonly string[];
   readonly credential_refs_used: readonly string[];
   readonly failure_reason: string | null;
+  /** V264: the run-end notification outcome; null until the notification forwarder records it. */
+  readonly notification?: ScriptRunNotification | null;
+}
+
+export type ScriptRunNotificationState = "SENT" | "FAILED" | "SKIPPED" | "NOT_REQUESTED";
+
+export interface ScriptRunNotification {
+  readonly syslog: ScriptRunNotificationState | string;
+  readonly syslog_code: string | null;
+  readonly smtp: ScriptRunNotificationState | string;
+  readonly smtp_code: string | null;
+  readonly notified_at: string;
 }
 
 export interface ScriptRunListResponse {
@@ -4885,6 +4899,7 @@ export interface CreateScriptInput {
   readonly egress?: readonly string[];
   readonly credential_refs?: readonly string[];
   readonly notify?: ScriptNotifyMode;
+  readonly notify_mail_on_failure_only?: boolean;
   readonly run_as?: string;
 }
 
@@ -4904,6 +4919,7 @@ export interface PatchScriptSettingsInput {
   readonly egress?: readonly string[];
   readonly credential_refs?: readonly string[];
   readonly notify?: ScriptNotifyMode;
+  readonly notify_mail_on_failure_only?: boolean;
   readonly run_as?: string;
 }
 

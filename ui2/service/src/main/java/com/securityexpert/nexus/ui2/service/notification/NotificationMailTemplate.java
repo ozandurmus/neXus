@@ -288,6 +288,43 @@ public final class NotificationMailTemplate {
         return spec.defaultBand();
     }
 
+    // ---------------------------------------------------------------- script run (V264, contract section 3.5)
+
+    /** One finished script run: subject and plain-text body (the HTML part is {@link #renderPlainFallback}). */
+    public record ScriptRunMail(String subject, String text) {}
+
+    /**
+     * The run-end mail of one script run: script name, version, outcome, exit code, duration, run id and, when there is
+     * any, the masked output tail the caller already clamped. Every value is passed in; nothing else is read.
+     */
+    public static ScriptRunMail renderScriptRun(String productName, String environment, String scriptName, int version,
+            String outcome, Integer exitCode, Long durationMs, String runId, Instant finishedAt, String maskedOutput) {
+        String brand = MailBrand.cleanLabel(productName, "Overwatch");
+        String env = MailBrand.cleanLabel(environment, "production");
+        String subject = brand + " – Script run " + outcome + ": " + scriptName + " v" + version;
+        StringBuilder text = new StringBuilder(512 + (maskedOutput == null ? 0 : maskedOutput.length()));
+        text.append("A script run finished.\n\n")
+                .append("Script:    ").append(scriptName).append(" (version ").append(version).append(")\n")
+                .append("Outcome:   ").append(outcome).append('\n')
+                .append("Exit code: ").append(exitCode == null ? "not reported" : exitCode.toString()).append('\n')
+                .append("Duration:  ").append(durationMs == null ? "not reported" : durationMs + " ms").append('\n')
+                .append("Run id:    ").append(runId).append('\n');
+        if (finishedAt != null) {
+            text.append("Finished:  ").append(localTime(finishedAt.toString())).append(" (").append(LOCAL_ZONE)
+                    .append(")\n");
+        }
+        text.append('\n');
+        if (maskedOutput == null || maskedOutput.isEmpty()) {
+            text.append("No output tail is stored for this run.\n");
+        } else {
+            text.append("Output tail (masked, at most 4096 bytes; the full output is on the Jobs screen):\n")
+                    .append(maskedOutput);
+            if (!maskedOutput.endsWith("\n")) text.append('\n');
+        }
+        text.append('\n').append(footerLine(brand, env)).append('\n');
+        return new ScriptRunMail(subject, text.toString());
+    }
+
     // ---------------------------------------------------------------- time and wording helpers
 
     /** "18.11.2026 12:15" in Europe/Istanbul; a value that is not an ISO instant is returned unchanged. */

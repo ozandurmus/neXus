@@ -47,7 +47,7 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
 afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 const TABS = [
-  { label: "HA and readiness", marker: "No HA pair or cluster enrolled" },
+  { label: "HA and failover", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
   { label: "Device health", marker: "Device health could not be read" },
   { label: "Script execution", marker: "No scripts registered yet" },
@@ -75,7 +75,7 @@ describe("OperationsScreen tabs", () => {
     render(withTheme(<OperationsScreen />));
     await screen.findByText("No HA pair or cluster enrolled");
     const tablist = screen.getByRole("tablist", { name: "Operations sections" });
-    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"]);
+    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and failover", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"]);
     expect(screen.queryByRole("tab", { name: "Scheduled jobs" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Platform status" })).toBeNull();
   });
@@ -94,7 +94,7 @@ describe("OperationsScreen tabs", () => {
     expect(new URLSearchParams(window.location.search).get("tab")).toBe("health");
   });
 
-  it("defaults to the HA and readiness tab, empty", async () => {
+  it("defaults to the HA and failover tab, empty", async () => {
     stubFetch([], null);
     render(withTheme(<OperationsScreen />));
     expect(await screen.findByText("No HA pair or cluster enrolled")).toBeInTheDocument();
@@ -107,21 +107,20 @@ describe("OperationsScreen tabs", () => {
     expect(screen.queryByText(/CLS-TANGO-01/)).toBeNull();
   });
 
-  it("shows readiness checks from the summary, without requesting Phase A preflight", async () => {
+  it("a row click opens one detail with the checks by consequence from the summary, without requesting Phase A preflight", async () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    expect(await screen.findByRole("region", { name: "Checks for CLS-ROMEO-01" })).toBeInTheDocument();
-    const table = screen.getByRole("table", { name: "Readiness results" });
-    expect(within(table).getByText("Active")).toBeInTheDocument();
-    expect(within(table).getByText("Standby")).toBeInTheDocument();
-    expect(within(table).getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
-    expect(within(table).getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
-    expect(table.textContent).not.toMatch(/[{}]/);
+    const drawer = await screen.findByRole("dialog", { name: "HA readiness detail" });
+    expect(await within(drawer).findByLabelText("Readiness checks by consequence")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open full detail" })).toBeNull();
+    expect(drawer.textContent).not.toMatch(/[{}]/);
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/preflight"))).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-    expect(screen.getByRole("dialog", { name: "HA readiness detail" })).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Close detail"));
+    // Exactly one verdict and one check list, not a summary card above a second one.
+    expect(within(drawer).getAllByText(/^Ready$/)).toHaveLength(1);
+    expect(drawer.querySelectorAll("[data-check-counts]")).toHaveLength(1);
+    fireEvent.click(within(drawer).getByRole("button", { name: "Close detail" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "HA readiness detail" })).toBeNull());
     expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();
   });
 
@@ -129,7 +128,8 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY.map(row => ({ ...row, masked })));
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
+    const drawer = await screen.findByRole("dialog", { name: "HA readiness detail" });
+    await within(drawer).findByLabelText("Readiness checks by consequence");
     expect(screen.queryByText("AIView Pseudonymized") !== null).toBe(masked);
   });
 
@@ -137,7 +137,6 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
     expect(await screen.findByLabelText("Check Point failover")).toBeInTheDocument();
     await act(async () => {});
     expect(vi.mocked(fetch).mock.calls.some(([input]) => /\/(schedules|authorize|execute)$/.test(String(input)))).toBe(false);
@@ -147,7 +146,7 @@ describe("OperationsScreen tabs", () => {
   it("submits read-only readiness from the unit row", async () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
-    fireEvent.click(await screen.findByRole("button", { name: "Run pre-checks" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Re-check CLS-ROMEO-01" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input, init]) =>
       String(input).endsWith("/units/opaque-cluster/readiness") && (init as RequestInit)?.method === "POST")).toBe(true));
   });
@@ -222,6 +221,7 @@ describe("job totals reconcile (review 2026-09-23)", () => {
   });
 });
 
+
 it("nests a VSX unit inside its cluster with a separate readiness action", async () => {
   const from = new Date(Date.now() - 3600_000).toISOString();
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
@@ -236,11 +236,9 @@ it("nests a VSX unit inside its cluster with a separate readiness action", async
   expect(toggle).toHaveAttribute("aria-expanded", "false");
   fireEvent.click(toggle);
   const row = screen.getByRole("row", { name: "Virtual System VS-ROMEO-01-07" });
-  expect(within(row).getByRole("button", { name: "Run pre-checks" })).toBeInTheDocument();
+  expect(within(row).getByRole("button", { name: "Run pre-checks Virtual System VS-ROMEO-01-07" })).toBeInTheDocument();
   fireEvent.click(row);
-  expect(screen.getByRole("region", { name: "Checks for Virtual System VS-ROMEO-01-07" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-  expect(await screen.findByLabelText("Readiness checks")).toBeInTheDocument();
+  expect(await screen.findByLabelText("Check Point failover")).toBeInTheDocument();
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/units?memberDeviceId="))).toBe(true));
   // The estate-wide incident list (PO 2026-10-20) is read beside the summary; the summary itself stays on the cp prefix.
   expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover") && !String(input).endsWith("/incidents"))?.[0])).toBe("/api/v2/cp-failover/summary");
@@ -250,23 +248,20 @@ it.each([
   { scenario: "stored results", summary: READY_SUMMARY },
   { scenario: "masked stored results", summary: READY_SUMMARY.map(row => ({ ...row, masked: true })) },
   { scenario: "no summary yet", summary: [] },
-])("opens full detail with $scenario, keeps the results table and failover flow", async ({ summary }) => {
+])("opens the detail with $scenario as one drawer, closed by the X button", async ({ summary }) => {
   stubFetch(MEMBERS, summary);
   render(withTheme(<OperationsScreen />));
   const url = window.location.href;
   fireEvent.keyDown(await screen.findByRole("row", { name: "CLS-ROMEO-01" }), { key: "Enter" });
-  fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-  const drawer = screen.getByRole("dialog", { name: "HA readiness detail" });
+  const drawer = await screen.findByRole("dialog", { name: "HA readiness detail" });
   expect(drawer).toHaveClass("MuiDrawer-paperAnchorRight");
-  const results = within(drawer).getByRole("table", { name: "Readiness results" });
-  expect(results).toBeVisible();
-  if (summary.length) {
-    expect(within(results).getByText("Active")).toBeVisible();
-    expect(within(results).getByText("Standby")).toBeVisible();
-  } else {
-    expect(within(drawer).getByText("No observations yet")).toBeVisible();
-  }
   expect(within(drawer).getByLabelText("Check Point failover")).toBeInTheDocument();
+  if (summary.length) {
+    expect(await within(drawer).findByLabelText("Readiness checks by consequence")).toBeVisible();
+    expect(within(drawer).getAllByText(/^Ready$/)).toHaveLength(1);
+  } else {
+    expect(await within(drawer).findByText("No eligible failover units")).toBeVisible();
+  }
   expect(screen.getByRole("table", { name: "HA clusters", hidden: true })).toBeInTheDocument();
   expect(window.location.href).toBe(url);
   fireEvent.click(within(drawer).getByRole("button", { name: "Close detail" }));
@@ -274,10 +269,61 @@ it.each([
   expect(screen.getByRole("table", { name: "HA clusters" })).toBeInTheDocument();
 });
 
+it("a failed summary read says so with a Retry, shows every cluster as unknown, and recovers on Retry", async () => {
+  stubFetch(MEMBERS, READY_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let fail = true;
+  vi.mocked(fetch).mockImplementation((input, init) => fail && String(input) === "/api/v2/cp-failover/summary"
+    ? Promise.resolve(new Response("{}", { status: 503 })) : original(input, init));
+  render(withTheme(<OperationsScreen />));
+  await waitFor(() => expect(document.querySelector("[data-readiness-summary-failed]")).toBeInTheDocument());
+  const notice = document.querySelector("[data-readiness-summary-failed]")!;
+  expect(notice).toHaveTextContent("Readiness could not be read (Request failed (HTTP 503)). Statuses below are unknown, not bad.");
+  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByText("UNKNOWN")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Fail over/ })).toBeNull();
+  fail = false;
+  fireEvent.click(within(notice as HTMLElement).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(document.querySelector("[data-readiness-summary-failed]")).toBeNull());
+  expect(await screen.findByRole("button", { name: "Fail over CLS-ROMEO-01" })).toBeInTheDocument();
+});
+
+it("a failed incidents read is not an empty list: the Ready row is Unknown with the reason, no failover is offered, Retry recovers", async () => {
+  stubFetch(MEMBERS, READY_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let fail = true;
+  vi.mocked(fetch).mockImplementation((input, init) => fail && String(input).endsWith("/incidents")
+    ? Promise.resolve(new Response("{}", { status: 503 })) : original(input, init));
+  render(withTheme(<OperationsScreen />));
+  const notice = await waitFor(() => { const found = document.querySelector("[data-incidents-failed]"); expect(found).toBeInTheDocument(); return found as HTMLElement; });
+  expect(notice).toHaveTextContent("Open incidents could not be read, so no cluster is shown as ready to fail over.");
+  const row = screen.getByRole("row", { name: "CLS-ROMEO-01" });
+  expect(row).toHaveAttribute("data-row-state", "UNKNOWN");
+  expect(within(row).getByText("UNKNOWN")).toBeInTheDocument();
+  expect(within(row).queryByText("Ready")).toBeNull();
+  expect(within(row).getByText(/incidents could not be read/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /^Fail over/ })).toBeNull();
+  fail = false;
+  fireEvent.click(within(notice).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(document.querySelector("[data-incidents-failed]")).toBeNull());
+  expect(await screen.findByRole("button", { name: "Fail over CLS-ROMEO-01" })).toBeInTheDocument();
+});
+
+it("reads the failover incidents once for the screen, not once per panel", async () => {
+  stubFetch(MEMBERS, READY_SUMMARY);
+  render(withTheme(<OperationsScreen />));
+  fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
+  await screen.findByLabelText("Check Point failover");
+  await act(async () => {});
+  const reads = vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/incidents"));
+  expect(reads).toHaveLength(1);
+});
+
 const BULK_MEMBERS = [...MEMBERS, ...MEMBERS.map((member, index) => ({ ...member, device_id: `pan-member-${index}`, hostname: `FW-TANGO-02-M${index + 1}`, vendor_hint: "palo_alto", cluster_member_ref: "CLS-TANGO-02" }))];
 const BULK_SUMMARY = [...READY_SUMMARY, { ...READY_SUMMARY[0], clusterId: "opaque-pan", unitId: "opaque-pan", cluster_member_ref: "CLS-TANGO-02", vendor: "palo_alto", members: BULK_MEMBERS.slice(2) }];
+// hidden: the confirm dialog of "Re-check shown" marks the page aria-hidden while it closes.
+const rowOf = (name: string) => screen.getByRole("row", { name, hidden: true });
 
-it("starts every HA row collapsed and unselected when a late summary reorders the list", async () => {
+it("keeps each row's identity when a late summary reorders the list", async () => {
   stubFetch(BULK_MEMBERS, BULK_SUMMARY);
   const original = vi.mocked(fetch).getMockImplementation()!;
   let finishSummary!: (response: Response) => void;
@@ -287,42 +333,25 @@ it("starts every HA row collapsed and unselected when a late summary reorders th
   render(withTheme(<OperationsScreen />));
   const row = await screen.findByRole("row", { name: "CLS-ROMEO-01" });
   const identity = row.getAttribute("data-readiness-row");
-  expect(row).toHaveAttribute("aria-expanded", "false");
-  expect(within(row).getByRole("checkbox")).not.toBeChecked();
   await act(async () => finishSummary(new Response(JSON.stringify([
     BULK_SUMMARY[0], { ...BULK_SUMMARY[1], readiness: { ...BULK_SUMMARY[1].readiness, status: "NOT_READY" } },
   ]))));
-  const table = screen.getByRole("table", { name: "HA clusters" });
-  expect(within(table).getAllByRole("row")[1]).toHaveAccessibleName("CLS-TANGO-02");
+  // The list now opens on "Can fail over now": the ready cluster stays, the not-ready one is under Blocked.
   expect(screen.getByRole("row", { name: "CLS-ROMEO-01" })).toBe(row);
   expect(row).toHaveAttribute("data-readiness-row", identity);
-  for (const name of ["CLS-ROMEO-01", "CLS-TANGO-02"]) {
-    const refreshed = within(table).getByRole("row", { name });
-    expect(refreshed).toHaveAttribute("aria-expanded", "false");
-    expect(within(refreshed).getByRole("checkbox")).not.toBeChecked();
-  }
+  expect(screen.queryByRole("row", { name: "CLS-TANGO-02" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Blocked: 1 clusters" }));
+  expect(screen.getByRole("row", { name: "CLS-TANGO-02" })).toBeInTheDocument();
 });
 
-it("keeps user expansion on the same HA identity when a refresh changes status ordering", () => {
-  const clusters = ["CLS-ROMEO-01", "CLS-TANGO-02"].map(ref => ({
-    ref, title: ref, members: BULK_MEMBERS.filter(member => member.cluster_member_ref === ref) as DeviceSummary[],
-  }));
-  const rows = Object.fromEntries(BULK_SUMMARY.map(row => [row.cluster_member_ref, [row]])) as Record<string, CpFailoverSummary[]>;
-  const props = { clusters, rows, running: null, busy: false, progress: {}, error: null,
-    onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
-  const { rerender } = render(withTheme(<HaReadinessList {...props} />));
-  const row = screen.getByRole("row", { name: "CLS-ROMEO-01" });
-  fireEvent.click(within(row).getByRole("button", { name: "Checks for CLS-ROMEO-01" }));
-  rerender(withTheme(<HaReadinessList {...props} rows={{ ...rows,
-    "CLS-TANGO-02": [{ ...rows["CLS-TANGO-02"][0], readiness: { ...rows["CLS-TANGO-02"][0].readiness!, status: "NOT_READY" } }],
-  }} />));
-  expect(within(screen.getByRole("table", { name: "HA clusters" })).getAllByRole("row")[1]).toHaveAccessibleName("CLS-TANGO-02");
-  expect(screen.getByRole("row", { name: "CLS-ROMEO-01" })).toBe(row);
-  expect(row).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByRole("row", { name: "CLS-TANGO-02" })).toHaveAttribute("aria-expanded", "false");
-});
+const startBulk = async () => {
+  await screen.findByText("2 clusters enrolled");
+  await waitFor(() => expect(screen.getByTestId("toolbar-run-readiness")).toBeEnabled());
+  fireEvent.click(screen.getByTestId("toolbar-run-readiness"));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Re-check" }));
+};
 
-it("calls each selected unit's vendor readiness API sequentially and reports per-row progress", async () => {
+it("calls each shown unit's vendor readiness API sequentially and reports per-row progress", async () => {
   stubFetch(BULK_MEMBERS, BULK_SUMMARY);
   const original = vi.mocked(fetch).getMockImplementation()!;
   let finishFirst!: (response: Response) => void;
@@ -337,45 +366,41 @@ it("calls each selected unit's vendor readiness API sequentially and reports per
     return original(input, init);
   });
   render(withTheme(<OperationsScreen />));
-  await screen.findByText("2 clusters enrolled");
-  await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
+  expect(await screen.findByText("Re-check shown (2)")).toBeInTheDocument();
+  await startBulk();
   const postCalls = () => vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/readiness"));
   await waitFor(() => expect(postCalls()).toHaveLength(1));
   expect(String(postCalls()[0][0])).toBe("/api/v2/cp-failover/units/opaque-cluster/readiness");
   expect(postCalls()[0][1]).toMatchObject({ method: "POST", body: JSON.stringify({ clusterId: "opaque-cluster", unitId: "opaque-cluster" }) });
-  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByRole("status")).toHaveTextContent("Running");
-  expect(within(screen.getByRole("row", { name: "CLS-TANGO-02" })).getByRole("status")).toHaveTextContent("Queued");
-  expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeDisabled();
+  expect(within(rowOf("CLS-ROMEO-01")).getByText("Running")).toBeInTheDocument();
+  expect(within(rowOf("CLS-TANGO-02")).getByText("Queued")).toBeInTheDocument();
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
   await act(async () => finishFirst(new Response(JSON.stringify({ state: "DONE" }))));
   await waitFor(() => expect(postCalls()).toHaveLength(2));
   expect(String(postCalls()[1][0])).toBe("/api/v2/pan-failover/units/opaque-pan/readiness");
-  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByRole("status")).toHaveTextContent("Completed");
-  expect(within(screen.getByRole("row", { name: "CLS-TANGO-02" })).getByRole("status")).toHaveTextContent("Running");
+  expect(within(rowOf("CLS-ROMEO-01")).getByText("Completed")).toBeInTheDocument();
+  expect(within(rowOf("CLS-TANGO-02")).getByText("Running")).toBeInTheDocument();
   await act(async () => finishSecond(new Response(JSON.stringify({ state: "DONE" }))));
-  await waitFor(() => expect(screen.getAllByRole("status").filter(element => element.textContent === "Completed")).toHaveLength(2));
-  expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeEnabled();
+  await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeEnabled();
 });
 
-it("stops bulk after a failed API call, reports the failed and unstarted rows, and unlocks selection", async () => {
+it("stops a bulk re-check after a failed API call and reports the failed and unstarted rows, the error on its own row", async () => {
   stubFetch(BULK_MEMBERS, BULK_SUMMARY);
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith("/readiness")
     ? Promise.resolve(new Response("{}", { status: 503 })) : original(input, init));
   render(withTheme(<OperationsScreen />));
-  await screen.findByText("2 clusters enrolled");
-  await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
-  await waitFor(() => expect(within(screen.getByRole("row", { name: "CLS-TANGO-02" })).getByRole("status")).toHaveTextContent("Not run"));
-  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByRole("status")).toHaveTextContent("Failed");
+  await startBulk();
+  await waitFor(() => expect(within(rowOf("CLS-TANGO-02")).getByText("Not run")).toBeInTheDocument());
+  expect(within(rowOf("CLS-ROMEO-01")).getByText("Failed")).toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/readiness"))).toHaveLength(1);
-  expect(screen.getByText("Could not start or refresh the readiness run.")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Clear selection" })).toBeEnabled();
+  const notice = within(rowOf("CLS-ROMEO-01")).getByText("Could not start or refresh the readiness run.");
+  expect(notice).toHaveAttribute("role", "alert");
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeEnabled();
 });
 
-it("summarizes the same cluster readiness counts in the KPI and chips without double counting VS or unsupported vendors", async () => {
+it("counts clusters once per segment, beside a KPI that counts the same clusters, without double counting virtual systems or unsupported vendors", async () => {
   const extra = ["CLS-BRAVO-03", "CLS-CHARLIE-04"].flatMap((ref, index) => MEMBERS.map((member, m) => ({ ...member, device_id: `extra-${index}-${m}`, hostname: `FW-${ref}-M${m + 1}`, cluster_member_ref: ref, vendor_hint: index ? "cisco_asa" : "check_point" })));
   stubFetch([...BULK_MEMBERS, ...extra], [READY_SUMMARY[0], { ...BULK_SUMMARY[1], readiness: { ...BULK_SUMMARY[1].readiness, status: "NOT_READY" } },
     { ...READY_SUMMARY[0], unitId: "opaque-vs", virtual_system: "VS-ROMEO-07" },
@@ -385,41 +410,32 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
   const card = screen.getByText("Readiness checks", { selector: "p" }).closest("[data-kpi]") as HTMLElement;
   expect(card.querySelector("[data-kpi-figure]")).toHaveTextContent(/^1$/);
   expect(within(card).getByText("ready of 4 clusters")).toBeInTheDocument();
-  // R-13: Both the KPI and the chips count clusters by default; switching to Readiness records labels the records view explicitly.
-  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
+  for (const [name, n] of [["Can fail over now", 1], ["Blocked", 1], ["Unknown", 1], ["Readiness only", 0], ["All", 4]] as const)
+    expect(screen.getByRole("button", { name: `${name}: ${n} clusters` })).toBeInTheDocument();
   expect(screen.queryByText("NOT EVALUATED")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Ready: 1 clusters" }));
-  expect(screen.getByText("1 not ready · 1 unknown")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Readiness records (5)" }));
-  expect(screen.getByText("4 clusters enrolled · showing 5 readiness records")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Ready: 2 readiness records" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Readiness records/ })).toBeNull();
 });
 
-it("lets aiview start read-only readiness when the server allows it, and locks the controls when it does not", async () => {
+it("lets aiview re-check when the server allows it, and locks the controls when it does not; no failover button either way", async () => {
   stubFetch(MEMBERS, READY_SUMMARY.map(unit => ({ ...unit, masked: true, canRunReadiness: true })));
   const first = render(withTheme(<OperationsScreen />));
-  fireEvent.click(await screen.findByRole("row", { name: "CLS-ROMEO-01" }));
-  expect(screen.getByRole("region", { name: "Checks for CLS-ROMEO-01" })).toBeInTheDocument();
-  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled();
-  expect(screen.getAllByRole("button", { name: /^Run pre-checks/ }).length).toBeGreaterThan(0);
-  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check");
+  await screen.findByRole("row", { name: "CLS-ROMEO-01" });
+  expect(screen.getByRole("button", { name: "Re-check CLS-ROMEO-01" })).toBeEnabled();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Re-check shown (1)");
+  expect(screen.queryByRole("button", { name: /^Fail over/ })).toBeNull();
   first.unmount();
 
   stubFetch(MEMBERS, READY_SUMMARY.map(unit => ({ ...unit, masked: true, canRunReadiness: false })));
   render(withTheme(<OperationsScreen />));
-  fireEvent.click(await screen.findByRole("row", { name: "CLS-ROMEO-01" }));
-  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
-  expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
-  expect(screen.queryByRole("button", { name: /^Run pre-checks/ })).toBeNull();
+  await screen.findByRole("row", { name: "CLS-ROMEO-01" });
+  expect(screen.queryByRole("button", { name: /^Re-check CLS/ })).toBeNull();
   expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
-  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check · Role: not permitted");
-  fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-  expect(screen.queryByRole("button", { name: /^Run pre-checks/ })).toBeNull();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Re-check shown · Role: not permitted");
+  expect(screen.queryByRole("button", { name: /^Fail over/ })).toBeNull();
 });
 
-
 // Argon review 2026-10-20 P1-2: the bulk readiness run asks the business-hours question once for its own requests.
-it("a bulk readiness run asks once inside business hours and acknowledges only its own requests", async () => {
+it("a bulk re-check asks once inside business hours and acknowledges only its own requests", async () => {
   stubFetch(BULK_MEMBERS, BULK_SUMMARY);
   const original = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation((input, init) => {
@@ -434,15 +450,32 @@ it("a bulk readiness run asks once inside business hours and acknowledges only i
   const unregister = setBusinessHoursConfirm(ask);
   try {
     render(withTheme(<OperationsScreen />));
-    await screen.findByText("2 clusters enrolled");
-    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-    fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
-    await waitFor(() => expect(screen.getAllByRole("status").filter(element => element.textContent === "Completed")).toHaveLength(2));
+    await startBulk();
+    await waitFor(() => expect(screen.getAllByText("Completed")).toHaveLength(2));
     expect(ask).toHaveBeenCalledTimes(1);
     const acks = vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/readiness"))
       .map(([, init]) => (init?.headers as Record<string, string> | undefined)?.["X-Nexus-Business-Hours-Ack"] ?? null);
     expect(acks).toEqual([null, "true", null, "true"]);
+  } finally {
+    unregister();
+  }
+});
+
+it("declining the business-hours question is a neutral notice on that row, not a red error", async () => {
+  stubFetch(MEMBERS, READY_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith("/readiness")
+    ? Promise.resolve(new Response(JSON.stringify({ code: "BUSINESS_HOURS_CONFIRM_REQUIRED", message: "Business hours (08:00–20:00 GMT+3)." }), { status: 409 }))
+    : original(input, init));
+  const unregister = setBusinessHoursConfirm(() => Promise.resolve(false));
+  try {
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(await screen.findByRole("button", { name: "Re-check CLS-ROMEO-01" }));
+    await waitFor(() => expect(document.querySelector("[data-run-notice]")).toBeInTheDocument());
+    const notice = document.querySelector("[data-run-notice]")!;
+    expect(notice).toHaveAttribute("data-run-notice", "neutral");
+    expect(notice.closest("tr")).toHaveAttribute("aria-label", "CLS-ROMEO-01");
+    expect(notice).not.toHaveAttribute("role", "alert");
   } finally {
     unregister();
   }

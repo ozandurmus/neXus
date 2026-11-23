@@ -366,6 +366,34 @@ class ScriptExecutionServiceTest {
     }
 
     @Test
+    void mailOnFailureOnlyIsStoredWithAMailChannelAndWarnedNotRefusedWithout() {
+        Outcome created = service.create(new CreateScriptCommand(
+                "nightly-report", "report.sh", null, "echo ok\n".getBytes(StandardCharsets.UTF_8), null, false, 60,
+                List.of(), List.of(), "smtp", null, true), "actor-secadmin");
+        var details = ((Outcome.Ok) created).details();
+        String scriptId = details.script().scriptId();
+        assertTrue(details.script().notifyMailOnFailureOnly());
+        assertFalse(details.warnings().contains(ScriptExecutionService.MAIL_ON_FAILURE_ONLY_WITHOUT_MAIL_WARNING));
+
+        // A settings change that does not name the option keeps it.
+        Outcome toBoth = service.updateSettings(scriptId, new UpdateSettingsCommand(
+                Optional.empty(), false, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.of("both"), Optional.empty()), "actor-secadmin");
+        assertEquals("both", ((Outcome.Ok) toBoth).details().script().notifyMode());
+        assertTrue(((Outcome.Ok) toBoth).details().script().notifyMailOnFailureOnly());
+
+        // Asked for with a channel that sends no mail: saved, warned, never refused (PO 2026-11-18).
+        Outcome syslogOnly = service.updateSettings(scriptId, new UpdateSettingsCommand(
+                Optional.empty(), false, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.of("syslog"), Optional.empty(), Optional.of(true)), "actor-secadmin");
+        assertTrue(syslogOnly instanceof Outcome.Ok);
+        var syslogDetails = ((Outcome.Ok) syslogOnly).details();
+        assertEquals("syslog", syslogDetails.script().notifyMode());
+        assertFalse(syslogDetails.script().notifyMailOnFailureOnly());
+        assertTrue(syslogDetails.warnings().contains(ScriptExecutionService.MAIL_ON_FAILURE_ONLY_WITHOUT_MAIL_WARNING));
+    }
+
+    @Test
     void runAsIsARoleFromTheAllowlistOnly() {
         for (String bad : List.of("operator-alice", "role:security_admin", "security_admin", "role:operation_admin",
                 "role:backup_admin", "ROLE:OPERATOR")) {
@@ -541,6 +569,23 @@ class ScriptExecutionServiceTest {
                     existing.scriptId(), existing.name(), existing.kind(), existing.currentVersion(), enabled,
                     schedule, timeoutSeconds, egress, egressDeviceTargets, credentialRefs, notifyMode, runAs,
                     existing.createdByActorFingerprint(), existing.createdAt(), FIXED_NOW);
+            scripts.put(scriptId, updated);
+            return Optional.of(updated);
+        }
+
+        @Override
+        public Optional<ScriptRecord> updateSettings(String scriptId, boolean enabled, Optional<String> schedule,
+                int timeoutSeconds, List<String> egress, List<String> egressDeviceTargets, List<String> credentialRefs,
+                String notifyMode, boolean notifyMailOnFailureOnly, String runAs, String actorFingerprint,
+                String actionId) {
+            ScriptRecord existing = scripts.get(scriptId);
+            if (existing == null) return Optional.empty();
+            // As the V264 storage: the option is kept only with a channel that sends mail.
+            boolean stored = notifyMailOnFailureOnly && ("smtp".equals(notifyMode) || "both".equals(notifyMode));
+            ScriptRecord updated = new ScriptRecord(
+                    existing.scriptId(), existing.name(), existing.kind(), existing.currentVersion(), enabled,
+                    schedule, timeoutSeconds, egress, egressDeviceTargets, credentialRefs, notifyMode, runAs,
+                    existing.createdByActorFingerprint(), existing.createdAt(), FIXED_NOW, stored);
             scripts.put(scriptId, updated);
             return Optional.of(updated);
         }

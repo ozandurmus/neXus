@@ -22,7 +22,9 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
  * <li>job failures: one syslog message per failed job when selected;</li>
  * <li>credential failure alerts (V207): one ERROR line per newly opened alert and per update that changes its failed
  * device count, with its own watermark ({@code notification_state});</li>
- * <li>mail: one digest per enabled route, with its own watermark.</li>
+ * <li>mail: one digest per enabled route, with its own watermark;</li>
+ * <li>script runs (V264): the syslog line and/or mail each finished script run's record asks for, the outcome recorded
+ * on the run ({@link ScriptRunNotifier}).</li>
  * </ul>
  * Watermarks advance only after a successful send; a single syslog run forwards at most 500 audit events
  * and 200 failures.
@@ -48,6 +50,24 @@ public class NotificationForwarder {
     NotificationForwarder withSyslog(SyslogSink sink) {
         this.syslog = Objects.requireNonNull(sink, "sink");
         return this;
+    }
+
+    private ScriptRunNotifier.Mailer scriptRunMailer = SmtpRelaySender::send;
+
+    /** The script-run mail send, replaceable in tests. */
+    NotificationForwarder withScriptRunMailer(ScriptRunNotifier.Mailer mailer) {
+        this.scriptRunMailer = Objects.requireNonNull(mailer, "mailer");
+        return this;
+    }
+
+    /** V264: run-end notifications of finished script runs; best-effort, the outcome is recorded on the run. */
+    int forwardScriptRuns(NotificationSettings settings, NotificationIdentity identity) {
+        try {
+            return new ScriptRunNotifier(transactionBoundary, syslog, scriptRunMailer).forward(settings, identity);
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SCRIPT_RUN_FAILED] {0}", e.getClass().getSimpleName());
+            return 0;
+        }
     }
 
     static final String CREDENTIAL_ALERT_WATERMARK_KEY = "credential_alert_syslog_watermark";
@@ -79,6 +99,7 @@ public class NotificationForwarder {
             if (settings.notifyJobFailure() && settings.syslogEnabled()) forwardJobFailures(settings, identity);
             if (settings.syslogEnabled()) forwardCredentialAlerts(settings);
             if (settings.syslogEnabled()) forwardBreakGlassAlerts(settings);
+            forwardScriptRuns(settings, identity);
             NotificationMailRouter.tick(dsl, settings, identity);
             return null;
         });
