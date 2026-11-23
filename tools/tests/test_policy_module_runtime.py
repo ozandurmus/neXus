@@ -153,10 +153,10 @@ def test_policy_manifest_has_only_its_required_dependencies_and_starts_disabled(
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
 
 
-def test_backup_manifest_has_only_its_required_dependencies_and_starts_disabled():
+def test_backup_manifest_has_only_its_required_dependencies_and_keeps_the_cutover_replica():
     documents = list(yaml.safe_load_all((ROOT / "deploy/ui2/53-backup-deployment.yaml").read_text()))
     deployment = next(d for d in documents if d["kind"] == "Deployment")
-    assert deployment["spec"]["replicas"] == 0
+    assert deployment["spec"]["replicas"] == 1
     assert deployment["spec"]["strategy"]["type"] == "Recreate"
     spec = deployment["spec"]["template"]["spec"]
     assert spec["serviceAccountName"] == "ui2-backup" and spec["automountServiceAccountToken"] is False

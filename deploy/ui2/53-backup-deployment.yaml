@@ -1,6 +1,6 @@
 # Backup module worker (MODULE_PER_POD_PLAN.md step 2, MODULE_POD_RUNTIME_CONTRACT.md).
-# Committed at replicas: 0 while general fallback remains active; module_deploy.py scales to 1 and hands over ownership
-# only after a live module heartbeat and an explicit PO authorization reference.
+# Cutover performed 2026-11-23 under PO authorization: the backup module owns itself, so this commits replicas: 1.
+# A hand apply of this manifest must never stop the backup owner; module_deploy.py owns later scale and handover.
 # No CPU limit: MODULE_POD_RUNTIME_CONTRACT.md.
 # A copy of deploy/ui2/01-priority-classes.yaml's ui2-worker (identical; tests assert it), so this file applies on its own.
 apiVersion: scheduling.k8s.io/v1
@@ -30,7 +30,7 @@ metadata:
     app.kubernetes.io/part-of: nexus-ui2
     app.kubernetes.io/component: backup
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:

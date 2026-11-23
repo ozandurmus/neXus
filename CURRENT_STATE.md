@@ -16,7 +16,7 @@ collection never replaces a complete snapshot. Management policy is configured
 intent, never proof of gateway enforcement. License, contract and Live Patch
 reads run fleet-wide, and advisories are matched from a fixed-source intake
 through the proxy. Scheduled jobs run again since 2026-11-10, each family with
-an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and failover readiness (V209/V210; readiness only). Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md).
+an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and failover readiness (V209/V210; readiness only). Backup runs on its own pod (`ui2-backup`) since 2026-11-23. Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md).
 
 ## Active build
 
