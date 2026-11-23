@@ -36,6 +36,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Mapping
 
 from configuration.checkpoint_config_probe import ProbeTarget, _connect, _run_exec
+from utils.env_flags import env_bool as _env_bool
 from utils.logger import info, register_sensitive_value, user_fingerprint
 from utils.recovery_collect import RecoveryAttestationError, RecoveryCollectionTarget
 
@@ -218,13 +219,6 @@ def parse_gaia_listing(
 
 
 # --- attester --------------------------------------------------------------
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() not in {"0", "false", "no", "off", "disabled"}
 
 
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:

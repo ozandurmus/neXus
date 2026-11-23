@@ -64,11 +64,15 @@ export interface DossierConfigurationModel {
   readonly hashPrefix: string;
   readonly totalEntryCount: number | null;
   readonly entriesText: string;
-  readonly totalSectionCount: number;
+  /** null when the snapshot did not report the section index (never a silent 0). */
+  readonly totalSectionCount: number | null;
+  readonly sectionsText: string;
   readonly sectionsShown: readonly ConfigurationIndexEntry[];
   readonly totalChangedCount: number;
   readonly changedShown: readonly DossierChangedSectionRow[];
-  readonly totalOverrideCount: number;
+  /** null when the snapshot did not report local overrides (never a silent 0). */
+  readonly totalOverrideCount: number | null;
+  readonly overridesText: string;
   readonly overridesShown: readonly ConfigurationOverride[];
 }
 
@@ -86,16 +90,18 @@ function emptyModel(
     hashPrefix: "UNKNOWN",
     totalEntryCount: null,
     entriesText: "entries UNKNOWN",
-    totalSectionCount: 0,
+    totalSectionCount: null,
+    sectionsText: "sections UNKNOWN",
     sectionsShown: [],
     totalChangedCount: 0,
     changedShown: [],
-    totalOverrideCount: 0,
+    totalOverrideCount: null,
+    overridesText: "local overrides UNKNOWN",
     overridesShown: [],
   };
 }
 
-function finiteCount(n: number | null | undefined): number | null {
+export function finiteCount(n: number | null | undefined): number | null {
   return typeof n === "number" && Number.isFinite(n) ? n : null;
 }
 
@@ -143,6 +149,8 @@ export function projectDossierConfiguration(
   }
 
   const vendor = (opts.vendor ?? cfg.vendor ?? "").toLowerCase();
+  const indexReported = Array.isArray(cfg.index);
+  const overridesReported = Array.isArray(cfg.overrides);
   const rawIndex = Array.isArray(cfg.index) ? cfg.index : [];
   const filteredIndex =
     vendor === "fortinet"
@@ -153,10 +161,12 @@ export function projectDossierConfiguration(
   const changedSections = Array.isArray(rawChanged) ? rawChanged : [];
   const overrides = Array.isArray(cfg.overrides) ? cfg.overrides : [];
 
+  // An index or override list that was not reported can never read as "Aligned" / "First run".
+  const countsReported = indexReported && overridesReported;
   const badge: { readonly state: BadgeState; readonly word: string } =
     cfg.change_state === "changed" || changedSections.length > 0 || overrides.length > 0
       ? { state: "watch", word: "Changed" }
-      : cfg.change_state === "unchanged" || cfg.change_state === "first_run"
+      : countsReported && (cfg.change_state === "unchanged" || cfg.change_state === "first_run")
         ? { state: "ok", word: cfg.change_state === "first_run" ? "First run" : "Aligned" }
         : { state: "unk", word: "UNKNOWN" };
 
@@ -169,8 +179,11 @@ export function projectDossierConfiguration(
   const hashPrefix = cfg.canonical_hash ? cfg.canonical_hash.slice(0, 12) : "UNKNOWN";
   // A total is only a total when every indexed section reported its entry count; a partial sum is not shown as one.
   const totalEntryCount = sumEntryCounts(filteredIndex.map((row) => finiteCount(row.entry_count)));
-  const entriesText = totalEntryCount === null ? "entries UNKNOWN" : plural(totalEntryCount, "entry", "entries");
-  const totalSectionCount = filteredIndex.length;
+  const entriesText =
+    !indexReported || totalEntryCount === null ? "entries UNKNOWN" : plural(totalEntryCount, "entry", "entries");
+  const totalSectionCount = indexReported ? filteredIndex.length : null;
+  const sectionsText =
+    totalSectionCount === null ? "sections UNKNOWN" : `${plural(totalSectionCount, "section", "sections")} indexed`;
   const sectionsShown = filteredIndex.slice(0, CONFIG_SECTIONS_CAP);
   const totalChangedCount = changedSections.length;
   const changedShown: readonly DossierChangedSectionRow[] = changedSections
@@ -186,10 +199,14 @@ export function projectDossierConfiguration(
       newCountText:
         s.new_count === null || s.new_count === undefined ? "none" : plural(s.new_count, "entry", "entries"),
     }));
-  const totalOverrideCount = overrides.length;
+  const totalOverrideCount = overridesReported ? overrides.length : null;
+  const overridesText =
+    totalOverrideCount === null
+      ? "local overrides UNKNOWN"
+      : plural(totalOverrideCount, "local override", "local overrides");
   const overridesShown = overrides.slice(0, CONFIG_OVERRIDES_CAP);
 
-  const summaryText = `${plural(totalSectionCount, "section", "sections")} indexed · ${entriesText} · ${plural(totalChangedCount, "changed section", "changed sections")} · ${plural(totalOverrideCount, "local override", "local overrides")}`;
+  const summaryText = `${sectionsText} · ${entriesText} · ${plural(totalChangedCount, "changed section", "changed sections")} · ${overridesText}`;
 
   return {
     badge,
@@ -202,10 +219,12 @@ export function projectDossierConfiguration(
     totalEntryCount,
     entriesText,
     totalSectionCount,
+    sectionsText,
     sectionsShown,
     totalChangedCount,
     changedShown,
     totalOverrideCount,
+    overridesText,
     overridesShown,
   };
 }

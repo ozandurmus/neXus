@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Link from "@mui/material/Link";
@@ -1531,11 +1531,6 @@ function DetailTabsBody({ ariaLabel, tabs, initial }: {
       <M3Tabs ariaLabel={ariaLabel} tabs={tabs} value={value} onChange={setValue} />
     </DetailTabsContext.Provider>
   );
-}
-
-/** The tab strip's navigation for a panel inside it (a cluster page's Identity alias). */
-export function useDetailTabs() {
-  return useContext(DetailTabsContext);
 }
 
 /**

@@ -576,6 +576,15 @@
       "priority": "P3",
       "target": "docs/operations/BACKUP_MODULE_CUTOVER.md; tools/delivery/module_deploy.py --ownership-transfer (a4b00131)",
       "note": ""
+    },
+    {
+      "id": "preview_golden_database_rollout",
+      "category": "deploy",
+      "title": "Preview golden database: operator roll-out on the host (refresh script, nightly cron, first-run checks)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "docs/operations/PREVIEW_GOLDEN_DATABASE.md (fb373545)",
+      "note": ""
     }
   ]
 }

@@ -67,7 +67,11 @@ export function EstatePolicyHygiene({
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", mb: "8px" }}>
           <Typography sx={{ fontWeight: 700, fontSize: "15px", color: ev.ink }}>Policy hygiene</Typography>
-          <EvidenceStamp at={collectedAt} source="policy snapshot" now={now} />
+          <EvidenceStamp
+            at={read.state === "ok" && view.state === "ok" ? collectedAt : null}
+            source="policy snapshot"
+            now={now}
+          />
           <a
             href={POLICY_HYGIENE_STANDARD_HREF}
             style={{ marginLeft: "auto", fontSize: "12.5px", color: ev.accent }}
@@ -210,12 +214,24 @@ export function EstatePolicyHygiene({
 
             <Box>
               <Typography sx={{ fontWeight: 650, fontSize: "13px", color: ev.ink, mb: "4px" }}>
-                Finding rows: {view.totalRows} matching rules
+                {view.totalRows === null
+                  ? "Finding rows: matching rule count UNKNOWN"
+                  : `Finding rows: ${view.totalRows} matching rules`}
               </Typography>
               {view.shownRows.length === 0 ? (
-                <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
-                  No hygiene findings match this policy.
-                </Typography>
+                view.totalRows === null ? (
+                  <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
+                    Matching rule count UNKNOWN; no finding rows were returned.
+                  </Typography>
+                ) : view.totalRows === 0 ? (
+                  <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
+                    No hygiene findings match this policy.
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
+                    No finding rows on this page ({view.totalRows} matching rules exist).
+                  </Typography>
+                )
               ) : (
                 <Box
                   component="ul"
@@ -247,7 +263,7 @@ export function EstatePolicyHygiene({
                       </Box>
                     </Box>
                   ))}
-                  {view.totalRows > view.shownRows.length && (
+                  {view.totalRows !== null && view.totalRows > view.shownRows.length && (
                     <Box component="li" sx={{ py: "4px" }}>
                       <MoreFooter
                         shown={view.shownRows.length}
@@ -258,6 +274,11 @@ export function EstatePolicyHygiene({
                     </Box>
                   )}
                 </Box>
+              )}
+              {view.totalRows === null && view.shownRows.length > 0 && (
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink3, mt: "4px" }}>
+                  Matching rule total UNKNOWN (not reported); more matching rules may exist beyond these rows.
+                </Typography>
               )}
             </Box>
           </Box>

@@ -133,7 +133,7 @@ export function EstateDiagnosticRuns() {
                   <MoreFooter
                     shown={model.shown.length}
                     total={model.total}
-                    noun="diagnostic runs"
+                    noun={model.truncated ? "diagnostic runs on this page (more may exist)" : "diagnostic runs"}
                     testId="diagnostic-runs-more"
                   />
                 </Box>

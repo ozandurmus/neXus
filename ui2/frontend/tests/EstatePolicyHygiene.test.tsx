@@ -316,6 +316,71 @@ describe("EstatePolicyHygiene inside EstatePolicyBrowser", () => {
     expect(buildPolicyHygieneView({ rows: [] } as unknown as PolicyHygienePage).state).toBe("unknown");
   });
 
+  it("4b. a failed or malformed hygiene read shows an a0 UNKNOWN header stamp, never the fresh policy-snapshot stamp", async () => {
+    getPolicyHygiene.mockRejectedValueOnce(new Error("downstream unavailable"));
+    const { container, unmount } = render(
+      <EstatePolicyHygiene policy="pol-alpha-01" collectedAt={COLLECTED_AT} now={NOW} />,
+    );
+    await screen.findByText("Hygiene UNKNOWN: this policy's hygiene analysis could not be read.");
+    const failedStamp = container.querySelector("[data-evidence-stamp]");
+    expect(failedStamp?.getAttribute("data-evidence-stamp")).toBe("a0");
+    expect(failedStamp?.textContent).toContain("UNKNOWN");
+    expect(container.querySelector('[data-evidence-stamp="a1"]')).toBeNull();
+    unmount();
+
+    getPolicyHygiene.mockResolvedValueOnce({ rows: null, counts: null });
+    const { container: malformed } = render(
+      <EstatePolicyHygiene policy="pol-alpha-01" collectedAt={COLLECTED_AT} now={NOW} />,
+    );
+    await screen.findByText("Hygiene UNKNOWN: this policy's hygiene analysis could not be read.");
+    const malformedStamp = malformed.querySelector("[data-evidence-stamp]");
+    expect(malformedStamp?.getAttribute("data-evidence-stamp")).toBe("a0");
+    expect(malformedStamp?.textContent).toContain("UNKNOWN");
+    expect(malformed.querySelector('[data-evidence-stamp="a1"]')).toBeNull();
+  });
+
+  it("6. total omitted with rows [] renders 'matching rule count UNKNOWN' and never '0 matching rules' or 'No hygiene findings match'", async () => {
+    const { total: _omitted, ...withoutTotal } = makeHygienePage({ rows: [] });
+    void _omitted;
+    getPolicyHygiene.mockResolvedValue(withoutTotal);
+    render(<EstatePolicyHygiene policy="pol-alpha-01" collectedAt={COLLECTED_AT} now={NOW} />);
+
+    expect(await screen.findByText("Finding rows: matching rule count UNKNOWN")).toBeInTheDocument();
+    expect(screen.getByText("Matching rule count UNKNOWN; no finding rows were returned.")).toBeInTheDocument();
+    expect(screen.queryByText(/0 matching rules/)).toBeNull();
+    expect(screen.queryByText("No hygiene findings match this policy.")).toBeNull();
+  });
+
+  it("7. total null with 3 rows: totalRows is null and the header states the count is UNKNOWN, not '3 matching rules'", async () => {
+    const rows = Array.from({ length: 3 }, (_, idx) => ({
+      ruleId: `r-${idx + 1}`,
+      number: idx + 1,
+      name: `RULE-TANGO-${idx + 1}`,
+      sectionId: "sec-1",
+      findings: BASE_ASSESSMENT.findings,
+      hygiene: BASE_ASSESSMENT,
+    }));
+    const page = makeHygienePage({ rows, total: null as unknown as number });
+    expect(buildPolicyHygieneView(page)).toMatchObject({ state: "ok", totalRows: null });
+    getPolicyHygiene.mockResolvedValue(page);
+    render(<EstatePolicyHygiene policy="pol-alpha-01" collectedAt={COLLECTED_AT} now={NOW} />);
+
+    expect(await screen.findByText("Finding rows: matching rule count UNKNOWN")).toBeInTheDocument();
+    expect(screen.getByText("1 · RULE-TANGO-1")).toBeInTheDocument();
+    expect(screen.getByText(/Matching rule total UNKNOWN/)).toBeInTheDocument();
+    expect(screen.queryByText(/3 matching rules/)).toBeNull();
+    expect(screen.queryByTestId("policy-hygiene-rows-more")).toBeNull();
+  });
+
+  it("8. total 5 with rows [] never renders 'No hygiene findings match this policy.'", async () => {
+    getPolicyHygiene.mockResolvedValue(makeHygienePage({ rows: [], total: 5 }));
+    render(<EstatePolicyHygiene policy="pol-alpha-01" collectedAt={COLLECTED_AT} now={NOW} />);
+
+    expect(await screen.findByText("Finding rows: 5 matching rules")).toBeInTheDocument();
+    expect(screen.queryByText("No hygiene findings match this policy.")).toBeNull();
+    expect(screen.getByText(/No finding rows on this page \(5 matching rules exist\)/)).toBeInTheDocument();
+  });
+
   it("5. standard-view link points to ?screen=policy&tab=hygiene&standard=1 and carries (standard view) with no export or comparison buttons", async () => {
     getPolicyHygiene.mockResolvedValue(makeHygienePage());
     render(<EstatePolicyHygiene policy="pol-alpha-01" collectedAt={COLLECTED_AT} now={NOW} />);

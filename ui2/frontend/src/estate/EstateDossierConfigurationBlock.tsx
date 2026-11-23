@@ -3,6 +3,7 @@ import Typography from "@mui/material/Typography";
 import { plural } from "../shell/plural";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import {
+  finiteCount,
   projectDossierConfiguration,
   type DeviceConfigurationDetail,
   type EstateReadState,
@@ -71,7 +72,7 @@ export function EstateDossierConfigurationBlock({
           <Box sx={{ px: "18px", pb: "14px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: ev.ink }}>
-                {`${plural(model.totalSectionCount, "section", "sections")} indexed · ${model.entriesText} · ${plural(model.totalChangedCount, "changed section", "changed sections")} · ${plural(model.totalOverrideCount, "local override", "local overrides")}`}
+                {`${model.sectionsText} · ${model.entriesText} · ${plural(model.totalChangedCount, "changed section", "changed sections")} · ${model.overridesText}`}
               </Typography>
               <Typography sx={{ fontSize: "12px", color: ev.ink3, fontFamily: ESTATE_MONO }}>
                 {`Read kind: ${model.readKind} · Hash: ${model.hashPrefix} · ${model.withheldText}`}
@@ -81,7 +82,9 @@ export function EstateDossierConfigurationBlock({
             <Box data-testid="dossier-config-sections-list">
               {model.sectionsShown.length === 0 ? (
                 <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-                  No configuration sections indexed in this snapshot.
+                  {model.totalSectionCount === null
+                    ? "Configuration sections UNKNOWN (not reported in this snapshot)."
+                    : "No configuration sections indexed in this snapshot."}
                 </Typography>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -111,7 +114,9 @@ export function EstateDossierConfigurationBlock({
                         component="span"
                         sx={{ ml: "auto", fontSize: "12.5px", fontFamily: ESTATE_MONO, color: ev.ink2 }}
                       >
-                        {plural(row.entry_count, "entry", "entries")}
+                        {finiteCount(row.entry_count) === null
+                          ? "entries UNKNOWN"
+                          : plural(row.entry_count as number, "entry", "entries")}
                       </Typography>
                       {row.has_override ? <StateBadge state="watch" word="Override" dense /> : null}
                     </Box>
@@ -120,7 +125,7 @@ export function EstateDossierConfigurationBlock({
               )}
               <MoreFooter
                 shown={model.sectionsShown.length}
-                total={model.totalSectionCount}
+                total={model.totalSectionCount ?? 0}
                 noun="sections"
                 testId="dossier-config-sections-more"
               />
@@ -170,7 +175,7 @@ export function EstateDossierConfigurationBlock({
               </Box>
             ) : null}
 
-            {model.totalOverrideCount > 0 ? (
+            {(model.totalOverrideCount ?? 0) > 0 ? (
               <Box data-testid="dossier-config-overrides-list" sx={{ pt: "4px", borderTop: `1px solid ${ev.line}` }}>
                 <Typography sx={{ fontSize: "12px", fontWeight: 650, color: ev.ink3, mb: "4px" }}>
                   Local overrides (src=local)
@@ -200,7 +205,7 @@ export function EstateDossierConfigurationBlock({
                 </Box>
                 <MoreFooter
                   shown={model.overridesShown.length}
-                  total={model.totalOverrideCount}
+                  total={model.totalOverrideCount ?? 0}
                   noun="overrides"
                   testId="dossier-config-overrides-more"
                 />

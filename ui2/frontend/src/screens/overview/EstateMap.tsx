@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Link from "@mui/material/Link";
 import Tooltip from "@mui/material/Tooltip";
@@ -138,86 +137,6 @@ export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; 
               No archive <b style={{ color: m3.onSurface }}>{estate.no_archive}</b></Link>
           </Box>
         )}
-      </Box>
-    </Box>
-  );
-}
-
-/**
- * One hero fact: a big numeral with its population, one proportional bar, one plain sentence, one link.
- *
- * The bar keeps its meaning (only the shortfall is drawn, so a long bar is never a good sign) and now names it: each
- * sliver has an in-line label under the bar ("7 without an archive"), so the colour is never the only signal
- * (UI review 2026-10-18, F-13). A fact with nothing to name draws no sliver and no label.
- */
-export function HeroFact({ label, value, of, unit, bad, color, sentence, href, sliverLabel, segments, unknownWord = "n/a", aside, ariaLabel }: {
-  readonly label: string; readonly value: number | null; readonly of: number | null; readonly unit: string;
-  readonly bad: number; readonly color: string; readonly sentence: string; readonly href: string;
-  /** What the sliver counts, for example "without an archive"; printed after the count under the bar. */
-  readonly sliverLabel?: string;
-  /** Several named slivers instead of the single `bad` one (HA readiness: not ready, unknown). */
-  readonly segments?: ReadonlyArray<{ readonly count: number; readonly color: string; readonly label: string }>;
-  /** The word shown instead of the numeral when the figure is not known. */
-  readonly unknownWord?: string;
-  /** A marker beside the label (for example a Stale chip). */
-  readonly aside?: ReactNode;
-  readonly ariaLabel?: string;
-}) {
-  const known = value !== null && of !== null && of > 0;
-  const slivers = (segments ?? (bad > 0 ? [{ count: bad, color, label: sliverLabel ?? "" }] : [])).filter((x) => x.count > 0);
-  return (
-    <Box component="a" href={href} aria-label={ariaLabel} sx={{ display: "block", textDecoration: "none", color: "inherit", p: 1.5, borderRadius: "10px",
-      "&:hover": { bgcolor: m3.scLow } }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.06em", color: m3.onSurfaceVar, textTransform: "uppercase" }}>{label}</Typography>
-        {aside}
-      </Box>
-      <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.25 }}>
-        <Typography sx={{ fontSize: known ? 44 : 28, fontWeight: 700, lineHeight: 1.05, color: known ? m3.onSurface : m3.neutralInk }}>{known ? value : unknownWord}</Typography>
-        {known && <Typography sx={{ fontSize: 16, color: m3.onSurfaceVar }}>of {of} {unit}</Typography>}
-      </Box>
-      {known && (
-        <Box sx={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", bgcolor: m3.sc, my: 1 }}>
-          {slivers.map((x) => <Box key={x.label || x.color} sx={{ width: `${(100 * x.count) / (of ?? 1)}%`, background: x.color }} />)}
-        </Box>
-      )}
-      {known && slivers.some((x) => x.label) && (
-        <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 1.5, mb: 0.5 }}>
-          {slivers.filter((x) => x.label).map((x) => (
-            <Box key={x.label} sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
-              <Box sx={{ width: 9, height: 9, borderRadius: "2px", background: x.color, flex: "none" }} />
-              <Typography sx={{ fontSize: 12.5, color: m3.onSurface }}><b>{x.count}</b> {x.label}</Typography>
-            </Box>
-          ))}
-        </Box>
-      )}
-      <Typography sx={{ fontSize: 14, color: m3.onSurfaceVar }}>{sentence}</Typography>
-    </Box>
-  );
-}
-
-/** A population bar in named parts, counts printed; hatched parts are "not evidenced". */
-export function PopulationBar({ parts, height = 14 }: {
-  readonly parts: ReadonlyArray<{ name: string; count: number; bg: string; href?: string }>; readonly height?: number;
-}) {
-  const total = parts.reduce((n, p) => n + p.count, 0);
-  if (total === 0) return null;
-  return (
-    <Box>
-      <Box sx={{ display: "flex", height, borderRadius: `${height / 2}px`, overflow: "hidden", gap: "2px" }}>
-        {parts.filter((p) => p.count > 0).map((p) => (
-          <Tooltip key={p.name} title={`${p.name}: ${p.count}`}>
-            <Box component={p.href ? "a" : "div"} href={p.href} sx={{ width: `${(100 * p.count) / total}%`, background: p.bg, display: "block" }} />
-          </Tooltip>
-        ))}
-      </Box>
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.75, mt: 0.75 }}>
-        {parts.filter((p) => p.count > 0).map((p) => (
-          <Box key={p.name} sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: "2px", background: p.bg }} />
-            <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{p.name} <b style={{ color: m3.onSurface }}>{p.count}</b></Typography>
-          </Box>
-        ))}
       </Box>
     </Box>
   );

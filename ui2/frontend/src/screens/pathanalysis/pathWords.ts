@@ -154,10 +154,6 @@ export function explain(code: string): string {
   return WORDS[code] ?? code;
 }
 
-export function hasExplanation(code: string): boolean {
-  return code in WORDS;
-}
-
 /** The hops that must resolve favourably before this hop's own evaluation counts: every earlier UNKNOWN hop of the branch. */
 export function dependsOn(branch: PathBranch, hop: PathHop): number[] {
   if (hop.verdict !== "CONDITIONAL") return [];

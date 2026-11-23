@@ -5,6 +5,7 @@ import { EstateCasesScreen } from "../src/estate/EstateCasesScreen";
 import { EstateDiagnosticRuns } from "../src/estate/EstateDiagnosticRuns";
 import {
   buildDiagnosticRunsModel,
+  DIAGNOSTIC_HISTORY_PAGE_SIZE,
   diagnosticRunStateView,
 } from "../src/estate/estateDiagnosticRunsModel";
 
@@ -138,7 +139,9 @@ describe("EstateDiagnosticRuns", () => {
     const secFailed = screen.getByTestId("diagnostic-runs-section");
     expect(secFailed.querySelector('[data-state-badge="unk"]')).toHaveTextContent("UNKNOWN");
     expect(failed).toHaveTextContent("Diagnostic runs could not be read.");
-    expect(failed.querySelector("[data-evidence-stamp]")).not.toBeNull();
+    const failedStamp = failed.querySelector("[data-evidence-stamp]");
+    expect(failedStamp).toHaveAttribute("data-evidence-stamp", "a0");
+    expect(failedStamp).toHaveTextContent("UNKNOWN");
     expect(secFailed.querySelector('[data-state-badge="ok"]')).toBeNull();
     expect(within(secFailed).queryByText("No diagnostic runs recorded.")).toBeNull();
     expect(within(secFailed).queryByText(/^(OK|Fine)$/)).toBeNull();
@@ -147,7 +150,8 @@ describe("EstateDiagnosticRuns", () => {
     // Malformed payload without a runs array also renders UNKNOWN.
     historyMock.mockResolvedValueOnce({} as unknown as { runs: DiagnosticHistoryRow[] });
     const { unmount: unmountMalformed } = render(<EstateDiagnosticRuns />);
-    await screen.findByTestId("diagnostic-runs-failed");
+    const malformed = await screen.findByTestId("diagnostic-runs-failed");
+    expect(malformed.querySelector("[data-evidence-stamp]")).toHaveAttribute("data-evidence-stamp", "a0");
     expect(screen.getByTestId("diagnostic-runs-section").querySelector('[data-state-badge="unk"]')).not.toBeNull();
     unmountMalformed();
 
@@ -159,7 +163,9 @@ describe("EstateDiagnosticRuns", () => {
     const secRestricted = screen.getByTestId("diagnostic-runs-section");
     expect(secRestricted.querySelector('[data-state-badge="na"]')).toHaveTextContent("Restricted");
     expect(restricted).toHaveTextContent("Diagnostic history is restricted for this role.");
-    expect(restricted.querySelector("[data-evidence-stamp]")).not.toBeNull();
+    const restrictedStamp = restricted.querySelector("[data-evidence-stamp]");
+    expect(restrictedStamp).toHaveAttribute("data-evidence-stamp", "a0");
+    expect(restrictedStamp).toHaveTextContent("UNKNOWN");
     expect(secRestricted.querySelector('[data-state-badge="ok"]')).toBeNull();
     expect(within(secRestricted).queryByText("No diagnostic runs recorded.")).toBeNull();
     expect(within(secRestricted).queryByText(/^(OK|Fine)$/)).toBeNull();
@@ -196,6 +202,42 @@ describe("EstateDiagnosticRuns", () => {
     });
     expect(model.status === "ok" && model.evidenceAt).toBe(readAt);
     expect(model.status === "ok" && model.evidenceAt).not.toBe(twoDaysAgo);
+  });
+
+  it("models failed and restricted reads with evidenceAt null, never the local read instant", () => {
+    const readAt = new Date().toISOString();
+    expect(buildDiagnosticRunsModel({ status: "failed", readAt })).toMatchObject({ status: "failed", evidenceAt: null });
+    expect(buildDiagnosticRunsModel({ status: "restricted", readAt })).toMatchObject({
+      status: "restricted",
+      evidenceAt: null,
+    });
+  });
+
+  it("flags a full first page of 50 runs as truncated and never presents it as the exact total", async () => {
+    expect(DIAGNOSTIC_HISTORY_PAGE_SIZE).toBe(50);
+    const fifty = Array.from({ length: 50 }, (_, i) => makeRun(i + 1));
+    historyMock.mockResolvedValue({ runs: fifty });
+
+    const model = buildDiagnosticRunsModel({ status: "ok", runs: fifty, readAt: AT_NEW });
+    expect(model.status === "ok" && model.truncated).toBe(true);
+    expect(model.status === "ok" && model.countLine).toBe("50 diagnostic runs on first page (more may exist)");
+
+    render(<EstateDiagnosticRuns />);
+
+    const counts = await screen.findByTestId("diagnostic-runs-counts");
+    expect(counts).toHaveTextContent("50 diagnostic runs on first page (more may exist)");
+    expect(counts).not.toHaveTextContent(/^50 diagnostic runs listed$/);
+    expect(screen.getAllByTestId("diagnostic-run-row")).toHaveLength(10);
+    expect(screen.getByTestId("diagnostic-runs-more")).toHaveTextContent(
+      "+40 more diagnostic runs on this page (more may exist)",
+    );
+  });
+
+  it("does not flag a 12-run page as truncated", () => {
+    const twelve = Array.from({ length: 12 }, (_, i) => makeRun(i + 1));
+    const model = buildDiagnosticRunsModel({ status: "ok", runs: twelve, readAt: AT_NEW });
+    expect(model.status === "ok" && model.truncated).toBe(false);
+    expect(model.status === "ok" && model.countLine).toBe("12 diagnostic runs listed");
   });
 
   it("renders the EvidenceStamp from the read time when the newest run was submitted two days earlier", async () => {
