@@ -453,6 +453,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
                 "GET /healthz",
                 // PO 2026-11-15: HEAD answers like GET (Spring MVC serves HEAD from the GET handler).
                 "HEAD /healthz",
+                // Kubelet probes (deploy/ui2/50-service-deployment.yaml): /livez shallow, /readyz database check.
+                "GET /livez",
+                "HEAD /livez",
+                "GET /readyz",
+                "HEAD /readyz",
                 // Migration plan Step 4: the SAML 2.0 handshake runs before any session exists. SamlLoginController answers 404
                 // to every one of them while SAML is switched off.
                 "GET " + SamlSettingsService.AUTHENTICATE_PATH,

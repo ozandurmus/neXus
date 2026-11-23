@@ -51,7 +51,6 @@ USER 0
 ENV GRADLE_USER_HOME=/build/.gradle-home
 
 WORKDIR /build
-COPY ui2/ /build
 # Optional corporate CA anchors for this stage's own downloads. ui2/.ca/ is
 # part of the build context, git-ignored and normally empty; behind a
 # TLS-intercepting network the operator drops PEM files there before
@@ -60,6 +59,33 @@ COPY ui2/.ca/ /tmp/corp-ca/
 RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
       cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
     fi
+
+# Dependency layer: only the build definition is copied first -- wrapper,
+# version catalog, gradle/verification-metadata.xml, gradle.properties, the
+# settings and build scripts and every lockfile -- and the external
+# dependencies are downloaded and verified against it. With the image build's
+# layer cache this layer (and the Gradle distribution download) is reused
+# until one of these files changes; a source-only change starts below it.
+# Verification is the same as in the bootJar step: the same committed
+# verification metadata and lockfiles, no write or lenient flag.
+COPY ui2/gradlew ui2/settings.gradle.kts ui2/settings-gradle.lockfile ui2/build.gradle.kts ui2/gradle.properties /build/
+COPY ui2/gradle/ /build/gradle/
+COPY ui2/platform-core/build.gradle.kts ui2/platform-core/gradle.lockfile /build/platform-core/
+COPY ui2/persistence/build.gradle.kts ui2/persistence/gradle.lockfile /build/persistence/
+COPY ui2/capability-registry/build.gradle.kts ui2/capability-registry/gradle.lockfile /build/capability-registry/
+COPY ui2/job-engine/build.gradle.kts ui2/job-engine/gradle.lockfile /build/job-engine/
+COPY ui2/ldap-adapter/build.gradle.kts ui2/ldap-adapter/gradle.lockfile /build/ldap-adapter/
+COPY ui2/service/build.gradle.kts ui2/service/gradle.lockfile /build/service/
+COPY ui2/worker/build.gradle.kts ui2/worker/gradle.lockfile /build/worker/
+COPY ui2/scheduler/build.gradle.kts ui2/scheduler/gradle.lockfile /build/scheduler/
+COPY ui2/cli/build.gradle.kts ui2/cli/gradle.lockfile /build/cli/
+COPY ui2/architecture-tests/build.gradle.kts ui2/architecture-tests/gradle.lockfile /build/architecture-tests/
+COPY ui2/integration-tests/build.gradle.kts ui2/integration-tests/gradle.lockfile /build/integration-tests/
+COPY ui2/sanitizer/build.gradle.kts ui2/sanitizer/gradle.lockfile /build/sanitizer/
+COPY ui2/packet-analysis/build.gradle.kts ui2/packet-analysis/gradle.lockfile /build/packet-analysis/
+RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true resolveBuildDependencies
+
+COPY ui2/ /build
 
 # The committed wrapper is the only Gradle entry point, validated by its
 # committed distributionSha256Sum (B1-1a §4). No verification-metadata

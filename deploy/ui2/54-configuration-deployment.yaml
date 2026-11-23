@@ -1,3 +1,15 @@
+# A copy of deploy/ui2/01-priority-classes.yaml's ui2-core (identical; tests assert it), so this file applies on its own.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-core
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: 900000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "neXus service and its HTTP microservices: below the database, above the workers."
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +36,7 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      priorityClassName: system-cluster-critical
+      priorityClassName: ui2-core
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
           operator: "Exists"
