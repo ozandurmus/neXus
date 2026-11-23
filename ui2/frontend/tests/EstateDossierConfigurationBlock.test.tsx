@@ -111,6 +111,64 @@ describe("EstateDossierConfigurationBlock", () => {
     expect(restrictedModel.summaryText).toBe("Restricted for this role.");
   });
 
+  it("renders withheld count as UNKNOWN (never 0) when withheld_line_count is null", () => {
+    render(
+      <EstateDossierConfigurationBlock
+        deviceId={DEVICE_ID}
+        vendor="check_point"
+        role="gateway"
+        configuration={{ state: "ok", value: makeSnapshot({ withheld_line_count: null }) }}
+        now={NOW}
+      />,
+    );
+
+    const block = screen.getByTestId("dossier-configuration-block");
+    expect(block.textContent).toContain("secret-bearing line count UNKNOWN");
+    expect(block.textContent).not.toContain("0 secret-bearing lines withheld");
+    expect(block.textContent).not.toContain("secret-bearing lines withheld");
+  });
+
+  it("renders a real withheld_line_count of 0 as '0 secret-bearing lines withheld'", () => {
+    render(
+      <EstateDossierConfigurationBlock
+        deviceId={DEVICE_ID}
+        vendor="check_point"
+        role="gateway"
+        configuration={{ state: "ok", value: makeSnapshot({ withheld_line_count: 0 }) }}
+        now={NOW}
+      />,
+    );
+
+    const block = screen.getByTestId("dossier-configuration-block");
+    expect(block.textContent).toContain("0 secret-bearing lines withheld");
+    expect(block.textContent).not.toContain("UNKNOWN (");
+  });
+
+  it("renders 'entries UNKNOWN' instead of a partial total when an indexed section has no entry_count", () => {
+    render(
+      <EstateDossierConfigurationBlock
+        deviceId={DEVICE_ID}
+        vendor="check_point"
+        role="gateway"
+        configuration={{
+          state: "ok",
+          value: makeSnapshot({
+            index: [
+              { context: "physical", section: "System", source: "local", entry_count: 4, has_override: false },
+              { context: "physical", section: "Interfaces", source: "tpl", has_override: false } as ConfigurationIndexEntry,
+            ],
+          }),
+        }}
+        now={NOW}
+      />,
+    );
+
+    const block = screen.getByTestId("dossier-configuration-block");
+    expect(block.textContent).toContain("2 sections indexed · entries UNKNOWN ·");
+    expect(block.textContent).not.toMatch(/\d+ entr(y|ies) ·/);
+    expect(block.textContent).not.toContain("4 entries ·");
+  });
+
   it("renders indexed sections with unit words, hash prefix, EvidenceStamp, and standard=1 configuration link", () => {
     render(
       <EstateDossierConfigurationBlock
