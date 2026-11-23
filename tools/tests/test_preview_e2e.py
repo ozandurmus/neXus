@@ -1940,6 +1940,7 @@ class RefreshCluster:
     def __init__(self, active="a", fail=None):
         self.marker = golden_marker({"1", "2"}, slot=active) if active else None
         self.events, self.created, self.fail = [], [], fail
+        self.commands = []
 
     def k(self, ns, *args, **kwargs):
         text = kwargs.get("input") or ""
@@ -1958,12 +1959,15 @@ class RefreshCluster:
         if args[0] == "exec":
             command = args[-1]
             if "vacuumdb" in command:
+                self.commands.append(command)
                 self.events.append(("vacuum",))
                 if self.fail == "vacuum":
-                    raise preview.PreviewFailure("TIMEOUT")
+                    raise preview.PreviewFailure("OTHER")
                 return ""
             if "flyway_schema_history" in text:
                 self.events.append(("versions",))
+                if self.fail == "invalid":
+                    return "1\n1\n"  # a failed migration row exists
                 return "0\n1\n2\n3\n"
             if "IDENTIFY_SYSTEM" in command:
                 self.events.append(("probe",))
@@ -1980,7 +1984,7 @@ class RefreshCluster:
             self.events.append(("promote", obj["data"]["slot"]))
 
 
-@pytest.mark.parametrize("active, fail", [("a", None), ("b", None), (None, None), ("a", "copy"), ("a", "vacuum")])
+@pytest.mark.parametrize("active, fail", [("a", None), ("b", None), (None, None), ("a", "copy")])
 def test_refresh_stages_the_idle_slot_and_swaps_with_one_marker_write(monkeypatch, tmp_path, capsys, active, fail):
     cluster = RefreshCluster(active, fail)
     monkeypatch.setattr(preview, "k", cluster.k)
@@ -2134,3 +2138,72 @@ def test_preview_creates_namespace_limits_before_any_pod_and_sets_priority(monke
     assert objects[:3] == ["Namespace", "LimitRange", "ResourceQuota"]
     assert priorities and set(priorities) == {"ui2-low" if class_exists else None}
     assert preview.PREVIEW_PRIORITY is None, "restored after the run"
+
+
+def run_refresh(monkeypatch, tmp_path, cluster):
+    monkeypatch.setattr(preview, "k", cluster.k)
+    monkeypatch.setattr(preview, "create", cluster.create)
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview.time, "sleep", lambda s: None)
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: None)
+    monkeypatch.setattr(preview, "copy_database", lambda: None)
+    preview.refresh_golden(ROOT, now=datetime(2026, 11, 22, 3, 30))
+
+
+def test_golden_vacuum_runs_as_the_local_superuser_without_parallel_workers(monkeypatch, tmp_path):
+    cluster = RefreshCluster("a")
+    run_refresh(monkeypatch, tmp_path, cluster)
+    (command,) = cluster.commands
+    assert command.startswith('unset PGPASSWORD; export PGUSER=postgres; ')
+    assert "--analyze" in command and "--parallel=0" in command
+    assert "PGPASSWORD=" not in command.replace("unset PGPASSWORD;", "") and "ui2_migrate" not in command
+
+
+def test_a_failed_vacuum_does_not_stop_a_valid_copy_from_being_promoted(monkeypatch, tmp_path, capsys):
+    cluster = RefreshCluster("a", "vacuum")
+    run_refresh(monkeypatch, tmp_path, cluster)
+    out = capsys.readouterr().out
+    assert "PREVIEW GOLDEN: VACUUM_SKIPPED reason=OTHER" in out and "PREVIEW GOLDEN: PROMOTED slot=b" in out
+    order = [e[0] for e in cluster.events if e[0] in ("vacuum", "versions", "replication", "probe", "promote")]
+    assert order == ["vacuum", "versions", "replication", "probe", "promote"]
+
+
+def test_a_failed_vacuum_never_hides_an_invalid_copy(monkeypatch, tmp_path):
+    cluster = RefreshCluster("a", "invalid")
+    with pytest.raises(preview.PreviewFailure) as error:
+        run_refresh(monkeypatch, tmp_path, cluster)
+    assert error.value.reason == "GOLDEN_SCHEMA_FAILED_MIGRATION"
+    assert not any(e[0] == "promote" for e in cluster.events)
+
+
+def test_an_interrupt_during_vacuum_is_not_swallowed(monkeypatch, tmp_path):
+    cluster = RefreshCluster("a", "vacuum")
+    monkeypatch.setattr(preview, "INTERRUPTED", True)
+    with pytest.raises(preview.PreviewFailure):
+        run_refresh(monkeypatch, tmp_path, cluster)
+    assert not any(e[0] == "promote" for e in cluster.events)
+
+
+def test_the_window_is_computed_in_istanbul_not_in_the_host_clock_zone(monkeypatch):
+    """The host clock is UTC: 00:30 UTC is 03:30 Istanbul (allowed); 21:00 UTC is 00:00 Istanbul (collection)."""
+    from datetime import timezone
+
+    def clock(utc_hour, utc_minute):
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                assert tz is not None and getattr(tz, "key", None) == "Europe/Istanbul"
+                return datetime(2026, 11, 22, utc_hour, utc_minute, tzinfo=timezone.utc).astimezone(tz)
+        return Clock
+    for utc_hour, utc_minute, allowed in ((0, 30, True), (21, 0, False), (23, 0, False), (9, 5, False), (10, 0, True)):
+        monkeypatch.setattr(preview, "datetime", clock(utc_hour, utc_minute))
+        monkeypatch.setattr(preview, "k", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("past the window")))
+        try:
+            preview.refresh_golden(ROOT)
+        except preview.PreviewFailure as error:
+            assert error.reason == "GOLDEN_REFRESH_WINDOW" and not allowed
+        except RuntimeError:
+            assert allowed
+        else:
+            raise AssertionError("refresh must not complete")
