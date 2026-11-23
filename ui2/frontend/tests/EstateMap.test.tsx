@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { EstateView } from "../src/auth/adminApi";
+import type { EstateViewRead } from "../src/auth/adminApi";
 import { STATUS } from "../src/shell/Charts";
 import { CONDITION, EXEC, EstateMap, NOT_ASSESSED_REASON } from "../src/screens/overview/EstateMap";
 
@@ -11,13 +11,13 @@ import { CONDITION, EXEC, EstateMap, NOT_ASSESSED_REASON } from "../src/screens/
  * and that a target without an archive carries a marker of its own while the legend keeps its count.
  */
 const NOW = new Date().toISOString();
-type Cell = EstateView["devices"][number];
+type Cell = EstateViewRead["devices"][number];
 const cell = (id: string, vendor: string, condition: Cell["condition"], extra: Partial<Cell> = {}): Cell => ({
   device_id: id, hostname: `FW-${id.toUpperCase()}`, vendor, model: null, condition, no_archive: false,
   critical_fail: condition === "critical" ? 1 : 0, last_read_at: NOW, ...extra,
 });
 
-function estate(devices: Cell[]): EstateView {
+function estate(devices: Cell[]): EstateViewRead {
   const counts = { critical: 0, ageing: 0, partly_assessed: 0, not_assessed: 0, clear: 0 };
   devices.forEach((d) => { counts[d.condition]++; });
   return { devices, counts, no_archive: devices.filter((d) => d.no_archive).length, compliance_state: "OK",
