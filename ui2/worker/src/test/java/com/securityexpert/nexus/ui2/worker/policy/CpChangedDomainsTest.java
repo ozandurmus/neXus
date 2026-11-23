@@ -294,4 +294,63 @@ class CpChangedDomainsTest {
             contains("rule-001"), eq(1), eq("2026-10-04T00:00:00Z"), anyString());
     }
 
+    /**
+     * Deploy-freeze Phase 1: a domain finished before a drain yield published a change before the resume. Its stale
+     * checkpoint is discarded (domain row rewritten as COLLECTING with the new signal and no snapshots; no old package
+     * checkpoint is read) and the domain is read again, instead of failing with CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE.
+     */
+    @Test void resumedDomainWhoseSignalChangedDiscardsItsCheckpointAndIsReadAgain() throws Exception {
+        for (String newer : new String[]{
+                "{\"uid\":\"published-002\",\"publish-time\":{\"posix\":1791158500000,\"iso-8601\":\"2026-10-05T00:01+0000\"}}",
+                "{\"uid\":\"\"}"}) {
+            var repository = mock(PolicyCollectionRepository.class);
+            var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-a", 9);
+            String oldSignal = json.writeValueAsString(CpDomainReuse.signal(json.readTree(SIGNAL)));
+            when(repository.domainForRequest(request, container)).thenReturn(Optional.of(
+                new PolicyCollectionRepository.DomainRun(true, oldSignal, json.writeValueAsString(List.of(stored())))));
+            when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+            var reuse = new CpDomainReuse(repository, request);
+            reuse.begin(container);
+            assertNull(assertDoesNotThrow(() -> reuse.decide(container, json.readTree(newer))));
+            var current = CpDomainReuse.signal(json.readTree(newer));
+            verify(repository).saveDomain(eq(request), eq(container), eq("COLLECTING"), eq(false),
+                current == null ? isNull() : eq(json.writeValueAsString(current)), eq("[]"), eq(0), isNull(), anyString());
+            reuse.planned(container, 1);
+            assertNull(reuse.resumedPackage(container, "policy-1"));
+            verify(repository, never()).resumedUnit(any(), anyString(), anyString());
+            verify(repository, never()).previousDomain(anyString(), anyString());
+        }
+    }
+
+    /** Review D8: a partially collected domain (COLLECTING, no snapshots) whose signal changed is recollected too. */
+    @Test void partiallyCollectedDomainWhoseSignalChangedIsRecollectedWithoutStaleLookups() throws Exception {
+        var repository = mock(PolicyCollectionRepository.class);
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-a", 9);
+        String oldSignal = json.writeValueAsString(CpDomainReuse.signal(json.readTree(SIGNAL)));
+        when(repository.domainForRequest(request, container)).thenReturn(Optional.of(
+            new PolicyCollectionRepository.DomainRun(false, oldSignal, "[]")));
+        when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+        var reuse = new CpDomainReuse(repository, request);
+        reuse.begin(container);
+        var newer = json.readTree(SIGNAL.replace("published-001", "published-002"));
+        assertNull(reuse.decide(container, newer));
+        verify(repository).saveDomain(eq(request), eq(container), eq("COLLECTING"), eq(false),
+            eq(json.writeValueAsString(CpDomainReuse.signal(newer))), eq("[]"), eq(0), isNull(), anyString());
+        assertNull(reuse.resumedPackage(container, "policy-1"));
+        verify(repository, never()).resumedUnit(any(), anyString(), anyString());
+    }
+
+    @Test void resumedDomainWithAnUnchangedSignalIsStillReusedFromItsCheckpoint() throws Exception {
+        var repository = mock(PolicyCollectionRepository.class);
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-a", 9);
+        String signal = json.writeValueAsString(CpDomainReuse.signal(json.readTree(SIGNAL)));
+        when(repository.domainForRequest(request, container)).thenReturn(Optional.of(
+            new PolicyCollectionRepository.DomainRun(true, signal, json.writeValueAsString(List.of(stored())))));
+        when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+        var reuse = new CpDomainReuse(repository, request);
+        reuse.begin(container);
+        assertEquals(List.of(stored()), reuse.decide(container, json.readTree(SIGNAL)));
+    }
+
 }

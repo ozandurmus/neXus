@@ -115,6 +115,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
             List<String> domains = enumerateDomains(session, counter);
             // T-6: sequential -- one domain, one object type at a time, no executor, no parallel stream.
             for (String domain : domains) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.yieldAtUnitBoundary(); // Drain yield between domains.
                 for (ObjectType objectType : ObjectType.values()) {
                     candidates.addAll(queryObjects(session, domain, objectType, counter, parseCounts));
                 }
@@ -125,7 +126,13 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
             channelStates = ConnectionTableReducer.reduce(
                     firstObservation, secondObservation, candidates, request.configuredChannelPort());
         } catch (RuntimeException e) {
-            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            try {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            } catch (RuntimeException unwinding) {
+                // T-1 on a drain yield or lease loss too: disconnect here, not only through the admission scope's close.
+                try { closeSession(session); } catch (RuntimeException alreadyUnwinding) { /* the original wins */ }
+                throw unwinding;
+            }
             caught = e;
         }
         // T-1: disconnect is attempted whether or not the try block above failed.

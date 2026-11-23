@@ -416,6 +416,8 @@ public final class InventoryCapabilityExecutor {
 
             boolean clusterMember = !"STANDALONE".equals(haState.role());
             for (String vsid : vsids) {
+                // Deploy-freeze Phase 1: one virtual system is one unit; a drain stops the read here, nothing is written.
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.yieldAtUnitBoundary();
                 // cp_vsx_interfaces_identical_to_physical: measured live (Product Owner, 2026-09-21) that
                 // chaining multiple "vsenv <vsid> ...; <read>;" segments for different VSIDs inside one
                 // shared bash -lc process (the batch) does not reliably re-scope every later read to its

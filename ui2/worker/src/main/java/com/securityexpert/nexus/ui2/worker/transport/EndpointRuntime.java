@@ -35,6 +35,8 @@ public final class EndpointRuntime implements AutoCloseable {
     private final Set<java.net.http.HttpClient> clients = ConcurrentHashMap.newKeySet();
     private EndpointRuntime(Owner owner) { this.owner = owner; previous = ACTIVE.get(); ACTIVE.set(this); }
     public static void install(EndpointAdmissionRepository value) { repository = Objects.requireNonNull(value); }
+    /** Tests only: undo {@link #install} so a mocked repository never leaks into another test in the same JVM. */
+    static void uninstallForTest() { repository = null; }
     public static EndpointRuntime open(Owner owner) { return new EndpointRuntime(owner); }
     public static EndpointRuntime current() { return ACTIVE.get(); }
     public static AutoCloseable attach(EndpointRuntime scope) {
@@ -52,6 +54,36 @@ public final class EndpointRuntime implements AutoCloseable {
     public static void checkCommand() {
         var scope = ACTIVE.get();
         if (scope != null && "POLICY".equals(scope.owner.purpose()) && !repository.openingAllowed(scope.owner)) throw new AdmissionWait();
+    }
+    /**
+     * Read-only purposes whose multi-unit jobs yield to a deploy drain at a unit boundary (deploy-freeze Phase 1,
+     * PO 2026-11-23). Never BACKUP, FAILOVER_EXECUTION, CONFIGURATION_WRITE, ENROLLMENT, DIAGNOSTIC or POLICY (policy
+     * already yields before every command through {@link #checkCommand()}).
+     */
+    static final Set<String> UNIT_BOUNDARY_YIELD_PURPOSES = Set.of("INVENTORY", "CONFIGURATION", "DISCOVERY");
+
+    /**
+     * A unit boundary of a long read-only job (one VSX virtual system, one management domain, one configuration
+     * section): when this job's module or its owner is draining (or this job no longer owns its lease), stop here
+     * with {@link AdmissionWait}; the claim loop returns the job to REQUESTED without spending retry budget, the scope
+     * closes every transport, and the window-preserving requeue (V263) lets it be claimed again after the deploy.
+     * Nothing is mutated: only reads have run, and the job is re-read from its start. Call it only from read-only
+     * collectors ({@code WorkerUnitBoundaryYieldTest} pins the call sites); the purpose check is defence in depth,
+     * because a capability without a known purpose defaults to INVENTORY.
+     */
+    public static void yieldAtUnitBoundary() {
+        var scope = ACTIVE.get();
+        if (scope == null || repository == null || scope.owner.jobId() == null
+                || !UNIT_BOUNDARY_YIELD_PURPOSES.contains(scope.owner.purpose())) return;
+        boolean allowed;
+        // The yield is an optimisation: an unreadable owner row lets the read continue, as it did before this check.
+        try { allowed = repository.openingAllowed(scope.owner); }
+        catch (IllegalStateException unavailable) { return; }
+        if (!allowed) {
+            System.getLogger(EndpointRuntime.class.getName()).log(System.Logger.Level.INFO,
+                "DRAIN_YIELD role={0} purpose={1}", scope.owner.role(), scope.owner.purpose());
+            throw new AdmissionWait();
+        }
     }
     private boolean ownershipLost() {
         synchronized (leases) { return fleetLost || leases.stream().anyMatch(lease -> lease.lost); }

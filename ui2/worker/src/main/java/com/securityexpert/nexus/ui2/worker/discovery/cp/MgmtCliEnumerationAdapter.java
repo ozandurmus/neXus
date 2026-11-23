@@ -90,6 +90,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             List<String> domains = enumerateDomains(session);
             requestCount++;
             for (String domain : domains) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.yieldAtUnitBoundary(); // Drain yield between domains.
                 candidates.addAll(queryGateways(session, domain, parseCounts));
                 requestCount++;
             }
@@ -98,7 +99,13 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             List<ConnectionTableRow> secondObservation = readConnectionTableObservation(session);
             channelStates = ConnectionTableReducer.reduce(firstObservation, secondObservation, candidates, request.configuredChannelPort());
         } catch (RuntimeException e) {
-            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            try {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            } catch (RuntimeException unwinding) {
+                // T-1 on a drain yield or lease loss too: disconnect here, not only through the admission scope's close.
+                try { closeSession(session); } catch (RuntimeException alreadyUnwinding) { /* the original wins */ }
+                throw unwinding;
+            }
             caught = e;
         }
 

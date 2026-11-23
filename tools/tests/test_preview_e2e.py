@@ -1370,7 +1370,8 @@ def test_preview_claim_sql_resolves_all_placeholders_with_open_window(monkeypatc
     for sql in claims:
         joined = re.search(r"string_to_array\(''([^']+)'', '',''\)", sql)[1]
         assert set(joined.split(',')) == set(fleet_types)
-        boundaries = re.findall(r"CAST\(''([^']+)'' AS timestamptz\)", sql)
+        # The claim predicate's window, after the SET clause (which also stamps admitted_window_end, V263).
+        boundaries = re.findall(r"CAST\(''([^']+)'' AS timestamptz\)", sql.split('WHERE job_id = (', 1)[1])
         start, end = map(datetime.fromisoformat, boundaries[:2])
         assert (start.hour, start.minute, start.second) == (2, 0, 0)
         assert (end - start).total_seconds() == 3600

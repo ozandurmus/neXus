@@ -832,10 +832,13 @@ public final class Ui2WorkerMain {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        // Same knob as the general worker (default 840 s = terminationGracePeriodSeconds minus a margin); parsed at startup
+        // so a malformed value fails here, never inside the shutdown hook.
+        long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             loop.requestStop();
             executor.shutdown();
-            try { executor.awaitTermination(840, java.util.concurrent.TimeUnit.SECONDS); }
+            try { executor.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS); }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
             finally {
                 heartbeat.shutdownNow();

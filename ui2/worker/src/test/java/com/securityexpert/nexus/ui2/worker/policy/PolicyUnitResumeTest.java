@@ -30,7 +30,9 @@ class PolicyUnitResumeTest {
         assertNull(reuse.resumedPackage("domain-1", "unfinished-policy"));
         var changed = json.readTree(signalText.replace("published-001", "published-002"));
         reuse.begin("domain-1");
-        assertThrows(PolicyCollectionTrace.Failure.class, () -> reuse.decide("domain-1", changed));
+        // Deploy-freeze Phase 1: a domain changed between yield and resume is read again from scratch, not failed.
+        assertNull(reuse.decide("domain-1", changed));
+        assertNull(reuse.resumedPackage("domain-1", "policy-1"));
     }
 
     @Test void cpCompletedUnitsResumeWithPendingDomainAndDatabaseGapsPreventCompletion() throws Exception {

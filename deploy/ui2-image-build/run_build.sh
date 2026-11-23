@@ -29,7 +29,7 @@ as_tree_owner() {
 # The deploy account cannot write the tree, so Python must not try to cache bytecode there.
 export PYTHONDONTWRITEBYTECODE=1
 cd "$REPO"
-NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy script-runner packet-analysis}"
+NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy backup script-runner packet-analysis}"
 as_tree_owner git fetch
 as_tree_owner git checkout main
 as_tree_owner git pull origin main

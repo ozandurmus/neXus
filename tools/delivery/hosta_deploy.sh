@@ -33,7 +33,7 @@ if [ -z "$HOST" ]; then echo "set NEXUS_HOST or write user@host to ~/.config/nex
 LIMIT="${NEXUS_DEPLOY_LIMIT_S:-4500}"
 SKIP_SECURITY_B64=""
 APPLY=()
-TARGETS="service worker configuration compliance policy script-runner packet-analysis"
+TARGETS="service worker configuration compliance policy backup script-runner packet-analysis"
 while [ $# -gt 0 ]; do
   case "$1" in
     --targets) TARGETS="$2"; shift 2 ;;
@@ -63,6 +63,10 @@ case "$SX_BUILD" in 0|1) ;; *) echo "NEXUS_BUILD_SCRIPT_EXEC_IMAGE must be 0 or 
 # Module e2e cadence (module_deploy.py --module-e2e): "each" (default) or "edges" (first and last rollout step only).
 MODULE_E2E="${NEXUS_MODULE_E2E:-each}"
 case "$MODULE_E2E" in each|edges) ;; *) echo "NEXUS_MODULE_E2E must be each or edges" >&2; exit 64 ;; esac
+# Drain wait (s) for worker/policy while only yield-capable jobs hold the barrier (module_deploy.py --yield-wait-limit);
+# 0 = the long --wait-limit throughout.
+YIELD_WAIT="${NEXUS_YIELD_WAIT_LIMIT_S:-900}"
+case "$YIELD_WAIT" in ''|*[!0-9]*) echo "NEXUS_YIELD_WAIT_LIMIT_S must be a whole number of seconds" >&2; exit 64 ;; esac
 
 for m in "${APPLY[@]:-}"; do
   [ -n "$m" ] && scp -q "$m" "$HOST:/tmp/$(basename "$m")"
@@ -77,7 +81,7 @@ for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(bas
 git -C "$(dirname "$0")/../.." push -q --receive-pack='sudo -n -u nexus git-receive-pack' "ssh://$HOST/opt/nexus.git" main \
   || { echo "STOP: push to the host repository failed" >&2; exit 6; }
 
-ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' PA_BUILD='$PA_BUILD' SX_BUILD='$SX_BUILD' MODULE_E2E='$MODULE_E2E' bash -s" <<'REMOTE'
+ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' PA_BUILD='$PA_BUILD' SX_BUILD='$SX_BUILD' MODULE_E2E='$MODULE_E2E' YIELD_WAIT='$YIELD_WAIT' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
 export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
@@ -94,6 +98,7 @@ export NEXUS_DEPLOY_TARGETS="$TARGETS"
 export NEXUS_BUILD_PACKET_ANALYSIS_IMAGE="$PA_BUILD"
 export NEXUS_BUILD_SCRIPT_EXEC_IMAGE="$SX_BUILD"
 export NEXUS_MODULE_E2E="$MODULE_E2E"
+export NEXUS_YIELD_WAIT_LIMIT_S="$YIELD_WAIT"
 before=$(kubectl -n ui2 get pods --no-headers -o custom-columns=N:.metadata.name | tr '\n' ' ')
 lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1 | awk '{print $1}')
 nohup bash ~/run_build.sh > /tmp/nexus_build.log 2>&1 &
