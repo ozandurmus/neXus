@@ -6,7 +6,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Operator script record in {@code script} (V251, SCRIPT_EXECUTION_CONTRACT.md section 3.1 and Amendment 2026-11-18).
+ * Operator script record in {@code script} (V251, SCRIPT_EXECUTION_CONTRACT.md section 3.1 and Amendment 2026-11-18);
+ * {@code notifyMailOnFailureOnly} is V266's per-script "on failure only" option for the run-end mail (section 3.5).
  */
 public record ScriptRecord(
         String scriptId,
@@ -23,7 +24,29 @@ public record ScriptRecord(
         String runAs,
         String createdByActorFingerprint,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        boolean notifyMailOnFailureOnly) {
+
+    /** Without the V266 per-script "mail on failure only" option (false). */
+    public ScriptRecord(
+            String scriptId,
+            String name,
+            String kind,
+            int currentVersion,
+            boolean enabled,
+            Optional<String> schedule,
+            int timeoutSeconds,
+            List<String> egress,
+            List<String> egressDeviceTargets,
+            List<String> credentialRefs,
+            String notifyMode,
+            String runAs,
+            String createdByActorFingerprint,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(scriptId, name, kind, currentVersion, enabled, schedule, timeoutSeconds, egress, egressDeviceTargets,
+                credentialRefs, notifyMode, runAs, createdByActorFingerprint, createdAt, updatedAt, false);
+    }
 
     public ScriptRecord {
         Objects.requireNonNull(scriptId, "scriptId");
@@ -59,6 +82,7 @@ public record ScriptRecord(
                 + ", egressDeviceTargets=" + egressDeviceTargets
                 + ", credentialRefs=" + credentialRefs
                 + ", notifyMode=" + notifyMode
+                + ", notifyMailOnFailureOnly=" + notifyMailOnFailureOnly
                 + ", runAs=" + runAs
                 + ", createdByActorFingerprint=" + createdByActorFingerprint
                 + ", createdAt=" + createdAt
