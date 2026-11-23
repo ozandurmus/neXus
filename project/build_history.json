@@ -3,6 +3,71 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0397",
+      "status": "automated_validated",
+      "title": "Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence",
+      "summary": "PolicyChunkGarbageCollector deletes unreferenced policy chunk generations after 24 h and the telemetry audit skips pure worker liveness writes (685910d2, V262). Batch auto-1123-0103 adds the Flyway expand/contract fence above V261 and Estat",
+      "started": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0397.md"
+    },
+    {
+      "build": "NXS-LOCAL-0396",
+      "status": "automated_validated",
+      "title": "Estate view parity: Cases, Reports, System, dossier blocks, review fixes, ship-speed fixes",
+      "summary": "Twenty-two ship batches (48c371ba through a5a460fe) bring the Estate view to read-only parity: Cases, Reports, System, dossier blocks and the find palette, plus the ESTATE_VIEW_EFFECTIVENESS_REVIEW fixes that make unknown or unreadable evid",
+      "started": "2026-11-22",
+      "completed": "2026-11-22",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0396.md"
+    },
+    {
+      "build": "NXS-LOCAL-0395",
+      "status": "automated_validated",
+      "title": "Alternative Estate view, Overwatch rename R1, lifecycle reasons, ASA keyword diff, image and ship fixes",
+      "summary": "The alternative Estate view ships its first slices with the Ask workbench and the Rewind screen (3820e187, f880cf8f), and the user-visible Overwatch rename R1 and R1b land with OVERWATCH_* dual-read (d0134f0c, 3621381c). Lifecycle rows carr",
+      "started": "2026-11-21",
+      "completed": "2026-11-21",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0395.md"
+    },
+    {
+      "build": "NXS-LOCAL-0394",
+      "status": "automated_validated",
+      "title": "VSX chassis failover, Script Execution slice 2, failover authority recheck, database roles step 0, aiview read-only admin slice 1",
+      "summary": "VSX chassis failover (2bdb6008, V255/V256), the Check Point per-VS cpstat policy gate (3ad90651, V254), Script Execution slice 2 with a per-run pod and masked audited output (084c89d7, V258) and the worker-start recheck of initiator and app",
+      "started": "2026-11-20",
+      "completed": "2026-11-20",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0394.md"
+    },
+    {
+      "build": "NXS-LOCAL-0393",
+      "status": "automated_validated",
+      "title": "Static route phase R0, ASA relation rewrite, notification mail templates",
+      "summary": "Static route phase R0 ships approved reads, pre-checks and a command-plan preview with zero writes (4ff5206b, V252) and the route write carve-out is ratified; the ASA saved-state relation is keyed by manifest artefact id with a Myers diff a",
+      "started": "2026-11-19",
+      "completed": "2026-11-19",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0393.md"
+    },
+    {
+      "build": "NXS-LOCAL-0392",
+      "status": "automated_validated",
+      "title": "ASA saved-state relation, Script Execution slice 1, Java4Shell mitigation, security batch",
+      "summary": "The ASA saved-state relation is computed in the backup and stored as a verdict with counts (1fa4e9f1, V250), Script Execution slice 1 adds encrypted write-only script versions with secret-scan warnings (f141bb2b, V251), and a differently fo",
+      "started": "2026-11-18",
+      "completed": "2026-11-18",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0392.md"
+    },
+    {
       "build": "NXS-LOCAL-0391",
       "status": "in_progress",
       "title": "Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch",

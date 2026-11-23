@@ -116,8 +116,11 @@ export function EstateFailoverIncidents({ units }: { readonly units: readonly Fa
 
         {state.phase === "ready" && model && model.total > 0 && (
           <>
-            <Box sx={{ fontSize: "13px", color: ev.ink2 }}>
-              {`${plural(model.total, "incident", "incidents")} listed: ${model.openCount} open, ${model.unresolvedCount} unresolved ${model.unresolvedCount === 1 ? "send" : "sends"}, ${model.unknownCount} with UNKNOWN status`}
+            <Box sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "13px" }}>
+              <span style={{ color: ev.ink2 }}>
+                {`${plural(model.total, "incident", "incidents")} listed: ${model.openCount} open, ${model.unresolvedCount} unresolved ${model.unresolvedCount === 1 ? "send" : "sends"}, ${model.unknownCount} with UNKNOWN status`}
+              </span>
+              <EvidenceStamp at={state.readAt} source="incidents read" />
             </Box>
             <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
               {model.rows.map((row) => (
@@ -129,7 +132,13 @@ export function EstateFailoverIncidents({ units }: { readonly units: readonly Fa
                 >
                   <StateBadge state={row.status.state} word={row.status.word} dense />
                   <span style={{ fontFamily: ESTATE_MONO, fontWeight: 600 }}>{row.label}</span>
-                  {row.blocksEstate && <span style={{ color: ev.ink3 }}>blocks every failover in the estate</span>}
+                  <span style={{ color: row.incidentRef ? ev.ink2 : ev.ink3, fontFamily: ESTATE_MONO }}>
+                    {row.incidentRef ? `Run ${row.incidentRef}` : "Run reference UNKNOWN"}
+                  </span>
+                  <span style={{ color: row.reason ? ev.ink2 : ev.ink3 }}>
+                    {row.reason ? `Reason: ${row.reason}` : "Reason UNKNOWN"}
+                  </span>
+                  {row.blocksEstate && row.blocksEstateText && <span style={{ color: ev.ink3 }}>{row.blocksEstateText}</span>}
                   <EvidenceStamp at={row.openedAt} source="opened" />
                 </Box>
               ))}

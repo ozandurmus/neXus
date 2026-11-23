@@ -54,7 +54,7 @@ describe("Estate System Roles block (read-only)", () => {
       .toBe("?screen=administration&tab=access&section=roles-permissions&standard=1");
   });
 
-  it("caps the list at ten rows and prints +1 more for eleven roles", async () => {
+  it("caps the list at ten rows and prints +1 more roles for eleven roles", async () => {
     const roles = Array.from({ length: 11 }, (_, i) => role(`ROLE-TANGO-${String(i + 1).padStart(2, "0")}`, ["Operations"]));
     stubRolesFetch(() => jsonResponse(200, roles));
 
@@ -62,7 +62,7 @@ describe("Estate System Roles block (read-only)", () => {
 
     expect(await screen.findByText("11 roles (custom roles)")).toBeTruthy();
     expect(screen.getAllByTestId("estate-system-role-row")).toHaveLength(10);
-    expect(screen.getByText("+1 more")).toBeTruthy();
+    expect(screen.getByTestId("estate-system-roles-more").textContent).toBe("+1 more roles");
   });
 
   it("renders the security_admin note, not an error, when the read is refused with a 403", async () => {
@@ -76,14 +76,38 @@ describe("Estate System Roles block (read-only)", () => {
     expect(container.querySelectorAll("[data-testid='estate-system-role-row']")).toHaveLength(0);
   });
 
-  it("renders Unable to load roles, not an empty list, when the read fails", async () => {
+  it("renders Unable to load roles with UNKNOWN badge and a0 evidence stamp, not an empty list, when the read fails", async () => {
     stubRolesFetch(() => jsonResponse(500, { error: "synthetic" }));
 
-    render(<EstateSystemRoles now={new Date()} />);
+    const { container } = render(<EstateSystemRoles now={new Date()} />);
 
     expect(await screen.findByText("Unable to load roles")).toBeTruthy();
+    expect(container.querySelector("[data-state-badge='unk']")).not.toBeNull();
+    expect(container.querySelector("[data-evidence-stamp='a0']")).not.toBeNull();
     expect(screen.queryByText("0 roles (custom roles)")).toBeNull();
     expect(screen.queryByText("Roles need the security_admin role")).toBeNull();
+  });
+
+  it("renders the failed/UNKNOWN state without throwing when the roles array contains a null entry", async () => {
+    stubRolesFetch(() => jsonResponse(200, [null]));
+
+    const { container } = render(<EstateSystemRoles now={new Date()} />);
+
+    expect(await screen.findByText("Unable to load roles")).toBeTruthy();
+    expect(container.querySelector("[data-state-badge='unk']")).not.toBeNull();
+    expect(container.querySelector("[data-evidence-stamp='a0']")).not.toBeNull();
+    expect(screen.queryByText(/0 roles/)).toBeNull();
+  });
+
+  it("renders UNKNOWN when a custom role has a blank name", async () => {
+    stubRolesFetch(() => jsonResponse(200, [role("   ", ["Devices"])]));
+
+    render(<EstateSystemRoles now={new Date("2026-11-22T09:00:00.000Z")} />);
+
+    expect(await screen.findByText("1 role (custom roles)")).toBeTruthy();
+    const row = screen.getByTestId("estate-system-role-row");
+    expect(row.textContent).toContain("UNKNOWN");
+    expect(row.textContent).toContain("Planes: Devices");
   });
 
   it("renders no button or input inside the block", async () => {

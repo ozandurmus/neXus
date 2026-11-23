@@ -425,15 +425,6 @@
       "note": ""
     },
     {
-      "id": "failover_approver_role_recheck_at_worker",
-      "category": "failover",
-      "title": "Re-check approver and initiator roles at worker admission; a disabled or demoted approver's approval stays valid today",
-      "status": "planned",
-      "priority": "P2",
-      "target": "JooqCpFailoverRepository.mutationAdmission",
-      "note": "see docs/history/backlog/failover_approver_role_recheck_at_worker.md"
-    },
-    {
       "id": "cyberark_archive_key_custody",
       "category": "Recovery / Security",
       "title": "CyberArk custody of the archive and master keys (platform backup, artefact store, failover, schedule)",
@@ -539,6 +530,33 @@
       "status": "planned",
       "priority": "P3",
       "target": "docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md BK-12/BW-4; re-implement on main, next free migration",
+      "note": ""
+    },
+    {
+      "id": "cve_acceptances_review_2026_11_28",
+      "category": "security",
+      "title": "Review time-boxed CVE acceptances due 2026-11-28 (base image, nodejs, ruby, cyrus-sasl)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "security/baseline.yaml; drop ruby from the script-execution image if no fix",
+      "note": ""
+    },
+    {
+      "id": "script_run_launcher_stdout_race",
+      "category": "CI",
+      "title": "Script-run launcher stdout capture race: investigation not confirmed",
+      "status": "planned",
+      "priority": "P3",
+      "target": "docs/reviews/SCRIPT_RUN_LAUNCHER_RACE_2026_11_22.md",
+      "note": ""
+    },
+    {
+      "id": "estate_view_review_open_points",
+      "category": "ui2",
+      "title": "Estate view review: PO points (7-day versus 24 h stale backup rule) and unverified fixes 1 and 7",
+      "status": "planned",
+      "priority": "P3",
+      "target": "docs/reviews/ESTATE_VIEW_EFFECTIVENESS_REVIEW_2026_11_21.md",
       "note": ""
     }
   ]

@@ -148,7 +148,33 @@ describe("estate dossier grid members block model", () => {
       "DHCP ranges (count of ranges)",
     ]);
     for (const line of lines) expect(line.label).toMatch(/\(count of /);
-    expect(lines.map((l) => l.value)).toEqual(["2", "≥9", "UNKNOWN", "4"]);
+    expect(lines.map((l) => l.value)).toEqual(["2 views", "≥9 zones", "UNKNOWN", "4 ranges"]);
+  });
+
+  it("uncollected member list with summary counts is UNKNOWN, never a zero member count", () => {
+    const m = buildGridBlockModel(ok(inv({ grid_members: undefined, grid_summary: { ...SUMMARY, dns_views: 2 } })));
+    expect(m.drawn).toBe(true);
+    if (!m.drawn) return;
+    expect(m.badge).toBe("unk");
+    expect(m.membersKnown).toBe(false);
+    expect(m.headline).not.toContain("0 grid members");
+    expect(m.headline).toBe("Grid member list not collected (UNKNOWN)");
+    expect(m.summaryLines.find((l) => l.label.startsWith("DNS views"))?.value).toBe("2 views");
+    expect(m.evidenceAt).toBe("2026-11-20T08:00:00Z");
+  });
+
+  it("a collected member list is marked membersKnown and pluralises the headline", () => {
+    const m = buildGridBlockModel(ok(inv({ grid_members: [member("FW-TANGO-04")], grid_summary: SUMMARY })));
+    if (!m.drawn) throw new Error("expected drawn");
+    expect(m.membersKnown).toBe(true);
+    expect(m.headline).toBe("1 grid member listed in the stored inventory");
+  });
+
+  it("an HA field that is not reported is UNKNOWN, never HA off", () => {
+    const m = buildGridBlockModel(ok(inv({ grid_members: [member("FW-TANGO-06", { ha_enabled: undefined as unknown as boolean })] })));
+    if (!m.drawn) throw new Error("expected drawn");
+    expect(m.rows[0].ha).toBe("UNKNOWN");
+    expect(m.rows[0].ha).not.toBe("HA off");
   });
 
   it("evidence stamp is the inventory collected-at time and the source is inventory", () => {

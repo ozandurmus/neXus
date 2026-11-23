@@ -134,3 +134,54 @@ describe("EstateFailoverIncidents", () => {
     expect(listMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("EstateFailoverIncidents summary stamp and row detail", () => {
+  beforeEach(() => listMock.mockReset());
+
+  it("stamps the summary line when the list is populated", async () => {
+    listMock.mockResolvedValueOnce(payload([incident(1, { maskedName: "FW-TANGO-04" })]));
+    render(<EstateFailoverIncidents units={[]} />);
+    const summary = await screen.findByText(/^1 incident listed:/);
+    const line = summary.parentElement as HTMLElement;
+    expect(line.querySelector("[data-evidence-stamp]")).not.toBeNull();
+    expect(line).toHaveTextContent("incidents read");
+  });
+
+  it("stamps the empty-state line too", async () => {
+    listMock.mockResolvedValueOnce(payload([]));
+    render(<EstateFailoverIncidents units={[]} />);
+    const line = (await screen.findByText("0 failover incidents in the last read")).parentElement as HTMLElement;
+    expect(line.querySelector("[data-evidence-stamp]")).not.toBeNull();
+  });
+
+  it("renders the run reference, reason and unresolved-send count on an estate-blocking incident", async () => {
+    listMock.mockResolvedValueOnce(
+      payload([incident(7, { blocksEstate: true, unresolvedSends: 2, reason: "synthetic reason", maskedName: "FW-TANGO-04" })]),
+    );
+    render(<EstateFailoverIncidents units={[]} />);
+    const row = await screen.findByTestId("failover-incident-row");
+    expect(row).toHaveTextContent("Run INC-7");
+    expect(row).toHaveTextContent("Reason: synthetic reason");
+    expect(row).toHaveTextContent("blocks every failover in the estate (2 unresolved sends)");
+  });
+
+  it("prints UNKNOWN for a missing run reference and reason, and no count sentence for a non-blocking incident", async () => {
+    listMock.mockResolvedValueOnce(
+      payload([incident(8, { incidentRef: "", reason: "", blocksEstate: false, maskedName: "FW-JULIET-06" })]),
+    );
+    render(<EstateFailoverIncidents units={[]} />);
+    const row = await screen.findByTestId("failover-incident-row");
+    expect(row).toHaveTextContent("Run reference UNKNOWN");
+    expect(row).toHaveTextContent("Reason UNKNOWN");
+    expect(row).not.toHaveTextContent("blocks every failover");
+  });
+
+  it("says the unresolved-send count is UNKNOWN on a blocking incident without a usable count", async () => {
+    listMock.mockResolvedValueOnce(
+      payload([incident(9, { blocksEstate: true, unresolvedSends: undefined as unknown as number, maskedName: "FW-BRAVO-02" })]),
+    );
+    render(<EstateFailoverIncidents units={[]} />);
+    const row = await screen.findByTestId("failover-incident-row");
+    expect(row).toHaveTextContent("blocks every failover in the estate (unresolved sends count UNKNOWN)");
+  });
+});

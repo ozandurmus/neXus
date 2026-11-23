@@ -1,6 +1,7 @@
 import type { PolicyHygieneSummary, PolicyHygieneSummaryRow, PolicyMetadata } from "../auth/adminApi";
-import type { BadgeState } from "./estateModel";
+import { oldestIso, parseTimeMs, type BadgeState } from "./estateModel";
 import { capList } from "./estatePolicyBrowserModel";
+import { plural } from "../shell/plural";
 import { formatStamp } from "../shell/time";
 
 /** Container rows shown in the dossier block before the list says "+N more". */
@@ -21,10 +22,23 @@ export type DossierHygieneRow =
       /** Rules in this container (the container's own rule total, not a package total). */
       readonly rules: number;
       readonly counts: readonly DossierHygieneCount[];
+      readonly snapshotAt: string | null;
       readonly stamp: string;
     }
-  | { readonly kind: "pending"; readonly key: string; readonly label: string; readonly stamp: string }
-  | { readonly kind: "unknown"; readonly key: string; readonly label: string; readonly stamp: string };
+  | {
+      readonly kind: "pending";
+      readonly key: string;
+      readonly label: string;
+      readonly snapshotAt: string | null;
+      readonly stamp: string;
+    }
+  | {
+      readonly kind: "unknown";
+      readonly key: string;
+      readonly label: string;
+      readonly snapshotAt: string | null;
+      readonly stamp: string;
+    };
 
 export interface DossierHygieneModel {
   /** "na" when the unit owns no policy container: a not-applicable line, never a pass. */
@@ -36,6 +50,8 @@ export interface DossierHygieneModel {
   readonly pendingLine: string | null;
   readonly totals: readonly DossierHygieneCount[];
   readonly rows: readonly DossierHygieneRow[];
+  readonly totalContainers: number;
+  readonly evidenceAt: string | null;
   readonly moreLabel: string | null;
   readonly notApplicable: boolean;
 }
@@ -44,8 +60,11 @@ function rowLabel(r: PolicyHygieneSummaryRow): string {
   return `${r.containerName} · ${r.sourceName} (${r.vendor})`;
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+function validSnapshotAt(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed || parseTimeMs(trimmed) === null) return null;
+  return raw;
 }
 
 function unknownModel(headline: string, countsLine: string): DossierHygieneModel {
@@ -57,6 +76,8 @@ function unknownModel(headline: string, countsLine: string): DossierHygieneModel
     pendingLine: null,
     totals: [],
     rows: [],
+    totalContainers: 0,
+    evidenceAt: null,
     moreLabel: null,
     notApplicable: false,
   };
@@ -100,6 +121,8 @@ export function buildDossierHygieneModel(input: {
       pendingLine: null,
       totals: [],
       rows: [],
+      totalContainers: 0,
+      evidenceAt: null,
       moreLabel: null,
       notApplicable: true,
     };
@@ -114,15 +137,26 @@ export function buildDossierHygieneModel(input: {
   const all: DossierHygieneRow[] = [...ownedKeys].map((key): DossierHygieneRow => {
     const r = summaryByKey.get(key);
     if (!r) {
-      return { kind: "unknown", key, label: "Container without a hygiene row", stamp: "UNKNOWN" };
+      return { kind: "unknown", key, label: "Container without a hygiene row", snapshotAt: null, stamp: "UNKNOWN" };
     }
     const label = rowLabel(r);
+    const snapshotAt = validSnapshotAt(r.snapshotAt);
     const stamp = `snapshot ${formatStamp(r.snapshotAt)}`;
-    if (r.state === "PENDING") return { kind: "pending", key, label, stamp };
-    const counts = r.counts ?? {};
-    const countEntries = Object.entries(counts);
-    if (r.state !== "READY" || typeof r.rules !== "number" || countEntries.some(([, v]) => typeof v !== "number")) {
-      return { kind: "unknown", key, label, stamp };
+    if (r.state === "PENDING") return { kind: "pending", key, label, snapshotAt, stamp };
+    if (
+      r.state !== "READY" ||
+      typeof r.rules !== "number" ||
+      !Number.isFinite(r.rules) ||
+      r.rules < 0 ||
+      r.counts === null ||
+      typeof r.counts !== "object" ||
+      Array.isArray(r.counts)
+    ) {
+      return { kind: "unknown", key, label, snapshotAt, stamp };
+    }
+    const countEntries = Object.entries(r.counts);
+    if (countEntries.some(([, v]) => typeof v !== "number" || !Number.isFinite(v) || v < 0)) {
+      return { kind: "unknown", key, label, snapshotAt, stamp };
     }
     return {
       kind: "ready",
@@ -130,6 +164,7 @@ export function buildDossierHygieneModel(input: {
       label,
       rules: r.rules,
       counts: countEntries.map(([finding, rules]) => ({ finding, rules: rules as number })),
+      snapshotAt,
       stamp,
     };
   });
@@ -176,6 +211,8 @@ export function buildDossierHygieneModel(input: {
     pendingLine: pending > 0 ? `${plural(pending, "container", "containers")} PENDING: no counts yet, not counted as zero.` : null,
     totals,
     rows: capped.shown,
+    totalContainers: all.length,
+    evidenceAt: unknown > 0 ? null : oldestIso(all.map((r) => r.snapshotAt)),
     moreLabel: capped.moreLabel,
     notApplicable: false,
   };

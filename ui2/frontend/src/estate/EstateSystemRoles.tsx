@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import { PRODUCT_PLANES, type Role } from "../screens/CustomRolesPanel";
-import { EvidenceStamp } from "./EstatePrimitives";
-import { capList } from "./estatePolicyBrowserModel";
+import { plural } from "../shell/plural";
+import { EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 /** Role rows shown before "+N more"; the standard Roles and permissions panel lists them all. */
@@ -20,21 +20,26 @@ type RolesRead =
   | { readonly state: "failed" }
   | { readonly state: "ok"; readonly roles: readonly Role[]; readonly readAt: string };
 
-/** The custom (non-system) roles, in the order the server sent them. A non-array body is a failed read, never an empty list. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The custom (non-system) roles, in the order the server sent them. A non-array body or malformed item is a failed read, never an empty list. */
 export function customRolesOf(body: unknown): readonly Role[] | null {
-  if (!Array.isArray(body)) return null;
-  return (body as Role[]).filter((role) => !(role.isSystem ?? role.is_system));
+  if (!Array.isArray(body) || !body.every(isRecord)) return null;
+  return (body as unknown as Role[]).filter((role) => !(role.isSystem ?? role.is_system));
 }
 
 /** The product planes a role carries, as plain words from PRODUCT_PLANES; empty when it carries none. */
 export function planeWordsOf(role: Role): string {
-  const granted = new Set(role.permissions ?? []);
+  const granted = new Set(Array.isArray(role.permissions) ? role.permissions : []);
   const words = PRODUCT_PLANES.filter((plane) => granted.has(plane));
   return words.length > 0 ? words.join(", ") : "no product planes";
 }
 
-function countLine(n: number): string {
-  return n === 1 ? "1 role" : `${n} roles`;
+function roleNameOf(role: Role): string {
+  const trimmed = typeof role.name === "string" ? role.name.trim() : "";
+  return trimmed.length > 0 ? trimmed : "UNKNOWN";
 }
 
 /**
@@ -72,7 +77,13 @@ export function EstateSystemRoles({ now }: { readonly now: Date }) {
       ) : read.state === "restricted" ? (
         <Box sx={{ fontSize: 13, color: ev.ink2 }}>{RESTRICTED_NOTE}</Box>
       ) : read.state === "failed" ? (
-        <Box role="alert" sx={{ fontSize: 13, color: ev.ink2 }}>{FAILED_NOTE}</Box>
+        <>
+          <Box role="alert" sx={{ display: "flex", alignItems: "center", gap: "6px", fontSize: 13, color: ev.ink2 }}>
+            <StateBadge state="unk" word="UNKNOWN" dense />
+            <span>{FAILED_NOTE}</span>
+          </Box>
+          <EvidenceStamp at={null} source="roles" missingLabel="UNKNOWN" />
+        </>
       ) : (
         <RolesList roles={read.roles} readAt={read.readAt} now={now} />
       )}
@@ -84,27 +95,28 @@ export function EstateSystemRoles({ now }: { readonly now: Date }) {
 }
 
 function RolesList({ roles, readAt, now }: { readonly roles: readonly Role[]; readonly readAt: string; readonly now: Date }) {
-  const capped = capList(roles, ESTATE_ROLES_ROW_CAP);
+  const shown = roles.slice(0, ESTATE_ROLES_ROW_CAP);
   return (
     <>
       <Box sx={{ fontSize: 12.5, color: ev.ink2 }} data-testid="estate-system-roles-count">
-        {countLine(roles.length)} (custom roles)
+        {plural(roles.length, "role", "roles") + " (custom roles)"}
       </Box>
       {roles.length === 0 ? null : (
-        <Box component="ul" aria-label="Custom roles" sx={{ m: 0, p: 0 }}>
-          {capped.shown.map((role) => (
-            <Box component="li" key={role.id} data-testid="estate-system-role-row"
-              sx={{ listStyle: "none", py: "4px", borderTop: `1px solid ${ev.line}`, display: "flex", flexDirection: "column", gap: "2px" }}>
-              <Box sx={{ fontFamily: ESTATE_MONO, fontSize: 12.5, color: ev.ink, overflowWrap: "anywhere" }}>{role.name}</Box>
-              <Box sx={{ fontSize: 12, color: ev.ink3 }}>Planes: {planeWordsOf(role)}</Box>
-            </Box>
-          ))}
-          {capped.moreLabel ? (
-            <Box component="li" data-testid="estate-system-roles-more" sx={{ listStyle: "none", pt: "4px", fontSize: 12, color: ev.ink3 }}>
-              {capped.moreLabel}
-            </Box>
-          ) : null}
-        </Box>
+        <>
+          <Box component="ul" aria-label="Custom roles" sx={{ m: 0, p: 0 }}>
+            {shown.map((role, index) => {
+              const name = roleNameOf(role);
+              return (
+                <Box component="li" key={role.id || `${name}:${index}`} data-testid="estate-system-role-row"
+                  sx={{ listStyle: "none", py: "4px", borderTop: `1px solid ${ev.line}`, display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <Box sx={{ fontFamily: ESTATE_MONO, fontSize: 12.5, color: ev.ink, overflowWrap: "anywhere" }}>{name}</Box>
+                  <Box sx={{ fontSize: 12, color: ev.ink3 }}>Planes: {planeWordsOf(role)}</Box>
+                </Box>
+              );
+            })}
+          </Box>
+          <MoreFooter shown={shown.length} total={roles.length} noun="roles" testId="estate-system-roles-more" />
+        </>
       )}
       <EvidenceStamp at={readAt} source="roles" now={now} />
     </>

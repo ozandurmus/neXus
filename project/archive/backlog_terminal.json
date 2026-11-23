@@ -1269,6 +1269,15 @@
       "priority": "P2",
       "target": "nightly e2e guard",
       "note": ""
+    },
+    {
+      "id": "failover_approver_role_recheck_at_worker",
+      "category": "failover",
+      "title": "Re-check approver and initiator roles at worker admission; a disabled or demoted approver's approval stays valid today",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "JooqCpFailoverRepository.mutationAdmission",
+      "note": "see docs/history/backlog/failover_approver_role_recheck_at_worker.md"
     }
   ]
 }
