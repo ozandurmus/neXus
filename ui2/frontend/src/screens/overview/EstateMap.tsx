@@ -3,7 +3,7 @@ import Link from "@mui/material/Link";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
-import type { EstateCondition, EstateConditionReason, EstateView } from "../../auth/adminApi";
+import type { EstateCondition, EstateConditionReason, EstateViewRead } from "../../auth/adminApi";
 import { STATUS, UNKNOWN_HATCH_CSS } from "../../shell/Charts";
 import { vendorDisplayName } from "../../shell/States";
 import { relativeAge } from "../../shell/time";
@@ -64,8 +64,8 @@ const q = (params: Record<string, string>) => `?${new URLSearchParams(params).to
  * Every device as one square, grouped by vendor in the vendor's own name and sorted by condition so colours form
  * blocks; a backup target without an archive carries the corner marker. Hover names the device; a click opens it.
  */
-export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; readonly cell?: number }) {
-  const groups = new Map<string, EstateView["devices"][number][]>();
+export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateViewRead; readonly cell?: number }) {
+  const groups = new Map<string, EstateViewRead["devices"][number][]>();
   for (const d of estate.devices) {
     const list = groups.get(d.vendor) ?? [];
     list.push(d);

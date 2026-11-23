@@ -51,6 +51,18 @@ export { relativeAge } from "../shell/time";
 const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, p: 2.25, boxShadow: "none" } as const;
 const q = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
 const pct = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
+/** A figure the server may have left out (its section failed): the word UNKNOWN, never 0. */
+const figure = (v: number | null | undefined): string => (typeof v === "number" ? String(v) : "UNKNOWN");
+/** A count tile that was built and read (state OK); one that failed or is missing is UNKNOWN. */
+const tileKnown = (t: CountTile | undefined): t is CountTile => !!t && t.state === "OK";
+
+/** The inventory read ages when the section was built and carries every bucket; null (UNKNOWN) otherwise, never zeros. */
+export function readAges(age: OverviewView["inventory_age"] | null | undefined): { lt24h: number; h24_72: number; gt72h: number; never: number; of: number } | null {
+  if (!age || (age.state ?? "OK") !== "OK") return null;
+  const { lt24h, h24_72, gt72h, never, of } = age;
+  return typeof lt24h === "number" && typeof h24_72 === "number" && typeof gt72h === "number" && typeof never === "number" && typeof of === "number"
+    ? { lt24h, h24_72, gt72h, never, of } : null;
+}
 
 interface HaOverview { total: number; ready: number; notReady: number; unknown: number; unsupported: number; evaluated: number; stale: number; mostlyStale: boolean;
   /** The newest readiness evaluation among the not-ready / unknown clusters (the age on the "needs attention" line). */
@@ -217,7 +229,8 @@ function VendorVersions({ vendor, name, majorTitle, minorTitle, modelTitle, vers
   readonly modelTitle: string;
   readonly versions: { major: VersionSlice[]; minor: VersionSlice[]; model?: VersionSlice[] } | undefined;
   readonly fallbackMinor?: Array<{ level: string | null; count: number }>;
-  readonly total: number;
+  /** undefined when the platform section could not be read. */
+  readonly total: number | undefined;
 }) {
   const accent = vendor === "check_point" ? m3.cp : m3.pan;
   const all = q({ screen: "inventory", vendor });
@@ -240,7 +253,7 @@ function VendorVersions({ vendor, name, majorTitle, minorTitle, modelTitle, vers
           <Box sx={{ width: 9, height: 9, borderRadius: "2px", bgcolor: accent }} />
           <Typography sx={{ fontSize: 16, fontWeight: 600 }}>{name}</Typography>
         </Box>
-        <Link href={all} sx={{ fontSize: 13 }}>{total} devices</Link>
+        <Link href={all} sx={{ fontSize: 13 }}>{figure(total)} devices</Link>
       </Box>
       <Typography data-testid="version-verdict" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface, mb: 1.5 }}>
         {majorVersionVerdict(vendor, versions?.major ?? [])}
@@ -261,15 +274,18 @@ function reasonSearch(reason: string): string {
 
 /** Failed jobs, 24 h, grouped by cause first, then the contract's list as the three latest rows. */
 function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
-  readonly total: number; readonly reasons: readonly FailureReason[];
-  readonly rows: OverviewView["exceptions"]["failed_jobs"]["rows"]; readonly allHref: string; readonly latest?: boolean;
+  /** null when the server could not build the failed-jobs list: UNKNOWN, not "no failed jobs". */
+  readonly total: number | null; readonly reasons: readonly FailureReason[];
+  readonly rows: NonNullable<OverviewView["exceptions"]["failed_jobs"]>["rows"]; readonly allHref: string; readonly latest?: boolean;
 }) {
   const max = Math.max(1, ...reasons.map((r) => r.count));
   return (
     <Card sx={CARD}>
-      <SectionTitle icon="operations" title="Why jobs failed" hint={total > 0 ? "last 24 h, grouped by cause" : undefined}
-        right={total > 0 ? <Link href={allHref} sx={{ fontSize: 13 }}>Show all · {total}</Link> : null} />
-      {total === 0 ? (
+      <SectionTitle icon="operations" title="Why jobs failed" hint={total !== null && total > 0 ? "last 24 h, grouped by cause" : undefined}
+        right={total !== null && total > 0 ? <Link href={allHref} sx={{ fontSize: 13 }}>Show all · {total}</Link> : null} />
+      {total === null ? (
+        <Typography variant="body2" sx={{ color: m3.neutralInk }}>UNKNOWN — the failed jobs of the last 24 h could not be read.</Typography>
+      ) : total === 0 ? (
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>No failed jobs in the last 24 h.</Typography>
       ) : (
         <>
@@ -329,12 +345,12 @@ function PolicyInstallCard({ p, hideOpenLink = false }: { readonly p: OverviewVi
             {buckets.map(([label, n]) => (
               <Box key={label} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: "8px", px: 1.5, py: 1 }}>
                 <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{label}</Typography>
-                <Typography sx={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{n ?? 0}</Typography>
+                <Typography sx={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{figure(n)}</Typography>
               </Box>
             ))}
           </Box>
           <Typography variant="body2" sx={{ mt: 1.25, color: m3.onSurfaceVar }}>
-            {p.of} gateways · oldest install {p.oldest_at ? <Ts at={p.oldest_at} /> : "UNKNOWN"} · newest {p.newest_at ? <Ts at={p.newest_at} /> : "UNKNOWN"}
+            {figure(p.of)} gateways · oldest install {p.oldest_at ? <Ts at={p.oldest_at} /> : "UNKNOWN"} · newest {p.newest_at ? <Ts at={p.newest_at} /> : "UNKNOWN"}
           </Typography>
         </>
       )}
@@ -452,10 +468,10 @@ function ReportedVersionBars({ fleet }: { readonly fleet: readonly DeviceSummary
 export function EstateDetails({ data, onDevicesScreen = false, fleet }: { readonly data: OverviewView; readonly onDevicesScreen?: boolean;
   /** The device list the Devices screen already holds: the other vendors' version slices come from it (1.5). */
   readonly fleet?: readonly DeviceSummary[] }) {
-  const age = data.inventory_age;
-  const p = data.platform;
-  const n = data.nexus;
-  const neverRead = age?.never ?? 0;
+  const age = readAges(data.inventory_age);
+  const p = data.platform ?? {};
+  const n = data.nexus ?? {};
+  const queueKnown = typeof n.running === "number";
   return (
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <PolicyInstallCard p={data.policy_install} hideOpenLink={onDevicesScreen} />
@@ -465,9 +481,9 @@ export function EstateDetails({ data, onDevicesScreen = false, fleet }: { readon
         <SectionTitle icon="grid" title="Software and hardware" hint={`Per vendor, from the latest reads · facts ${relativeAge(p.evidence_at)} · each slice opens the device list`} />
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
           <VendorVersions vendor="check_point" name={vendorDisplayName("check_point")} majorTitle="Major version" minorTitle="Jumbo hotfix"
-            modelTitle="Appliance" versions={p.versions?.check_point} fallbackMinor={p.hotfix_levels} total={p.check_point ?? 0} />
+            modelTitle="Appliance" versions={p.versions?.check_point} fallbackMinor={p.hotfix_levels} total={p.check_point} />
           <VendorVersions vendor="palo_alto" name={vendorDisplayName("palo_alto")} majorTitle="PAN-OS major" minorTitle="Exact version"
-            modelTitle="Model" versions={p.versions?.palo_alto} total={p.palo_alto ?? 0} />
+            modelTitle="Model" versions={p.versions?.palo_alto} total={p.palo_alto} />
         </Box>
       </Box>
       {fleet && <ReportedVersionBars fleet={fleet} />}
@@ -475,18 +491,22 @@ export function EstateDetails({ data, onDevicesScreen = false, fleet }: { readon
       {/* evidence age (the change and cluster lists are the facts above) */}
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" } }}>
         <Card sx={CARD}>
-          <SectionTitle icon="devices" title="Data freshness per device" hint={`${age?.of ?? 0} active devices · newest read per device`} />
+          <SectionTitle icon="devices" title="Data freshness per device" hint={age ? `${age.of} active devices · newest read per device` : "UNKNOWN active devices · newest read per device"} />
           {/* The one freshness scale (B1): every age has the same colour on every screen. */}
-          <Donut title="Last successful inventory" centerLabel="devices" slices={[
-            { label: "under 24 h", display: "under 24 h", count: age?.lt24h ?? 0, color: FRESHNESS_COLOR.fresh, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
-            { label: "24–72 h", display: "24–72 h", count: age?.h24_72 ?? 0, color: FRESHNESS_COLOR.ageing, href: q({ screen: "inventory", inventory_age: "24h_72h" }) },
-            { label: "over 72 h", display: "over 72 h", count: age?.gt72h ?? 0, color: FRESHNESS_COLOR.stale, href: q({ screen: "inventory", inventory_age: "gt72h" }) },
-            { label: "never", display: "never", count: neverRead, color: FRESHNESS_COLOR.unknown, href: q({ screen: "inventory", inventory_age: "never" }) },
-          ].filter((s) => s.count > 0)} />
+          {age ? (
+            <Donut title="Last successful inventory" centerLabel="devices" slices={[
+              { label: "under 24 h", display: "under 24 h", count: age.lt24h, color: FRESHNESS_COLOR.fresh, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
+              { label: "24–72 h", display: "24–72 h", count: age.h24_72, color: FRESHNESS_COLOR.ageing, href: q({ screen: "inventory", inventory_age: "24h_72h" }) },
+              { label: "over 72 h", display: "over 72 h", count: age.gt72h, color: FRESHNESS_COLOR.stale, href: q({ screen: "inventory", inventory_age: "gt72h" }) },
+              { label: "never", display: "never", count: age.never, color: FRESHNESS_COLOR.unknown, href: q({ screen: "inventory", inventory_age: "never" }) },
+            ].filter((s) => s.count > 0)} />
+          ) : (
+            <Typography data-testid="read-ages-unknown" variant="body2" sx={{ color: m3.neutralInk }}>UNKNOWN — the read ages of the devices could not be read.</Typography>
+          )}
           <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
             <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
-              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">{PRODUCT_NAME}</Link>: completed 24 h <b>{n.completed_24h ?? "UNKNOWN"}</b> · running <b>{n.running ?? "UNKNOWN"}</b> ·
-              oldest running {n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "none"} ·
+              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">{PRODUCT_NAME}</Link>: completed 24 h <b>{figure(n.completed_24h)}</b> · running <b>{figure(n.running)}</b> ·
+              oldest running {!queueKnown ? "UNKNOWN" : n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "none"} ·
               last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}
             </Typography>
           </Box>
@@ -585,36 +605,47 @@ export function OverviewScreen() {
     return <ScreenRoot><ScreenHeader title="Overview" subtitle="Reading the fleet…" /></ScreenRoot>;
   }
 
-  const a = data.attention;
-  const ex = data.exceptions;
-  const age = data.inventory_age;
-  const c = data.compliance;
-  const p = data.platform;
-  const n = data.nexus;
+  // Every section below `denominators` can arrive as { state: "READ_FAILED" } without its fields (OverviewService.section).
+  const a = data.attention ?? {};
+  const ex = data.exceptions ?? {};
+  const age = readAges(data.inventory_age);
+  const c = data.compliance ?? { state: "READ_FAILED" as const };
+  const n = data.nexus ?? {};
   const d = data.denominators;
-  const failed = a.failed_jobs_24h?.count ?? 0;
-  const tileUnknown = (t: CountTile | undefined) => !t || t.state !== "OK";
+  const tileUnknown = (t: CountTile | undefined) => !tileKnown(t);
+  const failedJobs = tileKnown(a.failed_jobs_24h) ? a.failed_jobs_24h : null;
+  const failed = failedJobs?.count ?? 0;
+  const backupMissing = tileKnown(a.backup_missing) ? a.backup_missing : null;
+  const clusterDiff = tileKnown(a.cluster_diff) ? a.cluster_diff : null;
+  const configChanged = tileKnown(a.config_changed) ? a.config_changed : null;
   const neverRead = age?.never ?? 0;
+  const complianceWord = c.state === "READ_FAILED" ? "Compliance could not be read — UNKNOWN." : "Compliance not evaluated.";
 
   // Row B -- three lines, Act now / Review / Evidence (review §2 wording: "n of N", no adjectives).
   const actNow: string[] = [];
-  if (!tileUnknown(a.failed_jobs_24h)) actNow.push(failed > 0
-    ? `${failed} of ${a.failed_jobs_24h.terminal_24h} jobs failed in 24 h${a.failed_jobs_24h.last_at ? `, latest ${relativeAge(a.failed_jobs_24h.last_at)}` : ""}.`
+  if (failedJobs) actNow.push(failed > 0
+    ? `${failed} of ${figure(failedJobs.terminal_24h)} jobs failed in 24 h${failedJobs.last_at ? `, latest ${relativeAge(failedJobs.last_at)}` : ""}.`
     : "No job failed in 24 h.");
-  if (!tileUnknown(a.backup_missing)) actNow.push(a.backup_missing.count > 0
-    ? `${a.backup_missing.count} of ${a.backup_missing.of} backup targets have no archive.`
-    : `Every one of ${a.backup_missing.of} backup targets holds an archive.`);
+  else actNow.push("Failed jobs could not be read — UNKNOWN.");
+  if (backupMissing) actNow.push(backupMissing.count > 0
+    ? `${backupMissing.count} of ${figure(backupMissing.of)} backup targets have no archive.`
+    : `Every one of ${figure(backupMissing.of)} backup targets holds an archive.`);
+  else actNow.push("Backup archives could not be read — UNKNOWN.");
   const review: string[] = [];
-  if (!tileUnknown(a.cluster_diff)) review.push(`${a.cluster_diff.count} of ${a.cluster_diff.of} active clusters show member differences${a.cluster_diff.unknown ? ` (${a.cluster_diff.unknown} not comparable)` : ""}.`);
+  if (clusterDiff) review.push(`${clusterDiff.count} of ${figure(clusterDiff.of)} active clusters show member differences${clusterDiff.unknown ? ` (${clusterDiff.unknown} not comparable)` : ""}.`);
+  else review.push("Cluster member differences could not be read — UNKNOWN.");
   if (a.managed_not_enrolled && !tileUnknown(a.managed_not_enrolled) && a.managed_not_enrolled.count > 0) {
     review.push(`${a.managed_not_enrolled.count} gateway${a.managed_not_enrolled.count === 1 ? "" : "s"} managed by ${a.managed_not_enrolled.of === 1 ? "the management server" : `${a.managed_not_enrolled.of} management servers`} ${a.managed_not_enrolled.count === 1 ? "is" : "are"} not in ${PRODUCT_NAME}.`);
   }
-  if (!tileUnknown(a.config_changed)) review.push(`${a.config_changed.count} device${a.config_changed.count === 1 ? "" : "s"} changed configuration since the previous collection.`);
+  if (configChanged) review.push(`${configChanged.count} device${configChanged.count === 1 ? "" : "s"} changed configuration since the previous collection.`);
+  else review.push("Configuration changes could not be read — UNKNOWN.");
   const evidence: string[] = [];
-  evidence.push(`Evidence read in 24 h for ${age?.lt24h ?? 0} of ${age?.of ?? d.active_devices} active devices${neverRead ? `; ${neverRead} never read` : ""}.`);
+  evidence.push(age
+    ? `Evidence read in 24 h for ${age.lt24h} of ${age.of} active devices${neverRead ? `; ${neverRead} never read` : ""}.`
+    : "Device read ages could not be read — UNKNOWN.");
   evidence.push(c.state === "OK"
-    ? `Compliance evidence covers ${c.coverage_pct}% of control checks: ${c.critical_deficiencies} critical failing checks, ${c.data_gaps} data gaps.`
-    : "Compliance not evaluated.");
+    ? `Compliance evidence covers ${figure(c.coverage_pct)}% of control checks: ${figure(c.critical_deficiencies)} critical failing checks, ${figure(c.data_gaps)} data gaps.`
+    : complianceWord);
 
   const headline = (
     <Card sx={{ ...CARD, p: { xs: 2, md: 2.5 }, bgcolor: m3.scLowest }}>
@@ -629,32 +660,32 @@ export function OverviewScreen() {
 
   const tiles = (
     <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" }}>
-      <PostureTile big={wall} icon="operations" severity="critical" title="Failed jobs, 24 h" count={failed} of={a.failed_jobs_24h?.terminal_24h}
-        unknown={tileUnknown(a.failed_jobs_24h)} previous={a.failed_jobs_24h?.previous}
-        context={`${a.failed_jobs_24h?.last_at ? `latest ${relativeAge(a.failed_jobs_24h.last_at)}` : "no failure in 24 h"}${a.failed_jobs_24h?.other_terminal_24h ? ` · +${a.failed_jobs_24h.other_terminal_24h} outcome unknown / rejected` : ""}`}
+      <PostureTile big={wall} icon="operations" severity="critical" title="Failed jobs, 24 h" count={failed} of={failedJobs?.terminal_24h}
+        unknown={!failedJobs} previous={failedJobs?.previous}
+        context={failedJobs ? `${failedJobs.last_at ? `latest ${relativeAge(failedJobs.last_at)}` : "no failure in 24 h"}${failedJobs.other_terminal_24h ? ` · +${failedJobs.other_terminal_24h} outcome unknown / rejected` : ""}` : "could not be read"}
         href={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
-      <PostureTile big={wall} icon="backup" severity="critical" title="Backup targets without archive" count={a.backup_missing?.count ?? 0} of={a.backup_missing?.of}
-        unknown={tileUnknown(a.backup_missing)} previous={a.backup_missing?.previous}
-        context={`latest backup ${relativeAge(data.evidence.backup?.at)}`} href={q({ screen: "backups", artefact: "none" })} />
-      <PostureTile big={wall} icon="config" severity="serious" title="Clusters with member differences" count={a.cluster_diff?.count ?? 0} of={a.cluster_diff?.of}
-        unknown={tileUnknown(a.cluster_diff)} previous={a.cluster_diff?.previous}
-        context={`${(a.cluster_diff?.of ?? 0) - (a.cluster_diff?.count ?? 0)} in agreement${a.cluster_diff?.unknown ? ` · ${a.cluster_diff.unknown} not comparable` : ""} · interface physical settings and member addresses excluded`}
+      <PostureTile big={wall} icon="backup" severity="critical" title="Backup targets without archive" count={backupMissing?.count ?? 0} of={backupMissing?.of}
+        unknown={!backupMissing} previous={backupMissing?.previous}
+        context={`latest backup ${relativeAge(data.evidence?.backup?.at)}`} href={q({ screen: "backups", artefact: "none" })} />
+      <PostureTile big={wall} icon="config" severity="serious" title="Clusters with member differences" count={clusterDiff?.count ?? 0} of={clusterDiff?.of}
+        unknown={!clusterDiff} previous={clusterDiff?.previous}
+        context={clusterDiff ? `${typeof clusterDiff.of === "number" ? `${clusterDiff.of - clusterDiff.count} in agreement` : "agreement UNKNOWN"}${clusterDiff.unknown ? ` · ${clusterDiff.unknown} not comparable` : ""} · interface physical settings and member addresses excluded` : "could not be read"}
         href={q({ screen: "inventory", cluster_diff: "present" })} />
-      <PostureTile big={wall} icon="config" severity="serious" title="Configuration changed" count={a.config_changed?.count ?? 0} of={a.config_changed?.of}
-        unknown={tileUnknown(a.config_changed)} previous={a.config_changed?.previous}
-        context={`since the previous collection · latest ${relativeAge(data.evidence.configuration?.at)}`} href={q({ screen: "inventory", change_state: "changed" })} />
+      <PostureTile big={wall} icon="config" severity="serious" title="Configuration changed" count={configChanged?.count ?? 0} of={configChanged?.of}
+        unknown={!configChanged} previous={configChanged?.previous}
+        context={`since the previous collection · latest ${relativeAge(data.evidence?.configuration?.at)}`} href={q({ screen: "inventory", change_state: "changed" })} />
       <PostureTile big={wall} icon="devices" severity="warning" title="Devices without evidence, 24 h" count={a.stale_inventory?.count ?? 0} of={a.stale_inventory?.of}
         unknown={tileUnknown(a.stale_inventory)} previous={a.stale_inventory?.previous}
-        context={`${age?.h24_72 ?? 0} aging · ${age?.gt72h ?? 0} stale · ${neverRead} never read`} href={q({ screen: "inventory", inventory_age: "stale" })} />
+        context={age ? `${age.h24_72} aging · ${age.gt72h} stale · ${neverRead} never read` : "read ages UNKNOWN"} href={q({ screen: "inventory", inventory_age: "stale" })} />
       <PostureTile big={wall} icon="compliance" severity="critical" title="Compliance deficiencies" count={c.state === "OK" ? (c.critical_deficiencies ?? 0) : 0}
         unknown={c.state !== "OK"} previous={null}
-        context={c.state === "OK" ? `critical failing checks (control × firewall) · ${c.coverage_pct}% coverage · ${c.data_gaps} data gaps` : "not evaluated"}
+        context={c.state === "OK" ? `critical failing checks (control × firewall) · ${figure(c.coverage_pct)}% coverage · ${figure(c.data_gaps)} data gaps` : c.state === "READ_FAILED" ? "could not be read" : "not evaluated"}
         href={q({ screen: "compliance", severity: "critical", result: "fail" })} />
     </Box>
   );
 
   const failedCard = (
-    <FailedJobsCard total={ex.failed_jobs?.total ?? 0} reasons={ex.failed_jobs?.reasons ?? []} rows={ex.failed_jobs?.rows ?? []} latest={!wall}
+    <FailedJobsCard total={ex.failed_jobs ? ex.failed_jobs.total : null} reasons={ex.failed_jobs?.reasons ?? []} rows={ex.failed_jobs?.rows ?? []} latest={!wall}
       allHref={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
   );
 
@@ -667,9 +698,9 @@ export function OverviewScreen() {
           {failedCard}
           <Card sx={CARD}>
             <SectionTitle icon="operations" title="Queue" hint={`${PRODUCT_NAME} jobs`} />
-            <Typography sx={{ fontSize: 40, fontWeight: 700 }}>{n.running ?? "UNKNOWN"}<Typography component="span" sx={{ fontSize: 16, color: m3.onSurfaceVar }}> running</Typography></Typography>
-            <Typography sx={{ color: m3.onSurfaceVar }}>completed in 24 h: <b>{n.completed_24h ?? "UNKNOWN"}</b></Typography>
-            <Typography sx={{ color: m3.onSurfaceVar }}>oldest running: {n.oldest_running_submitted_at ? relativeAge(n.oldest_running_submitted_at) : "none"}</Typography>
+            <Typography sx={{ fontSize: 40, fontWeight: 700 }}>{figure(n.running)}<Typography component="span" sx={{ fontSize: 16, color: m3.onSurfaceVar }}> running</Typography></Typography>
+            <Typography sx={{ color: m3.onSurfaceVar }}>completed in 24 h: <b>{figure(n.completed_24h)}</b></Typography>
+            <Typography sx={{ color: m3.onSurfaceVar }}>oldest running: {typeof n.running !== "number" ? "UNKNOWN" : n.oldest_running_submitted_at ? relativeAge(n.oldest_running_submitted_at) : "none"}</Typography>
             <Typography sx={{ color: m3.onSurfaceVar }}>last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}</Typography>
           </Card>
         </Box>
@@ -682,12 +713,12 @@ export function OverviewScreen() {
   // Below the attention list only what serves it: the fleet in four facts (each opening its list) and the framework
   // bars. Plain words; every figure from the reads this screen already made; UNKNOWN is never drawn as zero.
   const est = data.estate;
-  const bk = est?.facts.backups;
-  const ev = est?.facts.evidence;
+  const bk = est?.facts?.backups;
+  const ev = est?.facts?.evidence;
   const backups = bk ? { archived: bk.a, of: bk.b }
-    : !tileUnknown(a.backup_missing) && a.backup_missing.of !== undefined ? { archived: a.backup_missing.of - a.backup_missing.count, of: a.backup_missing.of } : null;
+    : backupMissing && typeof backupMissing.of === "number" ? { archived: backupMissing.of - backupMissing.count, of: backupMissing.of } : null;
   const freshness: FleetFreshness | null = ev ? { fresh: ev.r, of: ev.d, never: ev.never }
-    : age && (age.state ?? "OK") === "OK" ? { fresh: age.lt24h, of: age.of, never: age.never } : null;
+    : age ? { fresh: age.lt24h, of: age.of, never: age.never } : null;
   const haFig = typeof ha === "object" ? ha : null;
   const reads = (est?.devices ?? []).map((x) => x.last_read_at).filter((t): t is string => Boolean(t)).sort();
   const newestRead = data.evidence.inventory?.at ?? reads.at(-1) ?? null;
@@ -706,7 +737,7 @@ export function OverviewScreen() {
         title="Overview"
         // "Estate assurance · N enrolled devices" is also the e2e suite's populated-data check (e2e/screens.spec.ts).
         subtitle={`Estate assurance · ${estateDevicesLabel(d)} · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
-        actions={<FreshnessChip evidence={data.evidence} />}
+        actions={<FreshnessChip evidence={data.evidence ?? {}} />}
       />
 
       <StaleEvidenceBanner freshness={freshness} newestAt={newestRead} />
@@ -775,7 +806,7 @@ export function OverviewScreen() {
                 ))}
               </Box>
             </Box>
-          ) : <Typography sx={{ color: m3.onSurfaceVar }}>Compliance has not been evaluated yet.</Typography>}
+          ) : <Typography sx={{ color: m3.onSurfaceVar }}>{c.state === "READ_FAILED" ? "Compliance could not be read — UNKNOWN." : "Compliance has not been evaluated yet."}</Typography>}
         </Card>
       )}
     </ScreenRoot>

@@ -78,7 +78,9 @@ export const RULES: Readonly<Record<RuleKey, RuleSpec>> = {
 };
 
 /** One UNKNOWN row per source that could not be read; same shape as a rule, ranked by source. */
-const UNKNOWN_SOURCE: Readonly<Record<Exclude<SourceKey, "overview">, RuleSpec & { readonly label: string; readonly what: string; readonly detail: string }>> = {
+const UNKNOWN_SOURCE: Readonly<Record<SourceKey, RuleSpec & { readonly label: string; readonly what: string; readonly detail: string }>> = {
+  overview: { rank: 19, severity: "unknown", plane: null, href: q({ screen: "operations" }), linkLabel: "Open Operations",
+    label: "Overview", what: "Parts of the overview could not be read", detail: "backup, device-read, compliance and failed-job rows are missing from this list" },
   failover: { rank: 20, severity: "unknown", plane: null, href: q({ screen: "operations" }), linkLabel: "Open HA readiness",
     label: "HA readiness", what: "HA readiness could not be read", detail: "clusters not ready for failover are missing from this list" },
   compliance: { rank: 21, severity: "unknown", plane: PLANE_COMPLIANCE, href: q({ screen: "compliance" }), linkLabel: "Open Compliance",
@@ -107,7 +109,8 @@ export interface AttentionInputs {
 }
 
 export interface AttentionRow {
-  readonly key: RuleKey | `unknown-${SourceKey}`;
+  /** `unknown-<source>`: a source that could not be read. `unevaluated-<rule>`: the rule itself threw on the data it was given. */
+  readonly key: RuleKey | `unknown-${SourceKey}` | `unevaluated-${RuleKey}`;
   readonly severity: AttentionSeverity;
   readonly rank: number;
   /** The finding with its count, in plain words. */
@@ -162,94 +165,153 @@ function row(key: RuleKey, items: readonly Affected[], what: string, at: string 
     detail: extra.detail ?? null, at, atKind: extra.atKind ?? "age", atLabel, href: spec.href, linkLabel: spec.linkLabel };
 }
 
+/** What each rule checks, in the words of the "could not be evaluated" row. */
+const CHECK_NAME: Readonly<Record<RuleKey, string>> = {
+  "ha-not-ready": "HA clusters not ready for failover", "backup-missing": "backup targets without a stored backup",
+  "advisory-exploited": "devices affected by an actively exploited advisory", "compliance-critical": "firewalls failing a critical check",
+  "advisory-critical-high": "devices matching a critical or high advisory", "backup-stale": "backup targets with an old newest backup",
+  "failed-jobs": "jobs failed in the last 24 h", "not-read": "devices not read for over 72 h", "license-expired": "expired licenses",
+  "license-30": "licenses expiring within 30 days", "license-60": "licenses expiring in 31–60 days", "read-ageing": "devices last read 24–72 h ago",
+  "live-patch-missing": "Check Point devices without a Live Patch package", "ha-unknown": "HA clusters with UNKNOWN readiness",
+  "change-unknown-actor": "changes without a known actor",
+};
+
+/** The one row a rule that threw leaves behind: UNKNOWN, never the silence of "nothing found". */
+function unevaluatedRow(key: RuleKey): AttentionRow {
+  const spec = RULES[key];
+  return { key: `unevaluated-${key}`, severity: "unknown", rank: spec.rank, what: `This check could not be evaluated: ${CHECK_NAME[key]}`,
+    names: [], more: 0, count: 0, detail: "the rule failed on the data it was given; its findings are missing from this list",
+    at: null, atKind: "age", atLabel: "—", href: spec.href, linkLabel: spec.linkLabel };
+}
+
+/**
+ * Runs one rule (or the shared step of several): its rows, or -- when it throws, e.g. on a field the server sent as null --
+ * one "could not be evaluated" row per rule it stands for, so one bad rule never takes down the list.
+ */
+function guarded(keys: readonly RuleKey[], build: () => AttentionRow | readonly AttentionRow[] | null): AttentionRow[] {
+  try {
+    const built = build();
+    return built === null ? [] : Array.isArray(built) ? [...built] : [built as AttentionRow];
+  } catch {
+    return keys.map(unevaluatedRow);
+  }
+}
+
 const deviceName = (d: { hostname: string | null; device_id: string | null }) => d.hostname?.trim() || (d.device_id ? d.device_id.slice(0, 8) : "unknown device");
 
-type EstateDevice = NonNullable<OverviewView["estate"]>["devices"][number];
+type EstateDevice = NonNullable<NonNullable<OverviewView["estate"]>["devices"]>[number];
+
+/** The estate's device list, or null when the section failed (`{state: "READ_FAILED"}` carries none) or an older backend sent none. */
+const estateDevices = (o: OverviewView): readonly EstateDevice[] | null => (Array.isArray(o.estate?.devices) ? o.estate!.devices! : null);
+
+/** The parts of the overview body this list reads that the server could not build, by name; empty when all were read. */
+export function unreadableOverviewParts(o: OverviewView): string[] {
+  const parts: string[] = [];
+  if (o.estate && estateDevices(o) === null) parts.push("device list");
+  if (o.exceptions?.state === "READ_FAILED" || (o.exceptions && !o.exceptions.failed_jobs)) parts.push("failed jobs");
+  return parts;
+}
 
 function overviewRows(o: OverviewView, controls: readonly ComplianceControlItem[] | null | undefined, now: number): AttentionRow[] {
   const out: AttentionRow[] = [];
-  const devices: readonly EstateDevice[] = o.estate?.devices ?? [];
+  const devices = estateDevices(o);
   const byName = (d: EstateDevice, at?: string | null): Affected => ({ name: deviceName(d), at });
 
-  // Backups: a target without any stored archive, then a target whose newest archive is older than the threshold.
-  const missing = devices.filter((d) => d.no_archive);
-  if (missing.length > 0) {
-    out.push(row("backup-missing", missing.map((d) => byName(d)), `${plural(missing.length, "backup target has", "backup targets have")} no stored backup`,
-      null, "never backed up"));
-  }
-  const stale = devices.filter((d) => !d.no_archive && d.backup_target !== false && d.last_backup_at
-    && now - time(d.last_backup_at)! > BACKUP_STALE_DAYS * DAY_MS)
-    .sort((a, b) => time(a.last_backup_at)! - time(b.last_backup_at)!);
-  if (stale.length > 0) {
-    out.push(row("backup-stale", stale.map((d) => byName(d, d.last_backup_at)),
-      `${plural(stale.length, "backup target's newest backup is", "backup targets' newest backups are")} older than ${BACKUP_STALE_DAYS} days`,
-      oldest(stale.map((d) => d.last_backup_at)), "oldest backup"));
-  }
+  if (devices) {
+    // Backups: a target without any stored archive, then a target whose newest archive is older than the threshold.
+    out.push(...guarded(["backup-missing"], () => {
+      const missing = devices.filter((d) => d.no_archive);
+      return missing.length === 0 ? null : row("backup-missing", missing.map((d) => byName(d)),
+        `${plural(missing.length, "backup target has", "backup targets have")} no stored backup`, null, "never backed up");
+    }));
+    out.push(...guarded(["backup-stale"], () => {
+      const stale = devices.filter((d) => !d.no_archive && d.backup_target !== false && d.last_backup_at
+        && now - time(d.last_backup_at)! > BACKUP_STALE_DAYS * DAY_MS)
+        .sort((a, b) => time(a.last_backup_at)! - time(b.last_backup_at)!);
+      return stale.length === 0 ? null : row("backup-stale", stale.map((d) => byName(d, d.last_backup_at)),
+        `${plural(stale.length, "backup target's newest backup is", "backup targets' newest backups are")} older than ${BACKUP_STALE_DAYS} days`,
+        oldest(stale.map((d) => d.last_backup_at)), "oldest backup");
+    }));
 
-  // Compliance: a firewall failing at least one critical check (only once the evaluation is warm).
-  if (o.estate && o.estate.compliance_state === "OK") {
-    const failing = devices.filter((d) => (d.critical_fail ?? 0) > 0).sort((a, b) => (b.critical_fail ?? 0) - (a.critical_fail ?? 0));
-    if (failing.length > 0) {
-      const top = (controls ?? []).filter((c) => c.severity === "CRITICAL" && c.fail_count > 0)
-        .sort((a, b) => b.fail_count - a.fail_count || a.control_id.localeCompare(b.control_id))[0];
-      out.push(row("compliance-critical", failing.map((d) => byName(d)), `${plural(failing.length, "firewall fails", "firewalls fail")} at least one critical check`,
-        o.evidence.compliance?.at ?? null, "compliance data",
-        { detail: top ? `most widespread: ${top.title} (${top.fail_count} of ${top.target_device_count} firewalls)` : null }));
+    // Compliance: a firewall failing at least one critical check (only once the evaluation is warm).
+    if (o.estate?.compliance_state === "OK") {
+      out.push(...guarded(["compliance-critical"], () => {
+        const failing = devices.filter((d) => (d.critical_fail ?? 0) > 0).sort((a, b) => (b.critical_fail ?? 0) - (a.critical_fail ?? 0));
+        if (failing.length === 0) return null;
+        const top = (controls ?? []).filter((c) => c.severity === "CRITICAL" && c.fail_count > 0)
+          .sort((a, b) => b.fail_count - a.fail_count || a.control_id.localeCompare(b.control_id))[0];
+        return row("compliance-critical", failing.map((d) => byName(d)), `${plural(failing.length, "firewall fails", "firewalls fail")} at least one critical check`,
+          o.evidence?.compliance?.at ?? null, "compliance data",
+          { detail: top ? `most widespread: ${top.title} (${top.fail_count} of ${top.target_device_count} firewalls)` : null });
+      }));
     }
   }
 
   // Jobs failed in 24 h: the overview's own list (the latest five) names where; the reasons give the cause.
   const failed = o.exceptions?.failed_jobs;
   if (failed && failed.total > 0) {
-    const reasons = [...(failed.reasons ?? [])].sort((a, b) => b.count - a.count);
-    // A job without a target device (e.g. a cluster-level policy collection) has device_id null (crash 2026-11-23 13:15).
-    const labels = [...new Set(failed.rows.map((r) => r.label?.trim() || (r.device_id ? r.device_id.slice(0, 8) : "no device")))];
-    out.push(row("failed-jobs", [], `${plural(failed.total, "job", "jobs")} failed in the last 24 h`,
-      o.attention?.failed_jobs_24h?.last_at ?? newest(failed.rows.map((r) => r.finished_at)), "latest",
-      { count: failed.total, names: labels.slice(0, MAX_NAMES), more: 0, namesLead: labels.length ? "latest on" : undefined,
-        detail: reasons[0] ? `most common cause: ${reasons[0].reason} (${reasons[0].count})` : null }));
+    out.push(...guarded(["failed-jobs"], () => {
+      const reasons = [...(failed.reasons ?? [])].sort((a, b) => b.count - a.count);
+      const rows = failed.rows ?? [];
+      // A job without a target device (e.g. a cluster-level policy collection) has device_id null (crash 2026-11-23 13:15).
+      const labels = [...new Set(rows.map((r) => r.label?.trim() || (r.device_id ? r.device_id.slice(0, 8) : "no device")))];
+      return row("failed-jobs", [], `${plural(failed.total, "job", "jobs")} failed in the last 24 h`,
+        o.attention?.failed_jobs_24h?.last_at ?? newest(rows.map((r) => r.finished_at)), "latest",
+        { count: failed.total, names: labels.slice(0, MAX_NAMES), more: 0, namesLead: labels.length ? "latest on" : undefined,
+          detail: reasons[0] ? `most common cause: ${reasons[0].reason} (${reasons[0].count})` : null });
+    }));
   }
 
-  // Reads: never read or over 72 h (Review), 24-72 h (Watch) -- the product's one freshness scale.
-  const age = (d: EstateDevice) => (time(d.last_read_at) === null ? null : now - time(d.last_read_at)!);
-  const notRead = devices.filter((d) => { const a = age(d); return a === null || a > AGEING_UNTIL_MS; })
-    .sort((a, b) => (time(a.last_read_at) ?? -Infinity) - (time(b.last_read_at) ?? -Infinity));
-  if (notRead.length > 0) {
-    const never = notRead.filter((d) => !d.last_read_at).length;
-    out.push(row("not-read", notRead.map((d) => byName(d, d.last_read_at)),
-      never === notRead.length ? `${plural(never, "device has", "devices have")} never been read` : `${plural(notRead.length, "device", "devices")} not read for over 72 h`,
-      oldest(notRead.map((d) => d.last_read_at)), never === notRead.length ? "never read" : "oldest read",
-      { detail: never > 0 && never < notRead.length ? `${never} never read` : null }));
-  }
-  const ageing = devices.filter((d) => { const a = age(d); return a !== null && a > FRESH_UNDER_MS && a <= AGEING_UNTIL_MS; })
-    .sort((a, b) => time(a.last_read_at)! - time(b.last_read_at)!);
-  if (ageing.length > 0) {
-    out.push(row("read-ageing", ageing.map((d) => byName(d, d.last_read_at)), `${plural(ageing.length, "device", "devices")} last read 24–72 h ago`,
-      oldest(ageing.map((d) => d.last_read_at)), "oldest read"));
+  if (devices) {
+    // Reads: never read or over 72 h (Review), 24-72 h (Watch) -- the product's one freshness scale.
+    const age = (d: EstateDevice) => (time(d.last_read_at) === null ? null : now - time(d.last_read_at)!);
+    out.push(...guarded(["not-read"], () => {
+      const notRead = devices.filter((d) => { const a = age(d); return a === null || a > AGEING_UNTIL_MS; })
+        .sort((a, b) => (time(a.last_read_at) ?? -Infinity) - (time(b.last_read_at) ?? -Infinity));
+      if (notRead.length === 0) return null;
+      const never = notRead.filter((d) => !d.last_read_at).length;
+      return row("not-read", notRead.map((d) => byName(d, d.last_read_at)),
+        never === notRead.length ? `${plural(never, "device has", "devices have")} never been read` : `${plural(notRead.length, "device", "devices")} not read for over 72 h`,
+        oldest(notRead.map((d) => d.last_read_at)), never === notRead.length ? "never read" : "oldest read",
+        { detail: never > 0 && never < notRead.length ? `${never} never read` : null });
+    }));
+    out.push(...guarded(["read-ageing"], () => {
+      const ageing = devices.filter((d) => { const a = age(d); return a !== null && a > FRESH_UNDER_MS && a <= AGEING_UNTIL_MS; })
+        .sort((a, b) => time(a.last_read_at)! - time(b.last_read_at)!);
+      return ageing.length === 0 ? null : row("read-ageing", ageing.map((d) => byName(d, d.last_read_at)), `${plural(ageing.length, "device", "devices")} last read 24–72 h ago`,
+        oldest(ageing.map((d) => d.last_read_at)), "oldest read");
+    }));
   }
   return out;
 }
 
 function failoverRows(value: { devices: readonly DeviceSummary[]; rows: readonly CpFailoverSummary[] }): AttentionRow[] {
-  const byRef: Record<string, CpFailoverSummary[]> = {};
-  for (const r of value.rows) (byRef[r.cluster_member_ref] ??= []).push(r);
-  const items = haReadinessItems(groupClusters(value.devices), byRef);
-  const out: AttentionRow[] = [];
-  const notReady = items.filter((i) => i.status === "NOT_READY");
-  if (notReady.length > 0) {
-    const checks = [...new Set(notReady.map((i) => i.base?.readiness?.failedCheck).filter((c): c is string => Boolean(c)))];
-    out.push(row("ha-not-ready", notReady.map((i) => ({ name: i.cluster.title })),
-      `${plural(notReady.length, "HA cluster", "HA clusters")} not ready for failover`,
-      newest(notReady.map((i) => i.base?.readiness?.observedAt)), "checked",
-      { detail: checks.length ? `failed check: ${checks.slice(0, 2).join(", ")}${checks.length > 2 ? ` and ${checks.length - 2} more` : ""}` : null }));
+  type Items = ReturnType<typeof haReadinessItems>;
+  let items: Items;
+  try {
+    const byRef: Record<string, CpFailoverSummary[]> = {};
+    for (const r of value.rows) (byRef[r.cluster_member_ref] ??= []).push(r);
+    items = haReadinessItems(groupClusters(value.devices), byRef);
+  } catch {
+    return (["ha-not-ready", "ha-unknown"] as const).map(unevaluatedRow);
   }
-  const unknown = items.filter((i) => i.status === "UNKNOWN");
-  if (unknown.length > 0) {
-    out.push(row("ha-unknown", unknown.map((i) => ({ name: i.cluster.title })),
-      `${plural(unknown.length, "HA cluster has", "HA clusters have")} UNKNOWN readiness`,
-      newest(unknown.map((i) => i.base?.readiness?.observedAt)), "checked"));
-  }
-  return out;
+  return [
+    ...guarded(["ha-not-ready"], () => {
+      const notReady = items.filter((i) => i.status === "NOT_READY");
+      if (notReady.length === 0) return null;
+      const checks = [...new Set(notReady.map((i) => i.base?.readiness?.failedCheck).filter((c): c is string => Boolean(c)))];
+      return row("ha-not-ready", notReady.map((i) => ({ name: i.cluster.title })),
+        `${plural(notReady.length, "HA cluster", "HA clusters")} not ready for failover`,
+        newest(notReady.map((i) => i.base?.readiness?.observedAt)), "checked",
+        { detail: checks.length ? `failed check: ${checks.slice(0, 2).join(", ")}${checks.length > 2 ? ` and ${checks.length - 2} more` : ""}` : null });
+    }),
+    ...guarded(["ha-unknown"], () => {
+      const unknown = items.filter((i) => i.status === "UNKNOWN");
+      return unknown.length === 0 ? null : row("ha-unknown", unknown.map((i) => ({ name: i.cluster.title })),
+        `${plural(unknown.length, "HA cluster has", "HA clusters have")} UNKNOWN readiness`,
+        newest(unknown.map((i) => i.base?.readiness?.observedAt)), "checked");
+    }),
+  ];
 }
 
 /** A device's worst license state: expired, within 30 days, within 60 days, or null. Permanent and undated items never count. */
@@ -269,50 +331,69 @@ export function licenseState(d: LifecycleDevice): { state: "expired" | "soon" | 
 }
 
 function lifecycleRows(fleet: LifecycleFleet, enrolled: ReadonlySet<string> | null): AttentionRow[] {
-  const devices = fleet.devices.filter((d) => !enrolled || enrolled.has(d.device_id));
+  const LIFECYCLE_RULES = ["advisory-exploited", "advisory-critical-high", "license-expired", "license-30", "license-60", "live-patch-missing"] as const;
+  let devices: LifecycleDevice[];
+  try {
+    devices = fleet.devices.filter((d) => !enrolled || enrolled.has(d.device_id));
+  } catch {
+    return LIFECYCLE_RULES.map(unevaluatedRow);
+  }
   const out: AttentionRow[] = [];
   const name = (d: LifecycleDevice) => deviceName(d);
-  const evaluated = devices.filter((d) => d.vulnerabilities?.state === "EVALUATED");
-  const exploited = evaluated.filter((d) => (d.vulnerabilities?.affected_exploited ?? 0) > 0);
-  if (exploited.length > 0) {
-    out.push(row("advisory-exploited", exploited.map((d) => ({ name: name(d) })),
+  const evaluated = (): LifecycleDevice[] => devices.filter((d) => d.vulnerabilities?.state === "EVALUATED");
+  out.push(...guarded(["advisory-exploited"], () => {
+    const exploited = evaluated().filter((d) => (d.vulnerabilities?.affected_exploited ?? 0) > 0);
+    return exploited.length === 0 ? null : row("advisory-exploited", exploited.map((d) => ({ name: name(d) })),
       `${plural(exploited.length, "device is", "devices are")} affected by an actively exploited advisory`,
       newest(exploited.map((d) => d.vulnerabilities?.compared?.loaded_at)), "advisories loaded",
-      { detail: "a CVE of the advisory is in the CISA Known Exploited Vulnerabilities catalog" }));
-  }
-  const criticalHigh = evaluated.filter((d) => (d.vulnerabilities?.affected_exploited ?? 0) === 0 && (d.vulnerabilities?.affected_critical_high ?? 0) > 0);
-  if (criticalHigh.length > 0) {
+      { detail: "a CVE of the advisory is in the CISA Known Exploited Vulnerabilities catalog" });
+  }));
+  out.push(...guarded(["advisory-critical-high"], () => {
+    const criticalHigh = evaluated().filter((d) => (d.vulnerabilities?.affected_exploited ?? 0) === 0 && (d.vulnerabilities?.affected_critical_high ?? 0) > 0);
+    if (criticalHigh.length === 0) return null;
     const total = criticalHigh.reduce((n, d) => n + (d.vulnerabilities?.affected_critical_high ?? 0), 0);
-    out.push(row("advisory-critical-high", criticalHigh.map((d) => ({ name: name(d) })),
+    return row("advisory-critical-high", criticalHigh.map((d) => ({ name: name(d) })),
       `${plural(criticalHigh.length, "device matches", "devices match")} a critical or high advisory for its version`,
       newest(criticalHigh.map((d) => d.vulnerabilities?.compared?.loaded_at)), "advisories loaded",
-      { detail: `${plural(total, "advisory match", "advisory matches")} in all` }));
+      { detail: `${plural(total, "advisory match", "advisory matches")} in all` });
+  }));
+  let withLicense: Array<{ d: LifecycleDevice; l: NonNullable<ReturnType<typeof licenseState>> }> = [];
+  let licenseFailed = false;
+  try {
+    withLicense = devices.flatMap((d) => { const l = licenseState(d); return l ? [{ d, l }] : []; });
+  } catch {
+    licenseFailed = true;
   }
-  const withLicense = devices.map((d) => ({ d, l: licenseState(d) })).filter((x) => x.l !== null);
-  const bucket = (state: "expired" | "soon" | "watch") => withLicense.filter((x) => x.l!.state === state)
-    .sort((a, b) => (a.l!.days ?? 0) - (b.l!.days ?? 0));
-  const expired = bucket("expired");
-  if (expired.length > 0) {
-    const latest = [...expired].sort((a, b) => (b.l!.days ?? -Infinity) - (a.l!.days ?? -Infinity))[0];
-    out.push(row("license-expired", expired.map((x) => ({ name: name(x.d) })),
-      `${plural(expired.length, "device has", "devices have")} an expired license, subscription or support contract`,
-      latest.l!.expiry, "latest expired", { atKind: "date", detail: `latest: ${latest.l!.label}` }));
+  const bucket = (state: "expired" | "soon" | "watch") => withLicense.filter((x) => x.l.state === state)
+    .sort((a, b) => (a.l.days ?? 0) - (b.l.days ?? 0));
+  if (licenseFailed) out.push(...(["license-expired", "license-30", "license-60"] as const).map(unevaluatedRow));
+  else {
+    out.push(...guarded(["license-expired"], () => {
+      const expired = bucket("expired");
+      if (expired.length === 0) return null;
+      const latest = [...expired].sort((a, b) => (b.l.days ?? -Infinity) - (a.l.days ?? -Infinity))[0];
+      return row("license-expired", expired.map((x) => ({ name: name(x.d) })),
+        `${plural(expired.length, "device has", "devices have")} an expired license, subscription or support contract`,
+        latest.l.expiry, "latest expired", { atKind: "date", detail: `latest: ${latest.l.label}` });
+    }));
+    for (const [state, key, words] of [["soon", "license-30", `within ${LICENSE_SOON_DAYS} days`], ["watch", "license-60", `in ${LICENSE_SOON_DAYS + 1}–${LICENSE_WATCH_DAYS} days`]] as const) {
+      out.push(...guarded([key], () => {
+        const items = bucket(state);
+        if (items.length === 0) return null;
+        const first = items[0];
+        return row(key, items.map((x) => ({ name: name(x.d) })),
+          `${plural(items.length, "device has", "devices have")} a license or subscription expiring ${words}`,
+          first.l.expiry, "nearest expires",
+          { atKind: "date", detail: `nearest: ${first.l.label}${first.l.days !== null ? `, in ${plural(first.l.days, "day", "days")}` : ""}` });
+      }));
+    }
   }
-  for (const [state, key, words] of [["soon", "license-30", `within ${LICENSE_SOON_DAYS} days`], ["watch", "license-60", `in ${LICENSE_SOON_DAYS + 1}–${LICENSE_WATCH_DAYS} days`]] as const) {
-    const items = bucket(state);
-    if (items.length === 0) continue;
-    const first = items[0];
-    out.push(row(key, items.map((x) => ({ name: name(x.d) })),
-      `${plural(items.length, "device has", "devices have")} a license or subscription expiring ${words}`,
-      first.l!.expiry, "nearest expires",
-      { atKind: "date", detail: `nearest: ${first.l!.label}${first.l!.days !== null ? `, in ${plural(first.l!.days, "day", "days")}` : ""}` }));
-  }
-  const noLivePatch = devices.filter((d) => d.vendor === "check_point" && d.live_patch?.missing === true);
-  if (noLivePatch.length > 0) {
-    out.push(row("live-patch-missing", noLivePatch.map((d) => ({ name: name(d) })),
+  out.push(...guarded(["live-patch-missing"], () => {
+    const noLivePatch = devices.filter((d) => d.vendor === "check_point" && d.live_patch?.missing === true);
+    return noLivePatch.length === 0 ? null : row("live-patch-missing", noLivePatch.map((d) => ({ name: name(d) })),
       `${plural(noLivePatch.length, "Check Point device reports", "Check Point devices report")} no Live Patch package`,
-      newest(noLivePatch.map((d) => d.live_patch?.observed_at)), "read"));
-  }
+      newest(noLivePatch.map((d) => d.live_patch?.observed_at)), "read");
+  }));
   return out;
 }
 
@@ -322,17 +403,19 @@ export function actorUnknown(actor: string | null | undefined): boolean {
 }
 
 function changeRows(page: ChangeFeedPage): AttentionRow[] {
-  const events = page.events.filter((e) => e.kind === "USER" && actorUnknown(e.actor));
-  if (events.length === 0) return [];
-  const sorted = [...events].sort((a, b) => (time(b.time) ?? 0) - (time(a.time) ?? 0));
-  const named = sorted.map((e) => ({ name: e.device_name?.trim() || (e.device_id ? e.device_id.slice(0, 8) : "unknown device") }));
-  return [row("change-unknown-actor", named, `${plural(events.length, "change", "changes")} in the last ${CHANGE_WINDOW_DAYS} days without a known actor`,
-    sorted[0].time, "newest", { count: events.length })];
+  return guarded(["change-unknown-actor"], () => {
+    const events = page.events.filter((e) => e.kind === "USER" && actorUnknown(e.actor));
+    if (events.length === 0) return null;
+    const sorted = [...events].sort((a, b) => (time(b.time) ?? 0) - (time(a.time) ?? 0));
+    const named = sorted.map((e) => ({ name: e.device_name?.trim() || (e.device_id ? e.device_id.slice(0, 8) : "unknown device") }));
+    return row("change-unknown-actor", named, `${plural(events.length, "change", "changes")} in the last ${CHANGE_WINDOW_DAYS} days without a known actor`,
+      sorted[0].time, "newest", { count: events.length });
+  });
 }
 
-function unknownRow(source: Exclude<SourceKey, "overview">): AttentionRow {
+function unknownRow(source: SourceKey, what?: string): AttentionRow {
   const s = UNKNOWN_SOURCE[source];
-  return { key: `unknown-${source}`, severity: "unknown", rank: s.rank, what: s.what, names: [], more: 0, count: 0, detail: s.detail,
+  return { key: `unknown-${source}`, severity: "unknown", rank: s.rank, what: what ?? s.what, names: [], more: 0, count: 0, detail: s.detail,
     at: null, atKind: "age", atLabel: "—", href: s.href, linkLabel: s.linkLabel };
 }
 
@@ -344,8 +427,8 @@ export function compareRows(a: AttentionRow, b: AttentionRow): number {
 
 /** Whether a row's target screen is open to this session (presentation; the server decides every read). */
 export function rowAllowed(r: AttentionRow, permissions: readonly string[] | undefined): boolean {
-  const plane = r.key.startsWith("unknown-") ? UNKNOWN_SOURCE[r.key.slice("unknown-".length) as Exclude<SourceKey, "overview">].plane
-    : RULES[r.key as RuleKey].plane;
+  const plane = r.key.startsWith("unknown-") ? UNKNOWN_SOURCE[r.key.slice("unknown-".length) as SourceKey].plane
+    : RULES[(r.key.startsWith("unevaluated-") ? r.key.slice("unevaluated-".length) : r.key) as RuleKey].plane;
   return !plane || planeGranted(permissions, plane);
 }
 
@@ -358,13 +441,17 @@ export function sourceWanted(source: "lifecycle" | "changes", permissions: reado
 export function buildAttention(x: AttentionInputs, permissions: readonly string[] | undefined): AttentionResult {
   const now = x.now.getTime();
   const rows: AttentionRow[] = [...overviewRows(x.overview, x.controls, now)];
-  const sources: SourceStatus[] = [{ key: "overview", label: "Overview", state: "ok" }];
+  // A part of the overview the server could not build is UNKNOWN, not an empty result (the rules above skipped it).
+  const unreadable = unreadableOverviewParts(x.overview);
+  if (unreadable.length > 0) rows.push(unknownRow("overview", `The overview's ${unreadable.join(" and ")} could not be read`));
+  const sources: SourceStatus[] = [{ key: "overview", label: "Overview", state: unreadable.length > 0 ? "failed" : "ok" }];
 
   const compliance: SourceRead<unknown>["state"] = x.overview.estate?.compliance_state === "OK" ? "ok" : x.overview.estate ? "failed" : "skipped";
   if (compliance === "failed") rows.push(unknownRow("compliance"));
   sources.push({ key: "compliance", label: "Compliance", state: compliance });
 
-  const enrolled = x.overview.estate ? new Set(x.overview.estate.devices.map((d) => d.device_id)) : null;
+  const estate = estateDevices(x.overview);
+  const enrolled = estate ? new Set(estate.flatMap((d) => (d ? [d.device_id] : []))) : null;
   const reads: Array<[Exclude<SourceKey, "overview" | "compliance">, SourceRead<never>["state"], () => AttentionRow[]]> = [
     ["failover", x.failover.state, () => (x.failover.state === "ok" ? failoverRows(x.failover.value) : [])],
     ["lifecycle", x.lifecycle.state, () => (x.lifecycle.state === "ok" ? lifecycleRows(x.lifecycle.value, enrolled) : [])],
