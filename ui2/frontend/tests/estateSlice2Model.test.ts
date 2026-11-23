@@ -297,6 +297,51 @@ describe("buildFailoverBoardModel & evaluateCheckMatrixCell", () => {
   });
 });
 
+describe("buildFailoverBoardModel member roles without readiness", () => {
+  it("never presents inventory ha_role as an observed member role; no readiness check means UNKNOWN", () => {
+    const devices: readonly DeviceSummary[] = [
+      { ...SYNTHETIC_DEVICES[0], device_id: "dev-noobs-01", hostname: "FW-TANGO-09", cluster_member_ref: "CLS-NOOBS-01", ha_role: "active" },
+      { ...SYNTHETIC_DEVICES[1], device_id: "dev-noobs-02", hostname: "FW-TANGO-10", cluster_member_ref: "CLS-NOOBS-01", ha_role: "standby" },
+    ];
+    const failoverRows: readonly CpFailoverSummary[] = [
+      {
+        unitId: "cls-noobs-01",
+        clusterId: "cls-noobs-01",
+        cluster_member_ref: "CLS-NOOBS-01",
+        vendor: "check_point",
+        unitKind: "VSX_CHASSIS",
+        activeWindow: true,
+        lastRunState: "DONE",
+        lastRunOutcome: "SUCCEEDED",
+        lastRunAt: "2026-11-19T10:00:00Z",
+        canRunReadiness: true,
+        mode: "LOAD_SHARING",
+        readiness: null,
+      },
+    ];
+    const board = buildFailoverBoardModel({
+      now: NOW,
+      devices: { state: "ok", value: devices },
+      failover: { state: "ok", value: failoverRows },
+      model: buildEstateModel({
+        now: NOW,
+        devices: { state: "ok", value: devices },
+        overview: { state: "ok", value: SYNTHETIC_OVERVIEW },
+        failover: { state: "ok", value: failoverRows },
+        backups: { state: "ok", value: { backups: [] } },
+        lifecycle: { state: "skipped" },
+      }),
+    });
+    const unit = [...board.readyFresh, ...board.readyStale, ...board.notReady, ...board.unknown].find(
+      (u) => u.unitId === "cls-noobs-01",
+    );
+    expect(unit).toBeDefined();
+    expect(unit!.allMembers.map((m) => m.role)).toEqual(["unknown", "unknown"]);
+    expect(unit!.activeMembers).toEqual([]);
+    expect(unit!.standbyMembers).toEqual([]);
+  });
+});
+
 describe("buildEstateChangesModel", () => {
   it("buckets changes per day, groups by person keeping UNKNOWN separate, deduplicates rule history, and pairs before/after diffs", () => {
     const policyPage: PolicyChangesPage = {
