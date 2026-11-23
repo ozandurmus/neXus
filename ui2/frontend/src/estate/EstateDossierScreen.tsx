@@ -74,6 +74,7 @@ import { EstateDossierSshTrustBlock } from "./EstateDossierSshTrustBlock";
 import { EstateDossierGridBlock } from "./EstateDossierGridBlock";
 import { EstateDossierJobsBlock } from "./EstateDossierJobsBlock";
 import { EstateDossierHygieneBlock } from "./EstateDossierHygieneBlock";
+import { EstateDossierConfigurationBlock } from "./EstateDossierConfigurationBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
@@ -924,6 +925,14 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       </EstateCard>
 
       <EstateDossierLogsBlock deviceId={unit.deviceId} logs={logs} now={now} />
+
+      <EstateDossierConfigurationBlock
+        deviceId={unit.deviceId}
+        vendor={unit.vendor ?? null}
+        role={unit.role ?? null}
+        configuration={configuration}
+        now={now}
+      />
 
       <EstateDossierSshTrustBlock deviceId={unit.deviceId} />
 

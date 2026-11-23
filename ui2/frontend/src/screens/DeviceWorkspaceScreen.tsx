@@ -14,11 +14,9 @@ import { describeApiError } from "../shell/apiErrorText";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { Ts } from "../shell/States";
+import { vendorLabel } from "../shell/presenters";
 import { DeviceLifecycleLine } from "./LifecycleScreen";
 
-function vendorLabel(vendorHint: string): string {
-  return ({ check_point: "Check Point", palo_alto: "Palo Alto", infoblox: "Infoblox", radware: "Radware" } as Record<string, string>)[vendorHint] ?? vendorHint;
-}
 
 function enrollmentStateCopy(state: string): string {
   if (state === "DRAFT") return "Registered. Not confirmed reachable. Never collected from.";
