@@ -71,7 +71,7 @@ export function EstateDossierConfigurationBlock({
           <Box sx={{ px: "18px", pb: "14px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: ev.ink }}>
-                {`${plural(model.totalSectionCount, "section", "sections")} indexed · ${plural(model.totalEntryCount, "entry", "entries")} · ${plural(model.totalChangedCount, "changed section", "changed sections")} · ${plural(model.totalOverrideCount, "local override", "local overrides")}`}
+                {`${plural(model.totalSectionCount, "section", "sections")} indexed · ${model.entriesText} · ${plural(model.totalChangedCount, "changed section", "changed sections")} · ${plural(model.totalOverrideCount, "local override", "local overrides")}`}
               </Typography>
               <Typography sx={{ fontSize: "12px", color: ev.ink3, fontFamily: ESTATE_MONO }}>
                 {`Read kind: ${model.readKind} · Hash: ${model.hashPrefix} · ${model.withheldText}`}

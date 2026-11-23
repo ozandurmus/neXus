@@ -972,27 +972,71 @@ def _preview_e2e(repo: Path, commit: str) -> None:
         print(f"TIMING preview_total {time.monotonic() - start:.3f}", flush=True)
 
 
+# Two locks (2026-11-23, pipelined ships): ship-preview.lock serialises the part before the merge (rebase, preview,
+# pull request, checks); ship.lock serialises merge + deploy + production e2e. A ship takes the preview lock, and just
+# before its merge takes the deploy lock and hands the preview lock to the next ship. So ship B previews while ship A
+# deploys, and merges only after A has finished. One lock around the whole ship made a pipelined runner wait anyway.
+_DEPLOY_LOCK = None
+
+
+def _wait_lock(handle, minutes: int, label: str) -> bool:
+    deadline = time.monotonic() + minutes * 60
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            handle.seek(0)
+            owner = handle.read().strip() or "another task"
+            print(f"waiting for {owner} {label}", flush=True)
+            time.sleep(min(60, remaining))
+
+
+def _claim(handle, name: str) -> None:
+    handle.seek(0)
+    handle.truncate()
+    handle.write(name)
+    handle.flush()
+
+
+def _acquire_deploy_lock(preview_handle=None, name: str = "unknown task") -> None:
+    """Take the merge/deploy lock (waiting for the ship ahead to finish), then release the preview lock."""
+    global _DEPLOY_LOCK
+    if _DEPLOY_LOCK is not None:
+        return
+    handle = (STATE_DIR / "ship.lock").open("a+")
+    if not _wait_lock(handle, 150, "ship"):
+        handle.close()
+        raise SystemExit("the ship ahead still holds the deploy lock after 150 min; not merged")
+    _claim(handle, name)
+    _DEPLOY_LOCK = handle
+    if preview_handle is not None:
+        fcntl.flock(preview_handle, fcntl.LOCK_UN)
+
+
 def cmd_ship(args: argparse.Namespace) -> int:
+    global _DEPLOY_LOCK, _PREVIEW_LOCK_HANDLE, _SHIP_NAME
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with (STATE_DIR / "ship.lock").open("a+") as lock:
-        deadline = time.monotonic() + 45 * 60
-        while True:
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return 3
-                lock.seek(0)
-                owner = lock.read().strip() or "another task"
-                print(f"waiting for {owner} ship", flush=True)
-                time.sleep(min(60, remaining))
-        lock.seek(0)
-        lock.truncate()
-        lock.write(args.task or args.branch or "unknown task")
-        lock.flush()
-        return _ship(args)
+    name = args.task or args.branch or "unknown task"
+    with (STATE_DIR / "ship-preview.lock").open("a+") as preview:
+        if not _wait_lock(preview, 45, "preview"):
+            return 3
+        _claim(preview, name)
+        _PREVIEW_LOCK_HANDLE, _SHIP_NAME = preview, name
+        try:
+            return _ship(args)
+        finally:
+            _PREVIEW_LOCK_HANDLE = None
+            if _DEPLOY_LOCK is not None:
+                _DEPLOY_LOCK.close()
+                _DEPLOY_LOCK = None
+
+
+_PREVIEW_LOCK_HANDLE = None
+_SHIP_NAME = "unknown task"
 
 
 def _host_mirror_url() -> str:
@@ -1160,6 +1204,9 @@ def _ship(args: argparse.Namespace) -> int:
             subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT),
                            capture_output=True)
             raise
+    # Pipelined ships: wait here (not before the preview) for the ship ahead to finish its deploy.
+    if _PREVIEW_LOCK_HANDLE is not None:
+        _acquire_deploy_lock(_PREVIEW_LOCK_HANDLE, _SHIP_NAME)
     # Merge only after GitHub's own checks have passed (2026-11-03: the merge used to run 4 s after PR creation).
     if skip_checks is None:
         _wait_for_checks(url)

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { MatrixCellView, ZoneVersionDetail } from "../src/screens/zonematrix/zoneMatrixApi";
-import { ZONE_MATRIX_ROW_CAP, zoneMatrixGridModel } from "../src/estate/estateZoneMatrixModel";
+import type { MatrixCellView, ServiceSetView, ZoneVersionDetail } from "../src/screens/zonematrix/zoneMatrixApi";
+import {
+  ZONE_CELL_SERVICES_CAP,
+  ZONE_MATRIX_ROW_CAP,
+  ZONE_SERVICE_SET_ENTRIES_CAP,
+  ZONE_SERVICE_SETS_CAP,
+  zoneMatrixGridModel,
+} from "../src/estate/estateZoneMatrixModel";
 
 const zone = (id: string, name: string) => ({
   zone_id: id, name, description: null, role: null, block_count: 1,
@@ -74,5 +80,117 @@ describe("zoneMatrixGridModel", () => {
     const m = zoneMatrixGridModel(version(1, [], null), NOW);
     expect(m.evidenceAt).toBe("2026-11-19T10:00:00Z");
     expect(m.versionLabel).toBe("Version 3 · 3 d ago");
+  });
+
+  it("projects confirmationLine, unassignedPolicyLine, and templateOriginLine from the matrix header", () => {
+    const v = version(2, []);
+    const withHeader: ZoneVersionDetail = {
+      ...v,
+      matrix: {
+        ...v.matrix!,
+        cells_total: 5,
+        cells_with_reference: 3,
+        cells_confirmed: 2,
+        unassigned_to_unassigned: "DENY_ALL unless an explicit cell says otherwise",
+        template_origin: { name: "PCI-DSS-BASELINE", revision: "2026.2" },
+      },
+    };
+    const m = zoneMatrixGridModel(withHeader, NOW);
+    expect(m.confirmationUnknown).toBe(false);
+    expect(m.confirmationLine).toBe("2 of 5 cells confirmed by compliance (3 cells with reference)");
+    expect(m.unassignedPolicyLine).toBe("UNASSIGNED -> UNASSIGNED: DENY_ALL unless an explicit cell says otherwise");
+    expect(m.templateOriginLine).toBe("Template origin: PCI-DSS-BASELINE (2026.2)");
+  });
+
+  it("marks confirmationUnknown when confirmation counts are missing or NaN and falls back to UNKNOWN for unassigned policy", () => {
+    const v = version(1, []);
+    const broken: ZoneVersionDetail = {
+      ...v,
+      matrix: {
+        ...v.matrix!,
+        cells_total: Number.NaN,
+        cells_confirmed: 0,
+        unassigned_to_unassigned: "   ",
+        template_origin: null,
+      },
+    };
+    const m = zoneMatrixGridModel(broken, NOW);
+    expect(m.confirmationUnknown).toBe(true);
+    expect(m.confirmationLine).toBeNull();
+    expect(m.unassignedPolicyLine).toBe("UNASSIGNED -> UNASSIGNED: UNKNOWN");
+    expect(m.templateOriginLine).toBeNull();
+  });
+
+  it("formats ALLOW_LISTED cell servicesLine (empty list, non-evaluable reasons, and +N more services cap) and confirmedLine via actorLabel", () => {
+    const emptyListed: MatrixCellView = {
+      ...cell("z0", "z0", "ALLOW_LISTED", "CONFIRMED"),
+      services: [],
+      confirmed_by: "SN-0123456789",
+    };
+    const cappedListed: MatrixCellView = {
+      ...cell("z0", "z1", "ALLOW_LISTED", "CONFIRMED"),
+      services: Array.from({ length: ZONE_CELL_SERVICES_CAP + 2 }, (_, i) =>
+        i === 1
+          ? { entry: "app:pan:custom-tls", evaluable: false, not_evaluable_reason: "APP_ID_DYNAMIC" }
+          : i === 2
+            ? { entry: "app:pan:mystery", evaluable: false, not_evaluable_reason: null }
+            : { entry: `tcp/${443 + i}`, evaluable: true, not_evaluable_reason: null },
+      ),
+      confirmed_by: null,
+    };
+    const denyCell: MatrixCellView = {
+      ...cell("z1", "z0", "DENY_ALL", "PROPOSED"),
+      confirmed_by: "SN-0123456789",
+    };
+    const m = zoneMatrixGridModel(version(2, [emptyListed, cappedListed, denyCell]), NOW);
+
+    const c00 = m.rows[0].cells[0];
+    expect(c00.servicesLine).toBe("0 services (empty list)");
+    expect(c00.confirmedLine).toBe("Confirmed by Masked actor");
+
+    const c01 = m.rows[0].cells[1];
+    expect(c01.servicesLine).toBe(
+      "6 services: tcp/443, app:pan:custom-tls (not evaluable: APP_ID_DYNAMIC), app:pan:mystery (not evaluable: UNKNOWN), tcp/446 (+2 more services)",
+    );
+    expect(c01.confirmedLine).toBe("Confirmed (actor UNKNOWN)");
+
+    const c10 = m.rows[1].cells[0];
+    expect(c10.servicesLine).toBeNull();
+    expect(c10.confirmedLine).toBeNull();
+  });
+
+  it("projects capped serviceSets and caps each set's entries at ZONE_SERVICE_SET_ENTRIES_CAP", () => {
+    const sets: ServiceSetView[] = Array.from({ length: ZONE_SERVICE_SETS_CAP + 2 }, (_, idx) => ({
+      name: `SET-TANGO-${idx + 1}`,
+      entries:
+        idx === 0
+          ? Array.from({ length: ZONE_SERVICE_SET_ENTRIES_CAP + 2 }, (__, eIdx) =>
+              eIdx === 1
+                ? { entry: "app:pan:web", evaluable: false, not_evaluable_reason: "L7_APP" }
+                : { entry: `tcp/${8000 + eIdx}`, evaluable: true, not_evaluable_reason: null },
+            )
+          : [{ entry: "udp/53", evaluable: true, not_evaluable_reason: null }],
+    }));
+    const v = version(1, []);
+    const m = zoneMatrixGridModel({ ...v, matrix: { ...v.matrix!, service_sets: sets } }, NOW);
+
+    expect(m.totalServiceSets).toBe(ZONE_SERVICE_SETS_CAP + 2);
+    expect(m.shownServiceSets).toBe(ZONE_SERVICE_SETS_CAP);
+    expect(m.serviceSets).toHaveLength(ZONE_SERVICE_SETS_CAP);
+
+    expect(m.serviceSets[0]).toEqual({
+      name: "SET-TANGO-1",
+      countWord: "8 services",
+      entriesText: "tcp/8000, app:pan:web (not evaluable: L7_APP), tcp/8002, tcp/8003, tcp/8004, tcp/8005 (+2 more services)",
+      moreEntriesCount: 2,
+      hasNotEvaluable: true,
+    });
+    expect(m.serviceSets[1]).toEqual({
+      name: "SET-TANGO-2",
+      countWord: "1 service",
+      entriesText: "udp/53",
+      moreEntriesCount: 0,
+      hasNotEvaluable: false,
+    });
   });
 });

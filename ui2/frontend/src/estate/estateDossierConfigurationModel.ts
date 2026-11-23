@@ -59,10 +59,11 @@ export interface DossierConfigurationModel {
   readonly evidenceAt: string | null;
   readonly summaryText: string;
   readonly readKind: string;
-  readonly withheldLineCount: number;
+  readonly withheldLineCount: number | null;
   readonly withheldText: string;
   readonly hashPrefix: string;
-  readonly totalEntryCount: number;
+  readonly totalEntryCount: number | null;
+  readonly entriesText: string;
   readonly totalSectionCount: number;
   readonly sectionsShown: readonly ConfigurationIndexEntry[];
   readonly totalChangedCount: number;
@@ -80,10 +81,11 @@ function emptyModel(
     evidenceAt: null,
     summaryText,
     readKind: "UNKNOWN",
-    withheldLineCount: 0,
-    withheldText: `${plural(0, "secret-bearing line", "secret-bearing lines")} withheld`,
+    withheldLineCount: null,
+    withheldText: "secret-bearing line count UNKNOWN",
     hashPrefix: "UNKNOWN",
-    totalEntryCount: 0,
+    totalEntryCount: null,
+    entriesText: "entries UNKNOWN",
     totalSectionCount: 0,
     sectionsShown: [],
     totalChangedCount: 0,
@@ -91,6 +93,20 @@ function emptyModel(
     totalOverrideCount: 0,
     overridesShown: [],
   };
+}
+
+function finiteCount(n: number | null | undefined): number | null {
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/** Sum of per-section entry counts; null when any section did not report its count (a partial total is not a total). */
+function sumEntryCounts(values: readonly (number | null)[]): number | null {
+  let total = 0;
+  for (const v of values) {
+    if (v === null) return null;
+    total += v;
+  }
+  return total;
 }
 
 export function projectDossierConfiguration(
@@ -145,10 +161,15 @@ export function projectDossierConfiguration(
         : { state: "unk", word: "UNKNOWN" };
 
   const readKind = cfg.read_kind ?? "UNKNOWN";
-  const withheldLineCount = cfg.withheld_line_count ?? 0;
-  const withheldText = `${plural(withheldLineCount, "secret-bearing line", "secret-bearing lines")} withheld`;
+  const withheldLineCount = finiteCount(cfg.withheld_line_count);
+  const withheldText =
+    withheldLineCount === null
+      ? "secret-bearing line count UNKNOWN"
+      : `${plural(withheldLineCount, "secret-bearing line", "secret-bearing lines")} withheld`;
   const hashPrefix = cfg.canonical_hash ? cfg.canonical_hash.slice(0, 12) : "UNKNOWN";
-  const totalEntryCount = filteredIndex.reduce((sum, row) => sum + (row.entry_count ?? 0), 0);
+  // A total is only a total when every indexed section reported its entry count; a partial sum is not shown as one.
+  const totalEntryCount = sumEntryCounts(filteredIndex.map((row) => finiteCount(row.entry_count)));
+  const entriesText = totalEntryCount === null ? "entries UNKNOWN" : plural(totalEntryCount, "entry", "entries");
   const totalSectionCount = filteredIndex.length;
   const sectionsShown = filteredIndex.slice(0, CONFIG_SECTIONS_CAP);
   const totalChangedCount = changedSections.length;
@@ -168,7 +189,7 @@ export function projectDossierConfiguration(
   const totalOverrideCount = overrides.length;
   const overridesShown = overrides.slice(0, CONFIG_OVERRIDES_CAP);
 
-  const summaryText = `${plural(totalSectionCount, "section", "sections")} indexed · ${plural(totalEntryCount, "entry", "entries")} · ${plural(totalChangedCount, "changed section", "changed sections")} · ${plural(totalOverrideCount, "local override", "local overrides")}`;
+  const summaryText = `${plural(totalSectionCount, "section", "sections")} indexed · ${entriesText} · ${plural(totalChangedCount, "changed section", "changed sections")} · ${plural(totalOverrideCount, "local override", "local overrides")}`;
 
   return {
     badge,
@@ -179,6 +200,7 @@ export function projectDossierConfiguration(
     withheldText,
     hashPrefix,
     totalEntryCount,
+    entriesText,
     totalSectionCount,
     sectionsShown,
     totalChangedCount,
