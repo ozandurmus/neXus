@@ -764,4 +764,123 @@ class AsaPolicyParserAndMapperTest {
         assertFalse(in.rules().get(0).extras().containsKey("asa-unparsed"));
         assertEquals(List.of("true"), in.rules().get(3).extras().get("asa-unparsed"));
     }
+
+    // ---- ACL_NOT_BOUND (PO 2026-11-23): "none" only when no parsed feature and no unparsed line names the ACL ----
+
+    private static final String ACL_DEFS = """
+            access-list ACL-ORPHAN-1 extended permit ip any any
+            access-list ACL-DAP-1 extended permit ip any any
+            access-list ACL-WCCP-1 extended permit ip any any
+            access-list ACL-NAT-1 extended permit ip any any
+            access-list ACL-IGMP-1 extended permit ip any any
+            access-list ACL-AAA-1 extended permit ip any any
+            access-list ACL-DL-1 extended permit ip any any
+            access-list ACL-WEB-1 extended permit ip any any
+            access-list ACL-CRYPTO-1 extended permit ip any any
+            access-list ACL-RMAP-1 extended permit ip any any
+            access-list ACL-DESC-1 extended permit ip any any
+            access-list ACL-MIXED-1 extended permit ip any any
+            """;
+
+    private static Map<String, Object> aclUseByName(String config) {
+        AsaPolicyConfig parsed = AsaConfigPolicyParser.parse(config);
+        PolicySnapshot snapshot = AsaPolicyMapper.map("dev-asa-01", "FW-TANGO-04", "2026-11-23T10:00:00Z", "artefact-01", parsed);
+        Section notEvaluated = snapshot.sections().stream()
+                .filter(x -> "ASA not evaluated".equals(x.name())).findFirst().orElseThrow();
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        notEvaluated.rules().forEach(r -> out.put(r.name(), r.extras().get("asa-acl-use")));
+        return out;
+    }
+
+    @Test
+    void aclNotBound_noUseAtAllIsNone_andAnUnparsedFeatureLineMakesItUnknown() {
+        Map<String, Object> use = aclUseByName("ASA Version 9.18(4)\n" + ACL_DEFS + """
+                dynamic-access-policy-record DAP-1
+                 network-acl ACL-DAP-1
+                wccp 90 redirect-list ACL-WCCP-1
+                nat (inside) 1 access-list ACL-NAT-1
+                interface GigabitEthernet0/1
+                 nameif inside
+                 security-level 100
+                 igmp access-group ACL-IGMP-1
+                aaa authentication match ACL-AAA-1 inside LOCAL
+                router ospf 1
+                 distribute-list ACL-DL-1 in
+                group-policy GP-1 attributes
+                 webvpn
+                  filter value ACL-WEB-1
+                crypto map CM-1 10 match address ACL-CRYPTO-1
+                route-map RM-1 permit 10
+                 match ip address ACL-RMAP-1
+                 description ACL-DESC-1
+                """);
+        assertEquals(List.of("none"), use.get("ACL-ORPHAN-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-DAP-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-WCCP-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-NAT-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-IGMP-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-AAA-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-DL-1"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-WEB-1"));
+        // a parsed use stays exactly as before and is not also an unparsed reference
+        assertEquals(List.of("crypto_map"), use.get("ACL-CRYPTO-1"));
+        assertEquals(List.of("route_map"), use.get("ACL-RMAP-1"));
+        // free-text description lines are no feature
+        assertEquals(List.of("none"), use.get("ACL-DESC-1"));
+    }
+
+    @Test
+    void aclNotBound_unparsedReferenceNeverEntersPolicyEvaluation() {
+        AsaPolicyConfig parsed = AsaConfigPolicyParser.parse("""
+                access-list ACL-DAP-1 extended permit ip any any
+                dynamic-access-policy-record DAP-1
+                 network-acl ACL-DAP-1
+                """);
+        assertEquals(Set.of("unparsed_reference"), parsed.aclUses().get("ACL-DAP-1"));
+        PolicySnapshot snapshot = AsaPolicyMapper.map("dev-asa-01", "FW-TANGO-04", "2026-11-23T10:00:00Z", "artefact-01", parsed);
+        assertTrue(snapshot.failures().isEmpty());
+    }
+
+    @Test
+    void aclNotBound_aclNameThatIsAPrefixOfAnotherIsNotAReference() {
+        Map<String, Object> use = aclUseByName("""
+                access-list ACL-A extended permit ip any any
+                access-list ACL-A1 extended permit ip any any
+                wccp 91 redirect-list ACL-A1
+                """);
+        assertEquals(List.of("none"), use.get("ACL-A"));
+        assertEquals(List.of("unknown", "unparsed_reference"), use.get("ACL-A1"));
+    }
+
+    @Test
+    void aclNotBound_caseDifferenceIsNotAReference() {
+        Map<String, Object> use = aclUseByName("""
+                access-list ACL-A extended permit ip any any
+                wccp 91 redirect-list acl-a
+                """);
+        assertEquals(List.of("none"), use.get("ACL-A"));
+    }
+
+    @Test
+    void aclNotBound_aParsedUseAndAnUnparsedLineTogetherReadAsUsed() {
+        Map<String, Object> use = aclUseByName("""
+                access-list ACL-MIXED-1 extended permit ip any any
+                crypto map CM-1 10 match address ACL-MIXED-1
+                wccp 91 redirect-list ACL-MIXED-1
+                """);
+        assertEquals(List.of("crypto_map", "unparsed_reference"), use.get("ACL-MIXED-1"));
+    }
+
+    @Test
+    void aclNotBound_accessListAndAccessGroupLinesAreNotReferences() {
+        AsaPolicyConfig parsed = AsaConfigPolicyParser.parse("""
+                access-list ACL-OUT extended permit ip any any
+                access-list ACL-OUT remark ACL-OUT
+                interface GigabitEthernet0/0
+                 nameif outside
+                 security-level 0
+                access-group ACL-OUT in interface outside
+                """);
+        assertNull(parsed.aclUses().get("ACL-OUT"));
+    }
 }

@@ -35,7 +35,8 @@ public final class PolicyHygiene {
         "unsupported port expression", "invalid port range", "missing service values", EARLIER_UNSUPPORTED, DEFAULT_PORTS_UNKNOWN,
         APPLICATION_OVERLAP_UNKNOWN,
         "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
-        "earlier sections not analysed", "multiple ordered layers not evaluated", "zone membership not evaluated");
+        "earlier sections not analysed", "multiple ordered layers not evaluated", "zone membership not evaluated",
+        PolicyHygiene.ASA_ACL_USE_UNKNOWN);
     /**
      * Evidence for a rule fully covered by an earlier Check Point "Apply Layer" rule: the rule is never reached, but the
      * inline layer's own verdict is not analysed, so the actions are not comparable and this is never a CONFLICT.
@@ -44,6 +45,8 @@ public final class PolicyHygiene {
     /** Every fixed finding evidence string; "Shadowing: <reason>." is derived from {@link #REASONS}. */
     /** An ASA ACL with no access-group binding and no other use found by the parser (ASA mapper use "none", A0-ASA-2). */
     public static final String ASA_ACL_NOT_REFERENCED = "ACL has no access-group binding and no other use was found; it is not enforced as an access rule.";
+    /** An ASA ACL named only by a configuration line the parser does not read (ASA mapper use "unknown", PO 2026-11-23): never "unused". */
+    public static final String ASA_ACL_USE_UNKNOWN = "ACL is named by a configuration feature the parser does not read; whether it is used is UNKNOWN.";
     public static final Set<String> EVIDENCE = Set.of(
         "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
         "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
@@ -53,7 +56,7 @@ public final class PolicyHygiene {
         "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
         "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
         "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
-        "Last hit predates the threshold at counter collection time.", ASA_ACL_NOT_REFERENCED);
+        "Last hit predates the threshold at counter collection time.", ASA_ACL_NOT_REFERENCED, ASA_ACL_USE_UNKNOWN);
     public record Finding(String findingClass, String severity, String evidence) {}
     public record Assessment(String shadowStatus, String shadowReason, String coveringRuleId,
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,
@@ -162,7 +165,9 @@ public final class PolicyHygiene {
                     List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled."))
                         : "ASA".equals(snapshot.metadata().vendor()) && List.of("none").equals(rule.extras().get("asa-acl-use"))
                             ? List.of(finding("unused", "LOW", ASA_ACL_NOT_REFERENCED)) : List.of();
-                    results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,
+                    boolean aclUseUnknown = "ASA".equals(snapshot.metadata().vendor())
+                        && rule.extras().get("asa-acl-use") instanceof List<?> use && use.contains("unknown");
+                    results.put(rule.id(), new Assessment("UNKNOWN", aclUseUnknown ? ASA_ACL_USE_UNKNOWN : "unsupported rulebase", null, findings,
                         PolicyRuleMetrics.permissiveness("Unknown", List.of(), 0), "unknown", false,
                         "Counter window unknown.", "UNKNOWN", null, null, null));
                 }

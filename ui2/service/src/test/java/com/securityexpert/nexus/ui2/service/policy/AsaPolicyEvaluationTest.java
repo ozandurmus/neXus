@@ -173,6 +173,41 @@ class AsaPolicyEvaluationTest {
         assertTrue(orphan.findings().stream().anyMatch(f -> f.evidence().equals(PolicyHygiene.ASA_ACL_NOT_REFERENCED)));
     }
 
+    @Test void aclNotBoundIsUnusedOnlyWhenNoFeatureNamesIt_andUnknownWhenAnUnparsedFeatureDoes() {
+        var s = asa("""
+                access-list ACL-OUT extended permit tcp any host 198.51.100.20 eq https
+                access-list ACL-ORPHAN-1 extended permit ip any any
+                access-list ACL-DAP-1 extended permit ip any any
+                access-list ACL-CRYPTO-1 extended permit ip any any
+                access-group ACL-OUT in interface outside
+                dynamic-access-policy-record DAP-1
+                 network-acl ACL-DAP-1
+                crypto map CM-1 10 match address ACL-CRYPTO-1
+                """);
+        var result = PolicyHygiene.analyze(s, 90, Instant.parse("2026-11-23T12:00:00Z"), 250000);
+        var notEvaluated = s.sections().stream().filter(x -> x.name().equals("ASA not evaluated")).findFirst().orElseThrow();
+        var byName = new HashMap<String, PolicyHygiene.Assessment>();
+        notEvaluated.rules().forEach(r -> byName.put(r.name(), result.rules().get(r.id())));
+
+        var none = byName.get("ACL-ORPHAN-1");
+        assertEquals(1, none.findings().stream().filter(f -> f.findingClass().equals("unused")).count());
+        var unused = none.findings().stream().filter(f -> f.findingClass().equals("unused")).findFirst().orElseThrow();
+        assertEquals("LOW", unused.severity());
+        assertEquals(PolicyHygiene.ASA_ACL_NOT_REFERENCED, unused.evidence());
+
+        var unknown = byName.get("ACL-DAP-1");
+        assertTrue(unknown.findings().stream().noneMatch(f -> f.findingClass().equals("unused")), "UNKNOWN is never shown as unused");
+        assertEquals("UNKNOWN", unknown.shadowStatus());
+        assertEquals(PolicyHygiene.ASA_ACL_USE_UNKNOWN, unknown.shadowReason());
+        assertTrue(PolicyHygiene.REASONS.contains(unknown.shadowReason()));
+
+        // a parsed use (crypto map) stays no finding and keeps the generic reason; a bound ACL is not in this section
+        var used = byName.get("ACL-CRYPTO-1");
+        assertTrue(used.findings().stream().noneMatch(f -> f.findingClass().equals("unused")));
+        assertEquals("unsupported rulebase", used.shadowReason());
+        assertFalse(byName.containsKey("ACL-OUT"));
+    }
+
     @Test void anIdentityAceBoundsItsMatchForShadowingButNeverCoversOrDecides() {
         var s = asa("""
                 access-list ACL-OUT extended permit tcp user-group LAB\\\\Ops any host 198.51.100.20 eq https

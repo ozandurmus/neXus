@@ -131,6 +131,40 @@ A0-ASA-16, not a vendor citation: A0-ASA-16 stays MEDIUM (existence only) and no
 Revisit if `packet-tracer` corroboration (R2) or identity-firewall evidence shows an ACE matching a packet outside
 its address or port cells.
 
+## 16. Amendment 2026-11-23: ACL_NOT_BOUND (PO answer)
+
+PO decision of 2026-11-23 (ops ref `PO-2026-11-23-ayyas-midday`), recorded here as an edit of this FROZEN contract on that
+PO decision; no earlier entry above is changed. The PO answer, verbatim: "ACL_NOT_BOUND = referenced by no access-group
+and no other parsed feature (NAT, crypto map, VPN filter, class-map, route-map); unparsed features -> UNKNOWN."
+It refines the finding step of design section 8 (step 7, `ACL_NOT_BOUND`) and the consequence column of A0-ASA-2; it is
+a PO decision on when the model may call an ACL unused, not a vendor citation, and A0-ASA-2 keeps its grade.
+
+Implemented rule (`AsaConfigPolicyParser`, `AsaPolicyMapper`, `PolicyHygiene`):
+
+| Case | Mapper use (`asa-acl-use`) | Hygiene |
+|---|---|---|
+| No access-group binding, no recognised use, no configuration line names the ACL | `["none"]` | LOW finding class `unused` ("not enforced as an access rule") |
+| No access-group binding, no recognised use, but a configuration line the parser does not interpret names the ACL | `["unknown", "unparsed_reference"]` | no `unused` finding; assessment reason says the use is UNKNOWN; never shown as unused or as OK |
+| A recognised use exists | the recognised uses (`crypto_map`, `capture`, `vpn_filter`, `split_tunnel`, `class_map`, `route_map`), plus `unparsed_reference` when another unparsed line also names it | no `unused` finding |
+| Bound by a transit `access-group` | not in the "ASA not evaluated" section | unchanged |
+
+Parsed uses (a use the parser reads is a use, so it is never UNKNOWN): `access-group` (transit and `control-plane`),
+crypto map / dynamic-map `match address`, `capture ... access-list`, `vpn-filter value` and `ipv6-vpn-filter value`,
+`split-tunnel-network-list value`, class-map `match access-list`, route-map `match ip address`. NAT is **not** a parsed
+ACL use: the NAT parser reads the modern `nat (real,mapped) source ...` and object NAT forms, which carry no ACL name;
+a legacy policy NAT line (`nat (if) N access-list X`, `static (...) ... access-list X`) is not read, so an ACL named
+there reads UNKNOWN until a NAT contract reads that form.
+
+Unparsed reference: an ACL name that appears as a whole token on a line the parser does not interpret, matched exactly
+against the ACL names defined in the same configuration (case-sensitive; no case folding, prefix or pattern match;
+identity law). Lines scanned: top-level lines outside the structures the parser reads (every command in the
+non-policy command list and any other unrecognised command), indented children of those blocks, interface
+sub-commands other than the ones the parser reads, and `nat` / `access-group` lines the parser could not read. Not
+scanned: `access-list` definition and `remark` lines, parsed `access-group` and NAT lines, object, object-group and
+service-object definitions, and free-text `description` lines. A line on which a recognised use was recorded is not also
+an unparsed reference. Known limit: a token that equals an ACL name by coincidence (for example an interface name
+equal to an ACL name on an `mtu` line) reads UNKNOWN instead of unused, which is the safe direction.
+
 ## Sources
 
 Cisco (all cisco.com, pages updated 2026-07 to 2026-10):

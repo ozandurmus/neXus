@@ -12,8 +12,10 @@ import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class BackgroundSnapshotTest {
 
@@ -51,6 +53,7 @@ class BackgroundSnapshotTest {
     }
 
     @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void aStaleReadReturnsTheOldValueAtOnceAndRefreshesInTheBackground() throws Exception {
         MovableClock clock = new MovableClock();
         AtomicInteger computes = new AtomicInteger();
@@ -67,22 +70,21 @@ class BackgroundSnapshotTest {
                 refreshed.countDown();
             }
             return n;
-        }, Duration.ofSeconds(10), Duration.ofMinutes(5), clock);
+        }, Duration.ofMinutes(1), Duration.ofMinutes(10), clock);
         snapshot.get();
-        clock.now = clock.now.plusSeconds(11);
+        clock.now = clock.now.plusSeconds(61);
         // the refresh is blocked: the reader still gets the old value immediately, and a second stale read starts no second refresh
         assertEquals(1, snapshot.get().value());
         assertEquals(1, snapshot.get().value());
         release.countDown();
         assertTrue(refreshed.await(5, TimeUnit.SECONDS));
-        for (int i = 0; i < 50 && snapshot.get().value() != 2; i++) {
-            Thread.sleep(20);
-        }
+        awaitRefreshIdle(snapshot);
         assertEquals(2, snapshot.get().value());
         assertEquals(2, computes.get());
     }
 
     @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void aFailedRefreshKeepsThePreviousValue() throws Exception {
         MovableClock clock = new MovableClock();
         AtomicInteger computes = new AtomicInteger();
@@ -93,13 +95,21 @@ class BackgroundSnapshotTest {
                 throw new IllegalStateException("read failed");
             }
             return "first";
-        }, Duration.ofSeconds(10), Duration.ofMinutes(5), clock);
+        }, Duration.ofMinutes(1), Duration.ofMinutes(10), clock);
         snapshot.get();
-        clock.now = clock.now.plusSeconds(11);
+        clock.now = clock.now.plusSeconds(61);
         assertEquals("first", snapshot.get().value());
         assertTrue(failed.await(5, TimeUnit.SECONDS));
-        Thread.sleep(50);
+        awaitRefreshIdle(snapshot);
         assertEquals("first", snapshot.get().value());
+    }
+
+    private static void awaitRefreshIdle(BackgroundSnapshot<?> snapshot) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (snapshot.isRefreshing()) {
+            assertTrue(deadline - System.nanoTime() > 0, "timed out waiting for background refresh to finish");
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(5));
+        }
     }
 
     @Test
