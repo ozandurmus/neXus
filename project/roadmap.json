@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0397",
+  "current_build": "NXS-LOCAL-0398",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,8 +150,8 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0397",
-      "title": "Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence",
+      "build": "NXS-LOCAL-0398",
+      "title": "Window-preserving requeue (V263), checkpoint-and-yield hardening, Estate view review fixes and debt splits",
       "status": "automated_validated",
       "started": "2026-11-23"
     },
