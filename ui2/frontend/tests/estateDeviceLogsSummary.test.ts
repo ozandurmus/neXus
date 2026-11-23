@@ -19,7 +19,13 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => ({
 }));
 
 import { EstateDossierLogsBlock, loadDeviceLogsReads } from "../src/estate/EstateDossierLogsBlock";
-import { buildDeviceLogsSummary, standardDeviceLogsHref, type DeviceLogsReads } from "../src/estate/estateDeviceLogsSummary";
+import {
+  buildDeviceLogsSummary,
+  LOG_CRASH_FILES_CAP,
+  LOG_SOURCES_CAP,
+  standardDeviceLogsHref,
+  type DeviceLogsReads,
+} from "../src/estate/estateDeviceLogsSummary";
 
 const NOW = new Date("2026-11-22T12:00:00Z");
 const HOUR = 3_600_000;
@@ -180,5 +186,112 @@ describe("EstateDossierLogsBlock", () => {
     };
     render(createElement(EstateDossierLogsBlock, { deviceId: DEVICE, logs: { state: "ok", value: first }, now: NOW }));
     await waitFor(() => expect(screen.getByText("No logs collected yet")).toBeTruthy());
+  });
+});
+
+describe("device logs dossier: units, per-source rows, crash rows", () => {
+  const sourceRow = (key: string, status: string, chunks: number, lines: number, bytes: number): SystemLogSource => ({
+    ...source(key, chunks, 2 * HOUR), status, stored: { chunks, lines, bytes, newest_chunk_at: iso(2 * HOUR) },
+  });
+  const crashRow = (
+    entry: string,
+    directory: string,
+    state: SystemLogCrashFiles["files"][number]["state"],
+    process: string,
+  ): SystemLogCrashFiles["files"][number] => ({
+    entry_id: entry, device_id: DEVICE, directory, process, size: 2048, mtime_epoch: 0, state, first_seen_at: iso(3 * HOUR), removed_at: null,
+  });
+  const reads = (sources: readonly SystemLogSource[], files: SystemLogCrashFiles["files"] = []): DeviceLogsReads => ({
+    sources: { ok: true, value: sourcesOf(sources) },
+    gaps: { ok: true, value: { truncated: false, gaps: [gap("SEQ_GAP_SUSPECTED", 4 * HOUR)] } },
+    crashFiles: { ok: true, value: { device_id: DEVICE, new_window_days: 7, counts: {}, truncated: false, files, alerts: [] } },
+  });
+
+  it("gives every count its unit word and totals stored chunks, lines and bytes", () => {
+    const s = buildDeviceLogsSummary(FIXTURE);
+    expect(s.sourceCount).toBe(2);
+    expect(s.gapCount).toBe(2);
+    expect(s.crashFileCount).toBe(1);
+    expect(s.lineCount).toBe(50); // (3 + 2) chunks x 10 lines
+    expect(s.byteCount).toBe(500);
+    expect(s.bytesText).toBe("500 B");
+    expect(s.newCrashFileCount).toBe(1);
+  });
+
+  it("totals a 16 KiB source as formatted bytes", () => {
+    const s = buildDeviceLogsSummary(reads([sourceRow("cp_messages", "OK", 5, 300, 16 * 1024)]));
+    expect(s.chunkCount).toBe(5);
+    expect(s.lineCount).toBe(300);
+    expect(s.bytesText).toBe("16 KiB");
+  });
+
+  it("maps source keys through sourceLabel and status to badge states", () => {
+    const s = buildDeviceLogsSummary(
+      reads([
+        sourceRow("cp_messages", "OK", 3, 30, 300),
+        sourceRow("cp_fwd_elg", "BACKLOG", 1, 5, 100),
+        sourceRow("cp_cpd_elg", "TOO_LARGE", 1, 5, 100),
+        sourceRow("cp_mq_mng_elg", "UNKNOWN", 0, 0, 0),
+        sourceRow("cp_spike_log", "STORAGE_REFUSED", 0, 0, 0),
+        sourceRow("cp_sar_daily", "ABSENT", 0, 0, 0),
+      ]),
+    );
+    const labels = s.sourceRows.map((r) => r.label);
+    expect(labels).toEqual(["messages", "fwd.elg", "cpd.elg", "mq_mng.elg", "spike log", "sar (daily)"]);
+    expect(labels.join(" ")).not.toMatch(/cp_messages|cp_fwd_elg/);
+    expect(s.sourceRows.map((r) => r.badgeState)).toEqual(["ok", "watch", "watch", "unk", "unk", "na"]);
+    expect(s.sourceRows[0]).toMatchObject({ statusWord: "OK", chunks: 3, lines: 30, bytesText: "300 B" });
+    expect(s.badge).toBe("watch");
+  });
+
+  it("caps source rows at LOG_SOURCES_CAP and renders the '+N more sources' footer", () => {
+    const many = Array.from({ length: LOG_SOURCES_CAP + 3 }, (_, i) => sourceRow(`cp_messages`, "OK", 1, 1, 1 + i));
+    const s = buildDeviceLogsSummary(reads(many));
+    expect(s.sourceRows).toHaveLength(LOG_SOURCES_CAP);
+    const { container } = render(createElement(EstateDossierLogsBlock, { deviceId: DEVICE, logs: { state: "ok", value: reads(many) }, now: NOW }));
+    expect(container.querySelector('[data-testid="dossier-logs-sources-more"]')?.textContent).toBe("+3 more sources");
+  });
+
+  it("distinguishes NEW crash files from pre-existing ones, with directory and process labels", () => {
+    const s = buildDeviceLogsSummary(
+      reads(
+        [sourceRow("cp_messages", "OK", 1, 1, 1)],
+        [
+          crashRow("c-new", "crash", "NEW", "fwk"),
+          crashRow("c-old", "dump_usermode", "PRESENT_BEFORE_MONITORING", "UNKNOWN"),
+          crashRow("c-rem", "crash", "REMOVED", "cpd"),
+        ],
+      ),
+    );
+    expect(s.crashFileCount).toBe(2);
+    expect(s.newCrashFileCount).toBe(1);
+    expect(s.crashRows).toHaveLength(2);
+    expect(s.crashRows[0]).toMatchObject({ directoryLabel: "Kernel crash", processLabel: "fwk", stateWord: "New", badgeState: "act", sizeText: "2.0 KiB" });
+    expect(s.crashRows[1]).toMatchObject({
+      directoryLabel: "User-mode dump",
+      processLabel: "UNKNOWN process",
+      stateWord: "Present before monitoring",
+      badgeState: "na",
+    });
+  });
+
+  it("caps crash rows at LOG_CRASH_FILES_CAP and renders the '+N more crash files' footer", () => {
+    const files = Array.from({ length: LOG_CRASH_FILES_CAP + 2 }, (_, i) => crashRow(`c-${i}`, "crash", "PRESENT", "fwk"));
+    const value = reads([sourceRow("cp_messages", "OK", 1, 1, 1)], files);
+    expect(buildDeviceLogsSummary(value).crashRows).toHaveLength(LOG_CRASH_FILES_CAP);
+    const { container } = render(createElement(EstateDossierLogsBlock, { deviceId: DEVICE, logs: { state: "ok", value }, now: NOW }));
+    expect(container.querySelector('[data-testid="dossier-logs-crash-more"]')?.textContent).toBe("+2 more crash files");
+  });
+
+  it("renders unit words and the new-file split in the dossier block", () => {
+    const { container } = render(createElement(EstateDossierLogsBlock, { deviceId: DEVICE, logs: { state: "ok", value: FIXTURE }, now: NOW }));
+    const figure = (key: string) => container.querySelector(`[data-logs-figure="${key}"]`)?.textContent ?? "";
+    expect(figure("sources")).toContain("2 sources");
+    expect(figure("sources")).toContain("5 chunks · 50 lines · 500 B stored");
+    expect(figure("gaps")).toContain("2 gaps");
+    expect(figure("crash_files")).toContain("1 file");
+    expect(figure("crash_files")).toContain("1 new file · 1 file present");
+    expect(container.querySelector('[data-testid="dossier-logs-sources-list"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="dossier-logs-crash-list"]')).not.toBeNull();
   });
 });

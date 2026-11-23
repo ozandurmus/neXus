@@ -1,5 +1,10 @@
 import type { SystemLogCrashFiles, SystemLogGap, SystemLogSources } from "../auth/adminApi";
-import { newestIso, parseTimeMs, type BadgeState } from "./estateModel";
+import { formatBytes, sourceLabel, sourceStatusWord } from "../screens/DeviceLogsPanel";
+import { newestIso, type BadgeState } from "./estateModel";
+
+/** Per-source rows and crash-file rows shown in the dossier before "+N more" (standard view lists the rest). */
+export const LOG_SOURCES_CAP = 8;
+export const LOG_CRASH_FILES_CAP = 6;
 
 /**
  * Estate unit dossier, "Logs" block (read-only summary). Pure model: it counts and dates what the three system-log
@@ -23,6 +28,29 @@ export interface GapKindCount {
   readonly count: number;
 }
 
+/** One source row in the dossier: the label is `sourceLabel(source_key)`, never the raw key. */
+export interface DeviceLogSourceSummaryRow {
+  readonly label: string;
+  readonly statusWord: string;
+  readonly badgeState: BadgeState;
+  readonly chunks: number;
+  readonly lines: number;
+  readonly bytesText: string;
+  /** Age of the evidence: the newest stored chunk, else the source's last run. */
+  readonly evidenceAt: string | null;
+}
+
+/** One present crash file in the dossier. */
+export interface DeviceLogCrashSummaryRow {
+  readonly entryId: string;
+  readonly processLabel: string;
+  readonly directoryLabel: string;
+  readonly stateWord: string;
+  readonly badgeState: BadgeState;
+  readonly sizeText: string;
+  readonly firstSeenAt: string | null;
+}
+
 export interface DeviceLogsSummary {
   /** `collected`: sources read and at least one chunk stored; `no_logs_yet`: sources read with zero chunks; `not_collected`: the device is outside collection; `unknown`: a read failed. */
   readonly state: "collected" | "no_logs_yet" | "not_collected" | "unknown";
@@ -32,17 +60,34 @@ export interface DeviceLogsSummary {
   /** Null when the figure's read failed: rendered as UNKNOWN. */
   readonly sourceCount: number | null;
   readonly chunkCount: number | null;
+  /** Total stored lines and bytes across the sources; null when the sources read failed. */
+  readonly lineCount: number | null;
+  readonly byteCount: number | null;
+  readonly bytesText: string | null;
   readonly newestChunkAt: string | null;
   readonly gapCount: number | null;
   readonly gapKinds: readonly GapKindCount[];
   readonly gapsTruncated: boolean;
   readonly crashFileCount: number | null;
+  /** Present crash files in state NEW (new since monitoring started); null when the listing read failed. */
+  readonly newCrashFileCount: number | null;
   readonly crashFilesTruncated: boolean;
+  /** Per-source rows, capped at LOG_SOURCES_CAP. */
+  readonly sourceRows: readonly DeviceLogSourceSummaryRow[];
+  /** Present crash-file rows, capped at LOG_CRASH_FILES_CAP. */
+  readonly crashRows: readonly DeviceLogCrashSummaryRow[];
   /** Evidence time per figure: the newest item it counts, else the last collection job time (the read's own evidence). */
   readonly sourcesEvidenceAt: string | null;
   readonly gapsEvidenceAt: string | null;
   readonly crashEvidenceAt: string | null;
   readonly failedFigures: readonly LogsFigure[];
+}
+
+function sourceBadgeState(status: string): BadgeState {
+  if (status === "OK") return "ok";
+  if (status === "BACKLOG" || status === "TOO_LARGE" || status === "GAP") return "watch";
+  if (status === "UNKNOWN" || status === "STORAGE_REFUSED") return "unk";
+  return "na";
 }
 
 /** Gaps grouped by kind, most frequent first, ties by kind name so the order is stable. */
@@ -69,6 +114,18 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
   const sourceCount = sourcesRead ? sourcesRead.sources.length : null;
   const chunkCount = sourcesRead ? sourcesRead.sources.reduce((n, s) => n + s.stored.chunks, 0) : null;
   const newestChunkAt = sourcesRead ? newestIso(sourcesRead.sources.map((s) => s.stored.newest_chunk_at)) : null;
+  const lineCount = sourcesRead ? sourcesRead.sources.reduce((n, s) => n + (s.stored?.lines ?? 0), 0) : null;
+  const byteCount = sourcesRead ? sourcesRead.sources.reduce((n, s) => n + (s.stored?.bytes ?? 0), 0) : null;
+  const bytesText = byteCount !== null ? formatBytes(byteCount) : null;
+  const sourceRows: DeviceLogSourceSummaryRow[] = (sourcesRead?.sources ?? []).slice(0, LOG_SOURCES_CAP).map((s) => ({
+    label: sourceLabel(s.source_key),
+    statusWord: sourceStatusWord(s.status),
+    badgeState: sourceBadgeState(s.status),
+    chunks: s.stored?.chunks ?? 0,
+    lines: s.stored?.lines ?? 0,
+    bytesText: formatBytes(s.stored?.bytes ?? 0),
+    evidenceAt: s.stored?.newest_chunk_at ?? s.last_run_at ?? null,
+  }));
 
   // Gaps.
   const gaps = gapsRead?.gaps ?? [];
@@ -79,19 +136,35 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
   // Crash files: a removed file is not a present one.
   const presentCrash = crashRead ? crashRead.files.filter((f) => f.state !== "REMOVED") : [];
   const crashFileCount = crashRead ? presentCrash.length : null;
+  const newCrashFileCount = crashRead ? presentCrash.filter((f) => f.state === "NEW").length : null;
   const crashEvidenceAt = crashRead
     ? newestIso([...presentCrash.map((f) => f.first_seen_at), lastJobAt])
     : null;
+  const crashRows: DeviceLogCrashSummaryRow[] = presentCrash.slice(0, LOG_CRASH_FILES_CAP).map((f) => ({
+    entryId: f.entry_id,
+    processLabel: !f.process || f.process === "UNKNOWN" ? "UNKNOWN process" : f.process,
+    directoryLabel: f.directory === "crash" ? "Kernel crash" : f.directory === "dump_usermode" ? "User-mode dump" : f.directory,
+    stateWord: f.state === "NEW" ? "New" : f.state === "PRESENT_BEFORE_MONITORING" ? "Present before monitoring" : "Present",
+    badgeState: f.state === "NEW" ? "act" : "na",
+    sizeText: formatBytes(f.size),
+    firstSeenAt: f.first_seen_at,
+  }));
 
   const base = {
     sourceCount,
     chunkCount,
+    lineCount,
+    byteCount,
+    bytesText,
     newestChunkAt,
     gapCount,
     gapKinds,
     gapsTruncated: gapsRead?.truncated ?? false,
     crashFileCount,
+    newCrashFileCount,
     crashFilesTruncated: crashRead?.truncated ?? false,
+    sourceRows,
+    crashRows,
     sourcesEvidenceAt: newestChunkAt ?? lastJobAt,
     gapsEvidenceAt,
     crashEvidenceAt,
@@ -129,7 +202,9 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
     };
   }
 
-  const attention = (gapCount ?? 0) > 0 || (crashFileCount ?? 0) > 0 || failedFigures.length > 0;
+  const attentionStatus = (sourcesRead?.sources ?? []).some((src) =>
+    src.status === "BACKLOG" || src.status === "TOO_LARGE" || src.status === "GAP" || src.status === "STORAGE_REFUSED");
+  const attention = attentionStatus || (gapCount ?? 0) > 0 || (crashFileCount ?? 0) > 0 || failedFigures.length > 0;
   return {
     ...base,
     state: failedFigures.length > 0 ? "unknown" : "collected",

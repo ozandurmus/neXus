@@ -1,6 +1,7 @@
 import type { EstateAsOfFigure, EstateAsOfUnit, EstateAsOfView } from "../auth/adminApi";
 import type { BadgeState } from "./estateModel";
 import { BACKUP_STALE_DAYS } from "../screens/overview/attentionRules";
+import { plural } from "../shell/plural";
 
 /** Lenses the as-of endpoint answers exactly (stored evidence `<= T`). Exposure, install and age are not answered. */
 export const REWIND_LENSES = ["failover", "backups", "compliance"] as const;
@@ -13,6 +14,27 @@ export const REWIND_LENS_LABEL: Readonly<Record<RewindLens, string>> = {
 };
 
 export const REWIND_WINDOW_DAYS = 30;
+
+/** Rows the "Every transition" table prints before "+N more transitions". */
+export const REWIND_TRANSITION_CAP = 25;
+
+/** Header sentence for the transition table: what the count counts, with units. */
+export function transitionSummaryLine(count: number, lens: RewindLens): string {
+  return `${plural(count, "transition", "transitions")} on ${REWIND_LENS_LABEL[lens]}`;
+}
+
+/** Warnings of Moment A, plus Moment B's when compared. Trimmed, non-empty and deduplicated, in first-seen order. */
+export function mergeRewindWarnings(warningsA: readonly string[] | undefined, warningsB: readonly string[] | undefined, compare: boolean): string[] {
+  const out: string[] = [];
+  const sources = compare ? [warningsA, warningsB] : [warningsA];
+  for (const list of sources) {
+    for (const w of list ?? []) {
+      const t = w.trim();
+      if (t && !out.includes(t)) out.push(t);
+    }
+  }
+  return out;
+}
 
 export interface RewindAnswer {
   readonly state: BadgeState;

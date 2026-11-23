@@ -4,7 +4,8 @@ import Typography from "@mui/material/Typography";
 import { getSystemLogCrashFiles, getSystemLogGaps, getSystemLogSources } from "../auth/adminApi";
 import { gapKindLabel } from "../screens/DeviceLogsPanel";
 import type { SourceRead } from "../screens/overview/attentionRules";
-import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { plural } from "../shell/plural";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import {
   buildDeviceLogsSummary,
   standardDeviceLogsHref,
@@ -103,7 +104,7 @@ export function EstateDossierLogsBlock({
 
   const sourcesDetail = s.sourceCount === null ? null : (
     <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-      {s.chunkCount} {s.chunkCount === 1 ? "chunk" : "chunks"} stored
+      {`${plural(s.chunkCount ?? 0, "chunk", "chunks")} · ${plural(s.lineCount ?? 0, "line", "lines")} · ${s.bytesText ?? "0 B"} stored`}
     </Typography>
   );
   const gapsDetail = s.gapCount === null ? null : (
@@ -116,7 +117,10 @@ export function EstateDossierLogsBlock({
   );
   const crashDetail = s.crashFileCount === null ? null : (
     <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-      present on the device{s.crashFilesTruncated ? " · list truncated" : ""}
+      {s.crashFileCount > 0
+        ? `${plural(s.newCrashFileCount ?? 0, "new file", "new files")} · ${plural(s.crashFileCount, "file", "files")} present`
+        : "present on the device"}
+      {s.crashFilesTruncated ? " · list truncated" : ""}
     </Typography>
   );
 
@@ -129,12 +133,52 @@ export function EstateDossierLogsBlock({
           <Typography sx={{ fontSize: "14px", fontWeight: 650 }}>{s.headline}</Typography>
         </Box>
         <Box sx={{ px: "18px", pb: "8px" }}>
-          {figureRow("sources", "Sources collected", s.sourceCount === null ? null : String(s.sourceCount), sourcesDetail,
-            s.sourcesEvidenceAt, "newest chunk")}
-          {figureRow("gaps", "Gaps", s.gapCount === null ? null : String(s.gapCount), gapsDetail, s.gapsEvidenceAt, "gap record")}
-          {figureRow("crash_files", "Crash files", s.crashFileCount === null ? null : String(s.crashFileCount), crashDetail,
-            s.crashEvidenceAt, "crash listing")}
+          {figureRow("sources", "Sources collected", s.sourceCount === null ? null : plural(s.sourceCount, "source", "sources"),
+            sourcesDetail, s.sourcesEvidenceAt, "newest chunk")}
+          {figureRow("gaps", "Gaps", s.gapCount === null ? null : plural(s.gapCount, "gap", "gaps"), gapsDetail,
+            s.gapsEvidenceAt, "gap record")}
+          {figureRow("crash_files", "Crash files", s.crashFileCount === null ? null : plural(s.crashFileCount, "file", "files"),
+            crashDetail, s.crashEvidenceAt, "crash listing")}
         </Box>
+        {s.sourceRows.length > 0 ? (
+          <Box data-testid="dossier-logs-sources-list" sx={{ px: "18px", pb: "8px" }}>
+            {s.sourceRows.map((row, i) => (
+              <Box
+                key={`${row.label}-${i}`}
+                sx={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap", py: "6px", borderTop: `1px solid ${ev.line}` }}
+              >
+                <Typography sx={{ fontSize: "12.5px", fontWeight: 600, minWidth: "130px" }}>{row.label}</Typography>
+                <StateBadge state={row.badgeState} word={row.statusWord} dense />
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                  {`${plural(row.chunks, "chunk", "chunks")} · ${plural(row.lines, "line", "lines")} · ${row.bytesText}`}
+                </Typography>
+                <Box sx={{ ml: "auto" }}>
+                  <EvidenceStamp at={row.evidenceAt} source="chunk" now={now} missingLabel="no chunk yet" />
+                </Box>
+              </Box>
+            ))}
+            <MoreFooter shown={s.sourceRows.length} total={s.sourceCount ?? 0} noun="sources" testId="dossier-logs-sources-more" />
+          </Box>
+        ) : null}
+        {s.crashRows.length > 0 ? (
+          <Box data-testid="dossier-logs-crash-list" sx={{ px: "18px", pb: "8px" }}>
+            {s.crashRows.map((row) => (
+              <Box
+                key={row.entryId}
+                sx={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap", py: "6px", borderTop: `1px solid ${ev.line}` }}
+              >
+                <Typography sx={{ fontSize: "12.5px", fontWeight: 600, minWidth: "130px" }}>{row.directoryLabel}</Typography>
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>{row.processLabel}</Typography>
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink2, fontFamily: ESTATE_MONO }}>{row.sizeText}</Typography>
+                <StateBadge state={row.badgeState} word={row.stateWord} dense />
+                <Box sx={{ ml: "auto" }}>
+                  <EvidenceStamp at={row.firstSeenAt} source="first seen" now={now} />
+                </Box>
+              </Box>
+            ))}
+            <MoreFooter shown={s.crashRows.length} total={s.crashFileCount ?? 0} noun="crash files" testId="dossier-logs-crash-more" />
+          </Box>
+        ) : null}
         <Box sx={{ px: "18px", pb: "14px", pt: "4px" }}>{link}</Box>
       </Box>
     </EstateCard>

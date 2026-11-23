@@ -1,7 +1,9 @@
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import Typography from "@mui/material/Typography";
-import { StateBadge } from "./EstatePrimitives";
+import { failoverExecutionDisabled, failoverVendorLabel } from "../screens/HaReadinessList";
+import { readinessReasonLabel } from "../shell/presenters";
+import { EvidenceStamp, StateBadge } from "./EstatePrimitives";
 import type { FailoverBoardUnit, FailoverMatrixCell } from "./estateSlice2Model";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 
@@ -15,11 +17,17 @@ export interface FailoverCellTarget {
   readonly checkTitle: string;
   readonly cell: FailoverMatrixCell;
   readonly standardHref: string;
+  readonly unit?: {
+    readonly vendor?: string;
+    readonly failoverRefusal?: string | null;
+  };
+  readonly vendor?: string;
+  readonly failoverRefusal?: string | null;
 }
 
 /**
  * Read-only detail for one pre-check matrix cell. No action buttons: the only control is the
- * standard-view link. The board carries no evaluation time per cell, so the drawer says so.
+ * standard-view link.
  */
 export function EstateFailoverCellDrawer({
   target,
@@ -30,6 +38,9 @@ export function EstateFailoverCellDrawer({
 }) {
   const open = target !== null;
   const headingText = target ? `${target.checkTitle} · ${target.unitLabel}` : "";
+  const refusal = target?.unit?.failoverRefusal ?? target?.failoverRefusal ?? null;
+  const vendor = target?.unit?.vendor ?? target?.vendor;
+  const execDisabled = failoverExecutionDisabled(vendor);
   return (
     <Drawer
       anchor="right"
@@ -60,6 +71,24 @@ export function EstateFailoverCellDrawer({
             <Typography sx={{ fontSize: "12px", color: ev.ink3 }}>{PER_UNIT_PRECHECK_NOTE}</Typography>
           ) : null}
 
+          {refusal || execDisabled ? (
+            <Box data-testid="failover-cell-drawer-gate">
+              <Typography sx={{ fontSize: "11px", letterSpacing: "0.06em", textTransform: "uppercase", color: ev.ink3, fontWeight: 650 }}>
+                Failover gate
+              </Typography>
+              {refusal ? (
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                  {readinessReasonLabel(refusal)}
+                </Typography>
+              ) : null}
+              {execDisabled ? (
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                  {`Failover execution not enabled for ${failoverVendorLabel(vendor)}`}
+                </Typography>
+              ) : null}
+            </Box>
+          ) : null}
+
           <Box>
             <Typography sx={{ fontSize: "11px", letterSpacing: "0.06em", textTransform: "uppercase", color: ev.ink3, fontWeight: 650 }}>
               Summary
@@ -73,7 +102,11 @@ export function EstateFailoverCellDrawer({
             <Typography sx={{ fontSize: "11px", letterSpacing: "0.06em", textTransform: "uppercase", color: ev.ink3, fontWeight: 650 }}>
               Evaluated
             </Typography>
-            <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>no evaluation time recorded</Typography>
+            <EvidenceStamp
+              at={target.cell.observedAt ?? null}
+              source="evaluated"
+              missingLabel="no evaluation time recorded"
+            />
           </Box>
 
           <Box

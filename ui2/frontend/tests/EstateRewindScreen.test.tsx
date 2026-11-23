@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EstateRewindScreen } from "../src/estate/EstateRewindScreen";
 import { resetSharedApiCache } from "../src/auth/adminApi";
 import { dossierHref } from "../src/estate/estateRouting";
+import { REWIND_TRANSITION_CAP } from "../src/estate/estateRewindModel";
 
 function unit(verdict: string, at: string | null) {
   return {
@@ -133,5 +134,83 @@ describe("EstateRewindScreen drill-down links", () => {
     expect(rowHref.startsWith(`${expected}&rewind_compare=`)).toBe(true);
     rowLink.focus();
     expect(rowLink).toHaveFocus();
+  });
+});
+
+describe("EstateRewindScreen UNKNOWN, warnings and Moment B", () => {
+  beforeEach(() => resetSharedApiCache());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("marks a failed historical read UNKNOWN with a stamp", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("network down");
+    }));
+    render(<EstateRewindScreen initialAt={new Date(Date.now() - 10 * 86_400_000).toISOString()} initialCompare={null} />);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Rewind read failed");
+    expect(within(alert).getAllByText("UNKNOWN").length).toBeGreaterThan(0);
+  });
+
+  it("shows snapshot warnings with a Warning badge", async () => {
+    const at = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const requested = new URL(String(input), "http://x").searchParams.get("at") ?? "";
+      const body = { as_of: requested, generated_at: requested, warnings: [{ code: "W", message: "Synthetic snapshot warning" }], units: [] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+    render(<EstateRewindScreen initialAt={at} initialCompare={null} />);
+    const text = await screen.findByText("Synthetic snapshot warning");
+    expect(text.parentElement).toHaveTextContent("Warning");
+  });
+
+  it("jumps Moment B to a stored snapshot and back to live", async () => {
+    const evidence = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const requested = new URL(String(input), "http://x").searchParams.get("at") ?? "";
+      calls.push(requested);
+      const body = { as_of: requested, generated_at: requested, warnings: [], units: [unit("NOT_READY", evidence)] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+    render(<EstateRewindScreen initialAt={new Date(Date.now() - 10 * 86_400_000).toISOString()} initialCompare={null} />);
+    await waitFor(() => expect(screen.getByTestId("rewind-counts")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Compare two moments" }));
+    const strip = await screen.findByTestId("rewind-jump-b-strip");
+    const liveBtn = within(strip).getByRole("button", { name: "Live (now)" });
+    expect(liveBtn).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(within(strip).getByRole("button", { name: "7 days ago" }));
+    await waitFor(() => expect(screen.getByText("pinned")).toBeInTheDocument());
+    expect(calls).toContain(evidence);
+    expect(within(strip).getByRole("button", { name: "Live (now)" })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(within(strip).getByRole("button", { name: "Live (now)" }));
+    await waitFor(() => expect(screen.getByText("live")).toBeInTheDocument());
+    expect(within(strip).getByRole("button", { name: "Live (now)" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("caps the transition table at 25 rows with a +N more footer and prints then/now detail", async () => {
+    const evidence = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const count = REWIND_TRANSITION_CAP + 2;
+    const units = (old: boolean) => Array.from({ length: count }, (_, i) => ({
+      device_id: `dev-${i}`,
+      hostname: `FW-TANGO-${String(i).padStart(2, "0")}`,
+      failover: old ? { verdict: "READY", evidence_at: evidence, reason: null } : { verdict: "NOT_READY", evidence_at: evidence, reason: "SYNTHETIC_REASON" },
+      backup: { verdict: "OK", evidence_at: evidence },
+      compliance: { state: "EVIDENCED", pass_count: 2, fail_count: 0, critical_fail_count: 0, evidence_at: evidence },
+    }));
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const requested = new URL(String(input), "http://x").searchParams.get("at") ?? "";
+      const old = Date.parse(requested) < Date.now() - 86_400_000;
+      return new Response(JSON.stringify({ as_of: requested, generated_at: requested, warnings: [], units: units(old) }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+    render(<EstateRewindScreen initialAt={new Date(Date.now() - 10 * 86_400_000).toISOString()} initialCompare={null} />);
+    await waitFor(() => expect(screen.getByTestId("rewind-counts")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Compare two moments" }));
+    const table = await screen.findByTestId("rewind-transitions");
+    expect(screen.getByTestId("rewind-transitions-count")).toHaveTextContent(`${count} transitions on Failover`);
+    expect(within(table).getAllByRole("link")).toHaveLength(REWIND_TRANSITION_CAP);
+    expect(screen.getByTestId("rewind-transitions-more")).toHaveTextContent("+2 more transitions");
+    expect(within(table).getAllByText("synthetic reason").length).toBeGreaterThan(0);
   });
 });
