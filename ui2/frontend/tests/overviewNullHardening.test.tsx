@@ -242,3 +242,35 @@ describe("Overview screen: a failed or null section reads UNKNOWN", () => {
     expect(container.textContent).toContain("completed 24 h 3");
   });
 });
+
+describe("failed jobs total absent or null: UNKNOWN in the list and on the card, never 'no failed jobs'", () => {
+  const cases: [string, Record<string, unknown>][] = [
+    ["absent", { rows: [], reasons: [] }],
+    ["null", { total: null, rows: [], reasons: [] }],
+  ];
+  it.each(cases)("the attention list shows an unknown row naming failed jobs (total %s)", (_label, failed) => {
+    const o = overview([dev(1)], { exceptions: { failed_jobs: failed, config_changes: { total: 0, rows: [] }, cluster_diff: { total: 0, unknown: 0, all_refs: [], rows: [] } } });
+    expect(unreadableOverviewParts(o)).toEqual(["failed jobs"]);
+    const r = buildAttention(inputs(o), undefined);
+    expect(keys(r.rows)).toContain("unknown-overview");
+    expect(keys(r.rows)).not.toContain("failed-jobs");
+    expect(find(r.rows, "unknown-overview").what).toBe("The overview's failed jobs could not be read");
+    expect(JSON.stringify(r.rows)).not.toMatch(/No failed jobs/);
+  });
+
+  it.each(cases)("the FailedJobsCard shows UNKNOWN wording (total %s)", async (_label, failed) => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      const payload = url.includes("/compliance/controls") ? { total_controls: 0, controls: [] }
+        : url === "/devices" ? { devices: [] }
+        : url.includes("/cp-failover/summary") ? []
+        : url.startsWith("/api/v2/lifecycle") ? { as_of: NOW.toISOString(), devices: [], summary: {} }
+        : url.startsWith("/api/v2/changes/feed") ? { events: [] }
+        : overview([dev(1)], { exceptions: { failed_jobs: failed, config_changes: { total: 0, rows: [] }, cluster_diff: { total: 0, unknown: 0, all_refs: [], rows: [] } } });
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+    }));
+    render(<DisplayModeProvider search="?wall=1"><OverviewScreen /></DisplayModeProvider>);
+    expect(await screen.findByText("UNKNOWN — the failed jobs of the last 24 h could not be read.")).toBeInTheDocument();
+    expect(screen.queryByText("No failed jobs in the last 24 h.")).toBeNull();
+  });
+});

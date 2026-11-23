@@ -685,7 +685,7 @@ export function OverviewScreen() {
   );
 
   const failedCard = (
-    <FailedJobsCard total={ex.failed_jobs ? ex.failed_jobs.total : null} reasons={ex.failed_jobs?.reasons ?? []} rows={ex.failed_jobs?.rows ?? []} latest={!wall}
+    <FailedJobsCard total={typeof ex.failed_jobs?.total === "number" ? ex.failed_jobs.total : null} reasons={ex.failed_jobs?.reasons ?? []} rows={ex.failed_jobs?.rows ?? []} latest={!wall}
       allHref={q({ screen: "operations", tab: "jobs", state: "FAILED", since_hours: "24" })} />
   );
 
