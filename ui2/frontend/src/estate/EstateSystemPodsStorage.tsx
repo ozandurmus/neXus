@@ -1,8 +1,8 @@
 import Box from "@mui/material/Box";
 import type { PodStatusView, PodsView, StorageView } from "../auth/adminApi";
 import { formatBytes } from "../screens/SystemStatusPanel";
+import { plural } from "../shell/plural";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
-import { systemHref } from "./estateRouting";
 import { podStateWord, POD_STATE_WORDS, type TimedRead } from "./estateSystemModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
 import type { BadgeState } from "./estateModel";
@@ -11,7 +11,7 @@ import type { BadgeState } from "./estateModel";
 export const PODS_ROW_CAP = 50;
 
 /** The standard System view; `standard=1` keeps it out of the Estate shell. */
-export const PODS_STORAGE_STANDARD_HREF = `${systemHref()}&standard=1`;
+export const PODS_STORAGE_STANDARD_HREF = "?screen=administration&tab=platform-status&standard=1";
 
 const SOURCE = "pods and storage";
 const RESTRICTED_SENTENCE = "Your role cannot read pods and storage.";
@@ -103,13 +103,21 @@ export function EstateSystemPodsStorage({ pods, storage, now }: EstateSystemPods
   const bothRestricted = podsRead.state === "restricted" && storageRead.state === "restricted";
   const podsOk = podsRead.state === "ok" ? podsRead.value : null;
   const storageOk = storageRead.state === "ok" ? storageRead.value : null;
+  const podsAvailable = Boolean(podsOk && podsOk.available && Array.isArray(podsOk.pods));
 
-  const badge: BadgeState = podsOk && storageOk && podsOk.available ? "na" : "unk";
-  const word = bothRestricted ? "Restricted" : badge === "na" ? "Counted" : "UNKNOWN";
-
-  const podList = podsOk && podsOk.available ? podsOk.pods : [];
+  const podList = podsAvailable && podsOk ? podsOk.pods : [];
   const shown = podList.slice(0, PODS_ROW_CAP);
   const vol = storageOk?.artefact_volume;
+  const storageFiguresKnown = Boolean(
+    storageOk
+      && figureOrUnknown(vol?.used_bytes) !== "UNKNOWN"
+      && figureOrUnknown(vol?.total_bytes) !== "UNKNOWN"
+      && figureOrUnknown(storageOk.database_bytes) !== "UNKNOWN",
+  );
+  const podsStatesKnown = podsAvailable && podList.every((p) => podStateWord(p?.state) !== "UNKNOWN");
+
+  const badge: BadgeState = podsStatesKnown && storageFiguresKnown ? "na" : "unk";
+  const word = bothRestricted ? "Restricted" : badge === "na" ? "Counted" : "UNKNOWN";
 
   return (
     <EstateCard sx={{ p: "16px 18px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
@@ -131,16 +139,18 @@ export function EstateSystemPodsStorage({ pods, storage, now }: EstateSystemPods
             <Box role="alert" sx={{ fontSize: 13, color: ev.ink2 }}>
               Pods are UNKNOWN: {podsOk?.reason ?? "the status service did not report them"}.
             </Box>
+          ) : !podsAvailable ? (
+            <Box role="alert" sx={{ fontSize: 13, color: ev.ink2 }}>Pods could not be read: UNKNOWN. This is not a clean state.</Box>
           ) : (
             <Box component="dl" sx={{ m: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", rowGap: "6px", columnGap: "12px" }}>
-              <Line label="Pods listed" value={String(podList.length)} />
+              <Line label="Pods listed" value={plural(podList.length, "pod", "pods")} />
               {countPodStates(podList).map(([w, n]) => (
-                <Line key={w} label={`Pods in state ${w}`} value={String(n)} />
+                <Line key={w} label={`Pods in state ${w}`} value={plural(n, "pod", "pods")} />
               ))}
             </Box>
           )}
 
-          {podsOk && podsOk.available && podList.length > 0 ? (
+          {podsAvailable && podList.length > 0 ? (
             <Box component="ul" aria-label="Pods" sx={{ m: 0, p: 0 }}>
               {shown.map((p, i) => <PodRow key={`${p.name}:${i}`} pod={p} />)}
               {podList.length > PODS_ROW_CAP ? (

@@ -387,7 +387,8 @@
     "static_route_add_delete": "java_feature",
     "asa_failover_execution": "java_feature",
     "fortigate_route_changes_via_fortimanager": "java_feature",
-    "pan_change_actor_submitted_join_gap": "java_debt"
+    "pan_change_actor_submitted_join_gap": "java_debt",
+    "backup_claim_time_authorization_recheck": "java_debt"
   },
   "converted_lessons": [
     {

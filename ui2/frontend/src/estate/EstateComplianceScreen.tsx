@@ -32,6 +32,8 @@ import { buildComplianceLensModel } from "./estateSlice2Model";
 import { ESTATE_MONO, ESTATE_SANS, ESTATE_UNKNOWN_HATCH, ev } from "./estateTokens";
 import { useEstateData } from "./useEstateData";
 
+export const FLEET_OVERVIEW_STAMP_SOURCE = "overview read";
+
 export function EstateComplianceScreen({
   initialDeviceId = null,
   initialFamily = null,
@@ -262,7 +264,7 @@ export function EstateComplianceScreen({
             </Typography>
             <EvidenceStamp
               at={complianceAt}
-              source="compliance"
+              source={FLEET_OVERVIEW_STAMP_SOURCE}
               now={now}
               missingLabel="UNKNOWN (not recorded)"
             />
@@ -467,7 +469,7 @@ export function EstateComplianceScreen({
               <Box sx={{ ml: "auto" }}>
                 <EvidenceStamp
                   at={complianceAt}
-                  source="compliance read"
+                  source={FLEET_OVERVIEW_STAMP_SOURCE}
                   now={now}
                   missingLabel="UNKNOWN (not recorded)"
                 />
@@ -586,7 +588,12 @@ export function EstateComplianceScreen({
                   <Typography sx={{ fontSize: "22px", fontWeight: 700, fontFamily: ESTATE_MONO, color: ev.ok }}>
                     {sel.pass.toLocaleString("en-US")}
                   </Typography>
-                  <EvidenceStamp at={complianceAt} now={now} missingLabel="UNKNOWN" />
+                  <EvidenceStamp
+                    at={complianceAt}
+                    source={FLEET_OVERVIEW_STAMP_SOURCE}
+                    now={now}
+                    missingLabel="UNKNOWN"
+                  />
                 </Box>
                 <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>checks pass with evidence</Typography>
               </Box>
@@ -596,7 +603,12 @@ export function EstateComplianceScreen({
                   <Typography sx={{ fontSize: "22px", fontWeight: 700, fontFamily: ESTATE_MONO, color: ev.act }}>
                     {sel.fail.toLocaleString("en-US")}
                   </Typography>
-                  <EvidenceStamp at={complianceAt} now={now} missingLabel="UNKNOWN" />
+                  <EvidenceStamp
+                    at={complianceAt}
+                    source={FLEET_OVERVIEW_STAMP_SOURCE}
+                    now={now}
+                    missingLabel="UNKNOWN"
+                  />
                 </Box>
                 <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>
                   checks fail · <b style={{ color: ev.act }}>{sel.criticalChecksFail.toLocaleString("en-US")}</b> on critical controls
@@ -637,7 +649,12 @@ export function EstateComplianceScreen({
                   failing share of evidenced checks; bar shows pass · fail · no evidence (click family to filter)
                 </Typography>
                 <Box sx={{ ml: "auto" }}>
-                  <EvidenceStamp at={complianceAt} now={now} missingLabel="UNKNOWN" />
+                  <EvidenceStamp
+                    at={complianceAt}
+                    source={FLEET_OVERVIEW_STAMP_SOURCE}
+                    now={now}
+                    missingLabel="UNKNOWN"
+                  />
                 </Box>
               </Box>
 
@@ -778,7 +795,12 @@ export function EstateComplianceScreen({
                   <Typography component="h2" sx={{ fontSize: "16px", fontWeight: 650 }}>
                     Why {sel.unavailable.toLocaleString("en-US")} checks have no evidence
                   </Typography>
-                  <EvidenceStamp at={complianceAt} now={now} missingLabel="UNKNOWN" />
+                  <EvidenceStamp
+                    at={complianceAt}
+                    source={FLEET_OVERVIEW_STAMP_SOURCE}
+                    now={now}
+                    missingLabel="UNKNOWN"
+                  />
                 </Box>
                 <Box sx={{ px: "18px", pb: "14px" }}>
                   {lensModel.dataGapReasons.length === 0 ? (
@@ -821,9 +843,9 @@ export function EstateComplianceScreen({
                   </Typography>
                   <EvidenceStamp
                     at={complianceAt}
-                    source="scope"
+                    source={FLEET_OVERVIEW_STAMP_SOURCE}
                     now={now}
-                    missingLabel="not recorded"
+                    missingLabel="UNKNOWN (not recorded)"
                   />
                 </Box>
                 <Box sx={{ px: "18px", pb: "16px", fontSize: "13px", color: ev.ink2 }}>
@@ -867,12 +889,13 @@ export function EstateComplianceScreen({
                   ) : null}
 
                   <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", mt: "6px" }}>
-                    <span>Evaluation timestamp:</span>
-                    {complianceAt ? (
-                      <EvidenceStamp at={complianceAt} now={now} />
-                    ) : (
-                      <StateBadge state="unk" word="UNKNOWN (not recorded)" dense />
-                    )}
+                    <span>Fleet overview read:</span>
+                    <EvidenceStamp
+                      at={complianceAt}
+                      source={FLEET_OVERVIEW_STAMP_SOURCE}
+                      now={now}
+                      missingLabel="UNKNOWN (not recorded)"
+                    />
                   </Box>
                 </Box>
               </EstateCard>
@@ -889,7 +912,12 @@ export function EstateComplianceScreen({
                 controls ranked by how many firewalls one remediation would clear; UNKNOWN controls stay visible
               </Typography>
               <Box sx={{ ml: "auto" }}>
-                <EvidenceStamp at={complianceAt} source="controls" now={now} missingLabel="UNKNOWN" />
+                <EvidenceStamp
+                  at={complianceAt}
+                  source={FLEET_OVERVIEW_STAMP_SOURCE}
+                  now={now}
+                  missingLabel="UNKNOWN"
+                />
               </Box>
             </Box>
 
@@ -971,7 +999,12 @@ export function EstateComplianceScreen({
                         </Box>
 
                         <Box sx={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                          <EvidenceStamp at={complianceAt} now={now} missingLabel="UNKNOWN" />
+                          <EvidenceStamp
+                            at={complianceAt}
+                            source={FLEET_OVERVIEW_STAMP_SOURCE}
+                            now={now}
+                            missingLabel="UNKNOWN"
+                          />
                           <Box
                             component="button"
                             type="button"

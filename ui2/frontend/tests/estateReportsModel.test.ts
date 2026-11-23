@@ -112,8 +112,9 @@ describe("estate reports list model", () => {
 import {
   REPORT_SECTION_CAP,
   runDocument,
+  newestEvidenceAt as newestEvidenceAtRun,
+  runStateBadge,
   runStateLabel,
-  runStateTone,
   sectionCountLabel,
 } from "../src/estate/estateReportsModel";
 
@@ -128,9 +129,21 @@ describe("estate report run detail helpers", () => {
     const unknown = "WEIRD" as ReportRunView["state"];
     expect(runStateLabel(unknown)).toBe("UNKNOWN");
     expect(runStateLabel(null)).toBe("UNKNOWN");
-    expect(runStateTone(unknown)).not.toBe("ok");
-    expect(runStateTone(undefined)).not.toBe("ok");
-    expect(runStateTone("SUCCEEDED")).toBe("ok");
+    expect(runStateBadge(unknown)).toBe("unk");
+    expect(runStateBadge(undefined)).toBe("unk");
+    expect(runStateBadge(null)).toBe("unk");
+    expect(runStateBadge("SUCCEEDED")).toBe("ok");
+    expect(runStateBadge("FAILED")).toBe("act");
+    expect(runStateBadge("QUEUED")).toBe("watch");
+    expect(runStateBadge("RUNNING")).toBe("watch");
+  });
+
+  it("reads evidence age safely when data_as_of is null, omitted or has no planes array", () => {
+    const base = run("r4", 1, "SUCCEEDED", 1);
+    expect(newestEvidenceAtRun({ ...base, data_as_of: null } as unknown as ReportRunView)).toBeNull();
+    expect(newestEvidenceAtRun({ ...base, data_as_of: undefined } as unknown as ReportRunView)).toBeNull();
+    expect(newestEvidenceAtRun({ ...base, data_as_of: {} } as unknown as ReportRunView)).toBeNull();
+    expect(newestEvidenceAtRun({ ...base, data_as_of: { planes: "nope" } } as unknown as ReportRunView)).toBeNull();
   });
 
   it("treats a malformed document as unavailable, not as an empty OK document", () => {

@@ -1,8 +1,10 @@
 import {
+  addressCount,
   matrixOf,
   referenceStatusWord,
   severityWord,
   statementWord,
+  zoneRoleLabel,
   type MatrixCellView,
   type ZoneVersionDetail,
 } from "../screens/zonematrix/zoneMatrixApi";
@@ -37,6 +39,15 @@ export interface ZoneGridRow {
   readonly cells: readonly ZoneGridCell[];
 }
 
+export interface ZoneSummaryRow {
+  readonly zoneId: string;
+  readonly name: string;
+  readonly roleWord: string;
+  readonly blockCount: string;
+  readonly ipv4Addresses: string;
+  readonly ipv6Addresses: string;
+}
+
 export interface ZoneMatrixGridModel {
   /** `Version 3 · 2 d ago`, or `Draft · UNKNOWN` when the version carries no time. The age is the version's, not "now". */
   readonly versionLabel: string;
@@ -47,6 +58,11 @@ export interface ZoneMatrixGridModel {
   readonly rows: readonly ZoneGridRow[];
   readonly shownRows: number;
   readonly totalRows: number;
+  readonly zoneSummaries: readonly ZoneSummaryRow[];
+  readonly shownZones: number;
+  readonly totalZones: number;
+  readonly unassignedLine: string;
+  readonly redundantBlocksCount: number | null;
 }
 
 /** DENY_ALL is the restrictive case (ok), ALLOW_ANY the loosest (act), ALLOW_LISTED in between (watch). */
@@ -78,7 +94,8 @@ export function zoneGridCellOf(cell: MatrixCellView | undefined, key: string): Z
 
 export function zoneMatrixGridModel(version: ZoneVersionDetail, now: Date = new Date()): ZoneMatrixGridModel {
   const matrix = matrixOf(version);
-  const columns: ZoneGridColumn[] = version.zones.map((z) => ({ zoneId: z.zone_id, name: z.name }));
+  const zones = Array.isArray(version.zones) ? version.zones : [];
+  const columns: ZoneGridColumn[] = zones.map((z) => ({ zoneId: z.zone_id, name: z.name }));
   const byPair = new Map<string, MatrixCellView>();
   for (const cell of matrix.cells) byPair.set(pairKey(cell.source, cell.destination), cell);
 
@@ -90,6 +107,38 @@ export function zoneMatrixGridModel(version: ZoneVersionDetail, now: Date = new 
       return zoneGridCellOf(byPair.get(key), key);
     }),
   }));
+
+  const zoneSummaries: ZoneSummaryRow[] = zones.slice(0, ZONE_MATRIX_ROW_CAP).map((z) => {
+    const rawRole = z.role ? zoneRoleLabel(z.role).trim() : "";
+    const roleWord = rawRole.length > 0 ? rawRole : "UNKNOWN";
+    const blockCount =
+      typeof z.block_count === "number" && Number.isFinite(z.block_count) && z.block_count >= 0
+        ? `${z.block_count} ${z.block_count === 1 ? "block" : "blocks"}`
+        : "UNKNOWN";
+    const ipv4Addresses =
+      z.effective_addresses?.IPV4 !== undefined ? addressCount(z.effective_addresses.IPV4) : "UNKNOWN";
+    const ipv6Addresses =
+      z.effective_addresses?.IPV6 !== undefined ? addressCount(z.effective_addresses.IPV6) : "UNKNOWN";
+    return {
+      zoneId: z.zone_id,
+      name: z.name,
+      roleWord,
+      blockCount,
+      ipv4Addresses,
+      ipv6Addresses,
+    };
+  });
+
+  const unassignedIpv4 = version.unassigned_addresses ? addressCount(version.unassigned_addresses.IPV4) : "UNKNOWN";
+  const unassignedIpv6 = version.unassigned_addresses ? addressCount(version.unassigned_addresses.IPV6) : "UNKNOWN";
+  const unassignedLine = `Unassigned space: IPv4 ${unassignedIpv4} · IPv6 ${unassignedIpv6}`;
+
+  const redundantBlocksCount =
+    typeof version.redundant_blocks === "number" && Number.isFinite(version.redundant_blocks)
+      ? version.redundant_blocks
+      : Array.isArray(version.redundant_blocks)
+        ? version.redundant_blocks.length
+        : null;
 
   const evidenceAt = version.published_at ?? version.created_at ?? null;
   const base = version.number === null ? "Draft" : `Version ${version.number}`;
@@ -103,5 +152,10 @@ export function zoneMatrixGridModel(version: ZoneVersionDetail, now: Date = new 
     rows: allRows.slice(0, ZONE_MATRIX_ROW_CAP),
     shownRows: Math.min(allRows.length, ZONE_MATRIX_ROW_CAP),
     totalRows: allRows.length,
+    zoneSummaries,
+    shownZones: zoneSummaries.length,
+    totalZones: zones.length,
+    unassignedLine,
+    redundantBlocksCount,
   };
 }

@@ -1,4 +1,5 @@
 import type { JobTranscriptEntry } from "../auth/adminApi";
+import { plural } from "../shell/plural";
 import type { ScriptRunRead } from "./estateSystemModel";
 
 /** Most transcript lines the Estate drawer draws at once; the rest are counted as "+N more", never dropped silently. */
@@ -20,7 +21,7 @@ export function capTranscriptLines(
 
 /** "N lines": the count says what it counts, and singular only for exactly one line. */
 export function transcriptLineCountWording(count: number): string {
-  return `${count} ${count === 1 ? "line" : "lines"}`;
+  return plural(count, "line", "lines");
 }
 
 /** "+N more lines not shown" when the cap left lines out; null when every line is shown. */

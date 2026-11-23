@@ -4,9 +4,12 @@
 import { render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getJobStats,
   getReportCatalogue,
   getScheduledJobs,
   getSystemHealth,
+  getSystemPods,
+  getSystemStorage,
   listAuditEvents,
   listCredentials,
   listDevices,
@@ -27,12 +30,15 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/auth/adminApi")>();
   return {
     ...actual,
+    getJobStats: vi.fn(),
     getReportCatalogue: vi.fn(),
     listReportRuns: vi.fn(),
     listPacketCases: vi.fn(),
     listSupportBundles: vi.fn(),
     getScheduledJobs: vi.fn(),
     getSystemHealth: vi.fn(),
+    getSystemPods: vi.fn(),
+    getSystemStorage: vi.fn(),
     listAuditEvents: vi.fn(),
     listCredentials: vi.fn(),
     listDevices: vi.fn(),
@@ -192,6 +198,10 @@ const credential = (id: string, kind: CredentialView["kind"], over: Partial<Cred
 });
 
 function mockSystemReads() {
+  // Synthetic job statistics: the Job queue figures must each name their unit (guard C).
+  vi.mocked(getJobStats).mockResolvedValue({
+    total: 900, total_24h: 40, completed_24h: 30, failed_24h: 3, outcome_unknown_24h: 2, running: 1,
+  } as never);
   vi.mocked(getScheduledJobs).mockResolvedValue({
     master_enabled: true, master_env: "SYNTHETIC_MASTER", can_write: false, masked: true, business_hours: null, families: [],
   } as never);
@@ -212,6 +222,35 @@ function mockSystemReads() {
       credential("cred-tango-snmp2", "snmp_v1_v2c", { community: "set" }),
       credential("cred-tango-snmp3", "snmp_v3", { auth_secret: "set", priv_secret: "not set" }),
     ],
+  } as never);
+
+  vi.mocked(getSystemPods).mockResolvedValue({
+    available: true,
+    read_at: AT_NEW,
+    pods: [
+      {
+        name: "pod-tango-01",
+        component: "synthetic",
+        phase: "Running",
+        state: "Running",
+        ready: "1/1",
+        restarts: 0,
+        started_at: AT_NEW,
+        image_digest: null,
+        cpu_millicores: null,
+        cpu_limit_millicores: null,
+        memory_bytes: null,
+        memory_limit_bytes: null,
+      },
+    ],
+  } as never);
+  vi.mocked(getSystemStorage).mockResolvedValue({
+    read_at: AT_NEW,
+    backups: [],
+    top_devices: [],
+    configuration: { artefacts: 0, stored_bytes: 0, text_in_database_bytes: 0 },
+    database_bytes: 3 * 1024 * 1024 * 1024,
+    artefact_volume: { total_bytes: 10 * 1024 * 1024 * 1024, used_bytes: 2 * 1024 * 1024 * 1024 },
   } as never);
 }
 
@@ -279,7 +318,7 @@ const SCREEN_CASES: readonly ScreenCase[] = [
     render: () => render(<EstateSystemScreen />),
     mockReads: mockSystemReads,
     expectedCountText: /2 local identities[\s\S]*Credentials of kind ssh_password/,
-    // Access counts carry the identity, session and credential reads' own time; every dl value names its unit.
+    // Access counts carry the identity, session and credential reads' own time; every dl value names its unit (Job queue too).
     knownOpen: {},
   },
 ];

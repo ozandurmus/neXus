@@ -27,12 +27,12 @@ import {
 } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
 import type { SourceRead } from "../screens/overview/attentionRules";
-import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { mapJobQueue, JOB_QUEUE_NOT_REPORTED } from "./estateJobQueueModel";
 import { BADGE_WORD_DEFAULT } from "./estateModel";
 import { standardJobsHref } from "./estateRouting";
 import { EstateJobTranscriptDrawer } from "./EstateJobTranscript";
-import { latestTranscriptJobRows, moreRowsLabel, type TranscriptJobRow } from "./estateJobTranscriptModel";
+import { latestTranscriptJobRows, type TranscriptJobRow } from "./estateJobTranscriptModel";
 import {
   buildSystemSummary,
   SCRIPT_RUNS_READ_CAP,
@@ -79,7 +79,8 @@ function useSystemReads() {
   useEffect(() => {
     let active = true;
     void settle(getScheduledJobs()).then((r) => { if (active) setJobs(r); });
-    void settle(getJobStats()).then((r) => { if (active) setJobStats(r); });
+    void settle(getJobStats().then((r) => (r && typeof r === "object" && !Array.isArray(r) ? r : Promise.reject(new Error("malformed")))))
+      .then((r) => { if (active) setJobStats(r); });
     void settle(listDevices().then((r) => (Array.isArray(r?.devices) ? r.devices : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setDevices(r); });
     void settle(getSystemHealth()).then((r) => { if (active) setHealth(r); });
@@ -166,8 +167,8 @@ function scriptsInput(scripts: Settled<readonly ScriptSummary[]>, runs: readonly
 
 /** The What runs job rows: one Transcript button per script's newest job, capped like the card's other lists. */
 function RunTranscriptRows({ rows, onOpen }: { readonly rows: readonly TranscriptJobRow[]; readonly onOpen: (row: TranscriptJobRow) => void }) {
+  if (rows.length === 0) return null;
   const shown = rows.slice(0, SYSTEM_LIST_CAP);
-  const more = moreRowsLabel(rows.length - shown.length);
   return (
     <Box component="ul" aria-label="Job transcripts" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "6px" }}>
       {shown.map((row) => (
@@ -179,7 +180,11 @@ function RunTranscriptRows({ rows, onOpen }: { readonly rows: readonly Transcrip
           </Box>
         </Box>
       ))}
-      {more ? <Box component="li" sx={{ fontSize: 12, color: ev.ink3 }}>{more}</Box> : null}
+      {rows.length > shown.length ? (
+        <Box component="li" sx={{ fontSize: 12, color: ev.ink3 }}>
+          <MoreFooter shown={shown.length} total={rows.length} noun="jobs (open the standard view for the rest)" />
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -187,8 +192,8 @@ function RunTranscriptRows({ rows, onOpen }: { readonly rows: readonly Transcrip
 /** Job queue: four read-only figures from one job-statistics read; each figure carries that read's own age. */
 function JobQueueCard({ jobs, now }: { readonly jobs: Settled<JobStatsView>; readonly now: Date }) {
   const section = mapJobQueue(jobs);
-  const readAt = jobs.readAt;
-  const stamp = <EvidenceStamp at={readAt} source="job statistics read" now={now} />;
+  // Only a read that succeeded carries its age; a failed or refused read is UNKNOWN (a0), never a fresh stamp.
+  const stamp = <EvidenceStamp at={section.kind === "ok" ? jobs.readAt : null} source="job statistics read" now={now} />;
   return (
     <EstateCard sx={{ p: "16px 18px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
