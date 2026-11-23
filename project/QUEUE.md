@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T01:37:22Z
+Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T04:19:40Z
 
 ## Now
 - NXS-LOCAL-0397 — Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence (automated_validated)
@@ -11,16 +11,17 @@ Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T01:37:22Z
 - P1/in_progress asa_fortigate_policy_model — ASA and FortiGate policy model for lookup and hygiene
 - P1/in_progress policy_collection_gaps — Policy collection gaps: CP gateway objects (D-1), PAN App-
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
+- P1/in_progress script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or...
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
 - P1/planned cyberark_archive_key_custody
 - P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned recertification_council
-- P1/planned script_execution_module
 - P1/planned verify_first_scheduled_mds_export_and_asa_saved_state
+- P2/in_progress aiview_masked_readonly_admin
 - P2/in_progress manifest_drift_service_worker_configuration_policy
+- P2/in_progress static_route_add_delete
 - P2/in_progress topology_sources_apic_citrix_f5
 - P2/in_progress ui2_database_roles_and_data_ownership
-- P2/planned aiview_masked_readonly_admin
 - P2/planned analysis_container
 - P2/planned asa_failover_execution
 - P2/planned asa_fortinet_cluster_view
@@ -39,7 +40,6 @@ Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T01:37:22Z
 - P2/planned policy_install_p2_p4
 - P2/planned product_rename_identity
 - P2/planned reports_r2
-- P2/planned static_route_add_delete
 - P2/planned support_bundle_collection_s3_s8
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
