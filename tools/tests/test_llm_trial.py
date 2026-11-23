@@ -267,17 +267,12 @@ def test_percentile_nearest_rank():
 # ------------------------------------------------------------------ corpus sanity (once corpus.py exists)
 
 def _corpus():
-    try:
-        from tools.llm_trial import corpus
-    except ImportError:
-        return None
+    from tools.llm_trial import corpus
     return corpus.load_cases()
 
 
 def test_corpus_sanity():
     cases = _corpus()
-    if cases is None:
-        pytest.skip("corpus.py not written yet")
     assert len(cases) >= 30
     ids = [c["case_id"] for c in cases]
     assert len(ids) == len(set(ids))

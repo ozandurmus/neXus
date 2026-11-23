@@ -16,7 +16,7 @@
       "title": "UI2 database roles: least-privilege runtime roles per...",
       "status": "in_progress",
       "priority": "P2",
-      "target": "PO_DECISION_RECORD_2026_09_13D section 3...",
+      "target": "PO_DECISION_RECORD_2026_09_13D section 3...; Step 0 on main: definer triggers, views, worker secret items (V261, 594c811e); no workload switched.",
       "note": ""
     },
     {
@@ -68,9 +68,9 @@
       "id": "script_execution_module",
       "category": "ui2",
       "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
-      "target": "PO decision record 2026-09-22 (automation...",
+      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b) and slice 2 (V258, 084c89d7) on main; not real-env validated.",
       "note": ""
     },
     {
@@ -113,9 +113,9 @@
       "id": "aiview_masked_readonly_admin",
       "category": "security",
       "title": "aiview as a masked read-only administrator",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
-      "target": "",
+      "target": "Slice 1 on main behind UI2_AIVIEW_READONLY_ADMIN, default off (26330958).",
       "note": ""
     },
     {
@@ -358,7 +358,7 @@
       "title": "Product rename: display name, DNS, certificate, CMDB only",
       "status": "planned",
       "priority": "P2",
-      "target": "Blocked: final name from the PO",
+      "target": "Blocked: final name from the PO; R1 user-visible text and R1b env dual-read shipped (d0134f0c, 3621381c); DNS, certificate, CMDB open.",
       "note": ""
     },
     {
@@ -491,9 +491,9 @@
       "id": "static_route_add_delete",
       "category": "operations",
       "title": "Operations: static route add and delete on firewalls",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
-      "target": "OPERATIONS_STATIC_ROUTE_CHANGE_CONTRACT_DRAFT_2026_11_17 (DRAFT after council); decision record, R0 read list and amendment pending",
+      "target": "OPERATIONS_STATIC_ROUTE_CHANGE_CONTRACT_DRAFT_2026_11_17 (DRAFT after council); decision record, R0 read list and amendment pending; R0 reads, pre-checks, plan preview shipped, zero writes (V252, 4ff5206b); write carve-out ratified.",
       "note": ""
     },
     {
@@ -520,7 +520,7 @@
       "title": "Panorama config-log change actor: commits logged Submitted while the join needs Succeeded",
       "status": "planned",
       "priority": "P2",
-      "target": "PO_DECISION_RECORD_2026_11_12_PAN_CHANGE_ACTOR_FROM_CONFIG_LOG; trial switch on (642eb4ce)",
+      "target": "PO_DECISION_RECORD_2026_11_12_PAN_CHANGE_ACTOR_FROM_CONFIG_LOG; trial switch on (642eb4ce); Submitted commit paired with its commit job outcome in parse scope (42ad066e); verify on real data.",
       "note": ""
     },
     {

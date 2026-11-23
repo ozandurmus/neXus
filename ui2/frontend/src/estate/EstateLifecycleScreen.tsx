@@ -16,6 +16,7 @@ import {
   lifecycleCatalogRows,
   lifecycleDeviceCountText,
   lifecycleDeviceVulnerabilityRows,
+  lifecycleFleetSummaryLines,
   type LifecycleCatalogRow,
   type LifecycleDeviceVulnerabilityRow,
 } from "./estateLifecycleCatalogModel";
@@ -225,6 +226,9 @@ function DeviceVulnerabilityRowView({ row }: { readonly row: LifecycleDeviceVuln
         <Typography data-testid="estate-device-vulnerability-cell" sx={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>
           {row.cell.text}
         </Typography>
+        <Typography data-testid="estate-device-lifecycle-meta" sx={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2, overflowWrap: "anywhere" }}>
+          {row.supportLine}
+        </Typography>
         <Box sx={{ mt: 0.5 }}>
           <EvidenceStamp at={row.cell.evidenceAt} source="advisory data" />
         </Box>
@@ -276,6 +280,18 @@ function DeviceVulnerabilityCard() {
     const shown = rows.slice(0, LIFECYCLE_DEVICE_CAP);
     body = (
       <>
+        {/* Fleet counters: a counter the backend did not send reads UNKNOWN, never 0. */}
+        <Box data-testid="estate-lifecycle-fleet-summary" sx={{ px: 2, pt: 1.25 }}>
+          <EvidenceStamp at={lifecycle.value.as_of} source="lifecycle summary" />
+          <Box component="ul" sx={{ m: 0, p: 0, mt: 0.5, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "4px 16px" }}>
+            {lifecycleFleetSummaryLines(lifecycle.value.summary).map((line) => (
+              <Typography component="li" key={line.key} sx={{ listStyle: "none", fontSize: "13px", color: ev.ink2 }}>
+                <Box component="span" sx={{ fontFamily: ESTATE_MONO, color: line.text === "UNKNOWN" ? ev.ink2 : ev.ink }}>{line.text}</Box>
+                {` · ${line.label}`}
+              </Typography>
+            ))}
+          </Box>
+        </Box>
         <Typography data-testid="estate-device-vulnerability-count" sx={{ px: 2, pt: 1.25, fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>
           {lifecycleDeviceCountText(rows.length, shown.length)}
         </Typography>

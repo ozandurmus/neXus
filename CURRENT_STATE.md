@@ -25,7 +25,6 @@ garbage collection and the Flyway expand/contract fence; ships since 2026-11-18
 are `NXS-LOCAL-0392`-`0396`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
-Next: `recovery_offhost_key_custody` (script S1 installed and run; off-host target and key custody open).
 
 Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.json`. Applied by hand 2026-11-16: database ingress NetworkPolicy, platform backup script S1.
 
