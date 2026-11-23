@@ -17,9 +17,9 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   // name under Compliance and security, PO 2026-11-13); the full e2e visits it there.
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities", "Recent upgrades"],
     query: "screen=inventory&view=lifecycle", heading: "Lifecycle and security" },
-  // Navigation redesign 2026-11-12: "HA and readiness" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
+  // Navigation redesign 2026-11-12: "HA and failover" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).
-  { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"] },
+  { screen: "operations", tabList: "Operations sections", labels: ["HA and failover", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"] },
   // Administration's seven pages are children of the navigation group (navigation redesign 2026-11-12, PO amendment
   // 2026-11-13); a page's sections are its one tab strip, reached at the page's own address. Scheduled jobs, Platform
   // status, Audit log and Delivery plan have a single section and no strip.

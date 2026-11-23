@@ -74,7 +74,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   // Operations is the fleet's live activity (PO 2026-11-13 amendment of F1/F2): readiness, jobs, the firewalls' health.
   // Jobs stays a child of Operations (PO-NAV-8); the children are the tabs of the one screen.
   { kind: "group", id: "operations", label: "Operations", icon: "operations", children: [
-    { id: "operations-ha", label: "HA and readiness", screen: "operations", href: "?screen=operations" },
+    { id: "operations-ha", label: "HA and failover", screen: "operations", href: "?screen=operations" },
     { id: "operations-jobs", label: "Jobs", screen: "operations", href: "?screen=operations&tab=jobs" },
     { id: "operations-health", label: "Device health", screen: "operations", href: "?screen=operations&tab=health" },
     { id: "operations-policy-install", label: "Policy installation", screen: "operations", href: "?screen=operations&tab=policy-install" },

@@ -86,7 +86,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["trace", "?screen=trace&mode=lookup", "Trace", "Policy and changes"],
     ["changes", "?screen=changes", "Changes", "Policy and changes"],
     ["backups", "?screen=backups", "Backups", null],
-    ["operations", "?screen=operations", "HA and readiness", "Operations"],
+    ["operations", "?screen=operations", "HA and failover", "Operations"],
     ["operations", "?screen=operations&tab=jobs", "Jobs", "Operations"],
     ["operations", "?screen=operations&tab=health", "Device health", "Operations"],
     ["operations", "?screen=operations&tab=policy-install", "Policy installation", "Operations"],
@@ -122,7 +122,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
 
   it("follows a tab switched on the screen itself, and the browser's Back", () => {
     rail("operations");
-    expect(current()[0]).toHaveTextContent("HA and readiness");
+    expect(current()[0]).toHaveTextContent("HA and failover");
     act(() => writeUrlParams({ tab: "jobs" }, "push"));
     expect(current()).toHaveLength(1);
     expect(current()[0]).toHaveTextContent("Jobs");
@@ -336,7 +336,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     expect(operations).toHaveAttribute("aria-expanded", "true");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([
-      ["HA and readiness", "?screen=operations"],
+      ["HA and failover", "?screen=operations"],
       ["Jobs", "?screen=operations&tab=jobs"],
       ["Device health", "?screen=operations&tab=health"],
       ["Policy installation", "?screen=operations&tab=policy-install"],
