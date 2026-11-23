@@ -27,13 +27,15 @@ Network policy in the namespace: deny all, except TCP 5432 into golden pods from
 `tools/e2e/hosta_preview_golden_refresh.sh`):
 
 1. Refuses inside the collection windows (00/06/12/18, from :20 of the hour before) and the 02:00 backup hour
-   (Europe/Istanbul); single-flight through a host file lock.
+   (computed explicitly in Europe/Istanbul, whatever the host clock zone is); single-flight through a host file lock.
 2. Checks pinned image equality with `ui2-db-0` (pod spec through the API), as the preview does.
 3. Clears leftovers in the idle slot, then creates its Secret, PVC and StatefulSet.
 4. Runs today's `copy_database()` into it unchanged: the same snapshot, read-only options, filters (audit 7 days, latest
    backup entries, named policy-chunk generations), and the same temporary NetworkPolicy pair to `ui2-db-0`. The
    source credential Secret exists in the golden namespace only during the copy (the env refs are `optional`).
-5. `vacuumdb --analyze`, reads the applied Flyway versions (refused if any failed row exists), adds one replication
+5. `vacuumdb --analyze --parallel=0` as the pod's local superuser (statistics and hint bits only: a failure prints
+   `PREVIEW GOLDEN: VACUUM_SKIPPED reason=<TOKEN>` and the refresh continues, because the validity checks below still
+   decide the promotion; an interrupt is never swallowed), reads the applied Flyway versions (refused if any failed row exists), adds one replication
    role and one `pg_hba` line (`host replication ui2_golden_repl all md5`), and proves a replication login works.
 6. **Promotion = one write of `golden-marker`.** Before it, the serving slot is untouched. On any failure the marker is
    not written and only the staging slot is deleted, so the previous golden keeps serving.
@@ -82,14 +84,24 @@ The code ships with the normal PR/deploy. Then, on the host as the deploy accoun
 
 ```bash
 export KUBECONFIG=$HOME/.kube/config
-timedatectl | grep 'Time zone'          # expect Europe/Istanbul; otherwise convert 03:30 below
+timedatectl | grep 'Time zone'          # the host clock is UTC (checked 2026-11-23); cron uses the host zone
 bash /opt/nexus/tools/e2e/hosta_preview_golden_refresh.sh
 tail -20 ~/.local/state/nexus-preview/golden-refresh.out   # expect PREVIEW GOLDEN: PROMOTED ... and PASS
 kubectl -n ui2-preview-golden get configmap golden-marker -o jsonpath='{.data.slot} {.data.flyway_version} {.data.created}{"\n"}'
 kubectl -n ui2-preview-golden get pods,pvc
-( crontab -l 2>/dev/null; echo '30 3 * * * bash /opt/nexus/tools/e2e/hosta_preview_golden_refresh.sh' ) | crontab -
+( crontab -l 2>/dev/null; echo '30 0 * * * bash /opt/nexus/tools/e2e/hosta_preview_golden_refresh.sh' ) | crontab -
 crontab -l
 ```
+
+The host clock is **UTC**, so the cron line is `30 0 * * *` (= 03:30 Europe/Istanbul); `30 3 * * *` would run at 06:30
+Istanbul, inside a collection window, and be refused. The script's own window refusal does not depend on the host zone.
+
+First host run (2026-11-23 13:03): the copy took 179.5 s, then `preview_golden_vacuum` failed and nothing was promoted
+(previews kept the live copy). The failure was not a permission error (the step already ran as the pod's superuser, and
+the masked log keeps `permission denied` / `must be owner` readable); the masked shape fits `could not <verb> shared
+memory segment`, the usual parallel-vacuum failure in a pod with the default 64 MiB `/dev/shm`. The exact message is
+UNKNOWN. Fix: `--parallel=0`, and the vacuum can no longer block a valid copy. Re-run once and record
+`preview_golden_vacuum` here; a `VACUUM_SKIPPED` line in `golden-refresh.out` means the cause is still open.
 
 The next ship shows `PREVIEW DB SOURCE: golden reason=GOLDEN_CURRENT` and `TIMING preview_db_golden`. Record the
 refresh (`preview_golden_copy`, `preview_golden_vacuum`) and preview timings here.

@@ -1319,6 +1319,31 @@ def enable_golden_replication():
         raise PreviewFailure("GOLDEN_REPLICATION_UNAVAILABLE")
 
 
+# Runs as the pod's local superuser over the socket (SUPERUSER_ENV), so ownership is never the limit: the copy is a
+# pg_restore --no-owner by the app role, and a superuser may vacuum every table. --parallel=0 keeps VACUUM from
+# starting parallel index workers, which need dynamic shared memory from a pod's default 64 MiB /dev/shm.
+# First host run 2026-11-23 failed with the masked shape "could not <verb> <3 words> [..]", not a permission error:
+# the masking keeps "permission denied" and "must be owner" readable and neither appeared. The exact message is
+# UNKNOWN (masked); the shared-memory reading is the best fit, so the step is also made non-fatal (golden_vacuum).
+GOLDEN_VACUUM_COMMAND = (SUPERUSER_ENV + 'exec vacuumdb --quiet --analyze --jobs=4 --parallel=0'
+                         ' --dbname="${POSTGRESQL_DATABASE:-ui2}"')
+
+
+def golden_vacuum():
+    """VACUUM ANALYZE of the staged copy; an optimisation, never a gate.
+
+    It only freshens planner statistics and hint bits of a read-only copy, so a failure of it (one table, or the
+    whole run) leaves a valid database. Validity is proven by what follows and still aborts the promotion:
+    golden_versions() reads the Flyway history through a live connection (refused on a failed migration row) and
+    enable_golden_replication() proves a replication login. An interrupt is never swallowed."""
+    try:
+        k(NS, "exec", target_db_pod(), "--", "sh", "-c", GOLDEN_VACUUM_COMMAND, timeout=3600)
+    except PreviewFailure as failure:
+        if INTERRUPTED:
+            raise
+        print(f"PREVIEW GOLDEN: VACUUM_SKIPPED reason={failure.reason}", flush=True)
+
+
 def refresh_golden(repo, now=None):
     """Stage a fresh copy of the live database in the idle slot, then promote it with one marker write.
 
@@ -1354,9 +1379,7 @@ def refresh_golden(repo, now=None):
                     copy_database()
                 k(NS, "delete", "secret", preview_name("ui2-db-source"), "--ignore-not-found", timeout=60)
                 with timing("preview_golden_vacuum"):
-                    k(NS, "exec", target_db_pod(), "--", "sh", "-c", SUPERUSER_ENV
-                      + 'exec vacuumdb --quiet --analyze --jobs=4 --dbname="${POSTGRESQL_DATABASE:-ui2}"',
-                      timeout=3600)
+                    golden_vacuum()
                 versions = golden_versions()
                 enable_golden_replication()
                 # The promotion: one ConfigMap write. Previews read only this object to choose a slot.
