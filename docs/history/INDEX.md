@@ -6,6 +6,7 @@ regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |
 | --- | --- | --- | --- | --- | --- |
+| `NXS-LOCAL-0405` | automated_validated | 2026-11-23 | ASA failover contract PO answers, Devices deep link, ship preview e2e failure titles and build-history archive | ASA failover contract records PO answers Q3/Q4/Q6/Q7 with a Q3 council packet (5170995f, still DRAFT); ?screen=devices opens Devices (f69b318c). Preview e2e names failing tests (e9a5c166); 75 oldest build records archived (96ec4bd2, c590a7aa). | — |
 | `NXS-LOCAL-0404` | automated_validated | 2026-11-23 | ASA ACL_NOT_BOUND unknown reason, ASA A0 conformance tests and debt cleanups | An ASA ACL named by an unparsed feature is UNKNOWN, not unused (PO 2026-11-23, 65430d84); each A0-ASA entry has a conformance test. Debt: snapshot test made deterministic, dead adminApi exports removed, address math extracted. | — |
 | `NXS-LOCAL-0403` | automated_validated | 2026-11-23 | Script Execution slice 3: run-end syslog and mail notifications (V266) | A finished script run sends its requested syslog and mail notification, best effort, with the outcome stored per channel (V266, 8420aaf1). Adds the per-script mail-on-failure-only option. | — |
 | `NXS-LOCAL-0402` | automated_validated | 2026-11-23 | Estate dossier Management tree scope and malformed-payload hardening | Estate dossier Management tree shows only for management servers; a malformed tree reads UNKNOWN (14277931). | — |
