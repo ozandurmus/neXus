@@ -49,6 +49,28 @@ describe("estate job transcript drawer", () => {
     expect(new URL(link.getAttribute("href") ?? "", "https://example.invalid/").searchParams.get("standard")).toBe("1");
   });
 
+  it("caps a long transcript with a '+N more lines not shown' footer", async () => {
+    const many: JobTranscriptEntry[] = Array.from({ length: 103 }, (_, i) => ({
+      seq: i + 1, at: "2026-11-22T10:00:00Z", elapsedMs: 1, channel: "ssh", kind: "command", text: `synthetic line ${i + 1}`,
+    }));
+    getJobTranscript.mockResolvedValue(many);
+    render(<EstateJobTranscriptDrawer jobId={JOB_ID} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByLabelText("Transcript lines")).toBeInTheDocument());
+    expect(within(screen.getByLabelText("Transcript lines")).getAllByRole("listitem")).toHaveLength(100);
+    expect(screen.getByText("+3 more lines not shown")).toBeInTheDocument();
+  });
+
+  it("marks a failed read UNKNOWN: badge and a0 stamp, never a1", async () => {
+    getJobTranscript.mockRejectedValueOnce({ status: 500, body: {} });
+    render(<EstateJobTranscriptDrawer jobId={JOB_ID} onClose={() => {}} />);
+    await screen.findByRole("alert");
+    // The drawer is a MUI portal: the marks sit in document.body, not in the render container.
+    expect(document.body.querySelector('[data-state-badge="unk"]')).not.toBeNull();
+    const stamps = Array.from(document.body.querySelectorAll("[data-evidence-stamp]")).map((el) => el.getAttribute("data-evidence-stamp"));
+    expect(stamps).toContain("a0");
+    expect(stamps).not.toContain("a1");
+  });
+
   it("says no transcript lines for an empty transcript, and UNKNOWN for a failed read", async () => {
     getJobTranscript.mockResolvedValueOnce([]);
     const { unmount } = render(<EstateJobTranscriptDrawer jobId={JOB_ID} onClose={() => {}} />);

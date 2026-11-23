@@ -5,14 +5,13 @@ import { getJobTranscript, type JobTranscriptEntry } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
 import { formatStamp } from "../shell/time";
 import { transcriptErrorCode } from "../screens/transcriptDownload";
-import { EvidenceStamp } from "./EstatePrimitives";
+import { EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import {
   capTranscriptLines,
   orderTranscriptLines,
   TRANSCRIPT_EMPTY_WORDING,
   transcriptFailedWording,
   transcriptLineCountWording,
-  transcriptMoreLabel,
   transcriptStateWord,
 } from "./estateJobTranscriptModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
@@ -78,7 +77,8 @@ export function EstateJobTranscriptDrawer({ jobId, scriptName, onClose }: {
         {state.kind === "loading" ? <Box sx={{ fontSize: 13, color: ev.ink2 }}>Loading transcript…</Box> : null}
 
         {state.kind === "failed" ? (
-          <Box role="alert" sx={{ fontSize: 13.5, fontWeight: 600, color: ev.unk }}>
+          <Box role="alert" sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13.5, fontWeight: 600, color: ev.unk }}>
+            <StateBadge state="unk" word="UNKNOWN" dense />
             {transcriptFailedWording(state.restricted, state.code)}
           </Box>
         ) : null}
@@ -104,13 +104,15 @@ export function EstateJobTranscriptDrawer({ jobId, scriptName, onClose }: {
                 </Box>
               ))}
             </Box>
-            {transcriptMoreLabel(capped.hidden) ? (
-              <Box sx={{ fontSize: 12.5, color: ev.ink3 }}>{transcriptMoreLabel(capped.hidden)}</Box>
+            {capped.hidden > 0 ? (
+              <Box sx={{ fontSize: 12.5, color: ev.ink3 }}>
+                <MoreFooter shown={capped.shown.length} total={lines.length} noun="lines not shown" />
+              </Box>
             ) : null}
           </>
         ) : null}
 
-        <EvidenceStamp at={state.kind === "loading" ? null : state.readAt} source="job transcript read" />
+        <EvidenceStamp at={state.kind === "ok" ? state.readAt : null} source="job transcript read" />
       </Box>
     </Drawer>
   );

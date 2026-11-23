@@ -1,5 +1,6 @@
-import type { ReportCatalogue, ReportRunView, ReportTemplateCard } from "../auth/adminApi";
-import { ageBucketOf, parseTimeMs, type AgeBucket } from "./estateModel";
+import type { ReportCatalogue, ReportPlaneAsOf, ReportRunView, ReportTemplateCard } from "../auth/adminApi";
+import { ageBucketOf, newestIso, parseTimeMs, type AgeBucket, type BadgeState } from "./estateModel";
+import { plural } from "../shell/plural";
 
 /**
  * Estate Reports list model (Opus bold concept, row 20: "Reports · evidence packs, templates, history").
@@ -32,15 +33,18 @@ export function evidenceAgeLabel(iso: string | null | undefined, now: Date): str
   return `${Math.floor(hours / 24)} d`;
 }
 
-/** The newest evidence timestamp across a run's data planes; null when the run carries no plane evidence. */
+/** The newest evidence timestamp across data planes; null when no plane carries evidence. */
+export function newestPlaneEvidence(planes: readonly ReportPlaneAsOf[]): string | null {
+  return newestIso(planes.map(plane => plane.newest));
+}
+
+/**
+ * The newest evidence timestamp across a run's data planes; null when the run carries no plane evidence.
+ * Read defensively: a null, omitted or malformed `data_as_of` / `planes` carries no evidence (UNKNOWN), never a throw.
+ */
 export function newestEvidenceAt(run: ReportRunView): string | null {
-  let newest: { readonly iso: string; readonly ms: number } | null = null;
-  for (const plane of run.data_as_of.planes ?? []) {
-    const ms = parseTimeMs(plane.newest);
-    if (ms === null || plane.newest === null) continue;
-    if (newest === null || ms > newest.ms) newest = { iso: plane.newest, ms };
-  }
-  return newest?.iso ?? null;
+  const planes = (run as unknown as { readonly data_as_of?: { readonly planes?: unknown } | null }).data_as_of?.planes;
+  return Array.isArray(planes) ? newestPlaneEvidence(planes as readonly ReportPlaneAsOf[]) : null;
 }
 
 export type TemplateStatus = "AVAILABLE" | "REFUSED";
@@ -156,7 +160,7 @@ export const REPORT_SECTION_CAP = 12;
 
 /** "N sections", "1 section": names what the count counts (document sections, not runs or files). */
 export function sectionCountLabel(n: number): string {
-  return n === 1 ? "1 section" : `${n} sections`;
+  return plural(n, "section", "sections");
 }
 
 /** Plain state wording; an unrecognised state is named as-is and is never reported as OK. */
@@ -165,9 +169,15 @@ export function runStateLabel(state: string | null | undefined): string {
   return "UNKNOWN";
 }
 
-/** Tone of a run state: an unknown or missing state is "review", never "ok". */
-export function runStateTone(state: string | null | undefined): RunTone {
-  return toneOfState(state as ReportRunView["state"]);
+/**
+ * Badge state of a run state: SUCCEEDED is ok, FAILED is act, QUEUED/RUNNING are watch.
+ * An unknown or missing state is UNKNOWN (`unk`), never watch and never ok.
+ */
+export function runStateBadge(state: string | null | undefined): BadgeState {
+  if (state === "SUCCEEDED") return "ok";
+  if (state === "FAILED") return "act";
+  if (state === "QUEUED" || state === "RUNNING") return "watch";
+  return "unk";
 }
 
 export interface DetailSection {
@@ -178,7 +188,8 @@ export interface DetailSection {
 
 export type RunDocument =
   | { readonly available: true; readonly sections: readonly DetailSection[] }
-  | { readonly available: false };
+  /** `malformed` is true only when the run carries a non-null `document` that could not be read (UNKNOWN). */
+  | { readonly available: false; readonly malformed: boolean };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -190,10 +201,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  */
 export function runDocument(run: ReportRunView): RunDocument {
   const doc = (run as unknown as { readonly document?: unknown }).document;
-  if (!isRecord(doc) || !Array.isArray(doc.sections)) return { available: false };
+  if (doc === undefined || doc === null) return { available: false, malformed: false };
+  if (!isRecord(doc) || !Array.isArray(doc.sections)) return { available: false, malformed: true };
   const sections: DetailSection[] = [];
   for (const s of doc.sections as unknown[]) {
-    if (!isRecord(s) || typeof s.id !== "string" || typeof s.title !== "string") return { available: false };
+    if (!isRecord(s) || typeof s.id !== "string" || typeof s.title !== "string") return { available: false, malformed: true };
     const notes = Array.isArray(s.notes) ? s.notes.filter((n): n is string => typeof n === "string") : [];
     sections.push({ id: s.id, title: s.title, notes });
   }

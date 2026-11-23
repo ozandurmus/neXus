@@ -4,6 +4,7 @@ import type { PodStatusView, PodsView, StorageView } from "../src/auth/adminApi"
 import { EstateSystemPodsStorage, PODS_ROW_CAP } from "../src/estate/EstateSystemPodsStorage";
 import { EvidenceStamp } from "../src/estate/EstatePrimitives";
 import type { TimedRead } from "../src/estate/estateSystemModel";
+import { resolveAdminRoute } from "../src/screens/AdministrationScreen";
 import { formatBytes } from "../src/screens/SystemStatusPanel";
 
 // Synthetic fixtures only (FW-TANGO-04 style names, 192.0.2.x addresses). Nothing here names a real host.
@@ -61,9 +62,9 @@ describe("Estate System: Pods and storage section", () => {
     expect(within(rows[0]).getByText("Running")).toBeTruthy();
     expect(within(rows[1]).getByText("restarts: 3")).toBeTruthy();
     expect(within(rows[2]).getByText("Pending")).toBeTruthy();
-    expect(screen.getByText("Pods listed")).toBeTruthy();
-    expect(screen.getByText("Pods in state Running")).toBeTruthy();
-    expect(screen.getByText("Pods in state Pending")).toBeTruthy();
+    expect(screen.getByText("Pods listed").nextElementSibling?.textContent).toBe("3 pods");
+    expect(screen.getByText("Pods in state Running").nextElementSibling?.textContent).toBe("2 pods");
+    expect(screen.getByText("Pods in state Pending").nextElementSibling?.textContent).toBe("1 pod");
   });
 
   it("shows a pod with a missing or unlisted state as UNKNOWN, never as Running", () => {
@@ -80,7 +81,8 @@ describe("Estate System: Pods and storage section", () => {
     expect(rows[1].getAttribute("data-state")).toBe("UNKNOWN");
     expect(rows[1].textContent).not.toContain("Running");
     expect(rows[2].getAttribute("data-state")).toBe("Running");
-    expect(screen.getByText("Pods in state UNKNOWN")).toBeTruthy();
+    expect(screen.getByText("Pods in state UNKNOWN").nextElementSibling?.textContent).toBe("2 pods");
+    expect(screen.queryByText("Counted")).toBeNull();
   });
 
   it("caps the pod rows at 50 and prints +10 more pods for 60 pods", () => {
@@ -89,7 +91,8 @@ describe("Estate System: Pods and storage section", () => {
     expect(PODS_ROW_CAP).toBe(50);
     expect(screen.getAllByTestId("estate-system-pod-row")).toHaveLength(50);
     expect(screen.getByTestId("estate-system-pods-more").textContent).toBe("+10 more pods");
-    expect(screen.getByText("Pods listed").nextElementSibling?.textContent).toBe("60");
+    expect(screen.getByText("Pods listed").nextElementSibling?.textContent).toBe("60 pods");
+    expect(screen.getByText("Pods in state Running").nextElementSibling?.textContent).toBe("60 pods");
   });
 
   it("renders storage figures through formatBytes, with the evidence stamp from this read", () => {
@@ -102,9 +105,25 @@ describe("Estate System: Pods and storage section", () => {
     expect(container.textContent).toContain(stamp);
   });
 
-  it("shows UNKNOWN for a missing storage figure", () => {
-    render(<EstateSystemPodsStorage pods={ok(podsView([]))} storage={ok(storageView({ total_bytes: undefined, used_bytes: undefined }))} now={NOW} />);
-    expect(screen.getByText("UNKNOWN of UNKNOWN")).toBeTruthy();
+  it("shows UNKNOWN for a missing storage figure and keeps the section badge as UNKNOWN, not Counted", () => {
+    const { container } = render(<EstateSystemPodsStorage pods={ok(podsView([]))} storage={ok(storageView({ used_bytes: undefined }))} now={NOW} />);
+    expect(screen.getByText(`UNKNOWN of ${formatBytes(10 * GIB)}`)).toBeTruthy();
+    expect(container.querySelector('[data-state-badge="unk"]')?.textContent).toBe("UNKNOWN");
+    expect(screen.queryByText("Counted")).toBeNull();
+  });
+
+  it("renders UNKNOWN without throwing when PodsView has a malformed pods field", () => {
+    const { container } = render(
+      <EstateSystemPodsStorage
+        pods={ok(podsView(undefined as never))}
+        storage={ok(storageView())}
+        now={NOW}
+      />,
+    );
+    expect(screen.queryAllByTestId("estate-system-pod-row")).toHaveLength(0);
+    expect(screen.getByRole("alert").textContent).toContain("UNKNOWN");
+    expect(container.querySelector('[data-state-badge="unk"]')?.textContent).toBe("UNKNOWN");
+    expect(screen.queryByText("Counted")).toBeNull();
   });
 
   it("shows an error line and no pod rows when the pod read fails, and still shows storage", () => {
@@ -154,6 +173,11 @@ describe("Estate System: Pods and storage section", () => {
     render(<EstateSystemPodsStorage pods={ok(podsView([]))} storage={ok(storageView())} now={NOW} />);
     expect(screen.getByText("Read-only. Changes happen in the standard view.")).toBeTruthy();
     const link = screen.getByRole("link", { name: /Open system status \(standard\)/ });
-    expect(link.getAttribute("href")).toBe("?screen=administration&view=system&standard=1");
+    const href = link.getAttribute("href") ?? "";
+    expect(href).toBe("?screen=administration&tab=platform-status&standard=1");
+    const params = new URLSearchParams(href);
+    const route = resolveAdminRoute(params.get("tab"), params.get("section"));
+    expect(route.page.slug).toBe("platform-status");
+    expect(route.page.slug).not.toBe("registry");
   });
 });

@@ -1,10 +1,11 @@
 // Guard tests for Estate Rewind, Ask, Changes and the Policy browser (inside Changes).
 // Copied from tests/EstateEvidenceGuards.test.tsx (fixture helpers and setup/teardown pattern); test-only.
 // Same two concept open checks: A. every counted section carries an evidence stamp; B. UNKNOWN is shown as UNKNOWN, never OK.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { resetSharedApiCache } from "../src/auth/adminApi";
+import { CANNOT_PROVE } from "../src/estate/estateAskModel";
 
 
 function jsonResponse(status: number, body: unknown, extraHeaders?: Record<string, string>): Response {
@@ -711,11 +712,69 @@ function stubSlice2ApiFetch() {
       );
     }
 
+    // Ask (path question): one COMPUTED path with a matched hop and an UNKNOWN hop; synthetic names and 192.0.2.x addresses.
+    if (url === "/api/v2/path-analysis/query") {
+      const matched = {
+        hop_index: 0, node_id: "FW-TANGO-04", node_kind: "gateway", vendor: "check_point", context: "", routing_context: null, device_id: null,
+        ingress: { attachment_id: null, segment_id: null, interface_name: "eth1", zone: "INSIDE" },
+        egress: { attachment_id: null, segment_id: null, interface_name: "eth2", zone: "DMZ" },
+        packet_in: null, packet_out: null,
+        route: { route_id: "rt-synth-01", destination: "198.51.100.0/24", next_hop: "192.0.2.1", interface_name: "eth2", protocol: "static", next_hop_kind: "gateway" },
+        nat: null,
+        security: {
+          security_verdict: "ALLOWED", security_reason: "Stored policy allows this flow",
+          deciding_rule: { rule_id: "rule-synth-01", rule_number: 1, rule_name: "RULE-SYNTH-01", section_id: null, section_name: "SECTION-A", action: "Accept" },
+          undecidable_rules: [],
+        },
+        post_nat_security: null, policy_stale: false, policy_collected_at: tenHoursAgo, inventory_collected_at: twoHoursAgo,
+        own_verdict: "ALLOWED", verdict: "ALLOWED", verdict_reason: "Stored policy allows this flow", reasons: ["Stored policy allows this flow"],
+      };
+      const unknown = {
+        hop_index: 1, node_id: "FW-SIERRA-02", node_kind: "gateway", vendor: "palo_alto", context: "", routing_context: null, device_id: null,
+        ingress: { attachment_id: null, segment_id: null, interface_name: "ethernet1/1", zone: "DMZ" },
+        egress: { attachment_id: null, segment_id: null, interface_name: null, zone: null },
+        packet_in: null, packet_out: null, route: null, nat: null, security: null, post_nat_security: null,
+        policy_stale: false, policy_collected_at: twoDaysAgo, inventory_collected_at: twoHoursAgo,
+        own_verdict: "UNKNOWN", verdict: "UNKNOWN", verdict_reason: "Stored policy does not decide this hop", reasons: ["Stored policy does not decide this hop"],
+      };
+      return jsonResponse(200, {
+        status: "COMPUTED", snapshot_id: "snap-synth-01", computed_at: twoHoursAgo,
+        query: { src: "192.0.2.10", dst: "198.51.100.40", protocol: "tcp", port: 8443, ingress_node_id: null, ingress_interface_name: null, edge_mode: false },
+        verdict: "UNKNOWN", verdict_reason: "One hop cannot be decided from stored intent", plain: false, caveats: [], warnings: [],
+        ecmp_truncated: false, asymmetric: false, blocking_hop: null,
+        ingress: { ingress_mode: "AUTO", ingress_status: "RESOLVED", candidates: [] },
+        executive_summary: {
+          headline: "Stored intent matches hop 1 and cannot decide hop 2",
+          blocking_hops: [], unknown_hops: [{ branch_id: "branch-1", hop_index: 1 }],
+          asymmetry_detected: false, ecmp_branch_count: 1, ecmp_truncated: false, freshness_status: "FRESH",
+        },
+        branches: [{
+          branch_id: "branch-1", verdict: "UNKNOWN", verdict_reason: "One hop cannot be decided", termination: "UNDECIDED",
+          blocking_hop_index: null, caveats: [], warnings: [], hops: [matched, unknown],
+          return_path: { return_status: "UNKNOWN", return_reason: "No return evidence in stored intent", branches: [] },
+        }],
+        limitations: "Answers come from stored policy and routing intent only.",
+      }, headers);
+    }
+
+    // Ask (policy lookup): an unprovable answer, verdict UNKNOWN with one undecidable rule.
+    if (url === "/api/v2/policy/policies/pol-alpha/lookup") {
+      return jsonResponse(200, {
+        policyId: "pol-alpha", collectedAt: tenHoursAgo, limitations: "Stored policy only.",
+        query: { querySource: "192.0.2.10", queryDestination: "198.51.100.40", queryService: "tcp/8443" },
+        verdict: "UNKNOWN", lookupReason: "Rule 7 could match and cannot be decided from stored intent",
+        decidingRule: null,
+        undecidableRules: [{ ruleId: "rule-synth-07", number: 7, name: "RULE-SYNTH-07", sectionId: "sec-synth-a", sectionName: "SECTION-A", action: "Accept", lookupReason: "Service object not resolvable" }],
+        parts: [],
+      }, headers);
+    }
+
     return jsonResponse(200, {}, headers);
   });
 }
 // A section "has a count" when its text carries a percentage or a number followed by a word.
-const COUNT_RE = /\d+\s*%|\b\d+\s+[A-Za-z]/;
+// An IPv4 octet followed by a word (`198.51.100.40 tcp/8443`) is an address, not a count, so digits after a dot or word char are skipped.
+const COUNT_RE = /\d+\s*%|(?<![\w.])\d+\s+[A-Za-z]/;
 
 type MoreCase = {
   readonly screen: string;
@@ -730,6 +789,8 @@ type MoreCase = {
 };
 
 const NOW_ISO = new Date().toISOString();
+// Synthetic five-tuple typed into the Ask input (192.0.2.x / 198.51.100.x only).
+const ASK_PATH_QUESTION = "192.0.2.10 -> 198.51.100.40 tcp/8443";
 
 const SCREEN_CASES: readonly MoreCase[] = [
   {
@@ -740,13 +801,11 @@ const SCREEN_CASES: readonly MoreCase[] = [
     // The "One moment" count carries an EvidenceStamp (stored evidence timeline, newest point); guard A runs.
   },
   {
+    // The Ask case submits a synthetic path question in mount(); the answer card carries the counted sections.
     screen: "Ask",
     search: "/?screen=trace",
     testId: "estate-ask-screen",
-    fixtureHasUnknown: false,
-    // Fixture gap (test side): Ask renders no counted section until a question is submitted, and this fixture does not
-    // drive an answer. Not a UI gap; a query-driven Ask fixture is needed before guard A can run.
-    skipGuardA: "Ask: no count section renders before a question is answered; this fixture does not drive one",
+    fixtureHasUnknown: true,
   },
   { screen: "Changes", search: "/?screen=changes", testId: "estate-changes-screen", fixtureHasUnknown: true },
   {
@@ -781,13 +840,24 @@ describe("Estate evidence-stamp and UNKNOWN-never-OK guards (Rewind, Ask, Change
     window.history.replaceState(null, "", "/");
   });
 
-  const mount = async (c: MoreCase): Promise<HTMLElement> => {
+  const openEstate = async (search: string, testId: string): Promise<HTMLElement> => {
     window.localStorage.setItem("nx.view", "estate");
-    window.history.replaceState(null, "", c.search);
+    window.history.replaceState(null, "", search);
     vi.stubGlobal("fetch", stubSlice2ApiFetch());
     stubViewport(1280);
     render(<App />);
-    return (await screen.findByTestId(c.testId)) as HTMLElement;
+    return (await screen.findByTestId(testId)) as HTMLElement;
+  };
+
+  // Ask has no counted section until a question is answered: type a synthetic path question and wait for the answer.
+  const mount = async (c: MoreCase): Promise<HTMLElement> => {
+    const root = await openEstate(c.search, c.testId);
+    if (c.screen === "Ask") {
+      fireEvent.change(within(root).getByTestId("ask-input"), { target: { value: ASK_PATH_QUESTION } });
+      fireEvent.click(within(root).getByTestId("ask-submit"));
+      await within(root).findByTestId("ask-answer");
+    }
+    return root;
   };
 
   for (const c of SCREEN_CASES) {
@@ -827,10 +897,27 @@ describe("Estate evidence-stamp and UNKNOWN-never-OK guards (Rewind, Ask, Change
       const leaves = Array.from(scope.querySelectorAll("*")).filter((e) => e.children.length === 0 && /UNKNOWN/.test(e.textContent ?? ""));
       expect(leaves.length, `${c.screen}: UNKNOWN text is not in any leaf element`).toBeGreaterThan(0);
       for (const leaf of leaves) {
-        const row = (leaf.closest("tr, li") ?? leaf.parentElement ?? leaf) as HTMLElement;
+        // The row is the enclosing tr/li, or the leaf itself: a parent fallback would make a summary sentence stand for a whole card.
+        const row = (leaf.closest("tr, li") ?? leaf) as HTMLElement;
         expect(row.querySelector('[data-state-badge="ok"]'), `${c.screen}: OK badge on a row holding UNKNOWN`).toBeNull();
         expect(within(row).queryAllByText(/^(OK|Fine)$/), `${c.screen}: OK/Fine on a row holding UNKNOWN`).toHaveLength(0);
       }
     });
   }
+
+  it("Ask: an unprovable policy lookup renders the cannot-prove line with an evidence stamp and no OK badge", async () => {
+    const root = await openEstate("/?screen=trace", "estate-ask-screen");
+    fireEvent.click(root.querySelector('[data-ask-mode="lookup"]') as HTMLElement);
+    await waitFor(() => expect(root.querySelector("select option[value='pol-alpha']")).not.toBeNull());
+    fireEvent.change(root.querySelector("select") as HTMLSelectElement, { target: { value: "pol-alpha" } });
+    fireEvent.change(within(root).getByTestId("ask-input"), { target: { value: ASK_PATH_QUESTION } });
+    fireEvent.click(within(root).getByTestId("ask-submit"));
+
+    const cannotProve = await within(root).findByTestId("ask-cannot-prove");
+    expect(cannotProve.textContent ?? "").toContain(CANNOT_PROVE);
+    const answer = within(root).getByTestId("ask-answer");
+    expect(answer.getAttribute("data-ask-state")).toBe("unk");
+    expect(answer.querySelector("[data-evidence-stamp]"), "lookup answer shows UNKNOWN without an EvidenceStamp").not.toBeNull();
+    expect(answer.querySelector('[data-state-badge="ok"]'), "lookup UNKNOWN answer carries an OK badge").toBeNull();
+  });
 });

@@ -531,6 +531,15 @@
       "priority": "P2",
       "target": "PO_DECISION_RECORD_2026_11_12_PAN_CHANGE_ACTOR_FROM_CONFIG_LOG; trial switch on (642eb4ce)",
       "note": ""
+    },
+    {
+      "id": "backup_claim_time_authorization_recheck",
+      "category": "Backup / Security",
+      "title": "Backup claim-time authorization re-check (BK-12/BW-4; from branch feature/backup-claim-authorization)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "docs/design/BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md BK-12/BW-4; re-implement on main, next free migration",
+      "note": ""
     }
   ]
 }

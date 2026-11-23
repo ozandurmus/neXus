@@ -8,6 +8,7 @@
 import type { JobStatsView } from "../auth/adminApi";
 import type { BadgeState } from "./estateModel";
 import { BADGE_WORD_DEFAULT } from "./estateModel";
+import { plural } from "../shell/plural";
 import type { TimedRead } from "./estateSystemModel";
 
 export const JOB_QUEUE_NOT_REPORTED = "not reported";
@@ -46,17 +47,17 @@ export function mapJobQueueFigures(stats: JobStatsView): readonly JobQueueFigure
   const completed = count(stats.completed_24h);
   const outcomeUnknown = count(stats.outcome_unknown_24h);
   return [
-    { id: "running", label: "Running now (jobs in flight at the read)", value: running === null ? null : String(running) },
+    { id: "running", label: "Running now (jobs in flight at the read)", value: running === null ? null : plural(running, "job", "jobs") },
     {
       id: "failed",
       label: "Failed in the last 24 h, out of all jobs in the last 24 h",
-      value: failed === null || total === null ? null : `${failed} of ${total}`,
+      value: failed === null || total === null ? null : `${failed} of ${total} jobs`,
     },
-    { id: "completed", label: "Completed in the last 24 h", value: completed === null ? null : String(completed) },
+    { id: "completed", label: "Completed in the last 24 h", value: completed === null ? null : plural(completed, "job", "jobs") },
     {
       id: "outcome_unknown",
       label: "Outcome unknown in the last 24 h",
-      value: outcomeUnknown === null ? null : String(outcomeUnknown),
+      value: outcomeUnknown === null ? null : plural(outcomeUnknown, "job", "jobs"),
     },
   ];
 }
@@ -70,10 +71,13 @@ export function mapJobQueue(jobs: TimedRead<JobStatsView>): JobQueueSection {
   if (kind === "restricted") return { kind: "unreadable", text: JOB_QUEUE_RESTRICTED_TEXT };
   if (kind !== "ok") return { kind: "unreadable", text: JOB_QUEUE_FAILED_TEXT };
 
-  const stats = jobs.read.value;
-  const figures = mapJobQueueFigures(stats);
+  const stats: unknown = jobs.read.value;
+  // A payload that is not an object (absent, null, an array, a scalar) is unreadable, never a throw or a zero count.
+  if (!stats || typeof stats !== "object" || Array.isArray(stats)) return { kind: "unreadable", text: JOB_QUEUE_FAILED_TEXT };
+  const figures = mapJobQueueFigures(stats as JobStatsView);
   const anyMissing = figures.some((f) => f.value === null);
-  const flagged = (count(stats.failed_24h) ?? 0) > 0 || (count(stats.outcome_unknown_24h) ?? 0) > 0;
+  const typed = stats as JobStatsView;
+  const flagged = (count(typed.failed_24h) ?? 0) > 0 || (count(typed.outcome_unknown_24h) ?? 0) > 0;
   const badge: BadgeState = anyMissing ? "unk" : flagged ? "watch" : "ok";
   return { kind: "ok", badge, word: BADGE_WORD_DEFAULT[badge], figures };
 }

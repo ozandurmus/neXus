@@ -40,33 +40,72 @@ describe("EstateReportRunDetail", () => {
   beforeEach(() => { getReportRun.mockReset(); });
   afterEach(() => cleanup());
 
-  it("calls getReportRun exactly once on open and shows the run state", async () => {
+  it("calls getReportRun exactly once on open and shows the run state as a badge with its word", async () => {
     getReportRun.mockResolvedValue(run());
     render(<EstateReportRunDetail runId={RUN_ID} />);
     await waitFor(() => expect(screen.getByText(/Failover readiness/)).toBeTruthy());
     expect(getReportRun).toHaveBeenCalledTimes(1);
     expect(getReportRun).toHaveBeenCalledWith(RUN_ID);
-    expect(screen.getByText("SUCCEEDED")).toBeTruthy();
-    expect(screen.getByText(/Evidence age: 2 h/)).toBeTruthy();
+    expect(document.querySelector("[data-state-badge='ok']")?.textContent).toContain("SUCCEEDED");
+    const stamp = document.querySelector("[data-evidence-stamp]");
+    expect(stamp).not.toBeNull();
+    expect(stamp?.getAttribute("data-evidence-stamp")).toBe("a1");
+    expect(screen.queryByText(/Document not available/)).toBeNull();
   });
 
-  it("shows the failed state when the read fails", async () => {
+  it("renders an unrecognised or missing run state as UNKNOWN, never watch and never OK", async () => {
+    getReportRun.mockResolvedValue(run({ state: "WEIRD" } as unknown as Partial<ReportRunView>));
+    const { unmount } = render(<EstateReportRunDetail runId={RUN_ID} />);
+    await waitFor(() => expect(document.querySelector("[data-state-badge='unk']")).not.toBeNull());
+    expect(document.querySelector("[data-state-badge='unk']")?.textContent).toContain("UNKNOWN");
+    expect(document.querySelector("[data-state-badge='watch']")).toBeNull();
+    expect(document.querySelector("[data-state-badge='ok']")).toBeNull();
+    unmount();
+
+    getReportRun.mockResolvedValue(run({ state: undefined } as unknown as Partial<ReportRunView>));
+    render(<EstateReportRunDetail runId={RUN_ID} />);
+    await waitFor(() => expect(document.querySelector("[data-state-badge='unk']")).not.toBeNull());
+    expect(document.querySelector("[data-state-badge='ok']")).toBeNull();
+  });
+
+  it("renders UNKNOWN evidence (a0) without throwing when data_as_of is null or undefined", async () => {
+    getReportRun.mockResolvedValueOnce(run({ data_as_of: null } as unknown as Partial<ReportRunView>));
+    const { unmount } = render(<EstateReportRunDetail runId={RUN_ID} />);
+    await waitFor(() => expect(document.querySelector("[data-evidence-stamp]")).not.toBeNull());
+    expect(document.querySelector("[data-evidence-stamp]")?.getAttribute("data-evidence-stamp")).toBe("a0");
+    unmount();
+
+    const omitted = run();
+    delete (omitted as unknown as Record<string, unknown>).data_as_of;
+    getReportRun.mockResolvedValueOnce(omitted);
+    render(<EstateReportRunDetail runId={RUN_ID} />);
+    await waitFor(() => expect(document.querySelector("[data-evidence-stamp]")).not.toBeNull());
+    expect(document.querySelector("[data-evidence-stamp]")?.getAttribute("data-evidence-stamp")).toBe("a0");
+  });
+
+  it("shows the failed state as an UNKNOWN badge when the read fails, never SUCCEEDED", async () => {
     getReportRun.mockRejectedValue(new Error("network"));
     render(<EstateReportRunDetail runId={RUN_ID} />);
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("READ FAILED");
-    expect(screen.queryByText("SUCCEEDED")).toBeNull();
+    expect(alert.querySelector("[data-state-badge='unk']")).not.toBeNull();
+    expect(screen.queryByText(/SUCCEEDED/)).toBeNull();
   });
 
-  it("says Document not available when the document is missing or malformed, never OK", async () => {
+  it("says a normal run carries metadata only (neutral, not a warning) when no document is present", async () => {
     getReportRun.mockResolvedValue(run());
-    const { unmount } = render(<EstateReportRunDetail runId={RUN_ID} />);
-    expect(await screen.findByText("Document not available")).toBeTruthy();
-    unmount();
+    render(<EstateReportRunDetail runId={RUN_ID} />);
+    const note = await screen.findByText(/Inline sections are not stored on the run record/);
+    expect(note.getAttribute("data-document")).toBe("metadata-only");
+    expect(document.querySelector("[data-document='unavailable']")).toBeNull();
+    expect(screen.getByText("Download")).toBeTruthy();
+  });
 
+  it("renders a malformed document as UNKNOWN, never as available", async () => {
     getReportRun.mockResolvedValue(run({ document: { sections: [{ title: "No id" }] } } as Partial<ReportRunView>));
     render(<EstateReportRunDetail runId={RUN_ID} />);
-    await waitFor(() => expect(screen.getAllByText("Document not available").length).toBeGreaterThan(0));
+    expect(await screen.findByText("Document could not be read (UNKNOWN)")).toBeTruthy();
+    expect(document.querySelector("[data-document='unavailable'] [data-state-badge='unk']")).not.toBeNull();
     expect(document.querySelector("[data-document='available']")).toBeNull();
   });
 
@@ -75,6 +114,7 @@ describe("EstateReportRunDetail", () => {
     getReportRun.mockResolvedValue(run({ document: { sections } } as Partial<ReportRunView>));
     render(<EstateReportRunDetail runId={RUN_ID} />);
     expect(await screen.findByText("Document: 14 sections")).toBeTruthy();
+    expect(document.querySelector("[data-document='available']")).not.toBeNull();
     expect(document.querySelectorAll("[data-estate-report-section]")).toHaveLength(12);
     expect(screen.getByText("+2 more sections")).toBeTruthy();
   });

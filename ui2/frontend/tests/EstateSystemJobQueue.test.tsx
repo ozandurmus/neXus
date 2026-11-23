@@ -63,14 +63,15 @@ describe("Estate System screen: Job queue section", () => {
 
     render(<EstateSystemScreen />);
 
-    expect(await screen.findByText("3 of 40")).toBeTruthy();
+    expect(await screen.findByText("3 of 40 jobs")).toBeTruthy();
     expect(screen.getByText("Failed in the last 24 h, out of all jobs in the last 24 h", { selector: "dt", exact: false })).toBeTruthy();
     expect(screen.getByText("Completed in the last 24 h", { selector: "dt", exact: false })).toBeTruthy();
     expect(screen.getByText("Outcome unknown in the last 24 h", { selector: "dt", exact: false })).toBeTruthy();
     expect(screen.getByText("Running now (jobs in flight at the read)", { selector: "dt", exact: false })).toBeTruthy();
-    expect(valueFor("Completed in the last 24 h")).toBe("30");
-    expect(valueFor("Outcome unknown in the last 24 h")).toBe("2");
-    expect(valueFor("Running now")).toBe("1");
+    expect(valueFor("Completed in the last 24 h")).toBe("30 jobs");
+    expect(valueFor("Outcome unknown in the last 24 h")).toBe("2 jobs");
+    expect(valueFor("Running now")).toBe("1 job");
+    expect(valueFor("Failed in the last 24 h")).toBe("3 of 40 jobs");
 
     const link = screen.getByRole("link", { name: /Open failed jobs \(standard view\)/ });
     expect(link.getAttribute("href")).toBe(FAILED_HREF);
@@ -84,7 +85,29 @@ describe("Estate System screen: Job queue section", () => {
     render(<EstateSystemScreen />);
 
     await waitFor(() => expect(valueFor("Outcome unknown in the last 24 h")).toBe("not reported"));
-    expect(valueFor("Completed in the last 24 h")).toBe("30");
+    expect(valueFor("Completed in the last 24 h")).toBe("30 jobs");
+  });
+
+  it("renders a malformed (null) stats payload as unreadable UNKNOWN, without throwing", async () => {
+    vi.mocked(getJobStats).mockResolvedValue(null as never);
+
+    render(<EstateSystemScreen />);
+
+    expect(await screen.findByText(JOB_QUEUE_FAILED_TEXT)).toBeTruthy();
+    expect(screen.queryByText("Completed in the last 24 h", { selector: "dt", exact: false })).toBeNull();
+  });
+
+  it("stamps a failed job-statistics read UNKNOWN (a0), never a fresh a1", async () => {
+    vi.mocked(getJobStats).mockRejectedValue(new Error("synthetic"));
+
+    const { container } = render(<EstateSystemScreen />);
+
+    expect(await screen.findByText(JOB_QUEUE_FAILED_TEXT)).toBeTruthy();
+    const heading = screen.getByRole("heading", { name: "Job queue" });
+    const card = heading.parentElement?.parentElement ?? container;
+    const stamps = Array.from(card.querySelectorAll("[data-evidence-stamp]")).map((el) => el.getAttribute("data-evidence-stamp"));
+    expect(stamps).toContain("a0");
+    expect(stamps).not.toContain("a1");
   });
 
   it("shows 'could not be read' and no count when the read is rejected", async () => {
@@ -106,7 +129,12 @@ describe("estateJobQueueModel", () => {
     const figures = mapJobQueueFigures(withoutOutcome as JobStatsView);
     const outcome = figures.find((f) => f.id === "outcome_unknown");
     expect(outcome?.value).toBeNull();
-    expect(figures.find((f) => f.id === "failed")?.value).toBe("3 of 40");
+    expect(figures.find((f) => f.id === "failed")?.value).toBe("3 of 40 jobs");
+  });
+
+  it("maps a non-object stats payload to the unreadable state, without throwing", () => {
+    expect(mapJobQueue({ read: { state: "ok", value: null as never }, readAt: AT })).toEqual({ kind: "unreadable", text: JOB_QUEUE_FAILED_TEXT });
+    expect(mapJobQueue({ read: { state: "ok", value: [] as never }, readAt: AT })).toEqual({ kind: "unreadable", text: JOB_QUEUE_FAILED_TEXT });
   });
 
   it("maps a failed read to the unreadable state, not to a count", () => {

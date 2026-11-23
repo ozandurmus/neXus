@@ -39,6 +39,59 @@ export function EstateZoneMatrixGrid({ version, loading, failed }: {
               <EvidenceStamp at={model.evidenceAt} source="stored version" />
             </Box>
             <Typography sx={{ fontSize: "12.5px", color: ev.ink3, mt: "4px" }}>{model.defaultLine}</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", mt: "12px" }}>
+              <Typography data-testid="zone-inventory-count" sx={{ fontSize: "13.5px", fontWeight: 650 }}>
+                {`${model.totalZones} ${model.totalZones === 1 ? "zone" : "zones"} in this version`}
+              </Typography>
+              <EvidenceStamp at={model.evidenceAt} source="stored version" />
+            </Box>
+            {model.zoneSummaries.length > 0 ? (
+              <Box sx={{ overflowX: "auto", mt: "8px" }}>
+                <Box component="table" data-testid="zone-inventory-table" aria-label="Zones in this version" sx={{ borderCollapse: "collapse", fontSize: "13px", minWidth: "100%" }}>
+                  <Box component="thead">
+                    <Box component="tr">
+                      <Box component="th" scope="col" sx={{ textAlign: "left", p: "6px 8px", color: ev.ink3, fontWeight: 650 }}>Zone</Box>
+                      <Box component="th" scope="col" sx={{ textAlign: "left", p: "6px 8px", color: ev.ink3, fontWeight: 650 }}>Role</Box>
+                      <Box component="th" scope="col" sx={{ textAlign: "right", p: "6px 8px", color: ev.ink3, fontWeight: 650 }}>Blocks</Box>
+                      <Box component="th" scope="col" sx={{ textAlign: "right", p: "6px 8px", color: ev.ink3, fontWeight: 650 }}>IPv4 addresses</Box>
+                      <Box component="th" scope="col" sx={{ textAlign: "right", p: "6px 8px", color: ev.ink3, fontWeight: 650 }}>IPv6 addresses</Box>
+                    </Box>
+                  </Box>
+                  <Box component="tbody">
+                    {model.zoneSummaries.map((z) => (
+                      <Box component="tr" key={z.zoneId} data-testid="zone-inventory-row">
+                        <Box component="th" scope="row" sx={{ textAlign: "left", p: "6px 8px", fontFamily: ESTATE_MONO, fontWeight: 650, borderTop: `1px solid ${ev.line}` }}>{z.name}</Box>
+                        <Box component="td" sx={{ p: "6px 8px", borderTop: `1px solid ${ev.line}` }}>{z.roleWord}</Box>
+                        <Box component="td" sx={{ textAlign: "right", p: "6px 8px", fontFamily: ESTATE_MONO, borderTop: `1px solid ${ev.line}` }}>{z.blockCount}</Box>
+                        <Box component="td" sx={{ textAlign: "right", p: "6px 8px", fontFamily: ESTATE_MONO, borderTop: `1px solid ${ev.line}` }}>{z.ipv4Addresses}</Box>
+                        <Box component="td" sx={{ textAlign: "right", p: "6px 8px", fontFamily: ESTATE_MONO, borderTop: `1px solid ${ev.line}` }}>{z.ipv6Addresses}</Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Box>
+            ) : null}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", mt: "6px" }}>
+              <MoreFooter shown={model.shownZones} total={model.totalZones} noun="zones" testId="zone-inventory-more" />
+            </Box>
+            <Typography data-testid="zone-unassigned-space" sx={{ fontSize: "12.5px", color: ev.ink2, mt: "8px" }}>
+              {model.unassignedLine}
+            </Typography>
+            {model.redundantBlocksCount !== null && model.redundantBlocksCount > 0 ? (
+              <Box data-testid="zone-overlap-warning" sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", mt: "8px" }}>
+                <StateBadge state="watch" dense />
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                  {`Overlap warning: ${model.redundantBlocksCount} block(s) repeat or sit inside another block of the same zone`}
+                </Typography>
+              </Box>
+            ) : model.redundantBlocksCount === null ? (
+              <Box data-testid="zone-overlap-unknown" sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", mt: "8px" }}>
+                <StateBadge state="unk" word="UNKNOWN" dense />
+                <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
+                  Overlap status UNKNOWN
+                </Typography>
+              </Box>
+            ) : null}
             {model.rows.length === 0 ? (
               <Typography role="status" sx={{ mt: "10px", fontSize: "13.5px", color: ev.ink2 }}>This version has no zones.</Typography>
             ) : (
