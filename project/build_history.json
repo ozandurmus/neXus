@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0405",
+      "status": "automated_validated",
+      "title": "ASA failover contract PO answers, Devices deep link, ship preview e2e failure titles and build-history archive",
+      "summary": "ASA failover contract records PO answers Q3/Q4/Q6/Q7 with a Q3 council packet (5170995f, still DRAFT); ?screen=devices opens Devices (f69b318c). Preview e2e names failing tests (e9a5c166); 75 oldest build records archived (96ec4bd2, c590a7aa).",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0404",
       "status": "automated_validated",
       "title": "ASA ACL_NOT_BOUND unknown reason, ASA A0 conformance tests and debt cleanups",
