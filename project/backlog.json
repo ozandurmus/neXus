@@ -70,7 +70,7 @@
       "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
       "status": "in_progress",
       "priority": "P1",
-      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b) and slice 2 (V258, 084c89d7) on main; not real-env validated.",
+      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b), slice 2 (V258, 084c89d7) and slice 3 run-end notifications (V266, 8420aaf1) on main; not real-env validated.",
       "note": ""
     },
     {
@@ -584,6 +584,15 @@
       "status": "planned",
       "priority": "P3",
       "target": "docs/operations/PREVIEW_GOLDEN_DATABASE.md (fb373545)",
+      "note": ""
+    },
+    {
+      "id": "asa_port_operator_a0_asa_14_defect",
+      "category": "policy",
+      "title": "ASA lt/gt/neq port operators contradict A0-ASA-14: fix the mapper and enable the disabled DEFECT test",
+      "status": "planned",
+      "priority": "P2",
+      "target": "AsaA0ConformanceTest (disabled DEFECT test, 65430d84)",
       "note": ""
     }
   ]

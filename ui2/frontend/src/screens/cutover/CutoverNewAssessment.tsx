@@ -16,8 +16,11 @@ const LABELS: Record<Exclude<CsvField, "rule">, string> = {
 };
 export const MAX_FILES = 8;
 const MAX_BYTES = 100_000_000;
-/** Vendors whose stored policy the lookup can evaluate; any other enrolled firewall is NOT_EVALUABLE (PO 2026-11-14, Q8). */
-export const LOOKUP_VENDOR_HINTS = new Set(["check_point", "palo_alto"]);
+/** Vendors whose stored policy the lookup can evaluate; any other enrolled firewall is NOT_EVALUABLE. */
+export const LOOKUP_VENDOR_HINTS = new Set(["check_point", "palo_alto", "cisco_asa", "fortinet"]);
+/** What the zone inputs name per vendor hint: a Palo Alto zone, a Cisco ASA interface nameif, a FortiGate interface or zone. Check Point rules need none. */
+export const ZONE_NOUNS: Readonly<Record<string, string>> = { palo_alto: "zone", cisco_asa: "interface (nameif)", fortinet: "interface or zone" };
+export const zoneNoun = (vendorHint: string | undefined): string | undefined => (vendorHint === undefined ? undefined : ZONE_NOUNS[vendorHint]);
 
 interface Upload { readonly file: File; readonly headers: string[]; readonly rows: string[][]; mapping: Partial<Record<CsvField, string>> }
 
@@ -49,14 +52,14 @@ export function CutoverNewAssessment({ segmentId, onDone }: { readonly segmentId
 
   const device = devices.find((d) => d.device_id === deviceId);
   const evaluable = device ? LOOKUP_VENDOR_HINTS.has(device.vendor_hint) : false;
-  const paloAlto = device?.vendor_hint === "palo_alto";
+  const zoneName = zoneNoun(device?.vendor_hint);
   const targetPolicies = useMemo(() => policies.filter((p) => (p.targets ?? []).some((t) => t.deviceId === deviceId)), [policies, deviceId]);
   const contexts = useMemo(() => [...new Set((policies.find((p) => p.id === policyId)?.targets ?? []).filter((t) => t.deviceId === deviceId).map((t) => t.context ?? ""))],
     [policies, policyId, deviceId]);
   const oldPolicy = policies.find((p) => p.id === oldPolicyId);
   const oldTargets = oldPolicy?.targets ?? [];
 
-  const overrideComplete = !override || (Boolean(deviceId) && (!evaluable || Boolean(policyId)) && (!paloAlto || (segmentZone.trim() !== "" && peerZone.trim() !== "")));
+  const overrideComplete = !override || (Boolean(deviceId) && (!evaluable || Boolean(policyId)) && (zoneName === undefined || (segmentZone.trim() !== "" && peerZone.trim() !== "")));
   const filesComplete = uploads.length > 0 && uploads.every((u) => mappingValid(u.mapping));
   const canRun = overrideComplete && filesComplete && confirmed && !busy;
 
@@ -134,12 +137,12 @@ export function CutoverNewAssessment({ segmentId, onDone }: { readonly segmentId
           {contexts.map((c) => <MenuItem key={c} value={c}>{c || "default"}</MenuItem>)}
         </TextField>}
       </>}
-      {paloAlto && <>
-        <Typography variant="body2">Palo Alto rules match on zones. Name the zone of the interface that faces the segment and the one that faces its peers;
-          without both, every flow stays not decided.</Typography>
+      {zoneName !== undefined && <>
+        <Typography variant="body2">This firewall's rules match on the {zoneName} the traffic arrives in and leaves by. Name the {zoneName} that faces the segment
+          and the one that faces its peers; without both, every flow stays not decided.</Typography>
         <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
-          <TextField label="Segment-side zone" value={segmentZone} required disabled={busy} onChange={(e) => setSegmentZone(e.target.value)} inputProps={{ maxLength: 200 }} />
-          <TextField label="Peer-side zone" value={peerZone} required disabled={busy} onChange={(e) => setPeerZone(e.target.value)} inputProps={{ maxLength: 200 }} />
+          <TextField label={`Segment-side ${zoneName}`} value={segmentZone} required disabled={busy} onChange={(e) => setSegmentZone(e.target.value)} inputProps={{ maxLength: 200 }} />
+          <TextField label={`Peer-side ${zoneName}`} value={peerZone} required disabled={busy} onChange={(e) => setPeerZone(e.target.value)} inputProps={{ maxLength: 200 }} />
         </Stack>
       </>}
     </Stack>}

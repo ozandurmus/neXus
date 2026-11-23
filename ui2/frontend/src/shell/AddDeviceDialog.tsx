@@ -56,6 +56,17 @@ const DISCOVERY_FAILURE_COPY: Record<string, string> = {
   AUTH_FAILED: "SSH authentication failed.",
   CONNECT_TIMEOUT: "SSH connection timed out before trust could be verified.",
 };
+const FAILURE_REASON_PREFIX = "failure_reason_class:";
+const GENERIC_DISCOVERY_FAILURE = "Discovery did not complete.";
+
+/** Maps a run's outcome_summary keys (bare or `failure_reason_class:`-prefixed) to the closed copy map; anything else is generic. */
+function discoveryFailureCopy(outcomeSummary: Record<string, unknown> | undefined): string {
+  for (const key of Object.keys(outcomeSummary ?? {})) {
+    const cls = key.startsWith(FAILURE_REASON_PREFIX) ? key.slice(FAILURE_REASON_PREFIX.length) : key;
+    if (Object.prototype.hasOwnProperty.call(DISCOVERY_FAILURE_COPY, cls)) return DISCOVERY_FAILURE_COPY[cls];
+  }
+  return GENERIC_DISCOVERY_FAILURE;
+}
 
 const VENDOR_LABEL: Record<Vendor, string> = {
   check_point: "Check Point",
@@ -844,8 +855,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
 
         {mode === "discovery" && discoveryPhase === "failed" && (
           <Typography variant="body2" color="error">
-            {Object.keys(run?.outcome_summary ?? {}).map((key) => DISCOVERY_FAILURE_COPY[key]).find(Boolean)
-              ?? "Discovery did not complete."}
+            {discoveryFailureCopy(run?.outcome_summary)}
           </Typography>
         )}
 

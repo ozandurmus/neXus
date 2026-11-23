@@ -2516,8 +2516,9 @@ export const getPolicyHygiene = (id: string, page = 0, findingClass = "", severi
 export interface PolicyHygieneSummaryRow {
   sourceId: string; sourceName: string; vendor: string; containerId: string; containerName: string;
   snapshotAt: string; state: "READY" | "PENDING"; rules?: number; counts?: Record<string, number>;
+  unknownReasons?: Record<string, number>; blockerReasons?: Record<string, number>;
 }
-export interface PolicyHygieneSummary { containers: PolicyHygieneSummaryRow[]; totals: Record<string, number>; rules: number; pending: number; days: number }
+export interface PolicyHygieneSummary { containers: PolicyHygieneSummaryRow[]; totals: Record<string, number>; rules: number; pending: number; days: number; unknownReasons?: Record<string, number>; blockerReasons?: Record<string, number> }
 export const getPolicyHygieneSummary = () => call<PolicyHygieneSummary>("/api/v2/policy/hygiene-summary", "GET");
 export const getPolicyRule = (id: string, rule: string, days = 90) =>
   call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules?ruleId=${encodeURIComponent(rule)}&days=${days}`, "GET");

@@ -715,6 +715,53 @@ describe("AddDeviceDialog discovery mode", () => {
 });
 
 
+describe("AddDeviceDialog discovery failure class copy", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function runFailed(outcomeSummary: Record<string, number>) {
+    vi.stubGlobal("fetch", routedFetch({
+      "/credentials": CREDENTIALS_ROUTE,
+      "/session/status": { body: { csrf_token: "test-csrf" } },
+      "/discovery/runs": { status: 202, body: { run_id: "run-fc", job_id: "job-fc" } },
+      "/discovery/runs/run-fc": { body: { run_id: "run-fc", vendor: "check_point", state: "FAILED",
+        outcome_summary: outcomeSummary, candidates: [], error: "sensitive-response-marker" } },
+    }));
+    render(withTheme(<AddDeviceDialogTrigger />));
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+  }
+
+  it("maps a failure_reason_class-prefixed key to its copy", async () => {
+    await runFailed({ "failure_reason_class:AUTH_FAILED": 1 });
+    await waitFor(() => expect(screen.getByText("SSH authentication failed.")).toBeInTheDocument());
+    expect(screen.queryByText("sensitive-response-marker")).not.toBeInTheDocument();
+    expect(screen.queryByText("192.0.2.100")).not.toBeInTheDocument();
+  });
+
+  it("still maps a bare legacy key", async () => {
+    await runFailed({ CONNECT_TIMEOUT: 1 });
+    await waitFor(() => expect(screen.getByText(/SSH connection timed out/)).toBeInTheDocument());
+  });
+
+  it("shows the generic message for an unknown class and never echoes it", async () => {
+    await runFailed({ "failure_reason_class:job ended before the run finished": 1 });
+    await waitFor(() => expect(screen.getByText("Discovery did not complete.")).toBeInTheDocument());
+    expect(screen.queryByText(/job ended before/)).not.toBeInTheDocument();
+  });
+
+  it("shows the generic message for an empty outcome_summary", async () => {
+    await runFailed({});
+    await waitFor(() => expect(screen.getByText("Discovery did not complete.")).toBeInTheDocument());
+  });
+
+  it("does not treat an inherited object key as a failure class", async () => {
+    await runFailed({ "failure_reason_class:constructor": 1 });
+    await waitFor(() => expect(screen.getByText("Discovery did not complete.")).toBeInTheDocument());
+  });
+});
+
 describe("C10 SSH trust enrollment", () => {
   afterEach(() => vi.unstubAllGlobals());
 
