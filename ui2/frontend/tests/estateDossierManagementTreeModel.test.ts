@@ -89,6 +89,43 @@ describe("buildManagementTreeBlockModel", () => {
     expect(m.state).toBe("UNKNOWN");
   });
 
+  it("a null tree value is UNKNOWN and never throws or reads as OK", () => {
+    const m = buildManagementTreeBlockModel({ state: "ok", value: null as never });
+    expect(m.state).toBe("UNKNOWN");
+    expect(m.notImportedTotal).toBeNull();
+    expect(m.domains).toEqual([]);
+  });
+
+  it("a domain whose nodes are null or omitted is UNKNOWN, never zero clusters and OK", () => {
+    for (const bad of [null, undefined]) {
+      const m = buildManagementTreeBlockModel({
+        state: "ok",
+        value: { ...TWO_DOMAINS, domains: [{ domain: "DOMAIN-ALPHA", nodes: bad as never }] },
+      });
+      expect(m.state).toBe("UNKNOWN");
+      expect(m.notImportedTotal).toBeNull();
+      expect(m.domains).toEqual([]);
+    }
+  });
+
+  it("a null domain element is UNKNOWN and never throws", () => {
+    const m = buildManagementTreeBlockModel({ state: "ok", value: { ...TWO_DOMAINS, domains: [null as never] } });
+    expect(m.state).toBe("UNKNOWN");
+    expect(m.notImportedTotal).toBeNull();
+    expect(m.domains).toEqual([]);
+  });
+
+  it("a node with malformed children is UNKNOWN, even when a sibling domain is well formed", () => {
+    const broken = node({ hostname: "FW-CHARLIE-03", children: "not-a-list" as never });
+    const m = buildManagementTreeBlockModel({
+      state: "ok",
+      value: { ...TWO_DOMAINS, domains: [TWO_DOMAINS.domains[0], { domain: "DOMAIN-DELTA", nodes: [broken] }] },
+    });
+    expect(m.state).toBe("UNKNOWN");
+    expect(m.notImportedTotal).toBeNull();
+    expect(m.domains).toEqual([]);
+  });
+
   it("two domains yield the counts from domainCounts and the not-imported total", () => {
     const m = buildManagementTreeBlockModel({ state: "ok", value: TWO_DOMAINS });
     expect(m.state).toBe("OK");
