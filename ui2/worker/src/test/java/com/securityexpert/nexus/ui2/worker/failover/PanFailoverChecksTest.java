@@ -304,7 +304,28 @@ class PanFailoverChecksTest {
         var both=PanFailoverChecks.syncEvidence(disabled,disabled);
         assertEquals("FAIL",both.status());
         org.junit.jupiter.api.Assertions.assertTrue(both.derived().contains("\"membersDisabled\":2"));
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var perMember=json.readTree(one.derived()).path("syncEnabledByMember");
+        assertEquals("yes",perMember.path("first").asText());
+        assertEquals("no",perMember.path("second").asText());
+        var reversed=json.readTree(PanFailoverChecks.syncEvidence(disabled,enabled).derived()).path("syncEnabledByMember");
+        assertEquals("no",reversed.path("first").asText());
+        assertEquals("yes",reversed.path("second").asText());
+        var bothMap=json.readTree(both.derived()).path("syncEnabledByMember");
+        assertEquals("no",bothMap.path("first").asText());
+        assertEquals("no",bothMap.path("second").asText());
+        // One member's setting missing: it stays "unknown", never "yes"; the other member's "no" still fails the check.
+        var unreadable=PanFailoverChecks.parse(healthy.replace("<running-sync-enabled>yes</running-sync-enabled>",""));
+        var oneUnknown=PanFailoverChecks.syncEvidence(unreadable,disabled);
+        assertEquals("FAIL",oneUnknown.status());
+        var unknownMap=json.readTree(oneUnknown.derived()).path("syncEnabledByMember");
+        assertEquals("unknown",unknownMap.path("first").asText());
+        assertEquals("no",unknownMap.path("second").asText());
+        org.junit.jupiter.api.Assertions.assertTrue(oneUnknown.derived().contains("\"membersDisabled\":1"));
+        // Each member's own row carries its key; evidence without the failure is unchanged.
+        assertEquals("second",json.readTree(PanFailoverChecks.syncEvidenceForMember(one.derived(),"second")).path("self").asText());
         var enabledBoth=PanFailoverChecks.syncEvidence(enabled,enabled);
+        assertEquals(enabledBoth.derived(),PanFailoverChecks.syncEvidenceForMember(enabledBoth.derived(),"first"));
         assertEquals("FAIL",enabledBoth.status());
         org.junit.jupiter.api.Assertions.assertFalse(enabledBoth.derived().contains("CONFIG_SYNC_DISABLED"));
     }

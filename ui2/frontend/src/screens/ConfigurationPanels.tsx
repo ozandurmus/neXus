@@ -9,6 +9,7 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { describeApiError } from "../shell/apiErrorText";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
@@ -20,7 +21,6 @@ import {
   getDeviceConfiguration,
   getDeviceConfigurationText,
   requestConfigurationCollect,
-  type ApiError,
   type ConfigurationIndexEntry,
   type ConfigurationOverride,
   type DeviceConfiguration,
@@ -34,13 +34,6 @@ import { statusWord } from "../shell/presenters";
 import { categoryWord } from "./BackupDeviationCard";
 
 const POLL_INTERVAL_MS = 1750;
-
-function describeApiError(err: unknown): string {
-  const apiErr = err as Partial<ApiError>;
-  const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
-  if (serverError) return serverError;
-  return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
-}
 
 function changeStateTone(state: string | null): "ok" | "warn" | "neutral" | "bad" {
   if (state === "changed") return "bad";

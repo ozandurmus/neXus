@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as adminApi from "../src/auth/adminApi";
 import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
 import { EstateFailoverScreen } from "../src/estate/EstateFailoverScreen";
-import { EstateFailoverCellDrawer, PER_UNIT_PRECHECK_NOTE } from "../src/estate/EstateFailoverCellDrawer";
+import { EstateFailoverCellDrawer, FAILOVER_START_NOTE, PER_UNIT_PRECHECK_NOTE } from "../src/estate/EstateFailoverCellDrawer";
 import {
   buildFailoverBoard,
   buildFailoverBoardModel,
@@ -163,6 +163,33 @@ describe("EstateFailoverScreen pre-check cell drawer", () => {
     expect(within(dialog).queryAllByRole("button")).toHaveLength(0);
     const link = within(dialog).getByRole("link", { name: /Open in standard view/ });
     expect(link.getAttribute("href")).toContain("standard=1");
+  });
+
+  // PO 2026-11-23: both views word the failover start the same way; Estate stays read-only and only says where it is done.
+  it("words the failover start as one confirmation with a work log note, in the banner and in the drawer, with no approval form", async () => {
+    render(<EstateFailoverScreen />);
+    expect(FAILOVER_START_NOTE).toMatch(/one confirmation with a work log note/);
+    expect(screen.getByText(new RegExp(FAILOVER_START_NOTE.slice(0, 60)))).toBeInTheDocument();
+    expect(screen.queryByText(/manage failover approvals/)).not.toBeInTheDocument();
+
+    fireEvent.click(cellButtons(/VS VS-TANGO-04-01: Blocks/)[0]);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByTestId("failover-cell-drawer-start-note")).toHaveTextContent(FAILOVER_START_NOTE);
+    expect(within(dialog).queryAllByRole("button")).toHaveLength(0);
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: /Open in standard view/ }).getAttribute("href")).toContain("standard=1");
+  });
+
+  it("does not describe a failover start for a unit the server offers none for, or a vendor without execution", () => {
+    const cell = { state: "ok", word: "Pass", summary: "Active", observedAt: null } as never;
+    const base = { unitLabel: "FW-TANGO-04", unitKind: "VSX_CHASSIS" as const, checkTitle: "Cluster state", cell, standardHref: "?screen=operations&standard=1" };
+    const view = render(<EstateFailoverCellDrawer target={{ ...base, vendor: "check_point", failoverRefusal: "VSX_CHASSIS_NOT_FAILOVER_UNIT" }} onClose={() => undefined} />);
+    expect(screen.getByTestId("failover-cell-drawer-gate")).toBeInTheDocument();
+    expect(screen.queryByTestId("failover-cell-drawer-start-note")).not.toBeInTheDocument();
+    view.unmount();
+    render(<EstateFailoverCellDrawer target={{ ...base, unitKind: "CLUSTER", vendor: "cisco_asa" }} onClose={() => undefined} />);
+    expect(screen.getByText("Failover execution not enabled for Cisco ASA")).toBeInTheDocument();
+    expect(screen.queryByTestId("failover-cell-drawer-start-note")).not.toBeInTheDocument();
   });
 
   it("propagates the newest observedAt onto FailoverMatrixCell and stamps EvidenceStamp in EstateFailoverCellDrawer", () => {

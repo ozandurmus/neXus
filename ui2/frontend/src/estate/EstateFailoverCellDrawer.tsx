@@ -11,6 +11,13 @@ import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 export const PER_UNIT_PRECHECK_NOTE =
   "Chassis pre-checks apply to the physical pair; each Virtual System is evaluated separately.";
 
+/**
+ * Shared wording (PO 2026-11-23): how a failover is started in the standard view. Estate stays read-only; this only
+ * tells the reader what the standard-view link leads to, in the words that view uses ("Work log note").
+ */
+export const FAILOVER_START_NOTE =
+  "A failover starts in the standard view, from the unit's row: one confirmation with a work log note. A second administrator is asked only where the role requires one.";
+
 export interface FailoverCellTarget {
   readonly unitLabel: string;
   readonly unitKind: FailoverBoardUnit["unitKind"];
@@ -109,10 +116,16 @@ export function EstateFailoverCellDrawer({
             />
           </Box>
 
+          {!refusal && !execDisabled ? (
+            <Typography data-testid="failover-cell-drawer-start-note" sx={{ mt: "auto", fontSize: "12px", color: ev.ink3 }}>
+              {FAILOVER_START_NOTE}
+            </Typography>
+          ) : null}
+
           <Box
             component="a"
             href={target.standardHref}
-            sx={{ mt: "auto", color: ev.accent, fontWeight: 600, fontSize: "13px", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+            sx={{ mt: refusal || execDisabled ? "auto" : 0, color: ev.accent, fontWeight: 600, fontSize: "13px", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
           >
             Open in standard view →
           </Box>

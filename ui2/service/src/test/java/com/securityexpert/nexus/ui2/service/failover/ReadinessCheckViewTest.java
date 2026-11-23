@@ -69,6 +69,37 @@ class ReadinessCheckViewTest {
             row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":2}").get("summary"));
         assertEquals("Configuration not synchronized",row(true,4,"FAIL","{\"first\":{}}").get("summary"));
     }
+    @Test void panConfigSyncOffIsNamedPerMember() throws Exception {
+        String map="\"syncEnabledByMember\":{\"first\":\"yes\",\"second\":\"no\"}";
+        var first=row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":1,"+map+",\"self\":\"first\"}");
+        var second=row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":1,"+map+",\"self\":\"second\"}");
+        assertEquals("Config sync enabled on this member; its peer has it off",first.get("summary"));
+        assertEquals("on",first.get("memberSync"));
+        assertEquals("Config sync is OFF on this member (Device > High Availability > General > Setup > Enable Config Sync)",second.get("summary"));
+        assertEquals("off",second.get("memberSync"));
+        assertEquals("FAIL",second.get("result"));
+        assertEquals("FAIL",first.get("result"));
+        var both=row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":2,"
+            +"\"syncEnabledByMember\":{\"first\":\"no\",\"second\":\"no\"},\"self\":\"first\"}");
+        assertEquals("off",both.get("memberSync"));
+    }
+    @Test void panConfigSyncUnknownMemberIsNeverShownAsEnabled() throws Exception {
+        String d="{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":1,"
+            +"\"syncEnabledByMember\":{\"first\":\"unknown\",\"second\":\"no\"},\"self\":\"first\"}";
+        var unknown=row(true,4,"FAIL",d);
+        assertEquals("unknown",unknown.get("memberSync"));
+        assertEquals("Config sync setting of this member is not known; its peer has it off",unknown.get("summary"));
+    }
+    @Test void panConfigSyncOldEvidenceKeepsThePairWideText() throws Exception {
+        // No per-member map, or a map without the row's own marker: today's wording, and no memberSync field.
+        var old=row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":1}");
+        assertEquals("Config sync is disabled on 1 member(s): the running configurations are not kept equal",old.get("summary"));
+        assertFalse(old.containsKey("memberSync"));
+        var noSelf=row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":1,"
+            +"\"syncEnabledByMember\":{\"first\":\"yes\",\"second\":\"no\"}}");
+        assertEquals("Config sync is disabled on 1 member(s): the running configurations are not kept equal",noSelf.get("summary"));
+        assertFalse(noSelf.containsKey("memberSync"));
+    }
     /** PO decision 2026-10-20 item 2: the "Recovery mode" row the PO picks a pilot unit by. */
     @Test void recoveryModeRowIsBlockingAndNamesTheObservedMode() throws Exception {
         var active=row(false,15,"PASS","{\"recoveryMode\":\"ACTIVE_UP\",\"reason\":\"ACTIVE_UP\"}");

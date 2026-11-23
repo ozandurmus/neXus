@@ -26,8 +26,29 @@ public final class ReadinessCheckView {
         // A VSX chassis has no traffic interface in VS0: each Virtual System's unit measures its own traffic.
         boolean perVirtualSystem=!pan && no==8 && "NOT_EVALUATED".equals(status)
             && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText());
-        return Map.of("title",title(pan,no),"member",member,"result",status,
-            "blocking",pan ? no!=PAN_TRAFFIC_ARP : (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt));
+        var fields=new java.util.LinkedHashMap<String,Object>(Map.of("title",title(pan,no),"member",member,"result",status,
+            "blocking",pan ? no!=PAN_TRAFFIC_ARP : (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt)));
+        String sync=pan && no==4 && "FAIL".equals(status) ? panMemberSync(d) : null;
+        if (sync!=null) fields.put("memberSync",sync);
+        return Map.copyOf(fields);
+    }
+
+    /**
+     * Palo Alto check 4 with config sync switched off on a member (PO 2026-11-23): this row's own member state, "off",
+     * "on" or "unknown", from the per-member map the readiness run recorded; null for older evidence (no map, or no
+     * marker saying which member the row is), which keeps the pair-wide wording.
+     */
+    private static String panMemberSync(JsonNode d) {
+        if (!"CONFIG_SYNC_DISABLED".equals(d.path("reason").asText())) return null;
+        JsonNode byMember=d.path("syncEnabledByMember");
+        if (!byMember.isObject() || !byMember.has("first") || !byMember.has("second")) return null;
+        String self=d.path("self").asText();
+        if (!"first".equals(self) && !"second".equals(self)) return null;
+        return switch(byMember.path(self).asText()) {
+            case "no" -> "off";
+            case "yes" -> "on";
+            default -> "unknown";
+        };
     }
 
     private static String fgtTitle(int no) {
@@ -197,6 +218,11 @@ public final class ReadinessCheckView {
             case 2 -> pass ? "Reciprocal peer relationship verified" : "Peer relationship not ready";
             case 3 -> pass ? "Required HA links up on both members" : "An HA link is down";
             case 4 -> pass ? "Running configuration synchronized on both members"
+                : panMemberSync(d)!=null ? switch(panMemberSync(d)) {
+                    case "off" -> "Config sync is OFF on this member (Device > High Availability > General > Setup > Enable Config Sync)";
+                    case "on" -> "Config sync enabled on this member; its peer has it off";
+                    default -> "Config sync setting of this member is not known; its peer has it off";
+                }
                 : "CONFIG_SYNC_DISABLED".equals(d.path("reason").asText())
                     ? "Config sync is disabled on " + d.path("membersDisabled").asInt() + " member(s): the running configurations are not kept equal"
                     : "Configuration not synchronized";

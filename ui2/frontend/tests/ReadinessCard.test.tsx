@@ -44,6 +44,39 @@ describe("Readiness card", () => {
     expect(failing.className).not.toEqual(informational.className);
   });
 
+  it("names the member with config sync off: its own cell is red, the peer's cell is neutral, the row stays FAIL", () => {
+    const sync = (i: number, memberSync: "off" | "on" | "unknown", summary: string): ReadinessCheck => ({ checkNo: 4, title: "Configuration sync", member: `Member ${i + 1}`,
+      device_id: members[i].device_id, result: "FAIL", summary, blocking: true, memberSync });
+    const off = "Config sync is OFF on this member (Device > High Availability > General > Setup > Enable Config Sync)";
+    const on = "Config sync enabled on this member; its peer has it off";
+    render(<ReadinessCard {...props} vendor="palo_alto" status="NOT_READY" checks={[sync(0, "on", on), sync(1, "off", off)]} />);
+    expect(screen.getByText("Not ready · 1 blocker")).toBeInTheDocument();
+    const row = screen.getByText("Configuration sync").closest("tr")!;
+    expect(screen.getAllByRole("img", { name: "Blocking" })).toHaveLength(1);
+    const cells = within(row).getAllByRole("cell");
+    expect(cells.map(cell => cell.textContent)).toEqual([on, off]);
+    expect(cells.map(cell => cell.getAttribute("data-member-sync"))).toEqual(["on", "off"]);
+    const red = getComputedStyle(cells[1]).backgroundColor;
+    expect(red).not.toBe("");
+    expect(getComputedStyle(cells[0]).backgroundColor).not.toBe(red);
+    expect(getComputedStyle(row).backgroundColor).not.toBe(red);
+  });
+
+  it("keeps an unknown config sync member neutral and old evidence red on the whole row", () => {
+    const unknown: ReadinessCheck = { checkNo: 4, title: "Configuration sync", member: "Member 1", device_id: members[0].device_id,
+      result: "FAIL", summary: "Config sync setting of this member is not known; its peer has it off", blocking: true, memberSync: "unknown" };
+    const { unmount } = render(<ReadinessCard {...props} vendor="palo_alto" status="NOT_READY"
+      checks={[unknown, { ...unknown, member: "Member 2", device_id: members[1].device_id, memberSync: "off" }]} />);
+    expect(within(screen.getByText("Configuration sync").closest("tr")!).getAllByRole("cell").map(cell => cell.getAttribute("data-member-sync")))
+      .toEqual(["unknown", "off"]);
+    unmount();
+    const old = (i: number): ReadinessCheck => ({ checkNo: 4, title: "Configuration sync", member: `Member ${i + 1}`, device_id: members[i].device_id,
+      result: "FAIL", summary: "Config sync is disabled on 1 member(s): the running configurations are not kept equal", blocking: true });
+    render(<ReadinessCard {...props} vendor="palo_alto" status="NOT_READY" checks={[old(0), old(1)]} />);
+    const row = screen.getByText("Configuration sync").closest("tr")!;
+    expect(within(row).getAllByRole("cell").every(cell => !cell.hasAttribute("data-member-sync"))).toBe(true);
+  });
+
   it("keeps unknown evidence unknown and does not shift a missing member's result", () => {
     render(<ReadinessCard {...props} status="UNKNOWN" checks={[{ ...checks[1], member: "Member 1" }]} />);
     expect(screen.getByText("Unknown")).toBeInTheDocument();

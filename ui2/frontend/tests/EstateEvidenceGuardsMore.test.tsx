@@ -784,8 +784,6 @@ type MoreCase = {
   readonly fixtureHasUnknown: boolean;
   // Scope of the guarded text: the whole screen, or the card holding the named heading.
   readonly scopeHeading?: string;
-  // Guard A cannot run under this fixture or the real UI has a known gap: the test is skipped, reason named.
-  readonly skipGuardA?: string;
 };
 
 const NOW_ISO = new Date().toISOString();
@@ -867,8 +865,7 @@ describe("Estate evidence-stamp and UNKNOWN-never-OK guards (Rewind, Ask, Change
       scopeFor(root, c);
     });
 
-    const guardA = c.skipGuardA ? it.skip : it;
-    guardA(`${c.screen}: every counted section carries an evidence stamp (guard A)${c.skipGuardA ? ` - SKIPPED: ${c.skipGuardA}` : ""}`, async () => {
+    it(`${c.screen}: every counted section carries an evidence stamp (guard A)`, async () => {
       const root = await mount(c);
       const scope = scopeFor(root, c);
       await waitFor(() => expect(scope.querySelector("[data-evidence-stamp]"), `${c.screen}: no EvidenceStamp rendered`).not.toBeNull());

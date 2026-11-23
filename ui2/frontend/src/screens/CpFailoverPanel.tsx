@@ -12,14 +12,16 @@ import Stepper from "@mui/material/Stepper";
 import TextField from "@mui/material/TextField";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
 import { PRODUCT_NAME } from "../brand/product";
 import { m3 } from "../theme/m3Theme";
-import { DISPLAY_TZ_LABEL, displayInputToIso, isoToDisplayInput, relativeAge } from "../shell/time";
+import { formatStamp, relativeAge } from "../shell/time";
 import { clusterModeWord, readinessReasonLabel, requestFailure, statusWord } from "../shell/presenters";
 import { approveCpFailover, approveCpFailoverResume, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits,
-  resumeCpFailoverReturn, secondApproveCpFailover, startCpFailover, runCpFailoverReadiness,
+  listFailoverIncidents, resumeCpFailoverReturn, secondApproveCpFailover, startCpFailover, runCpFailoverReadiness,
   type CpFailoverApproval, type CpFailoverResumeState, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 import { ReadinessCard, ReadinessChecksTable } from "./ReadinessChecksTable";
 import { FailoverIncidentsPanel } from "./FailoverIncidentsPanel";
@@ -50,6 +52,38 @@ const CHASSIS_CODE = /^(VSX_|VIRTUAL_SYSTEM_|SEQUENCE_|VS_RUN_|CHASSIS_RUN_)/;
 export const isDirectoryUnreachable = (error: unknown) =>
   (error as { body?: { code?: string } } | null | undefined)?.body?.code === "DIRECTORY_UNREACHABLE_AT_START";
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };
+/** The one free-text field of a failover or resume request (PO 2026-11-23): a work record, not an approval form. */
+export const WORK_LOG_NOTE_LABEL = "Work log note";
+export const WORK_LOG_NOTE_MAX = 500;
+/** How long a request stays startable. A single administrator's request always uses the default; nothing is typed. */
+export const VALIDITY_MINUTES = [30, 60, 120] as const;
+export const DEFAULT_VALIDITY_MINUTES = 60;
+/**
+ * The readiness line of the confirm dialog. "Ready" needs a finished readiness run whose outcome is READY and a unit
+ * the server does not refuse; a missing, running or unrecognised result is Unknown and is never worded as ready. A
+ * server refusal is shown as the server sent it.
+ */
+export type ReadinessVerdict = { tone: "ready" | "warning" | "blocked" | "unknown"; text: string; detail?: string };
+export function failoverReadinessVerdict(unit: CpFailoverUnit, readiness: CpFailoverRunDetail | null): ReadinessVerdict {
+  const refusal = unit.refusalReason || unit.chassisStartRefusal || unit.failoverRefusal;
+  if (refusal) return { tone: "blocked", text: `Refused: ${refusal}` };
+  if (!readiness) return { tone: "unknown", text: "Unknown: no readiness result on record" };
+  if (activeStates.includes(readiness.state)) return { tone: "unknown", text: "Unknown: pre-checks are still running" };
+  const pre = readiness.checks.filter(c => c.phase === "pre");
+  if (readiness.outcome === "READY") {
+    const warned = [...new Set(pre.filter(c => (c.status ?? c.result) === "WARN").map(c => c.title))];
+    if (!warned.length) return { tone: "ready", text: "Ready" };
+    const listed = warned.slice(0, 3).join("; "), more = warned.length - 3;
+    return { tone: "warning", text: `Ready with ${warned.length} ${warned.length === 1 ? "warning" : "warnings"}`,
+      detail: more > 0 ? `${listed}; +${more} more` : listed };
+  }
+  if (readiness.outcome === "NOT_READY") {
+    const blockers = new Set(pre.filter(c => c.blocking && ["FAIL", "UNKNOWN"].includes(c.status ?? c.result)).map(c => c.checkNo)).size;
+    return { tone: "blocked", text: `Not ready${blockers ? ` · ${blockers} ${blockers === 1 ? "blocker" : "blockers"}` : ""}`,
+      detail: readiness.message ?? undefined };
+  }
+  return { tone: "unknown", text: "Unknown: the last readiness run recorded no verdict" };
+}
 /** Workers write "post_return" after the return step; "final" is the older name. Both are the final post-checks. */
 const FINAL_PHASES: ReadonlyArray<string> = ["post_return", "final"];
 const phaseGroups = [
@@ -113,7 +147,7 @@ const resumeWords: Record<string, string> = {
   TRUSTED_HOST_KEY_REQUIRED: "Resume is not available: a member's host key is not trusted.",
   TRUST_NOT_EVALUABLE: "Resume is not available: a member's host-key trust could not be checked.",
   ENDPOINT_MISSING: "Resume is not available: a member has no management endpoint.",
-  REASON_REQUIRED: "A reason is required.",
+  REASON_REQUIRED: "A work log note is required.",
   BUSINESS_HOURS_ACK_REQUIRED: "Business hours: tick the acknowledgement to continue.",
   RESUME_REQUEST_EXPIRED: "The resume request expired (30 minutes after it was made). Nothing was sent.",
   SELF_APPROVAL: "A second, different administrator must approve this resume.",
@@ -183,7 +217,8 @@ export function ResumeReturn({ run, unit, onChanged }: { run: CpFailoverRunDetai
         <Typography>Run {run.runId} on {label} stopped after clusterXL_admin down ({run.message ?? run.outcome ?? "unknown"}). {formerActive} is down by admin and {peer} carries the traffic.</Typography>
         <Typography>{PRODUCT_NAME} will first read the cluster state on both members. Only if {peer} is Active, {formerActive} is Down and the cluster is in Active Up mode, it sends clusterXL_admin up once to {formerActive}. Then it waits up to 60 s for it to rejoin as Standby and repeats the post-checks. Traffic stays on {peer}.</Typography>
         <Typography>Nothing is retried. If anything does not match, {PRODUCT_NAME} stops and the incident stays open.</Typography>
-        {dialog === "request" && <TextField label="Reason" value={reason} onChange={e => setReason(e.target.value)} inputProps={{ maxLength: 500 }} />}
+        {dialog === "request" && <TextField label={WORK_LOG_NOTE_LABEL} required autoFocus value={reason} placeholder="e.g. change CHG-123 return the former active"
+          helperText="Recorded with the resume." onChange={e => setReason(e.target.value)} inputProps={{ maxLength: WORK_LOG_NOTE_MAX }} />}
         {needsAck && <FormControlLabel control={<Checkbox checked={ack} onChange={e => setAck(e.target.checked)} />}
           label={`I acknowledge this runs during business hours (${resume.businessHours} Europe/Istanbul).`} />}
         {error && <Typography role="alert" color="error">{error}</Typography>}
@@ -194,7 +229,13 @@ export function ResumeReturn({ run, unit, onChanged }: { run: CpFailoverRunDetai
     </Dialog>
   </Stack>;
 }
-function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailoverUnit; expanded: boolean; onExpand: () => void; onRefreshUnits: () => void }) {
+/**
+ * `singleAdmin` chooses the dialog's wording only (PO 2026-11-23): true = this session starts alone (ADMIN_SINGLE), false =
+ * a second administrator approves (OPERATION_ADMIN_TWO_PERSON), null = not known. The server names the policy in its
+ * answer to the request and that answer alone decides whether the run starts or waits.
+ */
+function UnitPanel({ unit, expanded, singleAdmin, onExpand, onOpen, onRefreshUnits }: { unit: CpFailoverUnit; expanded: boolean;
+  singleAdmin: boolean | null | undefined; onExpand: () => void; onOpen: () => void; onRefreshUnits: () => void }) {
   const label = unit.maskedName ?? unit.virtual_system ?? unit.cluster_member_ref;
   const storageKey = `failover-request:${unit.vendor ?? "check_point"}:${unit.unitId}`;
   const [draft, setDraft] = useState<Draft | null>(() => {
@@ -203,8 +244,10 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const [approvals, setApprovals] = useState<CpFailoverApproval[]>([]);
   const [run, setRun] = useState<CpFailoverRunDetail | null>(null);
   const [readinessRun, setReadinessRun] = useState<CpFailoverRunDetail | null>(null);
-  const [dialog, setDialog] = useState(false), [until, setUntil] = useState("");
-  const [reason, setReason] = useState("Manual failover verification"), [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState(false), [minutes, setMinutes] = useState<number>(DEFAULT_VALIDITY_MINUTES);
+  const [note, setNote] = useState(""), [error, setError] = useState<string | null>(null);
+  // Set by the row's failover button: the dialog opens once this unit's requests and runs are read (and the policy hint answered).
+  const [armed, setArmed] = useState(false);
   const [canRetry, setCanRetry] = useState(false);
   const [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false);
   const lock = useRef(false), attempted = useRef<string | null>(null);
@@ -234,7 +277,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         const seen = checks.checks.map(c => c.observedAt).sort().at(-1);
         if (!firstSight || (seen && (!shown.current || Date.parse(seen) > Date.parse(shown.current)))) onRefreshUnits();
       }
-    } catch (e) { setLoaded(false); setError(errorText(e)); }
+    } catch (e) { setLoaded(false); setArmed(false); setError(errorText(e)); }
   }, [unit.unitId, unit.clusterId, unit.vendor, onRefreshUnits]);
   useEffect(() => { if (expanded) void refresh(); }, [expanded, refresh]);
   const pending = approvals.find(a => !a.revokedAt && Date.parse(a.windowUntil) > Date.now() && a.policy === "OPERATION_ADMIN_TWO_PERSON" && !a.approved);
@@ -276,18 +319,58 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const allVirtualSystems = unit.unitKind === "VSX_CHASSIS" && unit.chassisAction === "FAILOVER_ALL_VIRTUAL_SYSTEMS";
   const startLabel = allVirtualSystems ? "Fail over all virtual systems" : unit.unitKind === "VSX_CHASSIS" ? "Fail over the chassis" : "Start failover";
   const sequence = unit.sequence;
+  const single = singleAdmin === true;
+  const verdict = failoverReadinessVerdict(unit, readinessRun);
+  const readinessAt = readinessRun?.checks.filter(c => c.phase === "pre").map(c => c.observedAt).sort().at(-1) ?? unit.readinessObservedAt;
+  const refused = Boolean(unit.refusalReason) || Boolean(unit.chassisStartRefusal) || Boolean(unit.failoverRefusal);
+  const noteText = draft?.reason ?? note;
+  const openDialog = () => {
+    if (draft?.confirmedRevision && bound?.approved && (!run || run.approvalId !== bound.approvalId)) { void act(() => start(bound)); return; }
+    if (draft && (run?.approvalId === draft.requestId || Date.parse(draft.until) <= Date.now()
+      || approvals.some(a => a.requestId === draft.requestId && a.revokedAt))) {
+      sessionStorage.removeItem(storageKey); setDraft(null);
+    }
+    setNote(""); setMinutes(DEFAULT_VALIDITY_MINUTES); setError(null); setCanRetry(false); setDialog(true);
+  };
+  // One click from the row: a collapsed unit is opened and read first, then the dialog follows without a second click.
+  const requestFailover = () => {
+    if (!expanded) { setLoaded(false); onOpen(); }
+    setArmed(true);
+  };
+  useEffect(() => {
+    if (!armed || !expanded || !loaded || singleAdmin === undefined) return;
+    setArmed(false);
+    // A run or a request found while reading is shown in the opened unit instead of a second request.
+    if (!active && !readinessActive && !pending) openDialog();
+  }, [armed, expanded, loaded, singleAdmin, active, readinessActive, pending]);
   const confirm = () => act(async () => {
-    const request = draft ?? { requestId: crypto.randomUUID(), from: new Date().toISOString(), until: displayInputToIso(until) ?? new Date(until).toISOString(), reason: reason.trim() };
+    const now = Date.now();
+    const request = draft ?? { requestId: crypto.randomUUID(), from: new Date(now).toISOString(),
+      until: new Date(now + (single ? DEFAULT_VALIDITY_MINUTES : minutes) * 60_000).toISOString(), reason: note.trim() };
     remember(request);
     const currentBound = bound ?? (approvedDraft.current?.requestId === request.requestId ? approvedDraft.current : undefined);
     const approval = currentBound ?? await approveCpFailover(unit, request.from, request.until, request.reason, request.requestId);
     if (!approval.requestId || !approval.revision) throw new Error("Missing request revision");
     approvedDraft.current = approval;
-    remember({ ...request, confirmedRevision: approval.revision });
-    if (approval.approved) { attempted.current = approval.requestId; await start(approval); }
+    // The dialog said a second administrator must agree and the server needed none: nothing starts on words the reader
+    // was not given. The request stands on the server, but the reader's confirmation is NOT recorded: a later click on the
+    // row must show the dialog again instead of starting on the strength of this one. Confirming again in this dialog starts it.
+    const unconfirmed = approval.approved && singleAdmin === false && !currentBound;
+    remember(unconfirmed ? request : { ...request, confirmedRevision: approval.revision });
+    if (unconfirmed) throw new Error("No second administrator was needed for this request, so it is already approved on the server. The failover has not been started. Confirm again to start it now.");
+    if (approval.approved) {
+      attempted.current = approval.requestId;
+      await start(approval);
+    }
   });
   return <Card data-unit-kind={unit.unitKind ?? (unit.unitId === unit.clusterId ? "CLUSTER" : "VIRTUAL_SYSTEM")} sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
-    <M3Button emphasis="text" onClick={onExpand}>{unit.unitKind === "VSX_CHASSIS" ? `VSX chassis · ${label}` : unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
+    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+      <M3Button emphasis="text" onClick={onExpand}>{unit.unitKind === "VSX_CHASSIS" ? `VSX chassis · ${label}` : unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
+      {/* The action sits on the row: no expand step first. Collapsed, what the server already says on the unit decides it;
+          opened, a running run, running pre-checks or a waiting request disable it as before. */}
+      {failoverOffered && <M3Button deviceJob emphasis="filled" disabled={busy || armed || refused || sequence?.state === "RUNNING"
+        || (expanded && (!idle || Boolean(pending)))} onClick={requestFailover}>{startLabel}</M3Button>}
+    </Stack>
     <Typography variant="body2">{failoverVendorLabel(unit.vendor)} · Mode: <span title={unit.mode ?? undefined}>{clusterModeWord(unit.mode)}</span>{!unit.vendor || unit.vendor === "check_point" ? ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}` : ""} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
     {executionDisabled
@@ -305,15 +388,6 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
       <FailoverIncidentsPanel clusterId={unit.clusterId} onReleased={() => { onRefreshUnits(); void refresh(); }} />
       {pending && <Typography role="status">Awaiting second approval</Typography>}
-      {failoverOffered && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)
-        || Boolean(unit.chassisStartRefusal) || sequence?.state === "RUNNING"} onClick={() => {
-        if (draft?.confirmedRevision && bound?.approved && (!run || run.approvalId !== bound.approvalId)) { void act(() => start(bound)); return; }
-        if (draft && (run?.approvalId === draft.requestId || Date.parse(draft.until) <= Date.now()
-          || approvals.some(a => a.requestId === draft.requestId && a.revokedAt))) {
-          sessionStorage.removeItem(storageKey); setDraft(null);
-        }
-        setDialog(true);
-      }}>{startLabel}</M3Button>}
       {unit.masked !== true && unit.canApprove && !unit.failoverRefusal && pending?.canApprove && <M3Button emphasis="outlined" disabled={!idle}
         onClick={() => void act(() => secondApproveCpFailover(unit, pending.requestId!, pending.revision!))}>Approve request revision {pending.revision}</M3Button>}
       <ReadinessCard checks={readinessRun?.checks.filter(c => c.phase === "pre") ?? []} members={unit.members} cluster={label}
@@ -328,21 +402,36 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
       {error && <Stack direction="row" spacing={1} alignItems="center"><Typography role="alert" color="error">{error}</Typography>
         {canRetry && !dialog && <M3Button emphasis="outlined" disabled={busy} onClick={() => { if (lastAction.current) void act(lastAction.current); }}>Retry</M3Button>}</Stack>}
     </Stack>}
-    <Dialog open={dialog} onClose={() => { if (!busy) setDialog(false); }}><DialogTitle>{allVirtualSystems ? "Fail over all virtual systems" : "Start manual failover"}</DialogTitle>
-      <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
+    <Dialog open={dialog} onClose={() => { if (!busy) setDialog(false); }}>
+      <DialogTitle>{startLabel}</DialogTitle>
+      <DialogContent><Stack spacing={2} sx={{ pt: 1 }} data-failover-policy={single ? "single" : singleAdmin === false ? "two-person" : "unknown"}>
         <Typography>Target: {label}</Typography>
+        <Box data-readiness-verdict={verdict.tone}>
+          <Typography sx={{ fontWeight: 600, color: verdict.tone === "ready" ? m3.onSurface : verdict.tone === "blocked" ? m3.error : m3.onSurfaceVar }}>
+            Readiness: {verdict.text}{verdict.tone !== "ready" && verdict.detail ? ` · ${verdict.detail}` : ""}</Typography>
+          <Typography variant="caption">Pre-checks read: {readinessAt ? `${relativeAge(readinessAt, new Date())} (${formatStamp(readinessAt)})` : "not evaluated"}. The run repeats every pre-check before it switches.</Typography>
+        </Box>
         {allVirtualSystems && <Typography data-sequence-warning>Every virtual system of this chassis is failed over one after another, in VSID order, each in its own run with its own pre-checks, switch, post-checks and return. The sequence stops at the first virtual system that does not succeed.</Typography>}
         {unit.unitKind === "VSX_CHASSIS" && !allVirtualSystems && <Typography>The chassis fails over in VS0. Afterwards every virtual system must be active on the new active member; if one is not, the run stops and offers the return step.</Typography>}
         <Typography>Intended role swap: current active becomes DOWN/suspended; current standby/passive becomes active. The former active is then returned to standby/passive after successful checks.</Typography>
         <Typography>Traffic may be interrupted. The run may stop with one member DOWN. Intervention may be required.</Typography>
-        <Typography>OK / Start confirms this request revision and the complete workflow. No later confirmation is required.</Typography>
-        <TextField label="Window ends" helperText={`Turkey time (${DISPLAY_TZ_LABEL})`} type="datetime-local" InputLabelProps={{ shrink: true }} value={draft ? isoToDisplayInput(draft.until) : until} disabled={Boolean(draft)} onChange={e => setUntil(e.target.value)} />
-        <TextField label="Reason" value={draft?.reason ?? reason} disabled={Boolean(draft)} onChange={e => setReason(e.target.value)} />
+        <Typography data-failover-flow>{single ? "The failover starts as soon as you confirm. Nothing more is asked."
+          : singleAdmin === false ? "A second administrator must agree before anything is sent. The failover then starts from this page; nothing more is asked of you."
+          : "The failover starts as soon as you confirm, unless your role needs a second administrator to agree first. Nothing more is asked of you."}</Typography>
+        <TextField label={WORK_LOG_NOTE_LABEL} required autoFocus value={noteText} disabled={Boolean(draft)} placeholder="e.g. change CHG-123 planned failover"
+          helperText="Recorded with the run." inputProps={{ maxLength: WORK_LOG_NOTE_MAX }} onChange={e => setNote(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !busy && !refused && noteText.trim()) { e.preventDefault(); void confirm(); } }} />
+        {draft ? <Typography variant="caption" data-failover-validity>This request was already made. Valid until {formatStamp(draft.until)}.</Typography>
+          : single ? <Typography variant="caption" data-failover-validity>Valid for {DEFAULT_VALIDITY_MINUTES} minutes.</Typography>
+          : <Box><Typography variant="caption" id={`validity-${unit.unitId}`}>Request valid for</Typography>
+            <RadioGroup row aria-labelledby={`validity-${unit.unitId}`} value={String(minutes)} onChange={e => setMinutes(Number(e.target.value))}>
+              {VALIDITY_MINUTES.map(value => <FormControlLabel key={value} value={String(value)} control={<Radio size="small" />} label={`${value} minutes`} />)}
+            </RadioGroup></Box>}
         {error && <Stack direction="row" spacing={1} alignItems="center"><Typography role="alert" color="error">{error}</Typography>
           {canRetry && <M3Button emphasis="outlined" disabled={busy} onClick={() => { if (lastAction.current) void act(lastAction.current); }}>Retry</M3Button>}</Stack>}
       </Stack></DialogContent>
       <DialogActions><M3Button emphasis="text" disabled={busy} onClick={() => setDialog(false)}>Cancel</M3Button>
-        <M3Button deviceJob emphasis="filled" disabled={busy || !reason.trim() || (!draft && (!displayInputToIso(until) || Date.parse(displayInputToIso(until)!) <= Date.now()))} onClick={() => void confirm()}>OK / Start</M3Button></DialogActions>
+        <M3Button deviceJob emphasis="filled" disabled={busy || refused || !noteText.trim()} onClick={() => void confirm()}>{single ? "Fail over now" : "Request failover"}</M3Button></DialogActions>
     </Dialog>
   </Card>;
 }
@@ -354,6 +443,8 @@ export function orderUnits(units: CpFailoverUnit[]): CpFailoverUnit[] {
 export function CpFailoverPanel({ memberDeviceId, vendor = "check_point", initialUnitId }: { memberDeviceId: string; vendor?: "check_point" | "palo_alto" | "cisco_asa" | "fortinet"; initialUnitId?: string | null }) {
   const [units, setUnits] = useState<CpFailoverUnit[]>([]), [selected, setSelected] = useState<string | null>(initialUnitId ?? null);
   const [error, setError] = useState<string | null>(null);
+  // undefined = not asked or not answered yet; null = the read failed (the dialog then words both outcomes).
+  const [singleAdmin, setSingleAdmin] = useState<boolean | null | undefined>(undefined);
   const refreshUnits = useCallback(() => {
     void listCpFailoverUnits(memberDeviceId,vendor).then(value => setUnits(orderUnits(value).map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))))
       .catch(e => setError(errorText(e)));
@@ -364,9 +455,22 @@ export function CpFailoverPanel({ memberDeviceId, vendor = "check_point", initia
     listCpFailoverUnits(memberDeviceId, vendor).then(value => { if (!disposed) setUnits(orderUnits(value).map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))); }).catch(e => { if (!disposed) setError(errorText(e)); });
     return () => { disposed = true; };
   }, [memberDeviceId, vendor, initialUnitId]);
+  // Which dialog to word (PO 2026-11-23). The unit list does not name the session's approval policy, so the page reads the
+  // one fact the server already publishes that follows the same rule: `canRelease` on the incidents read is true exactly
+  // for the role that approves and starts alone. It words the dialog and nothing else; no role token is read here, and the
+  // policy in the server's answer to the request decides what happens.
+  const startable = units.some(unit => unit.canStart && unit.masked !== true && !failoverExecutionDisabled(unit.vendor));
+  useEffect(() => {
+    if (!startable) return;
+    let disposed = false;
+    (async () => listFailoverIncidents())().then(value => { if (!disposed) setSingleAdmin(value?.canRelease === true); })
+      .catch(() => { if (!disposed) setSingleAdmin(null); });
+    return () => { disposed = true; };
+  }, [startable]);
   return <Stack spacing={1} aria-label={`${failoverVendorLabel(vendor)} failover`}>
     {error && <Typography role="alert" color="error">{error}</Typography>}
     {!error && units.length === 0 && <Typography>No eligible failover units</Typography>}
-    {units.map(unit => <UnitPanel key={`${vendor}:${unit.unitId}`} unit={unit} expanded={selected === unit.unitId} onRefreshUnits={refreshUnits} onExpand={() => setSelected(selected === unit.unitId ? null : unit.unitId)} />)}
+    {units.map(unit => <UnitPanel key={`${vendor}:${unit.unitId}`} unit={unit} expanded={selected === unit.unitId} singleAdmin={singleAdmin} onRefreshUnits={refreshUnits}
+      onOpen={() => setSelected(unit.unitId)} onExpand={() => setSelected(selected === unit.unitId ? null : unit.unitId)} />)}
   </Stack>;
 }
