@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0400",
+  "current_build": "NXS-LOCAL-0401",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,8 +150,8 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0400",
-      "title": "Overview null-device fix, Estate UNKNOWN count fixes and golden refresh vacuum step",
+      "build": "NXS-LOCAL-0401",
+      "title": "VSX VS0 independent failover unit (V265), PAN idle-pair session sync warning and Overview section hardening",
       "status": "automated_validated",
       "started": "2026-11-23"
     },

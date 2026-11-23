@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0400 · Track: PCP.x · Generated: 2026-11-23T12:24:26Z
+Build: NXS-LOCAL-0401 · Track: PCP.x · Generated: 2026-11-23T16:55:10Z
 
 ## Now
-- NXS-LOCAL-0400 — Overview null-device fix, Estate UNKNOWN count fixes and golden refresh vacuum step (automated_validated)
+- NXS-LOCAL-0401 — VSX VS0 independent failover unit (V265), PAN idle-pair session sync warning and Overview section hardening (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -146,8 +146,8 @@ Build: NXS-LOCAL-0400 · Track: PCP.x · Generated: 2026-11-23T12:24:26Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0401 (automated_validated)
 - NXS-LOCAL-0400 (automated_validated)
 - NXS-LOCAL-0399 (automated_validated)
 - NXS-LOCAL-0398 (automated_validated)
 - NXS-LOCAL-0397 (automated_validated)
-- NXS-LOCAL-0396 (automated_validated)

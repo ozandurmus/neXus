@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `1e09e4c4`; ships through 2026-11-23 are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `46050da0`; ships through 2026-11-23 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V263** (live version not re-checked since V242).
+UI2 is the maintained Java/React product; repository schema is **V265** (live version not re-checked since V242).
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -20,17 +20,17 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0400` — **AUTOMATED_VALIDATED** (2026-11-23): Overview null-device
-fix, Estate UNKNOWN count fixes and golden refresh vacuum step;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0399`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0401` — **AUTOMATED_VALIDATED** (2026-11-23): VSX VS0 independent
+failover (V265), PAN idle-pair sync warning, Overview section hardening;
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0400`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
-Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.json`. Applied by hand 2026-11-16: database ingress NetworkPolicy, platform backup script S1.
+Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.json`. Applied by hand 2026-11-16: ingress NetworkPolicy, backup script S1.
 
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
 
-Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-2 (V251, V258), static route phase R0 reads only (V252, zero writes; write carve-out ratified), ASA saved-state relation (V253), VSX chassis failover (V255/V256), Check Point per-VS policy gate (V254), failover authority recheck at worker start (V260), database roles step 0 (V261), aiview masked read-only admin switch (default off), Overwatch rename R1 (text, env dual-read), notification mail templates, and policy chunk garbage collection plus a narrowed telemetry audit (V262, hourly, `UI2_POLICY_CHUNK_GC=off` disables), and window-preserving requeue (V263; read jobs yield at unit boundaries). Backup module cutover prepared, not performed. The alternative Estate view (Brief, Wall, Dossier, Failover, Changes, Compliance, Backups, Ask, Rewind, Cases, Reports, System, Lifecycle) is read-only and carries evidence stamps; unreadable evidence shows UNKNOWN. Not real-environment validated.
+Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-2 (V251, V258), static route phase R0 reads only (V252, zero writes; write carve-out ratified), ASA saved-state relation (V253), VSX chassis failover (V255/V256), Check Point per-VS policy gate (V254), failover authority recheck at worker start (V260), database roles step 0 (V261), aiview masked read-only admin switch (default off), Overwatch rename R1 (text, env dual-read), notification mail templates, and policy chunk garbage collection plus a narrowed telemetry audit (V262, hourly, `UI2_POLICY_CHUNK_GC=off` disables), and window-preserving requeue (V263; read jobs yield at unit boundaries), and VS0 failing over as its own unit (V265). Backup module cutover prepared, not performed. The alternative Estate view (Brief, Wall, Dossier, Failover, Changes, Compliance, Backups, Ask, Rewind, Cases, Reports, System, Lifecycle) is read-only and carries evidence stamps; unreadable evidence shows UNKNOWN. Not real-environment validated.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
 
