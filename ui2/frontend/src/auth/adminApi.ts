@@ -2541,8 +2541,9 @@ export const getPolicyHygiene = (id: string, page = 0, findingClass = "", severi
 export interface PolicyHygieneSummaryRow {
   sourceId: string; sourceName: string; vendor: string; containerId: string; containerName: string;
   snapshotAt: string; state: "READY" | "PENDING"; rules?: number; counts?: Record<string, number>;
+  unknownReasons?: Record<string, number>; blockerReasons?: Record<string, number>;
 }
-export interface PolicyHygieneSummary { containers: PolicyHygieneSummaryRow[]; totals: Record<string, number>; rules: number; pending: number; days: number }
+export interface PolicyHygieneSummary { containers: PolicyHygieneSummaryRow[]; totals: Record<string, number>; rules: number; pending: number; days: number; unknownReasons?: Record<string, number>; blockerReasons?: Record<string, number> }
 export const getPolicyHygieneSummary = () => call<PolicyHygieneSummary>("/api/v2/policy/hygiene-summary", "GET");
 export const getPolicyRule = (id: string, rule: string, days = 90) =>
   call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules?ruleId=${encodeURIComponent(rule)}&days=${days}`, "GET");
@@ -4513,7 +4514,8 @@ export interface CutoverMissingRuleItem {
   direction: string; flowDestination: string; protocol: string; port: number; sourceCount: number; flowSources?: string[]; sourceRange?: string;
   flowCount: number; firstSeen?: string; lastSeen?: string; decisionCounts?: { decision: string; count: number }[]; oldPathRule?: CutoverRule | null;
 }
-export interface CutoverFlowPage<T> { total: number; page: number; items: T[] }
+/** {@code flowsExpired}: the assessment is past retention (Q7) and its flow rows were removed; the verdict and counts are kept. */
+export interface CutoverFlowPage<T> { total: number; page: number; items: T[]; flowsExpired?: boolean; retentionDays?: number }
 export interface CutoverTargetOverride { deviceId: string; policyId?: string; context?: string; segmentZone?: string; peerZone?: string }
 export interface CutoverSpec {
   targetOverride?: CutoverTargetOverride; oldPolicyId?: string; oldDeviceId?: string; oldContext?: string;
@@ -4834,6 +4836,8 @@ export interface ScriptSummary {
   readonly egress_device_targets: readonly string[];
   readonly credential_refs: readonly string[];
   readonly notify: ScriptNotifyMode | string;
+  /** V266: the run-end mail only for a run that did not succeed (with notify smtp or both). */
+  readonly notify_mail_on_failure_only?: boolean;
   readonly run_as: string;
   readonly created_by_actor_fingerprint: string;
   readonly created_at: string;
@@ -4887,6 +4891,18 @@ export interface ScriptRunSummary {
   readonly egress_device_targets: readonly string[];
   readonly credential_refs_used: readonly string[];
   readonly failure_reason: string | null;
+  /** V266: the run-end notification outcome; null until the notification forwarder records it. */
+  readonly notification?: ScriptRunNotification | null;
+}
+
+export type ScriptRunNotificationState = "SENT" | "FAILED" | "SKIPPED" | "NOT_REQUESTED";
+
+export interface ScriptRunNotification {
+  readonly syslog: ScriptRunNotificationState | string;
+  readonly syslog_code: string | null;
+  readonly smtp: ScriptRunNotificationState | string;
+  readonly smtp_code: string | null;
+  readonly notified_at: string;
 }
 
 export interface ScriptRunListResponse {
@@ -4907,6 +4923,7 @@ export interface CreateScriptInput {
   readonly egress?: readonly string[];
   readonly credential_refs?: readonly string[];
   readonly notify?: ScriptNotifyMode;
+  readonly notify_mail_on_failure_only?: boolean;
   readonly run_as?: string;
 }
 
@@ -4926,6 +4943,7 @@ export interface PatchScriptSettingsInput {
   readonly egress?: readonly string[];
   readonly credential_refs?: readonly string[];
   readonly notify?: ScriptNotifyMode;
+  readonly notify_mail_on_failure_only?: boolean;
   readonly run_as?: string;
 }
 

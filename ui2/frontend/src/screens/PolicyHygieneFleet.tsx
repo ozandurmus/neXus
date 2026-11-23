@@ -10,6 +10,32 @@ import { relativeAge } from "../shell/time";
 import type { ContainerSummary } from "./PolicyScreen";
 import { snapshotFreshness } from "./PolicyRuleViewer";
 
+/** Reason -> rule count as ranked list text: the largest `limit` entries ("reason (N rules)"), "+N more" for the rest; empty when the service sent no map. */
+export function reasonList(reasons: Record<string, number> | undefined, limit: number): { readonly shown: readonly string[]; readonly more: number } {
+  if (!reasons) return { shown: [], more: 0 };
+  const ranked = Object.entries(reasons).filter(([, n]) => Number.isFinite(n) && n > 0)
+    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b));
+  return { shown: ranked.slice(0, limit).map(([reason, n]) => `${reason} (${plural(n, "rule")})`), more: Math.max(0, ranked.length - limit) };
+}
+
+function WhyUnknown({ summary }: { readonly summary: PolicyHygieneSummary }) {
+  const why = reasonList(summary.unknownReasons, 5), behind = reasonList(summary.blockerReasons, 3);
+  if (why.shown.length === 0) return null;
+  return (
+    <Box aria-label="Why UNKNOWN" sx={{ maxWidth: 820 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>Why UNKNOWN</Typography>
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        Rules whose shadowing verdict the stored evidence cannot decide, by reason: {why.shown.join("; ")}{why.more > 0 ? `; +${why.more} more` : ""}.
+      </Typography>
+      {behind.shown.length > 0 && (
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          Behind an earlier rule that is itself UNKNOWN for: {behind.shown.join("; ")}{behind.more > 0 ? `; +${behind.more} more` : ""}.
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
 /**
  * The fleet summary Policy > Hygiene opens on while no container is chosen (UI review 2026-11-05, C2; Argon R-16): the
  * tab used to be a bare prompt. It states only what the loaded catalog proves about the estate's stored policy -- how many
@@ -54,6 +80,7 @@ export function PolicyHygieneFleet({ rows, now, open }: { readonly rows: readonl
             reason="The fleet hygiene summary is computed in the background from the stored snapshots and has not produced a result yet."
             sentence="not evaluated yet" />}
       </KpiRow>
+      {summary && summary.totals.unknown > 0 && <WhyUnknown summary={summary} />}
       <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 820 }}>
         Counts are rules carrying a finding of each class, read from each container's stored snapshot (time shown); a finding the stored evidence cannot decide is counted as UNKNOWN, never as clean. Open a container below for the rules behind the numbers.
       </Typography>

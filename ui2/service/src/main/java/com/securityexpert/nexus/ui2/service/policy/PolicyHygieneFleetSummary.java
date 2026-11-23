@@ -22,7 +22,7 @@ public class PolicyHygieneFleetSummary {
     /** Counted classes in display order; {@code unknown} is reported beside them, not among them. */
     public static final List<String> COUNTED = List.of("shadowed", "conflict", "disabled", "unused", "expired", "broad");
 
-    record Entry(String fingerprint, Map<String, Integer> counts, int rules, String snapshotAt) {}
+    record Entry(String fingerprint, Map<String, Integer> counts, Map<String, Integer> unknownReasons, Map<String, Integer> blockerReasons, int rules, String snapshotAt) {}
     private final PolicyQueryService policies;
     private final Map<String, Entry> entries = new HashMap<>();
 
@@ -54,14 +54,18 @@ public class PolicyHygieneFleetSummary {
             if (known != null && known.fingerprint().equals(container.fingerprint())) continue;
             try {
                 Map<String, Integer> total = new TreeMap<>(); PolicyHygiene.CLASSES.forEach(c -> total.put(c, 0));
+                Map<String, Integer> unknownReasons = new HashMap<>(), blockerReasons = new HashMap<>();
                 int rules = 0;
                 for (var meta : container.snapshots()) {
                     var snapshot = policies.find(meta.id());
                     if (snapshot.isEmpty()) throw new IllegalStateException("Snapshot is no longer stored");
-                    policies.hygieneCounts(snapshot.get(), DAYS).forEach((c, n) -> total.merge(c, n, Integer::sum));
+                    var report = policies.hygieneReport(snapshot.get(), DAYS);
+                    report.classes().forEach((c, n) -> total.merge(c, n, Integer::sum));
+                    report.unknownReasons().forEach((r, n) -> unknownReasons.merge(r, n, Integer::sum));
+                    report.blockerReasons().forEach((r, n) -> blockerReasons.merge(r, n, Integer::sum));
                     rules += snapshot.get().sections().stream().mapToInt(s -> s.rules().size()).sum();
                 }
-                entries.put(container.key(), new Entry(container.fingerprint(), total, rules, container.snapshotAt()));
+                entries.put(container.key(), new Entry(container.fingerprint(), total, unknownReasons, blockerReasons, rules, container.snapshotAt()));
             } catch (RuntimeException failed) {
                 entries.remove(container.key());
                 LOG.log(System.Logger.Level.WARNING, "[HYGIENE_SUMMARY] container skipped: {0}", failed.getClass().getSimpleName());
@@ -76,6 +80,7 @@ public class PolicyHygieneFleetSummary {
         List<Map<String, Object>> rows = new ArrayList<>();
         Map<String, Integer> totals = new LinkedHashMap<>();
         COUNTED.forEach(c -> totals.put(c, 0)); totals.put("unknown", 0);
+        Map<String, Integer> totalUnknownReasons = new HashMap<>(), totalBlockerReasons = new HashMap<>();
         int rules = 0, pending = 0;
         for (var container : containers()) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -92,6 +97,9 @@ public class PolicyHygieneFleetSummary {
                 counts.put("unknown", entry.counts().getOrDefault("unknown", 0));
                 row.put("counts", counts);
                 counts.forEach((c, n) -> totals.merge(c, n, Integer::sum));
+                row.put("unknownReasons", ranked(entry.unknownReasons())); row.put("blockerReasons", ranked(entry.blockerReasons()));
+                entry.unknownReasons().forEach((r, n) -> totalUnknownReasons.merge(r, n, Integer::sum));
+                entry.blockerReasons().forEach((r, n) -> totalBlockerReasons.merge(r, n, Integer::sum));
                 rules += entry.rules();
             }
             rows.add(row);
@@ -99,7 +107,16 @@ public class PolicyHygieneFleetSummary {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("containers", rows); body.put("totals", totals); body.put("rules", rules); body.put("pending", pending);
         body.put("days", DAYS);
+        body.put("unknownReasons", ranked(totalUnknownReasons)); body.put("blockerReasons", ranked(totalBlockerReasons));
         return body;
+    }
+
+    /** Reason -> rule count, largest first, ties by reason text, so the answer is stable between reads. */
+    private static Map<String, Integer> ranked(Map<String, Integer> counts) {
+        Map<String, Integer> sorted = new LinkedHashMap<>();
+        counts.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+            .forEach(e -> sorted.put(e.getKey(), e.getValue()));
+        return sorted;
     }
 
     @Scheduled(fixedDelay = 30_000, initialDelay = 30_000)

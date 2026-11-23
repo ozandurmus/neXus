@@ -36,6 +36,27 @@ public interface ScriptRepository {
             String actorFingerprint,
             String actionId);
 
+    /**
+     * {@link #updateSettings(String, boolean, Optional, int, List, List, List, String, String, String, String)} plus the
+     * V266 per-script "mail on failure only" option (meaningful with notify {@code smtp} or {@code both}).
+     */
+    default Optional<ScriptRecord> updateSettings(
+            String scriptId,
+            boolean enabled,
+            Optional<String> schedule,
+            int timeoutSeconds,
+            List<String> egress,
+            List<String> egressDeviceTargets,
+            List<String> credentialRefs,
+            String notifyMode,
+            boolean notifyMailOnFailureOnly,
+            String runAs,
+            String actorFingerprint,
+            String actionId) {
+        return updateSettings(scriptId, enabled, schedule, timeoutSeconds, egress, egressDeviceTargets, credentialRefs,
+                notifyMode, runAs, actorFingerprint, actionId);
+    }
+
     Optional<ScriptRecord> setEnabled(String scriptId, boolean enabled, String actorFingerprint, String actionId);
 
     default List<String> findEnrolledDeviceIdsByEndpointHosts(List<String> hosts) {

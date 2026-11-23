@@ -12,6 +12,9 @@ configuration line was read or printed. The vendor semantics are an amendment to
 written, the quote re-check resolved two gaps listed in section 3: the ASA port and protocol literal tables are
 official (A0-ASA-15, HIGH) and a FortiOS 7.4 address with no `subnet` line defaults to `0.0.0.0 0.0.0.0` (A0-FG-24).
 
+2026-11-23: step 9 done: the ACI pre-cutover analysis evaluates stored ASA and FortiGate policies through the same lookup (operator-override
+targets and old-path policies; interface or zone inputs are required, never inferred; routed-path mode already covered both through `PathEngine`).
+
 Trigger: PO decision 2026-11-14 (relayed by the PO session): Cisco ASA and FortiGate firewalls get policy collection
 and a policy model like Check Point and Palo Alto, so Trace/topology, policy hygiene, the zone matrix and the ACI
 pre-cutover impact analysis can evaluate them. The ACI design (`ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md`,

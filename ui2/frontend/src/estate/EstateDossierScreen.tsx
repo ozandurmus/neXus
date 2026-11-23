@@ -979,7 +979,9 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       })()}
 
       {/* Management tree: read-only, management-plane intent (the tree state is read once above, no second fetch) */}
-      <EstateDossierManagementTreeBlock deviceId={deviceId} tree={managementTree} now={now} />
+      {unit.role === "management_server" && unit.vendor !== "bluecoat" && unit.vendor !== "fortinet" ? (
+        <EstateDossierManagementTreeBlock deviceId={deviceId} tree={managementTree} now={now} />
+      ) : null}
 
       {/* 30-day stored evidence timeline */}
       <EstateCard sx={{ mt: "16px" }}>

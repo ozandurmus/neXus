@@ -1,6 +1,7 @@
 import type { DomainHaEntry, ManagementTree, ManagementTreeNode } from "../auth/adminApi";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { domainCounts, domainHaLine, notImported, rowType, splitDomainHa } from "../screens/ManagementTreePanel";
+import { isRecord } from "../shell/malformedResponse";
 
 /**
  * Pure view model for the read-only management tree block on the Estate dossier.
@@ -59,6 +60,21 @@ function labelOf(n: ManagementTreeNode): string {
   return label && label.trim() !== "" ? label : "UNKNOWN";
 }
 
+/**
+ * A node is well formed when it is a record and its children (absent or null counts as none) are an array whose
+ * every element is well formed too. Anything else is a malformed payload, never an empty or OK tree.
+ */
+function nodeWellFormed(node: unknown): boolean {
+  if (!isRecord(node)) return false;
+  if (node.children === undefined || node.children === null) return true;
+  return Array.isArray(node.children) && node.children.every(nodeWellFormed);
+}
+
+/** A domain is well formed when it is a record whose nodes are an array of well-formed nodes. */
+function domainWellFormed(domain: unknown): boolean {
+  return isRecord(domain) && Array.isArray(domain.nodes) && domain.nodes.every(nodeWellFormed);
+}
+
 function flatten(
   nodes: readonly ManagementTreeNode[],
   depth = 0,
@@ -99,7 +115,10 @@ export function buildManagementTreeBlockModel(
   if (tree === "loading" || tree === null || tree === undefined) {
     return unreadModel("Management tree not read yet");
   }
-  if (tree.state !== "ok" || !Array.isArray(tree.value.domains)) {
+  if (tree.state !== "ok" || !isRecord(tree.value) || !Array.isArray(tree.value.domains)) {
+    return unreadModel("Management tree could not be read");
+  }
+  if (!tree.value.domains.every(domainWellFormed)) {
     return unreadModel("Management tree could not be read");
   }
 

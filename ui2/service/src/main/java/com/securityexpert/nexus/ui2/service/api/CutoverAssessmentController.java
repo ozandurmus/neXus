@@ -37,12 +37,14 @@ public final class CutoverAssessmentController {
     private final TopologyNamePseudonymizer names;
     private final SubnetPreservingIpMasker ips;
     private final PolicyBulkhead heavy;
+    private final CutoverFlowRetention retention;
     private final ObjectMapper json = new ObjectMapper();
     private final Semaphore uploads = new Semaphore(1);
 
     public CutoverAssessmentController(CutoverAssessmentService service, CutoverPathTargets paths, RbacEvaluator rbac,
-            TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips, PolicyBulkhead heavy) {
+            TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips, PolicyBulkhead heavy, CutoverFlowRetention retention) {
         this.service = service; this.paths = paths; this.rbac = rbac; this.names = names; this.ips = ips; this.heavy = heavy;
+        this.retention = retention;
     }
 
     @GetMapping(BASE + "/segments")
@@ -165,7 +167,14 @@ public final class CutoverAssessmentController {
         if (decision != null && !CutoverAssessment.DECISIONS.contains(decision)) return error(400, "INVALID_DECISION");
         if (page < 0 || page > 10_000) return error(400, "INVALID_PAGE");
         if (!service.assessmentExists(id)) return error(404, "ASSESSMENT_NOT_FOUND");
-        return ok(request, service.flows(id, kind, decision, page));
+        var found = service.flows(id, kind, decision, page);
+        // Q7 retention: an empty page of an assessment whose flow rows were removed says so, never "no flows".
+        if (found.get("total") instanceof Number total && total.longValue() == 0 && retention.flowsExpired(id)) {
+            var out = new LinkedHashMap<String, Object>(found);
+            out.put("flowsExpired", true); out.put("retentionDays", CutoverFlowRetention.RETENTION_DAYS);
+            return ok(request, out);
+        }
+        return ok(request, found);
     }
 
     @DeleteMapping(BASE + "/assessments/{id}")
