@@ -73,6 +73,7 @@ import { EstateDossierAsaSavedBlock } from "./EstateDossierAsaSavedBlock";
 import { EstateDossierSshTrustBlock } from "./EstateDossierSshTrustBlock";
 import { EstateDossierGridBlock } from "./EstateDossierGridBlock";
 import { EstateDossierJobsBlock } from "./EstateDossierJobsBlock";
+import { EstateDossierClusterInterfacesBlock } from "./EstateDossierClusterInterfacesBlock";
 import { EstateDossierHygieneBlock } from "./EstateDossierHygieneBlock";
 import { EstateDossierConfigurationBlock } from "./EstateDossierConfigurationBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
@@ -1101,6 +1102,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
 
       <EstateDossierCertificateBlock deviceId={unit.deviceId} />
       <EstateDossierJobsBlock deviceId={unit.deviceId} clusterUnit={unit.clusterRef !== null} />
+      <EstateDossierClusterInterfacesBlock deviceId={unit.deviceId} clusterRef={unit.clusterRef} now={now} />
 
       {/* Gated actions: links to the standard view for this unit; nothing runs from here */}
       <EstateCard sx={{ mt: "16px" }}>

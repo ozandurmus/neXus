@@ -5,6 +5,7 @@ import { getLifecycleAdvisories, getLifecycleCatalog, type LifecycleAdvisory } f
 import { isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
+import { describeError } from "./estateErrorText";
 import { EstateLifecycleSources } from "./EstateLifecycleSources";
 import { useEstateData } from "./useEstateData";
 import { standardLifecycleHref } from "./estateRouting";
@@ -70,10 +71,6 @@ export function lifecycleAdvisoryRow(a: LifecycleAdvisory): LifecycleAdvisoryRow
     return { ...base, ...counts, state: "unk", word: "UNKNOWN" };
   }
   return { ...base, ...counts, state: "ok", word: "OK" };
-}
-
-function describeError(err: unknown): string {
-  return String((err as { message?: string } | null)?.message ?? err);
 }
 
 function AdvisoryRowView({ row }: { readonly row: LifecycleAdvisoryRow }) {
