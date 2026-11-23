@@ -411,6 +411,26 @@ class CpFailoverChecksTest {
         var singleHour=new CpFailoverChecks.Policy("PASS",a.name(),"1Oct2026 0:01:00");
         check(CpFailoverChecks.policyParity(a,singleHour,null,null).status().equals("PASS"));
     }
+    /** PO 2026-11-23: the VS0 rule of a VSX chassis; every other outcome is policyParity's own. */
+    @Test void chassisPolicyParityWarnsOnSameNameSkewOnly() {
+        var a=new CpFailoverChecks.Policy("PASS","Sample_Policy","10Sep2026 14:01:25");
+        var later=new CpFailoverChecks.Policy("PASS","Sample_Policy","11Nov2026 14:01:25");
+        var warn=CpFailoverChecks.chassisPolicyParity(a,later,null,null);
+        assertEquals("WARN",warn.status());
+        assertEquals(CpFailoverChecks.VS0_INSTALL_TIMES_DIFFER,warn.derived().get("reason"));
+        assertEquals(62L*86400,warn.derived().get("installSkewSeconds"));
+        assertFalse(warn.derived().toString().contains("Sample_Policy"));
+        assertEquals("FAIL",CpFailoverChecks.policyParity(a,later,null,null).status(),"non-VSX unchanged");
+        var within=new CpFailoverChecks.Policy("PASS","Sample_Policy","10Sep2026 14:11:25");
+        assertEquals("PASS",CpFailoverChecks.chassisPolicyParity(a,within,null,null).status());
+        var other=new CpFailoverChecks.Policy("PASS","Other_Policy",later.installedAt());
+        assertEquals("FAIL",CpFailoverChecks.chassisPolicyParity(a,other,null,null).status());
+        assertEquals("POLICY_NAMES_DIFFER",CpFailoverChecks.chassisPolicyParity(a,other,null,null).derived().get("reason"));
+        assertEquals("FAIL",CpFailoverChecks.chassisPolicyParity(a,new CpFailoverChecks.Policy("FAIL",null,null),null,null).status());
+        assertEquals("UNKNOWN",CpFailoverChecks.chassisPolicyParity(a,new CpFailoverChecks.Policy("UNKNOWN",null,null),null,null).status());
+        assertEquals("UNKNOWN",CpFailoverChecks.chassisPolicyParity(a,new CpFailoverChecks.Policy("PASS",a.name(),"bad"),null,null).status());
+        assertEquals("FAIL",CpFailoverChecks.chassisPolicyParity(a,later,"Other_Policy",a.name()).status(),"a changed policy is no warning");
+    }
     @Test void sessionContinuityIsNeverPass() {
         assertEquals("NOT_EVALUATED",CpFailoverChecks.sessionContinuity().status());
         assertEquals(Map.of("reason","SESSION_CONTINUITY_NOT_EVALUATED"),CpFailoverChecks.sessionContinuity().derived());

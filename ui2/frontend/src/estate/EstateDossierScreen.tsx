@@ -76,6 +76,7 @@ import { EstateDossierGridBlock } from "./EstateDossierGridBlock";
 import { EstateDossierJobsBlock } from "./EstateDossierJobsBlock";
 import { EstateDossierClusterInterfacesBlock } from "./EstateDossierClusterInterfacesBlock";
 import { EstateDossierHygieneBlock } from "./EstateDossierHygieneBlock";
+import { EstateDossierManagementTreeBlock } from "./EstateDossierManagementTreeBlock";
 import { EstateDossierConfigurationBlock } from "./EstateDossierConfigurationBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
@@ -974,6 +975,9 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
           </EstateCard>
         );
       })()}
+
+      {/* Management tree: read-only, management-plane intent (the tree state is read once above, no second fetch) */}
+      <EstateDossierManagementTreeBlock deviceId={deviceId} tree={managementTree} now={now} />
 
       {/* 30-day stored evidence timeline */}
       <EstateCard sx={{ mt: "16px" }}>

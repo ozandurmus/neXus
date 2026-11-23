@@ -154,6 +154,34 @@ class ReadinessCheckViewTest {
             "{\"syncStatus\":\"OK\",\"lostUpdates\":853747,\"lostUpdatesIncrease\":2,"
             +"\"baselineAt\":\"2026-09-30T12:00:00Z\"}").get("summary"));
     }
+    /** PO 2026-11-23: the VS0 policy row of a VSX chassis warns, never blocks; the worker nests the parity per source. */
+    @Test void vs0PolicySkewOfAVsxChassisIsANonBlockingWarning() throws Exception {
+        var warn=row(false,10,"WARN","{\"fwStat\":{\"reason\":\"VS0_INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":"
+            +62L*86_400+",\"policyNamesMatch\":true}}");
+        assertEquals("Same VS0 policy name; install times differ by 62 days -- reinstall the VSX gateway policy to align",
+            warn.get("summary"));
+        assertEquals(false,warn.get("blocking"));
+        assertEquals("WARN",warn.get("result"));
+        assertTrue(row(false,10,"WARN","{\"reason\":\"VS0_INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":86400}")
+            .get("summary").toString().contains("differ by 1 day --"));
+        assertTrue(row(false,10,"WARN","{\"reason\":\"VS0_INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":7200}")
+            .get("summary").toString().contains("differ by 2 h --"));
+        // A failover row nests both sources: the source that is not a plain match explains the row.
+        assertEquals("Policy names differ between members",row(false,10,"FAIL","{\"fwStat\":{\"reason\":\"POLICY_MATCH\"},"
+            +"\"cpstat\":{\"reason\":\"POLICY_NAMES_DIFFER\"}}").get("summary"));
+        // A FAIL row is never explained by a plain match, and a FAIL reason outranks a WARN one.
+        assertEquals("Policy install continuity check failed",row(false,10,"FAIL","{\"fwStat\":{\"reason\":\"POLICY_MATCH\"},"
+            +"\"cpstat\":{\"reason\":\"POLICY_MATCH\"},\"installContinuity\":\"FAIL\"}").get("summary"));
+        assertEquals("Policy names differ between members",row(false,10,"FAIL","{\"fwStat\":{\"reason\":\"VS0_INSTALL_TIMES_DIFFER\","
+            +"\"installSkewSeconds\":7200},\"cpstat\":{\"reason\":\"POLICY_NAMES_DIFFER\"}}").get("summary"));
+        // Non-VSX skew keeps FAIL, blocking, with the existing text, also when nested.
+        var fail=row(false,10,"FAIL","{\"fwStat\":{\"reason\":\"INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":601}}");
+        assertEquals("Same policy, installed 601 s apart (limit 10 min)",fail.get("summary"));
+        assertEquals(true,fail.get("blocking"));
+        assertEquals(true,row(false,10,"UNKNOWN","{\"fwStat\":{\"reason\":\"POLICY_UNRECOGNIZED\"}}").get("blocking"));
+        assertEquals("Same policy on both members; installed within 10 min",
+            row(false,10,"PASS","{\"fwStat\":{\"reason\":\"POLICY_MATCH\"}}").get("summary"));
+    }
     @Test void tunedRulesExplainFailuresAndMaskTableAddresses() throws Exception {
         assertEquals("Same policy, installed 2 h apart (limit 10 min)",row(false,10,"FAIL",
             "{\"reason\":\"INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":7200}").get("summary"));

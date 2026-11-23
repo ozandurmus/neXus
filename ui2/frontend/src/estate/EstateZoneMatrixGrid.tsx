@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { ZoneVersionDetail } from "../screens/zonematrix/zoneMatrixApi";
+import { plural } from "../shell/plural";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { STANDARD_ZONE_MATRIX_HREF, zoneMatrixGridModel } from "./estateZoneMatrixModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
@@ -39,6 +40,34 @@ export function EstateZoneMatrixGrid({ version, loading, failed }: {
               <EvidenceStamp at={model.evidenceAt} source="stored version" />
             </Box>
             <Typography sx={{ fontSize: "12.5px", color: ev.ink3, mt: "4px" }}>{model.defaultLine}</Typography>
+            <Box
+              data-testid="zone-matrix-confirmation"
+              sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", mt: "6px" }}
+            >
+              {model.confirmationUnknown || !model.confirmationLine ? (
+                <>
+                  <StateBadge state="unk" word="UNKNOWN" dense />
+                  <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
+                    Compliance confirmation count UNKNOWN
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography sx={{ fontSize: "12.5px", color: ev.ink2, fontWeight: 600 }}>
+                    {model.confirmationLine}
+                  </Typography>
+                  <EvidenceStamp at={model.evidenceAt} source="stored version" />
+                </>
+              )}
+            </Box>
+            <Typography data-testid="zone-unassigned-policy" sx={{ fontSize: "12.5px", color: ev.ink3, mt: "4px" }}>
+              {model.unassignedPolicyLine}
+            </Typography>
+            {model.templateOriginLine ? (
+              <Typography data-testid="zone-template-origin" sx={{ fontSize: "12.5px", color: ev.ink3, mt: "4px" }}>
+                {model.templateOriginLine}
+              </Typography>
+            ) : null}
             <Box sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", mt: "12px" }}>
               <Typography data-testid="zone-inventory-count" sx={{ fontSize: "13.5px", fontWeight: 650 }}>
                 {`${model.totalZones} ${model.totalZones === 1 ? "zone" : "zones"} in this version`}
@@ -117,6 +146,16 @@ export function EstateZoneMatrixGrid({ version, loading, failed }: {
                                 {`Severity ${cell.severity} · ${cell.reference}`}
                               </Typography>
                             ) : null}
+                            {cell.servicesLine ? (
+                              <Typography data-testid="zone-cell-services" sx={{ fontSize: "11.5px", color: ev.ink2, fontFamily: ESTATE_MONO, mt: "2px" }}>
+                                {cell.servicesLine}
+                              </Typography>
+                            ) : null}
+                            {cell.confirmedLine ? (
+                              <Typography data-testid="zone-cell-confirmed" sx={{ fontSize: "11.5px", color: ev.ink3, mt: "2px" }}>
+                                {cell.confirmedLine}
+                              </Typography>
+                            ) : null}
                           </Box>
                         ))}
                       </Box>
@@ -128,6 +167,29 @@ export function EstateZoneMatrixGrid({ version, loading, failed }: {
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", mt: "8px" }}>
               <MoreFooter shown={model.shownRows} total={model.totalRows} noun="source zones" testId="zone-matrix-more" />
             </Box>
+            {model.totalServiceSets > 0 ? (
+              <Box data-testid="zone-service-sets" sx={{ mt: "12px" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <Typography sx={{ fontSize: "13.5px", fontWeight: 650 }}>Service sets</Typography>
+                  <Typography data-testid="zone-service-sets-count" sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                    {`${plural(model.totalServiceSets, "service set", "service sets")} in this version`}
+                  </Typography>
+                  <EvidenceStamp at={model.evidenceAt} source="stored version" />
+                </Box>
+                <Box component="ul" aria-label="Service sets in this version" sx={{ m: 0, mt: "6px", pl: "18px" }}>
+                  {model.serviceSets.map((s) => (
+                    <Box component="li" key={s.name} data-testid="zone-service-set-row" sx={{ fontSize: "12.5px", color: ev.ink2, mt: "4px" }}>
+                      <Box component="span" sx={{ fontFamily: ESTATE_MONO, fontWeight: 650 }}>{s.name}</Box>
+                      <Box component="span" sx={{ color: ev.ink3 }}>{` (set:${s.name} · ${s.countWord}): `}</Box>
+                      <Box component="span" sx={{ fontFamily: ESTATE_MONO }}>{s.entriesText}</Box>
+                    </Box>
+                  ))}
+                </Box>
+                <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", mt: "6px" }}>
+                  <MoreFooter shown={model.shownServiceSets} total={model.totalServiceSets} noun="service sets" testId="zone-service-sets-more" />
+                </Box>
+              </Box>
+            ) : null}
           </>
         )}
         <Typography sx={{ mt: "12px", fontSize: "12.5px", color: ev.ink3 }}>

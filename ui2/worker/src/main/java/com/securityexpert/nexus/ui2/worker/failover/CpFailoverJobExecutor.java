@@ -884,21 +884,26 @@ public final class CpFailoverJobExecutor {
             checkFailed("STATE_SYNC_NOT_READY",9,"FAIL".equals(syncA) || "FAIL".equals(syncB)?"FAIL":"UNKNOWN");
         var policyA=CpFailoverChecks.policy(command(first,POLICY));
         var policyB=CpFailoverChecks.policy(command(second,POLICY));
-        var parity=CpFailoverChecks.policyParity(policyA,policyB,
-            before==null?null:before.a().policyName(),before==null?null:before.b().policyName());
+        // PO 2026-11-23: on a VSX chassis (VS0 reads) the same policy installed at different times is a warning only;
+        // each virtual system's own unit measures the parity that blocks.
+        var parity=chassis?CpFailoverChecks.chassisPolicyParity(policyA,policyB,
+                before==null?null:before.a().policyName(),before==null?null:before.b().policyName())
+            :CpFailoverChecks.policyParity(policyA,policyB,
+                before==null?null:before.a().policyName(),before==null?null:before.b().policyName());
         var cpstatA=readiness?policyA:CpFailoverChecks.cpstatPolicy(command(first,CPSTAT_POLICY));
         var cpstatB=readiness?policyB:CpFailoverChecks.cpstatPolicy(command(second,CPSTAT_POLICY));
-        var cpstatParity=CpFailoverChecks.policyParity(cpstatA,cpstatB,
-            before==null?null:before.a().cpstatPolicyName(),before==null?null:before.b().cpstatPolicyName());
+        var cpstatParity=chassis?CpFailoverChecks.chassisPolicyParity(cpstatA,cpstatB,
+                before==null?null:before.a().cpstatPolicyName(),before==null?null:before.b().cpstatPolicyName())
+            :CpFailoverChecks.policyParity(cpstatA,cpstatB,
+                before==null?null:before.a().cpstatPolicyName(),before==null?null:before.b().cpstatPolicyName());
         String installed=stored?installContinuity(before.a(),policyA,policyB,cpstatA,cpstatB):"PASS";
-        String policyStatus="FAIL".equals(parity.status()) || "FAIL".equals(cpstatParity.status()) || "FAIL".equals(installed)?"FAIL"
-            :"PASS".equals(parity.status()) && "PASS".equals(cpstatParity.status()) && "PASS".equals(installed)?"PASS":"UNKNOWN";
+        String policyStatus=policyStatus(parity.status(),cpstatParity.status(),installed);
         String policyEvidence=readiness?json(Map.of("fwStat",parity.derived()))
             :stored?json(Map.of("fwStat",parity.derived(),"cpstat",cpstatParity.derived(),"installContinuity",installed))
             :json(Map.of("fwStat",parity.derived(),"cpstat",cpstatParity.derived()));
         record(phase,first,10,policyStatus,policyEvidence);
         record(phase,second,10,policyStatus,policyEvidence);
-        if(!"PASS".equals(policyStatus)) checkFailed("POLICY_NOT_MATCHED",10,policyStatus);
+        if(!"PASS".equals(policyStatus) && !"WARN".equals(policyStatus)) checkFailed("POLICY_NOT_MATCHED",10,policyStatus);
         for(Member member:List.of(first,second)) {
             var pnotes=CpFailoverChecks.pnotes(command(member,PNOTES),switched && member==oldActive);
             record(phase,member,11,pnotes.status(),json(Map.of("pnotes",pnotes.names())));
@@ -931,6 +936,16 @@ public final class CpFailoverJobExecutor {
                 switched?"DOWN":"STANDBY",first,second)) throw new Stop("UNEXPECTED_ROLES",1);
         return new Pair(new Measure(a,ta,ia,arpA,rates[0],policyA.name(),cpstatA.name(),routingA),
             new Measure(b,tb,ib,arpB,rates[1],policyB.name(),cpstatB.name(),routingB));
+    }
+    /**
+     * Check 10 from its parts: any FAIL fails; all PASS passes; PASS and WARN only (the VS0 install-time skew of a VSX
+     * chassis, PO 2026-11-23) is WARN, which neither stops a run nor makes readiness NOT_READY; anything else is UNKNOWN.
+     */
+    static String policyStatus(String... parts) {
+        var all=List.of(parts);
+        if(all.contains("FAIL")) return "FAIL";
+        if(!all.stream().allMatch(p -> "PASS".equals(p) || "WARN".equals(p))) return "UNKNOWN";
+        return all.contains("WARN")?"WARN":"PASS";
     }
     /**
      * Policy continuity of a resumed return against the stopped run's baseline: the policy names never left that run's
@@ -1063,7 +1078,8 @@ public final class CpFailoverJobExecutor {
         catch(JsonProcessingException invalid) { return ""; }
     }
     private void record(String phase,Member member,int no,String status,String derived) {
-        if (readiness && no!=5 && no!=6 && no!=13 && !"PASS".equals(status)
+        // WARN is the readiness model's non-blocking warning (check 13; check 10 of a VSX chassis, PO 2026-11-23).
+        if (readiness && no!=5 && no!=6 && no!=13 && !"PASS".equals(status) && !"WARN".equals(status)
                 && !(no==8 && "NOT_EVALUATED".equals(status) && TRAFFIC_PER_VIRTUAL_SYSTEM.equals(reasonOf(derived)))
                 && (readinessFailure==null || !"FAIL".equals(readinessFailure.status) && "FAIL".equals(status)))
             readinessFailure=new Stop("CHECK_NOT_READY",no,status);

@@ -170,6 +170,8 @@ class CpFailoverJobExecutorTest {
         /** VSX chassis option B: these VSIDs keep their pre-switch roles whatever the chassis does. */
         java.util.Set<String> stuckVs=java.util.Set.of();
         String peerPolicyTime;
+        /** The second member's fw stat install date and time (replaces the whole stamp; synthetic). */
+        String peerPolicyStamp;
         boolean zeroBaseline,preempt,extraPnote,adminOnNewActive,adminAfterReturn;
         String trafficFaultPhase,trafficFault,cpstatFaultPhase,cpstatFault;
         String bondFailurePhase;
@@ -209,6 +211,8 @@ class CpFailoverJobExecutorTest {
                             && literal.endsWith("cat /proc/net/dev'")) output=output.replace("eth0:","bond1.3843:");
                     if(peerPolicyTime!=null && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
                         output=output.replace("14:01:25",peerPolicyTime);
+                    if(peerPolicyStamp!=null && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                        output=output.replace("10Sep2018 14:01:25",peerPolicyStamp);
                     if(reverseActive && literal.endsWith("cphaprob stat'")) output=output
                         .replace("% Active","% TEMP").replace("% Standby","% Active").replace("% TEMP","% Standby");
                     if(literal.endsWith("cphaprob stat'")) {
@@ -648,6 +652,57 @@ class CpFailoverJobExecutorTest {
         assertFalse(store.checks.contains("pre:8:NOT_EVALUATED"));
         assertEquals("UNKNOWN",store.outcome);
         assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("NO_TRAFFIC_INTERFACES")));
+    }
+    // ---- PO 2026-11-23: VS0 policy install-time skew of a VSX chassis is a warning (PO_DECISION_RECORD_2026_11_23) ----
+    /** 62 days: 10Sep2018 14:01:25 against 11Nov2018 14:01:25. */
+    private static final String SKEW_62_DAYS="11Nov2018 14:01:25";
+    private static Script vs0Script() {
+        Script script=new Script();
+        script.measured=Map.of("cphaprob stat",Fixtures.read("cp/failover_stat_vsx_chassis.txt"));
+        script.prefix="Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n";
+        return script;
+    }
+    @Test void vsxChassisSamePolicyNameSixtyTwoDaysApartIsANonBlockingWarning() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=vs0Script(); script.peerPolicyStamp=SKEW_62_DAYS;
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertEquals(2,store.checks.stream().filter("pre:10:WARN"::equals).count(),store.checks.toString());
+        assertEquals("READY",store.outcome,"a warning never makes readiness NOT_READY: "+store.stopCode);
+        assertEquals(2,store.derivedValues.stream().filter(d -> d.contains(CpFailoverChecks.VS0_INSTALL_TIMES_DIFFER)
+            && d.contains("\"installSkewSeconds\":"+62L*86400)).count());
+        assertTrue(store.derivedValues.stream().noneMatch(d -> d.contains("Sample_Policy")),"policy names never stored");
+    }
+    @Test void vsxChassisDifferentPolicyNamesStillFail() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=vs0Script(); script.badPolicy=true; script.peerPolicyStamp=SKEW_62_DAYS;
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertTrue(store.checks.contains("pre:10:FAIL"),store.checks.toString());
+        assertEquals("NOT_READY",store.outcome);
+        assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("POLICY_NAMES_DIFFER")));
+    }
+    @Test void nonVsxSkewOfSixtyTwoDaysStillFails() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.peerPolicyStamp=SKEW_62_DAYS;
+        run(store,script);
+        assertEquals(2,store.checks.stream().filter("pre:10:FAIL"::equals).count(),store.checks.toString());
+        assertEquals("NOT_READY",store.outcome);
+        assertTrue(store.derivedValues.stream().noneMatch(d -> d.contains(CpFailoverChecks.VS0_INSTALL_TIMES_DIFFER)));
+        assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("INSTALL_TIMES_DIFFER")));
+    }
+    /** The chassis failover run (option B) does not stop on the VS0 warning: it records WARN and fails over. */
+    @Test void vsxHaChassisFailoverContinuesPastTheVs0PolicyWarning() {
+        Store store=chassisStore(); Script script=new Script();
+        script.peerPolicyStamp=SKEW_62_DAYS;
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertEquals("SUCCEEDED",store.outcome,store.stopCode);
+        assertEquals(2,store.checks.stream().filter("pre:10:WARN"::equals).count(),store.checks.toString());
+        assertEquals(1,script.downCount); assertEquals(1,script.upCount);
+    }
+    @Test void policyStatusCombinesWarnAsNonBlocking() {
+        assertEquals("PASS",CpFailoverJobExecutor.policyStatus("PASS","PASS","PASS"));
+        assertEquals("WARN",CpFailoverJobExecutor.policyStatus("WARN","PASS","PASS"));
+        assertEquals("FAIL",CpFailoverJobExecutor.policyStatus("WARN","FAIL","PASS"));
+        assertEquals("UNKNOWN",CpFailoverJobExecutor.policyStatus("WARN","UNKNOWN","PASS"));
     }
     @Test void vsxChassisStateRejectsAnotherContextAndIgnoresTheVsTable() {
         String output=Fixtures.read("cp/failover_stat_vsx_chassis.txt");

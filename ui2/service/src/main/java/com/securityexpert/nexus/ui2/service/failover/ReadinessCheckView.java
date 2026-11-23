@@ -26,8 +26,9 @@ public final class ReadinessCheckView {
         // A VSX chassis has no traffic interface in VS0: each Virtual System's unit measures its own traffic.
         boolean perVirtualSystem=!pan && no==8 && "NOT_EVALUATED".equals(status)
             && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText());
+        // WARN is the readiness model's non-blocking warning (PO 2026-11-23: the VS0 policy row of a VSX chassis).
         var fields=new java.util.LinkedHashMap<String,Object>(Map.of("title",title(pan,no),"member",member,"result",status,
-            "blocking",pan ? no!=PAN_TRAFFIC_ARP : (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt)));
+            "blocking",pan ? no!=PAN_TRAFFIC_ARP : (no!=5 && no!=13 && !perVirtualSystem && !"WARN".equals(status)),"summary",summary(pan,no,status,d,observedAt)));
         String sync=pan && no==4 && "FAIL".equals(status) ? panMemberSync(d) : null;
         if (sync!=null) fields.put("memberSync",sync);
         return Map.copyOf(fields);
@@ -387,9 +388,33 @@ public final class ReadinessCheckView {
             +", ratio "+(d.path("ratio").isNumber()?String.format(Locale.ROOT,"%.1f%%",d.path("ratio").asDouble()*100)
                 :"not applicable (zero baseline)")+"; rule: "+rule;
     }
-    private static String policySummary(String status,JsonNode d) {
+    /**
+     * The parity evidence of check 10: the worker stores it per source ({@code fwStat}, and {@code cpstat} on a failover
+     * run), so the reason is read from the first source that is not a plain match; a flat legacy row is read as it is.
+     */
+    private static JsonNode policyParity(JsonNode d,String status) {
+        if (d.has("reason") || !d.path("fwStat").isObject()) return d;
+        JsonNode warning=null;
+        for (String source:new String[]{"fwStat","cpstat"}) {
+            JsonNode parity=d.path(source);
+            String reason=parity.path("reason").asText();
+            if (!parity.isObject() || "POLICY_MATCH".equals(reason)) continue;
+            if ("VS0_INSTALL_TIMES_DIFFER".equals(reason)) { if (warning==null) warning=parity; continue; }
+            return parity; // a FAIL/UNKNOWN reason explains the row before a WARN one
+        }
+        if (warning!=null) return warning;
+        // Only plain matches nested: they never explain a row that is not PASS.
+        return "PASS".equals(status)?d.path("fwStat"):com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+    }
+    private static String policySummary(String status,JsonNode evidence) {
+        JsonNode d=policyParity(evidence,status);
+        if(!"PASS".equals(status) && "FAIL".equals(evidence.path("installContinuity").asText()) && d.path("reason").asText().isEmpty())
+            return "Policy install continuity check failed";
         return switch(d.path("reason").asText()) {
-            case "POLICY_MATCH" -> "Same policy on both members; installed within 10 min";
+            case "VS0_INSTALL_TIMES_DIFFER" -> "Same VS0 policy name; install times differ by "+installDays(d)
+                +" -- reinstall the VSX gateway policy to align";
+            case "POLICY_MATCH" -> "PASS".equals(status)?"Same policy on both members; installed within 10 min"
+                :"Policy missing, changed or different between members";
             case "POLICY_NAMES_DIFFER" -> "Policy names differ between members";
             case "POLICY_MISSING" -> "Policy missing on a member";
             case "POLICY_CHANGED" -> "Policy changed since the pre-check";
@@ -398,6 +423,12 @@ public final class ReadinessCheckView {
             default -> "UNKNOWN".equals(status)?"Installed policy could not be verified"
                 :"PASS".equals(status)?"Same policy on both members":"Policy missing, changed or different between members";
         };
+    }
+    /** The VS0 skew in whole days ("62 days", "1 day"); under a day, as {@link #installGap}. */
+    private static String installDays(JsonNode d) {
+        if(!d.path("installSkewSeconds").isIntegralNumber()) return "an unknown interval";
+        long days=d.path("installSkewSeconds").asLong()/86_400;
+        return days==0?installGap(d):days==1?"1 day":days+" days";
     }
     private static String installGap(JsonNode d) {
         if(!d.path("installSkewSeconds").isIntegralNumber()) return "an unknown interval";

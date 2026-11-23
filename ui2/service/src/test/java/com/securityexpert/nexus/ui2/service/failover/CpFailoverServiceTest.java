@@ -490,6 +490,30 @@ class CpFailoverServiceTest {
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
         verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
     }
+    /**
+     * PO 2026-11-23 (PO_DECISION_RECORD_2026_11_23_READINESS_WARNINGS.md): a chassis readiness that is READY with the VS0
+     * policy row WARN on both members does not block the start; the start still needs the initiator's warning confirmation.
+     */
+    @Test void aVs0PolicyWarningNeedsTheConfirmationButDoesNotBlockTheChassisStart() {
+        vsx();
+        chassisReadiness("HA","READY","READY");
+        String warn=",\"status\":\"WARN\",\"derived\":{\"fwStat\":{\"reason\":\"VS0_INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":5356800}}}";
+        String checks="[{\"memberRef\":\""+A+"\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"mode\":\"HA\",\"role\":\"ACTIVE\"}},"
+            +"{\"memberRef\":\""+B+"\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"mode\":\"HA\",\"role\":\"STANDBY\"}},"
+            +"{\"memberRef\":\""+A+"\",\"checkNo\":10"+warn+",{\"memberRef\":\""+B+"\",\"checkNo\":10"+warn+"]";
+        Instant at=Instant.parse("2026-11-23T08:00:00Z");
+        when(store.readinessStatuses(CLUSTER)).thenReturn(List.of(
+            new JooqCpFailoverRepository.ReadinessStatus(CLUSTER,null,"check_point","READY",at,null,checks),
+            new JooqCpFailoverRepository.ReadinessStatus(CLUSTER,"13","check_point","READY",at,null,"[]")));
+        when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
+        assertEquals("WARNING_CONFIRMATION_REQUIRED",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",false)).code());
+        verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
+        assertEquals("run-chassis",service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+    }
     @Test void aVslsChassisRunsEveryVirtualSystemInSequenceAndNeverTheVs0Write() {
         vsx();
         chassisReadiness("VSLS","READY","READY");

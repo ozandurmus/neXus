@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EstateAsOfView } from "../src/auth/adminApi";
+import type { EstateAsOfUnit, EstateAsOfView } from "../src/auth/adminApi";
 import {
   REWIND_TRANSITION_CAP,
   buildRewindSnapshot,
@@ -11,6 +11,7 @@ import {
   snapPoints,
   transitionSummaryLine,
 } from "../src/estate/estateRewindModel";
+import { buildRewindUnit } from "../src/estate/estateRewindModel";
 import { resolveEstateRoute, rewindHref } from "../src/estate/estateRouting";
 
 function view(asOf: string, verdict: string, evidenceAt: string | null, extra: Partial<EstateAsOfView> = {}): EstateAsOfView {
@@ -120,5 +121,58 @@ describe("transition summary and warnings", () => {
     expect(mergeRewindWarnings(["w1", " ", "w2"], ["w2", "w3"], true)).toEqual(["w1", "w2", "w3"]);
     expect(mergeRewindWarnings(["w1"], ["w9"], false)).toEqual(["w1"]);
     expect(mergeRewindWarnings(undefined, undefined, true)).toEqual([]);
+  });
+});
+
+describe("backups lens threshold rule", () => {
+  const ASOF = "2026-11-23T12:00:00Z";
+  const unitWith = (backup: Record<string, unknown>): EstateAsOfUnit => ({
+    device_id: "dev-tango-04",
+    hostname: "FW-TANGO-04",
+    failover: { verdict: "READY", evidence_at: "2026-11-23T10:00:00Z" },
+    backup: backup as EstateAsOfUnit["backup"],
+    compliance: { state: "NOT_APPLICABLE" },
+  });
+  const daysBefore = (days: number): string => new Date(Date.parse(ASOF) - days * 86_400_000).toISOString();
+
+  it("OK verdict is Stored and keeps its evidence time", () => {
+    const at = daysBefore(1);
+    const a = buildRewindUnit(unitWith({ verdict: "OK", evidence_at: at }), ASOF).lenses.backups;
+    expect(a).toMatchObject({ state: "ok", word: "Stored", evidenceAt: at });
+  });
+
+  it("STALE verdict with archive evidence 6 days old is still Stored", () => {
+    const at = daysBefore(6);
+    const a = buildRewindUnit(unitWith({ verdict: "STALE", evidence_at: at }), ASOF).lenses.backups;
+    expect(a).toMatchObject({ state: "ok", word: "Stored", evidenceAt: at });
+    expect(a.detail).toContain("6 d old");
+  });
+
+  it("STALE verdict with archive evidence 8 days old is Stale and states the archive age", () => {
+    const at = daysBefore(8);
+    const a = buildRewindUnit(unitWith({ verdict: "STALE", evidence_at: at }), ASOF).lenses.backups;
+    expect(a).toMatchObject({ state: "watch", word: "Stale", evidenceAt: at });
+    expect(a.detail).toContain("8 d old");
+  });
+
+  it("ANOMALY verdict is a Size anomaly watch", () => {
+    const at = daysBefore(1);
+    const a = buildRewindUnit(unitWith({ verdict: "ANOMALY", evidence_at: at }), ASOF).lenses.backups;
+    expect(a).toMatchObject({ state: "watch", word: "Size anomaly", evidenceAt: at });
+  });
+
+  it("MISSING verdict is No backup with no evidence time", () => {
+    const a = buildRewindUnit(unitWith({ verdict: "MISSING", evidence_at: null, reason: "NO_ARCHIVE" }), ASOF).lenses.backups;
+    expect(a).toMatchObject({ state: "act", word: "No backup", evidenceAt: null });
+  });
+
+  it("absent or unrecognised verdict is UNKNOWN, never ok", () => {
+    const absent = buildRewindUnit(unitWith({}), ASOF).lenses.backups;
+    expect(absent).toMatchObject({ state: "unk", word: "UNKNOWN", evidenceAt: null });
+    const absentFigure = buildRewindUnit({ device_id: "dev-tango-05", hostname: "FW-TANGO-05" }, ASOF).lenses.backups;
+    expect(absentFigure.state).toBe("unk");
+    const odd = buildRewindUnit(unitWith({ verdict: "SOMETHING_NEW", evidence_at: daysBefore(1) }), ASOF).lenses.backups;
+    expect(odd.state).toBe("unk");
+    expect(odd.word).not.toBe("Stored");
   });
 });

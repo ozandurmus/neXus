@@ -182,4 +182,78 @@ describe("EstateZoneMatrixGrid inside the Ask zones mode", () => {
     expect(await within(ask).findByTestId("zone-matrix-grid-failed")).toHaveTextContent("The active zone matrix could not be read");
     expect(within(ask).queryByTestId("zone-matrix-grid")).toHaveTextContent("The answer above is unaffected");
   });
+
+  it("renders confirmation coverage, UNASSIGNED -> UNASSIGNED policy, template origin, ALLOW_LISTED cell services/confirmed actor, and capped service sets without buttons", async () => {
+    const serviceSets = Array.from({ length: 12 }, (_, idx) => ({
+      name: `SET-TANGO-${idx + 1}`,
+      entries:
+        idx === 0
+          ? [
+              { entry: "tcp/443", evaluable: true, not_evaluable_reason: null },
+              { entry: "app:pan:ssl", evaluable: false, not_evaluable_reason: "APP_ID_DYNAMIC" },
+            ]
+          : [{ entry: "udp/53", evaluable: true, not_evaluable_reason: null }],
+    }));
+    const richMatrix = {
+      default_statement: "DENY_ALL",
+      default_severity: "LOW",
+      unassigned_to_unassigned: "DENY_ALL unless an explicit cell says otherwise",
+      template_origin: { name: "PCI-DSS-BASELINE", revision: "2026.2" },
+      service_sets: serviceSets,
+      cells: [
+        {
+          source: "z0",
+          destination: "z1",
+          source_name: "ZONE-TANGO-A",
+          destination_name: "ZONE-TANGO-B",
+          statement: "ALLOW_LISTED",
+          services: [
+            { entry: "tcp/443", evaluable: true, not_evaluable_reason: null },
+            { entry: "app:pan:ssl", evaluable: false, not_evaluable_reason: "APP_ID_DYNAMIC" },
+          ],
+          severity: "HIGH",
+          rationale: null,
+          regulation_reference: null,
+          reference_status: "CONFIRMED",
+          confirmed_by: "SN-0123456789",
+          confirmed_at: "2026-11-20T09:00:00Z",
+          cell_sha256: "2".repeat(64),
+        },
+      ],
+      cells_total: 2,
+      cells_with_reference: 1,
+      cells_confirmed: 1,
+    };
+
+    vi.stubGlobal("fetch", stubFetch(200, { matrix: richMatrix }));
+    stubViewport(1280);
+    render(<App />);
+    const ask = await screen.findByTestId("estate-ask-screen");
+    const grid = await within(ask).findByTestId("zone-matrix-grid");
+    await waitFor(() =>
+      expect(within(grid).getByTestId("zone-matrix-confirmation")).toHaveTextContent(
+        "1 of 2 cells confirmed by compliance (1 cell with reference)",
+      ),
+    );
+    expect(within(grid).getByTestId("zone-unassigned-policy")).toHaveTextContent(
+      "UNASSIGNED -> UNASSIGNED: DENY_ALL unless an explicit cell says otherwise",
+    );
+    expect(within(grid).getByTestId("zone-template-origin")).toHaveTextContent(
+      "Template origin: PCI-DSS-BASELINE (2026.2)",
+    );
+    expect(within(grid).getByTestId("zone-cell-services")).toHaveTextContent(
+      "2 services: tcp/443, app:pan:ssl (not evaluable: APP_ID_DYNAMIC)",
+    );
+    expect(within(grid).getByTestId("zone-cell-confirmed")).toHaveTextContent("Confirmed by Masked actor");
+
+    const setsBlock = within(grid).getByTestId("zone-service-sets");
+    expect(setsBlock).toHaveTextContent("12 service sets in this version");
+    const setRows = within(setsBlock).getAllByTestId("zone-service-set-row");
+    expect(setRows).toHaveLength(10);
+    expect(setRows[0]).toHaveTextContent("SET-TANGO-1");
+    expect(setRows[0]).toHaveTextContent("2 services");
+    expect(setRows[0]).toHaveTextContent("tcp/443, app:pan:ssl (not evaluable: APP_ID_DYNAMIC)");
+    expect(within(setsBlock).getByTestId("zone-service-sets-more")).toHaveTextContent("+2 more service sets");
+    expect(grid.querySelectorAll("button")).toHaveLength(0);
+  });
 });
