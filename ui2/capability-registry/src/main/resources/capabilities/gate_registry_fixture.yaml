@@ -421,7 +421,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run; failover readiness of a VSX chassis (PO 2026-10-23): once per member per readiness run, in that run's one SSH session per member; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, twice in each post-switch and post-return phase per member, plus a shared budget of 21 polls every 3 s across DOWN and UP"
+    max_frequency: "once per device per run; failover readiness of a VSX chassis (PO 2026-10-23): once per member per readiness run, in that run's one SSH session per member; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, twice in each post-switch and post-return phase per member, plus a shared budget of 21 polls every 3 s across DOWN and UP"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
     secret_output_risk: none
@@ -438,7 +438,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run; failover readiness of a VSX chassis (PO 2026-10-23): once per member per readiness run, in that run's one SSH session per member; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per device per run; failover readiness of a VSX chassis (PO 2026-10-23): once per member per readiness run, in that run's one SSH session per member; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "no cluster virtual interfaces is a result, not an error"
     secret_output_risk: none
@@ -3002,7 +3002,8 @@ gates:
     source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
 
   # PO 2026-11-19 "onaylıyorum" (docs/design/PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED; seeded by
-  # V255; FAILOVER_EXECUTION_CP_CONTRACT.md section 17): the two VS0 writes of a VSX HA-mode chassis failover.
+  # V255; FAILOVER_EXECUTION_CP_CONTRACT.md section 17): the two VS0 writes. Since V265 (PO 2026-11-23,
+  # PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md) the writes of a VS0 failover run in VSX HA or VSLS mode.
   - gate_id: cp_failover_down_vsenv0
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
@@ -3013,7 +3014,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once on the chassis's active member per failover run of a VSX HA-mode chassis; never on a VSLS chassis"
+    max_frequency: "once per VS0 failover run on the active member of a VSX chassis in HA or VSLS mode (PO 2026-11-23)"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
@@ -3030,7 +3031,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once on the former active member per failover run (or its one resumed return) of a VSX HA-mode chassis"
+    max_frequency: "once per VS0 failover run (or its one resumed return) on the former active member of a VSX chassis in HA or VSLS mode (PO 2026-11-23)"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
@@ -3276,8 +3277,8 @@ gates:
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   # VSX chassis step, VS0 context (PO decision 2026-10-23, docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md,
-  # RATIFIED; seeded by V177). Readiness of the chassis unit; since V255 (PO 2026-11-19) also the failover run of a VSX
-  # HA-mode chassis, where cp_policy_install_cpstat_vsenv0 is the execution-only read.
+  # RATIFIED; seeded by V177). Readiness of the chassis unit; since V255 (PO 2026-11-19) also its failover run, widened by
+  # V265 (PO 2026-11-23) to the VS0 failover run in VSX HA or VSLS mode; cp_policy_install_cpstat_vsenv0 is the execution-only read.
   - gate_id: cp_failover_tablestat_vsenv0
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
@@ -3288,7 +3289,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3305,7 +3306,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3322,7 +3323,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "two samples 5 s apart per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "two samples 5 s apart per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3339,7 +3340,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3356,7 +3357,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3373,7 +3374,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3390,7 +3391,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3407,7 +3408,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per selected bond per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per selected bond per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3424,7 +3425,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3441,7 +3442,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision; VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "UNKNOWN"
     secret_output_risk: "none"
@@ -3458,7 +3459,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre, once post-switch and once post-return per member per failover run of a VSX chassis; unused while chassis failover is refused (VSX_CHASSIS_FAILOVER_NOT_APPROVED); failover run of a VSX HA-mode chassis (PO 2026-11-19): once pre, once post-switch and once post-return per member"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run of a VSX chassis; unused while chassis failover is refused (VSX_CHASSIS_FAILOVER_NOT_APPROVED); VS0 failover run of a VSX chassis in HA or VSLS mode (PO 2026-11-23): once pre, once post-switch and once post-return per member"
     session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
     unsupported_behavior_ref: "missing policy or install time -> UNKNOWN; blocks failover"
     secret_output_risk: "policy identities stay in memory; only equality, presence and install-time skew are projected"

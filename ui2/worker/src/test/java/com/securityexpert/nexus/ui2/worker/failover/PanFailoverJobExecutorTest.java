@@ -38,6 +38,8 @@ class PanFailoverJobExecutorTest {
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,missingVersion,lowPostSessions;
         final List<String> sentCommands=new ArrayList<>();
         boolean missingFields,preempt,badFinal;
+        /** PO 2026-11-23: zeroSync = every session sync counter 0; noSessions = 0 active sessions on both members. */
+        boolean zeroSync,noSessions;
         String evidenceFault;
         String relA="10.2.3",relB="10.2.3";
         /** PO 2026-10-24: the synthetic show session meter answer -- "ok" (two vsys entries), "malformed", "empty". */
@@ -106,11 +108,11 @@ class PanFailoverJobExecutorTest {
                         boolean active=first?!suspended:suspended;
                         return new XmlApiResult.Completed(200,PanFailoverChecksTest.syncXml(
                             badSync && active?"no":active?"yes":"no (device not in active state)",
-                            active?"20":"0",active?"0":"20"));
+                            active&&!zeroSync?"20":"0",active||zeroSync?"0":"20"));
                     }
                     if (command.contains("<session><info/>"))
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><num-active>"
-                            +(badSessions&&!first?"invalid":lowPostSessions&&suspended&&!first?"79":"100")
+                            +(badSessions&&!first?"invalid":noSessions?"0":lowPostSessions&&suspended&&!first?"79":"100")
                             +"</num-active></result></response>");
                     if (command.contains("<session><meter/>")) {
                         if ("malformed".equals(meter)) return new XmlApiResult.Completed(200,"<response status=\"success\">"
@@ -441,6 +443,49 @@ class PanFailoverJobExecutorTest {
             assertTrue(derived.contains("\"sent\":20,\"recv\":0"));
             assertTrue(derived.contains("\"passive\":{\"enabled\":false"));
         }
+    }
+    /** PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md: an idle pair's zero counters warn and do not block. */
+    @Test void idlePairZeroCountersAreAWarningThatKeepsTheUnitReady() {
+        Script script=new Script(); script.zeroSync=true; script.noSessions=true;
+        Result result=run(script,true);
+        assertEquals("DONE",result.state());
+        assertEquals("READY",result.outcome());
+        assertEquals(2,result.checks().stream().filter("pre:5:WARN"::equals).count());
+        assertTrue(result.checks().contains("pre:3:PASS"));
+        assertTrue(result.checks().contains("pre:6:PASS"));
+        for(int index:new int[]{8,9})
+            assertTrue(result.derived().get(index).contains("\"reason\":\""+PanFailoverChecks.IDLE_SESSION_SYNC_REASON+"\""));
+    }
+    @Test void idlePairWarningDoesNotBlockTheFailoverRun() {
+        Script script=new Script(); script.zeroSync=true; script.noSessions=true;
+        Result result=run(script);
+        assertEquals("DONE",result.state());
+        assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
+        assertTrue(result.checks().contains("pre:5:WARN"));
+    }
+    @Test void idlePairWithHa2DownStaysFail() {
+        Script script=new Script(); script.zeroSync=true; script.noSessions=true; script.badPre=true;
+        Result result=run(script,true);
+        assertEquals("NOT_READY",result.outcome());
+        assertTrue(result.checks().contains("pre:3:FAIL"));
+        assertTrue(result.checks().contains("pre:5:FAIL"));
+        assertFalse(result.checks().contains("pre:5:WARN"));
+    }
+    @Test void zeroCountersWithSessionsCarriedStayFail() {
+        Script script=new Script(); script.zeroSync=true;
+        Result result=run(script,true);
+        assertEquals("NOT_READY",result.outcome());
+        assertEquals("Session synchronization",result.failedCheck());
+        assertTrue(result.checks().contains("pre:5:FAIL"));
+        Script execution=new Script(); execution.zeroSync=true;
+        assertEquals("STOPPED",run(execution).state());
+        assertEquals(0,execution.suspendCount);
+    }
+    @Test void idlePairWithActiveSyncDisabledStaysFail() {
+        Script script=new Script(); script.zeroSync=true; script.noSessions=true; script.badSync=true;
+        Result result=run(script,true);
+        assertEquals("NOT_READY",result.outcome());
+        assertTrue(result.checks().contains("pre:5:FAIL"));
     }
     @Test void precheckFailNeverWrites() {
         Script script=new Script(); script.badPre=true; Result result=run(script);

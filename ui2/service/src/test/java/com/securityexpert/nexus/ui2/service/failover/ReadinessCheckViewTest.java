@@ -247,6 +247,22 @@ class ReadinessCheckViewTest {
         assertTrue(unknown.contains("missing fields: 1") && unknown.contains("unrecognised values: 1"));
         assertFalse(unknown.contains("SYNTHETIC-PRIVATE-NAME"));
     }
+    /** PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md: the idle-pair warning text, still blocking-check row. */
+    @Test void panIdleSessionSyncWarningIsNamedWithItsCounters() throws Exception {
+        String facts="{\"reason\":\"NO_SESSIONS_TO_SYNCHRONIZE\",\"missing\":[],\"unrecognised\":[],"
+            +"\"active\":{\"enabled\":true,\"messages\":{\"session setup\":{\"enable\":true,\"sent\":0,\"recv\":0}}},"
+            +"\"passive\":{\"enabled\":false,\"messages\":{\"session setup\":{\"enable\":true,\"sent\":0,\"recv\":0}}}}";
+        var warn=row(true,5,"WARN",facts);
+        String summary=warn.get("summary").toString();
+        assertTrue(summary.startsWith("No sessions to synchronize (0 active sessions on both members); "
+            +"the session sync path is not proven by traffic."),summary);
+        assertTrue(summary.contains("active sync enabled"));
+        assertTrue(summary.contains("active session setup enabled, sent 0, recv 0"));
+        assertFalse(summary.contains("failed or disabled"));
+        assertEquals("WARN",warn.get("result"));
+        assertEquals(true,warn.get("blocking"));
+        assertFalse(row(true,5,"FAIL",facts).get("summary").toString().startsWith("No sessions to synchronize"));
+    }
     @Test void sensitiveDerivedStringsNeverEnterSummaries() throws Exception {
         String derived="{\"role\":\"SYNTHETIC-PRIVATE-NAME\",\"reason\":\"SYNTHETIC-PRIVATE-NAME\","
             +"\"policy\":\"SYNTHETIC-PRIVATE-NAME\",\"up\":\"SYNTHETIC-PRIVATE-NAME\"}";

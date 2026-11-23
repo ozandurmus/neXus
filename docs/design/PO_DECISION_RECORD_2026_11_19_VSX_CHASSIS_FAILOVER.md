@@ -5,6 +5,11 @@ exact literals). Prepared at the PO's request ("Evet, hazırla", 2026-11-19 even
 no failover button on a VSX chassis unit. The FROZEN `FAILOVER_EXECUTION_CP_CONTRACT.md` §10 is amended by its §17,
 which points here. Implementation: §8.
 
+> **Superseded in part by `PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md` (RATIFIED, PO 2026-11-23):** VS0 is its
+> own failover unit in VSX HA and VSLS mode; it is verified on VS0 alone and never depends on any VS (§6 item 1, §7's
+> every-VS mitigation and §8's mode-picks-the-path, check 16 and every-VS-READY rules no longer apply). "Fail over all
+> virtual systems" stays as an optional chassis action. The gate literals of §7 are unchanged.
+
 ## 1. Today
 - `FAILOVER_EXECUTION_CP_CONTRACT.md` §10 (FROZEN): "The VSX chassis itself is not failed over by this feature."
 - PO 2026-10-23 ("Önce readiness, sonra karar"): chassis readiness only; chassis failover refused everywhere with

@@ -60,6 +60,9 @@ function evaluationAgeMs(at: string | null | undefined, now: Date): number | nul
 export function failoverVendorLabel(vendor?: string): string {
   return vendor === "cisco_asa" ? "Cisco ASA" : vendor === "fortinet" ? "FortiGate" : vendor === "palo_alto" ? "Palo Alto" : "Check Point";
 }
+/** The optional chassis action (PO 2026-11-23): writes are fenced one at a time fleet-wide, so the VS runs follow each other. */
+export const ALL_VIRTUAL_SYSTEMS_TOOLTIP = "Fails over every virtual system of this chassis one after another, in VSID order, each in its own run; "
+  + "never in parallel, because only one failover write runs at a time across the fleet. VS0 is not part of it.";
 export function failoverExecutionDisabled(vendor?: string): boolean {
   return vendor === "cisco_asa" || vendor === "fortinet";
 }
@@ -299,12 +302,16 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           {/* The mode line only when it adds information: "Mode: UNKNOWN" next to a known role says nothing. */}
           {!nested && row?.unitKind === "VSX_CHASSIS" && <Typography variant="caption" component="div" data-vsx-chassis
             title="The chassis is its own unit: its status, pre-checks and selection are the chassis step; each Virtual System below has its own">VSX chassis</Typography>}
-          {/* The chassis failover the server offers for its mode (contract §17), started from the unit's detail; or why none. */}
+          {/* PO 2026-11-23: VS0 is its own failover unit ("Fail over VS0", HA or VSLS mode; or why not), each Virtual System
+              row keeps its own action, and "Fail over all virtual systems" is a secondary chassis action. Both open the
+              chassis unit's detail, where the server re-checks everything. */}
           {!nested && row?.unitKind === "VSX_CHASSIS" && (row.failoverRefusal
             ? <Typography variant="caption" component="div" data-chassis-refusal title={row.failoverRefusal}>{readinessReasonLabel(row.failoverRefusal)}</Typography>
             : row.chassisAction && <Button size="small" data-chassis-action={row.chassisAction} sx={{ p: 0, textTransform: "none" }}
-                onClick={event => { event.stopPropagation(); onOpen(cluster.ref, row.unitId); }}>
-                {row.chassisAction === "FAILOVER_ALL_VIRTUAL_SYSTEMS" ? "Fail over all virtual systems" : "Fail over the chassis"}</Button>)}
+                onClick={event => { event.stopPropagation(); onOpen(cluster.ref, row.unitId); }}>Fail over VS0</Button>)}
+          {!nested && row?.unitKind === "VSX_CHASSIS" && row.sequenceAction && <Button size="small" data-sequence-action={row.sequenceAction}
+            title={ALL_VIRTUAL_SYSTEMS_TOOLTIP} sx={{ p: 0, ml: 1, textTransform: "none", color: m3.onSurfaceVar }}
+            onClick={event => { event.stopPropagation(); onOpen(cluster.ref, row.unitId); }}>Fail over all virtual systems</Button>}
           {!nested && failoverExecutionDisabled(vendor) && <Typography variant="caption" component="div" data-failover-execution-disabled
             title={row?.failoverRefusal ?? "FAILOVER_VENDOR_NOT_AVAILABLE"} sx={{ color: m3.onSurfaceVar }}>
             Failover execution not enabled for {failoverVendorLabel(vendor)}</Typography>}

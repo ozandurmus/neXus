@@ -445,6 +445,7 @@ class CpFailoverServiceTest {
         Instant from=Instant.now(), until=from.plusSeconds(600);
         assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, assertThrows(CpFailoverService.Refusal.class,
             () -> service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point")).code());
+        when(store.requestOperation(request)).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
         assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point",request,1,"nonce",true)).code());
         verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
@@ -457,38 +458,55 @@ class CpFailoverServiceTest {
             eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
             .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs-failover",null));
         assertEquals("run-vs-failover",service.request(CLUSTER_ID,VS_UNIT,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+        // "Fail over all virtual systems" does not depend on the VS0 mode: its approval is taken.
+        String sequence=UUID.randomUUID().toString();
+        service.createApprovalRequest(sequence,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point",
+            JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS);
+        verify(store).createRequestApproval(eq(sequence),eq(CLUSTER),isNull(),eq(CLUSTER_ID),any(),any(),any(),any(),any(),any(),any(),
+            eq(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS),any());
     }
-    @Test void aVsxHaModeChassisIsApprovedAndStartedAsOneChassisRun() {
-        vsx();
-        chassisReadiness("HA","READY","READY");
-        String request=UUID.randomUUID().toString();
-        Instant from=Instant.now(), until=from.plusSeconds(600);
-        service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
-        // Option B: an ordinary unit approval (operation FAILOVER) on the chassis unit.
-        verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),eq(java.util.Set.of(A,B)),eq(from),eq(until),
-            eq("Synthetic"),eq("actor-1"),eq("check_point"),eq(JooqCpFailoverRepository.ADMIN_SINGLE),
-            eq(JooqCpFailoverRepository.OPERATION_FAILOVER),any());
-        when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
-        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
-            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
-            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
-        assertEquals("run-chassis",service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
-        // An approval of the other path (the mode changed since): refused, nothing started.
-        when(store.requestOperation("request-b")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
-        assertEquals(CpFailoverService.CHASSIS_MODE_CHANGED, assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-b",1,"nonce-b",true)).code());
+    /**
+     * PO 2026-11-23 (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md): VS0 is its own failover unit in VSX HA and VSLS
+     * mode alike; the approval (operation FAILOVER) and the start are the same one VS0 run in both modes.
+     */
+    @Test void aVs0RunIsApprovedAndStartedInHaAndInVslsMode() {
+        for (String mode:List.of("HA","VSLS")) {
+            vsx();
+            chassisReadiness(mode,"READY","READY");
+            String request=UUID.randomUUID().toString();
+            Instant from=Instant.now(), until=from.plusSeconds(600);
+            service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
+            verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),eq(java.util.Set.of(A,B)),eq(from),eq(until),
+                eq("Synthetic"),eq("actor-1"),eq("check_point"),eq(JooqCpFailoverRepository.ADMIN_SINGLE),
+                eq(JooqCpFailoverRepository.OPERATION_FAILOVER),any());
+            String nonce="nonce-"+mode;
+            when(store.requestOperation("request-"+mode)).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
+            when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+                eq(java.util.Set.of(A,B)),eq("request-"+mode),eq(1L),eq(nonce),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
+                .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs0-"+mode,null));
+            assertEquals("run-vs0-"+mode,service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-"+mode,1,nonce,true));
+        }
         verify(store,never()).requestSequence(any(),any(),any(),any(),any(),anyLong(),any(),anyBoolean(),any(),any(),any(),anyBoolean());
     }
-    @Test void aChassisStartNeedsTheChassisAndEveryVirtualSystemReady() {
+    @Test void aVs0RunNeedsOnlyTheChassisReadyNeverEveryVirtualSystem() {
         vsx();
         when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
         chassisReadiness("HA","NOT_READY","READY");
         assertEquals(CpFailoverService.CHASSIS_READINESS_NOT_READY, assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
-        chassisReadiness("HA","READY","NOT_READY");
-        assertEquals(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY, assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
         verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
+        // A VS that is not ready does not block the VS0 run: they are independent.
+        chassisReadiness("VSLS","READY","NOT_READY");
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs0",null));
+        assertEquals("run-vs0",service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+        // ...but it does refuse "Fail over all virtual systems", whatever the chassis's own readiness.
+        when(store.requestOperation("request-s")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
+        chassisReadiness("HA","NOT_READY","NOT_READY");
+        assertEquals(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-s",1,"nonce-s",true)).code());
+        verify(store,never()).requestSequence(any(),any(),any(),any(),any(),anyLong(),any(),anyBoolean(),any(),any(),any(),anyBoolean());
     }
     /**
      * PO 2026-11-23 (PO_DECISION_RECORD_2026_11_23_READINESS_WARNINGS.md): a chassis readiness that is READY with the VS0
@@ -514,18 +532,27 @@ class CpFailoverServiceTest {
             .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
         assertEquals("run-chassis",service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
     }
-    @Test void aVslsChassisRunsEveryVirtualSystemInSequenceAndNeverTheVs0Write() {
+    @Test void theSequenceIsAChassisOnlyOperationAndAnUnknownOperationIsRefused() {
+        vsx();
+        chassisReadiness("HA","READY","READY");
+        Instant from=Instant.now(), until=from.plusSeconds(600);
+        assertEquals(CpFailoverService.OPERATION_NOT_OFFERED, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.createApprovalRequest(UUID.randomUUID().toString(),CLUSTER_ID,VS_UNIT,from,until,"Synthetic","actor-1",
+                "check_point",JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS)).code());
+        assertEquals(CpFailoverService.OPERATION_NOT_OFFERED, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.createApprovalRequest(UUID.randomUUID().toString(),CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1",
+                "check_point","FAILOVER_SOMETHING_ELSE")).code());
+        verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
+    }
+    @Test void allVirtualSystemsRunsEveryVirtualSystemInSequenceInEitherMode() {
         vsx();
         chassisReadiness("VSLS","READY","READY");
         String request=UUID.randomUUID().toString();
         Instant from=Instant.now(), until=from.plusSeconds(600);
-        service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
+        service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point",
+            JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS);
         verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),any(),any(),any(),any(),any(),any(),any(),
             eq(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS),any());
-        // A chassis-run approval on a VSLS chassis: option B is refused with its own code.
-        when(store.requestOperation("request-b")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
-        assertEquals(CpFailoverService.CHASSIS_MODE_VSLS, assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-b",1,"nonce-b",true)).code());
         when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
         assertEquals(CpFailoverService.SEQUENCE_NOT_SCHEDULABLE, assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,Instant.now().plusSeconds(60),"actor-1","check_point","request-a",1,"nonce-a",true)).code());
@@ -576,7 +603,7 @@ class CpFailoverServiceTest {
         assertEquals(JooqCpFailoverRepository.CHASSIS_RUN_ACTIVE, assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,vsUnit,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
     }
-    @Test void vsxChassisIsAScheduledReadinessTargetAndAnApiUnitWithoutFailoverActions() throws Exception {
+    @Test void vsxChassisWithUnknownModeOffersNoVs0RunButKeepsTheSequence() throws Exception {
         vsx();
         assertEquals(List.of(CLUSTER_ID, UUID.nameUUIDFromBytes((CLUSTER+":13").getBytes(StandardCharsets.UTF_8)).toString()),
             service.units(CLUSTER_ID,"actor-1").stream().map(CpFailoverService.Unit::id).toList());
@@ -588,13 +615,16 @@ class CpFailoverServiceTest {
             .andExpect(jsonPath("$[0].unitId").value(CLUSTER_ID))
             .andExpect(jsonPath("$[0].unitKind").value("VSX_CHASSIS"))
             .andExpect(jsonPath("$[0].failoverRefusal").value(CpFailoverService.CHASSIS_MODE_UNKNOWN))
-            .andExpect(jsonPath("$[0].canStart").value(false))
+            .andExpect(jsonPath("$[0].chassisAction").doesNotExist())
+            .andExpect(jsonPath("$[0].sequenceAction").value(CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS))
+            .andExpect(jsonPath("$[0].canStart").value(true))
+            .andExpect(jsonPath("$[0].canSchedule").value(false))
             .andExpect(jsonPath("$[0].virtual_system").doesNotExist())
             .andExpect(jsonPath("$[1].unitKind").value("VIRTUAL_SYSTEM"))
             .andExpect(jsonPath("$[1].canStart").value(true))
             .andExpect(jsonPath("$[1].failoverRefusal").doesNotExist());
     }
-    @Test void theChassisUnitOffersTheActionItsModeAllows() throws Exception {
+    @Test void theChassisUnitOffersTheVs0RunInBothModesAndTheSequenceBesideIt() throws Exception {
         vsx();
         var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
         String path = "/api/v2/cp-failover/units";
@@ -606,16 +636,23 @@ class CpFailoverServiceTest {
             .andExpect(jsonPath("$[0].chassisMode").value("HA"))
             .andExpect(jsonPath("$[0].chassisAction").value(CpFailoverService.ACTION_CHASSIS_FAILOVER))
             .andExpect(jsonPath("$[0].failoverRefusal").doesNotExist())
+            .andExpect(jsonPath("$[0].sequenceAction").value(CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS))
+            .andExpect(jsonPath("$[0].sequenceStartRefusal").doesNotExist())
             .andExpect(jsonPath("$[0].canStart").value(true))
             .andExpect(jsonPath("$[0].canSchedule").value(true));
+        // VSLS: the same VS0 run; a VS not ready refuses only the sequence, never the VS0 run.
         chassisReadiness("VSLS","READY","NOT_READY");
         mvc.perform(get(path).servletPath(path).param("clusterRef", CLUSTER)
                 .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].chassisAction").value(CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS))
-            .andExpect(jsonPath("$[0].chassisStartRefusal").value(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY))
+            .andExpect(jsonPath("$[0].chassisMode").value("VSLS"))
+            .andExpect(jsonPath("$[0].chassisAction").value(CpFailoverService.ACTION_CHASSIS_FAILOVER))
+            .andExpect(jsonPath("$[0].chassisStartRefusal").doesNotExist())
+            .andExpect(jsonPath("$[0].sequenceStartRefusal").value(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY))
             .andExpect(jsonPath("$[0].canStart").value(true))
-            .andExpect(jsonPath("$[0].canSchedule").value(false));
+            .andExpect(jsonPath("$[0].canSchedule").value(true))
+            .andExpect(jsonPath("$[1].unitKind").value("VIRTUAL_SYSTEM"))
+            .andExpect(jsonPath("$[1].canStart").value(true));
     }
     private static DeviceSummaryRecord summaryWithVs(String id,String vsNames) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
@@ -793,6 +830,27 @@ class CpFailoverServiceTest {
         ready("ACTIVE","STANDBY");
         assertEquals("WARNING_CONFIRMATION_REQUIRED",assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",false)).code());
+        verifyNoInteractions(store);
+    }
+    /** PO 2026-11-23: a READY Palo Alto unit with a check 5 warning still needs the one existing warning confirmation. */
+    @Test void panStartNeedsTheWarningConfirmationWhateverTheReadinessRows() {
+        ready("ACTIVE","STANDBY");
+        var panA=new DeviceSummaryRecord(A,"gateway","palo_alto",DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
+        var panB=new DeviceSummaryRecord(B,"gateway","palo_alto",DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
+        when(devices.listAll()).thenReturn(List.of(panA,panB));
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(panA,panB));
+        when(devices.findSummary(A)).thenReturn(Optional.of(panA));
+        for (String id:List.of(A,B)) when(devices.findEndpointByDeviceId(id)).thenReturn(Optional.of(
+            new EndpointRecord("endpoint-"+id,id,"pan_xml_api",A.equals(id)?"192.0.2.11":"192.0.2.12",Instant.EPOCH)));
+        for (String id:List.of(A,B)) when(inventory.findLatestRun(id)).thenReturn(Optional.of(new InventoryRun(
+            "inventory-"+id,id,"job-"+id,Instant.now(),1,
+            List.of(new InventoryContext("physical",List.of(),List.of())),
+            List.of(new InventoryHaFact("ha-"+id,"physical",A.equals(id)?"ACTIVE":"PASSIVE",Optional.of("Active-Passive"),
+                InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE)))));
+        assertEquals("WARNING_CONFIRMATION_REQUIRED",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","palo_alto","request-a",1,"nonce-a",false)).code());
         verifyNoInteractions(store);
     }
     @Test void panActiveActiveRefusedWithoutVsUnits() {

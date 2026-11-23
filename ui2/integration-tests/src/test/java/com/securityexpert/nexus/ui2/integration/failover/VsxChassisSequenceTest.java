@@ -165,4 +165,53 @@ class VsxChassisSequenceTest {
             migrate.rollback();
         }
     }
+
+    /**
+     * V265 (PO 2026-11-23, VS0 independent of every VS): after the full migration the two VS0 writes carry the widened
+     * text, every VS0 read of the run carries the widened purpose clause once and no HA-only clause, the commands are
+     * unchanged; re-running V265 twice changes nothing.
+     */
+    @Test
+    void v265WidensTheVs0RowsAndIsRepeatable() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("vsx_vs0_independent");
+                var migrate = fixture.migrateConnection(); var statement = migrate.createStatement()) {
+            migrate.setAutoCommit(false);
+            String sql = java.nio.file.Files.readString(java.nio.file.Path.of("../service/src/main/resources/db/migration",
+                "V265__vsx_vs0_independent_failover_gates.sql"));
+            String before = vs0Rows(statement);
+            statement.execute(sql);
+            statement.execute(sql);
+            assertEquals(before, vs0Rows(statement), "V265 is a no-op when re-run");
+            try (var rows = statement.executeQuery("select gate_id, max_frequency, canonical_command_key from gate_registry "
+                    + "where gate_id in ('cp_failover_down_vsenv0','cp_failover_up_vsenv0') order by gate_id")) {
+                rows.next();
+                assertEquals(com.securityexpert.nexus.ui2.capability.GateRow.CP_CHASSIS_DOWN_MAX_FREQUENCY, rows.getString(2));
+                assertEquals(com.securityexpert.nexus.ui2.capability.GateRow.CP_CHASSIS_DOWN_COMMAND, rows.getString(3));
+                rows.next();
+                assertEquals(com.securityexpert.nexus.ui2.capability.GateRow.CP_CHASSIS_UP_MAX_FREQUENCY, rows.getString(2));
+                assertEquals(com.securityexpert.nexus.ui2.capability.GateRow.CP_CHASSIS_UP_COMMAND, rows.getString(3));
+            }
+            try (var rows = statement.executeQuery("select count(*) from gate_registry where gate_id like '%vsenv0' "
+                    + "and max_frequency like '%VSX HA-mode chassis%'")) {
+                rows.next();
+                assertEquals(0, rows.getInt(1), "no HA-only clause is left on a VS0 row");
+            }
+            try (var rows = statement.executeQuery("select count(*) from gate_registry where max_frequency like '%"
+                    + com.securityexpert.nexus.ui2.capability.GateRow.CP_VS0_RUN_READ_PURPOSE + "%'")) {
+                rows.next();
+                assertEquals(13, rows.getInt(1), "the eleven V177 reads and the two inventory VS0 reads");
+            }
+            migrate.rollback();
+        }
+    }
+
+    private static String vs0Rows(java.sql.Statement statement) throws java.sql.SQLException {
+        StringBuilder out = new StringBuilder();
+        try (var rows = statement.executeQuery("select gate_id, canonical_command_key, max_frequency from gate_registry "
+                + "where gate_id like '%vsenv0' order by gate_id")) {
+            while (rows.next()) out.append(rows.getString(1)).append('|').append(rows.getString(2)).append('|')
+                .append(rows.getString(3)).append('\n');
+        }
+        return out.toString();
+    }
 }

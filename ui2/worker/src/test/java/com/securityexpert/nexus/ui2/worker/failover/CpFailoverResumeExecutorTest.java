@@ -407,8 +407,11 @@ class CpFailoverResumeExecutorTest {
         }
     }
 
-    /** A stopped VSX HA-mode chassis run (option B, PO 2026-11-19): the resumed return writes and reads in VS0 only. */
-    @Test void aChassisResumeReturnsInVs0AndVerifiesTheVirtualSystemsCameBack() {
+    /**
+     * A stopped VS0 run (PO 2026-11-23, VS0 independent of every VS): the resumed return writes and reads in VS0 only and
+     * is verified on the VS0 roles; no virtual system is read or waited for.
+     */
+    @Test void aChassisResumeReturnsInVs0AndReadsNoVirtualSystem() {
         Store store=new Store(); store.expectedUpGate="cp_failover_up_vsenv0";
         List<JooqCpFailoverRepository.SummaryMember> rows=new ArrayList<>();
         for(String member:List.of(A,B)) {
@@ -420,8 +423,7 @@ class CpFailoverResumeExecutorTest {
         run(store,script);
         assertEquals("DONE",store.state,store.checks.toString()); assertEquals("RETURN_VERIFIED",store.message);
         assertEquals(List.of("bash -lc 'vsenv 0 && clusterXL_admin up'"),script.writes());
-        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ")
-            || c.equals("bash -lc 'vsenv 12 && cphaprob stat'")),script.commands.toString());
-        assertEquals(2,store.checks.stream().filter("post_return:16:PASS"::equals).count());
+        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ")),script.commands.toString());
+        assertTrue(store.checks.stream().noneMatch(c -> c.contains(":16:")),"no 'Virtual systems moved' check on a VS0 run");
     }
 }

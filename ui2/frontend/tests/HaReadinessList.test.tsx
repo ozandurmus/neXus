@@ -461,19 +461,23 @@ it("shows the single FortiGate's roles from check 1 (primary active, secondary s
   view("UNKNOWN");
   expect(within(row("CLS-TANGO-05")).getByText(/Active:/).textContent).toBe("Active: Not observed ↔ Standby: Not observed");
 });
-it("offers the chassis failover its mode allows on the VSX parent row, or says why none", () => {
-  const base: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitKind: "VSX_CHASSIS" };
+it("offers Fail over VS0 in either mode and Fail over all virtual systems on the VSX parent row; VS rows keep their own", () => {
+  const base: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitKind: "VSX_CHASSIS", sequenceAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" };
   const vs: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-13" };
-  const { onOpen, unmount } = setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" }, vs] } });
-  fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all virtual systems" }));
-  expect(onOpen).toHaveBeenCalledWith("CLS-ALPHA-01", base.unitId);
-  unmount();
-  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode: "HA", chassisAction: "FAILOVER" }, vs] } });
-  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over the chassis" })).toBeInTheDocument();
-  cleanup();
+  for (const chassisMode of ["HA", "VSLS"] as const) {
+    const { onOpen, unmount } = setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode, chassisAction: "FAILOVER" }, vs] } });
+    fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over VS0" }));
+    expect(onOpen).toHaveBeenCalledWith("CLS-ALPHA-01", base.unitId);
+    const all = within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all virtual systems" });
+    expect(all).toHaveAttribute("title", expect.stringContaining("one after another"));
+    fireEvent.click(all);
+    expect(onOpen).toHaveBeenCalledTimes(2);
+    unmount();
+  }
   setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN" }, vs] } });
   expect(within(row("CLS-ALPHA-01")).getByText(/VSX chassis mode not known/)).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
-  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over/ })).toBeNull();
+  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: "Fail over VS0" })).toBeNull();
+  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all virtual systems" })).toBeInTheDocument();
 });
 it("renders Cisco ASA and FortiGate pairs as first-class rows with readiness roles, inventory fallback, check table, vendor filter, single chip counts and execution-disabled notice", () => {
   withNow();

@@ -17,6 +17,7 @@ import { M3Button } from "../shell/M3Widgets";
 import { readinessReasonLabel } from "../shell/presenters";
 import { m3 } from "../theme/m3Theme";
 import { formatStamp, relativeAge } from "../shell/time";
+import { readyWord } from "./readinessWarnings";
 
 /** Check 10 (traffic and ARP) is read on the active member only. */
 const TRAFFIC_ARP_CHECK = 10;
@@ -111,8 +112,9 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], pee
     const passed = blocking && members.every(check => check?.result === "PASS");
     // Palo Alto config sync off on one member: the row is still blocking, but only that member's own cell is red.
     const perMember = failed && members.some(check => check?.memberSync !== undefined);
-    // WARN: the readiness model's non-blocking warning (PO 2026-11-23, e.g. the VS0 policy row of a VSX chassis).
-    const warned = !failed && members.some(check => check?.result === "WARN");
+    // WARN: non-blocking warning (VS0 policy row, PO 2026-11-23) or a blocking check that warns (PAN idle session sync, PO 2026-11-23); a FAIL on either member wins.
+    const warned = !failed && members.some(check => check?.result === "WARN")
+      && (!blocking || members.every(check => check?.result === "PASS" || check?.result === "WARN"));
     return { no, title: first.title, members, blocking, failed, passed, perMember, warned };
   });
 }
@@ -203,18 +205,19 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
   const blocking = rows.filter(row => row.failed).length;
   const warnings = rows.filter(row => row.warned).length;
   const ready = !running && status === "READY";
+  const readyClean = ready && warnings === 0;
   const notReady = !running && status === "NOT_READY";
-  const verdict = running ? "Running pre-checks" : ready ? `Ready${warnings ? ` · ${warnings} ${warnings === 1 ? "warning" : "warnings"}` : ""}` : notReady
+  const verdict = running ? "Running pre-checks" : ready ? readyWord(warnings) : notReady
     ? `Not ready${blocking ? ` · ${blocking} ${blocking === 1 ? "blocker" : "blockers"}` : ""}` : "Unknown";
-  const icon = ready ? "check-circle" : notReady ? "x-circle" : "warning";
+  const icon = readyClean ? "check-circle" : notReady ? "x-circle" : "warning";
   const observed = observedAt ? Date.parse(observedAt) : NaN;
   const minutes = Math.max(0, Math.floor((Date.now() - observed) / 60_000));
   const age = Number.isFinite(minutes) ? minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)} h ago` : "Not evaluated";
   const vendorLabel = vendor === "palo_alto" ? "Palo Alto · Active/passive" : vendor === "cisco_asa" ? "Cisco ASA · Active/standby failover" : vendor === "fortinet" ? "FortiGate · FGCP active-passive (as the primary reports)" : "Check Point · ClusterXL HA";
   return <Card component="section" aria-label="Readiness checks" sx={{ p: { xs: 2, md: 3 }, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: 3 }}>
     <Stack direction="row" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
-      <Box sx={{ display: "flex", p: 1.25, borderRadius: "50%", bgcolor: ready ? m3.successContainer : notReady ? m3.errorContainer : m3.warningContainer,
-        color: ready ? m3.onSuccessContainer : notReady ? m3.onErrorContainer : m3.onWarningContainer }}><Icon name={icon} size={24} /></Box>
+      <Box sx={{ display: "flex", p: 1.25, borderRadius: "50%", bgcolor: readyClean ? m3.successContainer : notReady ? m3.errorContainer : m3.warningContainer,
+        color: readyClean ? m3.onSuccessContainer : notReady ? m3.onErrorContainer : m3.onWarningContainer }}><Icon name={icon} size={24} /></Box>
       <Box sx={{ flex: 1, minWidth: 180 }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>{verdict}</Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{cluster} · {vendorLabel} · {age}</Typography>

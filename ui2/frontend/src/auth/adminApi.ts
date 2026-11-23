@@ -2329,11 +2329,14 @@ export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omi
   unitKind?: "CLUSTER" | "VSX_CHASSIS" | "VIRTUAL_SYSTEM";
   /** Set when the server offers no failover for this unit (a VSX chassis whose mode is unknown); approvals and starts are refused with this code. */
   failoverRefusal?: string | null;
-  /** VSX chassis (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md): the VS0 mode of its latest readiness, the action that
-   * mode allows (FAILOVER = one chassis run in VSX HA mode; FAILOVER_ALL_VIRTUAL_SYSTEMS = every VS in turn on VSLS), why a
-   * start would be refused now, and the latest "Fail over all virtual systems" sequence. */
-  chassisMode?: "HA" | "VSLS" | "UNKNOWN"; chassisAction?: "FAILOVER" | "FAILOVER_ALL_VIRTUAL_SYSTEMS" | null;
-  chassisStartRefusal?: string | null; sequence?: CpFailoverSequence;
+  /** VSX chassis (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md): VS0 and every VS are independent units. The VS0 mode
+   * of its latest readiness; `chassisAction` FAILOVER = "Fail over VS0" (HA or VSLS mode; null while the mode is unknown);
+   * `chassisStartRefusal` why a VS0 start would be refused now (the chassis's own readiness); `sequenceAction` the optional
+   * "Fail over all virtual systems" (one VS run after another) and `sequenceStartRefusal` why it would be refused now (a VS
+   * not ready); the latest such sequence. */
+  chassisMode?: "HA" | "VSLS" | "UNKNOWN"; chassisAction?: "FAILOVER" | null;
+  chassisStartRefusal?: string | null; sequenceAction?: "FAILOVER_ALL_VIRTUAL_SYSTEMS" | null; sequenceStartRefusal?: string | null;
+  sequence?: CpFailoverSequence;
   canApprove: boolean; canStart: boolean; canSchedule: boolean; canRunReadiness?: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null;
   /** Palo Alto units only: the server's config-sync facts (PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §6). */
   configSync?: PanConfigSyncFacts }
@@ -2358,7 +2361,7 @@ export interface CpFailoverSequence { sequenceId: string; state: "RUNNING" | "DO
   started: number; vsIds: string[]; currentRunId: string | null; failedVsId: string | null; requestedAt: string; finishedAt: string | null }
 export interface HaPairViewFacts { vendor: string; state: "HEALTHY" | "DEGRADED" | "UNKNOWN"; reason: string | null;
   sync: "UNKNOWN"; syncReason: string; members: Array<{ device_id: string; role: string }> }
-export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync" | "chassisMode" | "chassisAction"> {
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync" | "chassisMode" | "chassisAction" | "sequenceAction"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   /** False for a listed pair whose vendor has no readiness yet (Cisco ASA while its readiness switch is off): shown, never run. */
   readinessAvailable?: boolean;
@@ -2397,8 +2400,12 @@ export const listCpFailoverSummary = () => call<CpFailoverSummary[]>("/api/v2/cp
 export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${failoverPath(unit.vendor)}/approvals?${cpQuery(unit)}`, "GET");
 export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${failoverPath(unit.vendor)}/runs?${cpQuery(unit)}`, "GET");
 export const getCpFailoverRun = (runId: string, vendor?: string) => call<CpFailoverRunDetail>(`${failoverPath(vendor)}/runs/${encodeURIComponent(runId)}`, "GET");
-export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: string, reason: string, requestId: string) =>
-  call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason, requestId });
+/** `operation`: omitted for the unit's own failover (a VSX chassis's VS0 run); FAILOVER_ALL_VIRTUAL_SYSTEMS for the chassis sequence. */
+export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: string, reason: string, requestId: string,
+  operation?: CpFailoverOperation) =>
+  call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason, requestId,
+    ...(operation && operation !== "FAILOVER" ? { operation } : {}) });
+export type CpFailoverOperation = "FAILOVER" | "FAILOVER_ALL_VIRTUAL_SYSTEMS";
 export const secondApproveCpFailover = (unit: CpFailoverUnit, requestId: string, revision: number) =>
   call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals/${encodeURIComponent(requestId)}/approve`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, revision });
 export const revokeCpFailover = (approvalId: string, vendor?: string) => call<{ revoked: boolean }>(`${failoverPath(vendor)}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");

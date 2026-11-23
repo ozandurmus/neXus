@@ -29,6 +29,7 @@ import { backupDisplayWord } from "../screens/backupWords";
 import { knownHaRole, orderMembers } from "../screens/DeviceShared";
 import { groupClusters, haReadinessItems, primaryReasonWord, readinessCounts } from "../screens/HaReadinessList";
 import { ESTATE_LENSES, type EstateLens } from "./estateRouting";
+import { readinessWarningChecks, readyWord } from "../screens/readinessWarnings";
 
 export type BadgeState = "act" | "watch" | "ok" | "unk" | "na";
 export type TileState = BadgeState | "fresh" | "day" | "old" | "stale";
@@ -514,6 +515,14 @@ export function buildEstateModel(inputs: EstateInputs): EstateModel {
           detail: "Evaluation is older than 24 h; re-check before relying on Ready",
         });
       }
+      // PO 2026-11-23: a blocking check's WARN keeps the unit READY but the badge names the warning.
+      const warnings = readinessWarningChecks(item.base?.readiness?.checks).length;
+      if (warnings > 0) {
+        return makeAnswer("watch", `${readyWord(warnings)}, review before failing over`, obsAt, "readiness", {
+          badgeWord: readyWord(warnings),
+          detail: reason,
+        });
+      }
       return makeAnswer("ok", "Ready to fail over", obsAt, "readiness", {
         badgeWord: "Ready",
         detail: reason,
@@ -841,12 +850,13 @@ export function buildEstateModel(inputs: EstateInputs): EstateModel {
         inputs.failover.state !== "ok" ? "UNKNOWN" : item?.status ?? "UNKNOWN";
       const observedAt = item?.base?.readiness?.observedAt ?? item?.base?.readinessObservedAt ?? null;
       const stale = Boolean(observedAt && isPastFresh(observedAt, now));
+      const warned = failoverStatus === "READY" && readinessWarningChecks(item?.base?.readiness?.checks).length > 0;
       const pairState: BadgeState =
         failoverStatus === "NOT_READY"
           ? "act"
           : failoverStatus === "UNSUPPORTED" || failoverStatus === "UNKNOWN" || !observedAt
               ? "unk"
-              : stale
+              : stale || warned
                 ? "watch"
                 : "ok";
       const reason =

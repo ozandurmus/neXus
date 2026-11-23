@@ -40,28 +40,31 @@ public final class CpFailoverService {
         }
     }
     /**
-     * VSX chassis failover (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED; FAILOVER_EXECUTION_CP_CONTRACT.md
-     * §17 amends §10). The chassis mode, from the VS0 check 1 of the chassis unit's latest readiness on both members, picks
-     * the path: VSX HA mode -> one chassis run with the VS0 writes (option B); VSLS -> "Fail over all virtual systems", one
-     * VS run after another (option A). An unknown or split mode is refused.
+     * VSX chassis failover (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md, RATIFIED; FAILOVER_EXECUTION_CP_CONTRACT.md
+     * §17 amends §10). VS0 is its own failover unit and every VS is its own unit; they are never dependent. The chassis
+     * unit offers two actions: "Fail over VS0" (operation FAILOVER, one VS0 run with the VS0 writes) in VSX HA and VSLS
+     * mode alike, and, optionally, "Fail over all virtual systems" (FAILOVER_ALL_VIRTUAL_SYSTEMS, one ordinary VS run after
+     * another). The mode, from the VS0 check 1 of the chassis unit's latest readiness on both members, must be known for the
+     * VS0 run: an unknown or split mode is refused.
      */
     public static final String CHASSIS_MODE_UNKNOWN = "VSX_CHASSIS_MODE_UNKNOWN";
-    /** A VSLS chassis is never failed over by the VS0 writes (option B); its action is the sequence of VS runs. */
-    public static final String CHASSIS_MODE_VSLS = "VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE";
-    /** The approval was requested for the other chassis path than the chassis mode now observed. */
-    public static final String CHASSIS_MODE_CHANGED = "VSX_CHASSIS_MODE_CHANGED";
-    /** Record §4: the chassis unit and every VS unit must be READY at start. */
+    /** A VS0 run needs the chassis unit's own latest readiness READY; never a VS's. */
     public static final String CHASSIS_READINESS_NOT_READY = "VSX_CHASSIS_READINESS_NOT_READY";
+    /** "Fail over all virtual systems" needs every VS unit READY at start (each VS run re-checks its own). */
     public static final String VIRTUAL_SYSTEM_NOT_READY = "VIRTUAL_SYSTEM_NOT_READY";
+    /** An approval names an operation the unit does not offer (the sequence on a unit that is not a VSX chassis). */
+    public static final String OPERATION_NOT_OFFERED = "OPERATION_NOT_OFFERED";
     /** "Fail over all virtual systems" is an immediate action: each VS start follows the previous VS run's end. */
     public static final String SEQUENCE_NOT_SCHEDULABLE = "SEQUENCE_SCHEDULE_NOT_SUPPORTED";
     public static final String ACTION_CHASSIS_FAILOVER = JooqCpFailoverRepository.OPERATION_FAILOVER;
     public static final String ACTION_ALL_VIRTUAL_SYSTEMS = JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS;
     /**
-     * What a chassis unit offers: {@code action} (FAILOVER for option B, FAILOVER_ALL_VIRTUAL_SYSTEMS for option A) or
-     * {@code modeRefusal} when the mode is not known; {@code startRefusal} when a start would be refused now (record §4).
+     * What a chassis unit offers (record 2026-11-23): {@code action} FAILOVER (the VS0 run) when the mode is HA or VSLS, else
+     * null with {@code modeRefusal}; {@code startRefusal} when a VS0 start would be refused now (chassis readiness only);
+     * {@code sequenceStartRefusal} when "Fail over all virtual systems" would be refused now (a VS not READY). The two
+     * actions are independent: neither refusal affects the other.
      */
-    public record ChassisPlan(String mode, String action, String modeRefusal, String startRefusal) {}
+    public record ChassisPlan(String mode, String action, String modeRefusal, String startRefusal, String sequenceStartRefusal) {}
     public record Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
             String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness,
             boolean canRunReadiness, boolean readinessAvailable) {
@@ -600,17 +603,26 @@ public final class CpFailoverService {
 
     public JooqCpFailoverRepository.RequestApproval createApprovalRequest(String requestId,String clusterId,
             String unitId,Instant from,Instant until,String reason,String actor,String vendor) {
+        return createApprovalRequest(requestId,clusterId,unitId,from,until,reason,actor,vendor,null);
+    }
+    /**
+     * {@code requestedOperation}: null or FAILOVER for the unit's own failover (on a VSX chassis: the VS0 run), or
+     * FAILOVER_ALL_VIRTUAL_SYSTEMS for the optional chassis sequence. Anything else is refused.
+     */
+    public JooqCpFailoverRepository.RequestApproval createApprovalRequest(String requestId,String clusterId,
+            String unitId,Instant from,Instant until,String reason,String actor,String vendor,String requestedOperation) {
         String policy=approvalPolicy(actor);
         requireAvailable(vendor);
         // PO 2026-10-20: an approval request sends nothing to a device; an administrator is never refused for the window.
         windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
-        String operation=JooqCpFailoverRepository.OPERATION_FAILOVER;
-        if (u.vsxChassis()) {
-            // The approval names the path the chassis mode allows now; a start re-checks it (CHASSIS_MODE_CHANGED).
+        String operation=requestedOperation==null ? JooqCpFailoverRepository.OPERATION_FAILOVER : requestedOperation;
+        if (!ACTION_CHASSIS_FAILOVER.equals(operation) && !(ACTION_ALL_VIRTUAL_SYSTEMS.equals(operation) && u.vsxChassis()))
+            throw new Refusal(OPERATION_NOT_OFFERED);
+        if (u.vsxChassis() && ACTION_CHASSIS_FAILOVER.equals(operation)) {
+            // The VS0 run needs a known mode (HA or VSLS); a start re-checks it.
             ChassisPlan plan=chassisPlan(u,actor,vendor);
             if (plan.modeRefusal()!=null) throw new Refusal(plan.modeRefusal());
-            operation=plan.action();
         }
         if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
@@ -672,14 +684,15 @@ public final class CpFailoverService {
         if (!warningConfirmed) throw new Refusal("WARNING_CONFIRMATION_REQUIRED");
         refreshApprovalAuthority(requestId,actor);
         if (u.vsxChassis()) {
+            // The approval names the action; VS0 and the virtual systems are independent (record 2026-11-23).
             ChassisPlan plan=chassisPlan(u,actor,vendor);
-            if (plan.modeRefusal()!=null) throw new Refusal(plan.modeRefusal());
             String operation=store.requestOperation(requestId).orElseThrow(() -> new Refusal("REQUEST_CHANGED"));
-            if (!plan.action().equals(operation)) throw new Refusal(ACTION_ALL_VIRTUAL_SYSTEMS.equals(plan.action())
-                ? CHASSIS_MODE_VSLS : CHASSIS_MODE_CHANGED);
-            if (plan.startRefusal()!=null) throw new Refusal(plan.startRefusal());
-            if (ACTION_ALL_VIRTUAL_SYSTEMS.equals(plan.action()))
+            if (ACTION_ALL_VIRTUAL_SYSTEMS.equals(operation)) {
+                if (plan.sequenceStartRefusal()!=null) throw new Refusal(plan.sequenceStartRefusal());
                 return requestSequence(u,scheduledFor,actor,requestId,revision,nonce,warningConfirmed,policy);
+            }
+            if (plan.modeRefusal()!=null) throw new Refusal(plan.modeRefusal());
+            if (plan.startRefusal()!=null) throw new Refusal(plan.startRefusal());
         }
         try {
             var decision=store.requestBound(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
@@ -741,24 +754,26 @@ public final class CpFailoverService {
         String mode=distinct.iterator().next();
         return "HA".equals(mode) || "VSLS".equals(mode) ? mode : "UNKNOWN";
     }
-    /** The plan of a chassis unit from readiness already read for its cluster (unit id -> latest readiness). */
+    /**
+     * The plan of a chassis unit from readiness already read for its cluster (unit id -> latest readiness). The VS0 run
+     * depends on the chassis unit's own readiness only; the sequence on the VS units' readiness only (record 2026-11-23).
+     */
     public static ChassisPlan chassisPlan(Unit chassis,List<Unit> clusterUnits,
             Map<String,JooqCpFailoverRepository.ReadinessStatus> readiness) {
         var own=readiness.get(chassis.id());
         String mode=chassisMode(own);
-        String action="HA".equals(mode) ? ACTION_CHASSIS_FAILOVER : "VSLS".equals(mode) ? ACTION_ALL_VIRTUAL_SYSTEMS : null;
-        String start=null;
-        if (own==null || !"READY".equals(own.outcome())) start=CHASSIS_READINESS_NOT_READY;
-        else if (clusterUnits.stream().filter(u -> u.vsId()!=null && u.clusterId().equals(chassis.clusterId()))
-                .anyMatch(u -> readiness.get(u.id())==null || !"READY".equals(readiness.get(u.id()).outcome())))
-            start=VIRTUAL_SYSTEM_NOT_READY;
-        return new ChassisPlan(mode,action,action==null ? CHASSIS_MODE_UNKNOWN : null,start);
+        String action="HA".equals(mode) || "VSLS".equals(mode) ? ACTION_CHASSIS_FAILOVER : null;
+        String start=own==null || !"READY".equals(own.outcome()) ? CHASSIS_READINESS_NOT_READY : null;
+        String sequenceStart=clusterUnits.stream().filter(u -> u.vsId()!=null && u.clusterId().equals(chassis.clusterId()))
+                .anyMatch(u -> readiness.get(u.id())==null || !"READY".equals(readiness.get(u.id()).outcome()))
+            ? VIRTUAL_SYSTEM_NOT_READY : null;
+        return new ChassisPlan(mode,action,action==null ? CHASSIS_MODE_UNKNOWN : null,start,sequenceStart);
     }
     private ChassisPlan chassisPlan(Unit chassis,String actor,String vendor) {
         List<Unit> all=units(chassis.clusterId(),actor,vendor);
         return chassisPlan(chassis,all,unitReadiness(actor,all));
     }
-    /** Option A: every VS of the chassis in VSID order, each its own run (JooqCpFailoverRepository#requestSequence). */
+    /** "Fail over all virtual systems": every VS of the chassis in VSID order, each its own run (JooqCpFailoverRepository#requestSequence). */
     private String requestSequence(Unit chassis,Instant scheduledFor,String actor,String requestId,long revision,String nonce,
             boolean warningConfirmed,String policy) {
         if (scheduledFor!=null) throw new Refusal(SEQUENCE_NOT_SCHEDULABLE);

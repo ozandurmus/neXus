@@ -12,6 +12,7 @@ import type {
   PolicyChangesPage,
 } from "../src/auth/adminApi";
 import { buildEstateModel } from "../src/estate/estateModel";
+import { readinessWarningChecks, readyWord } from "../src/screens/readinessWarnings";
 import {
   buildBackupsLensModel,
   buildComplianceLensModel,
@@ -339,6 +340,72 @@ describe("buildFailoverBoardModel member roles without readiness", () => {
     expect(unit!.allMembers.map((m) => m.role)).toEqual(["unknown", "unknown"]);
     expect(unit!.activeMembers).toEqual([]);
     expect(unit!.standbyMembers).toEqual([]);
+  });
+});
+
+describe("failover board: a READY unit whose blocking check warned (PO 2026-11-23)", () => {
+  it("never shows a bare Ready for a Palo Alto idle pair with a session sync warning", () => {
+    const warning = "No sessions to synchronize (0 active sessions on both members); the session sync path is not proven by traffic.";
+    const row = (checkNo: number, member: string, result: "PASS" | "WARN" | "FAIL", title: string) =>
+      ({ checkNo, title, member, result, status: result, summary: result === "WARN" ? warning : "OK", blocking: true, derived: {} });
+    const failoverRows: readonly CpFailoverSummary[] = [{
+      unitId: "cls-sierra-02",
+      clusterId: "cls-sierra-02",
+      cluster_member_ref: "CLS-SIERRA-02",
+      vendor: "palo_alto",
+      activeWindow: true,
+      lastRunState: "DONE",
+      lastRunOutcome: "READY",
+      lastRunAt: "2026-11-19T11:00:00Z",
+      canRunReadiness: true,
+      mode: "ACTIVE_PASSIVE",
+      readiness: {
+        status: "READY",
+        observedAt: "2026-11-19T11:00:00Z",
+        failedCheck: "",
+        checks: [
+          row(1, "Member 1", "PASS", "HA mode and roles"), row(1, "Member 2", "PASS", "HA mode and roles"),
+          row(5, "Member 1", "WARN", "Session synchronization"), row(5, "Member 2", "WARN", "Session synchronization"),
+        ],
+      },
+    }];
+    const estateModel = buildEstateModel({
+      now: NOW,
+      devices: { state: "ok", value: SYNTHETIC_DEVICES },
+      overview: { state: "ok", value: SYNTHETIC_OVERVIEW },
+      failover: { state: "ok", value: failoverRows },
+      backups: { state: "ok", value: { backups: [] } },
+      lifecycle: { state: "skipped" },
+    });
+    const board = buildFailoverBoardModel({
+      now: NOW,
+      devices: { state: "ok", value: SYNTHETIC_DEVICES },
+      failover: { state: "ok", value: failoverRows },
+      model: estateModel,
+    });
+    const unit = board.readyFresh.find((u) => u.unitId === "cls-sierra-02")!;
+    expect(unit.status).toBe("READY");
+    expect(unit.warnings).toBe(1);
+    expect(unit.badgeState).toBe("watch");
+    expect(unit.badgeWord).toBe("Ready · 1 warning");
+    const cell = board.cellsByUnit.get("CLS-SIERRA-02::base")!.get("session synchronization")!;
+    expect(cell.state).toBe("watch");
+    expect(cell.word).toBe("Review");
+    const cluster = estateModel.clusters.find((c) => c.ref === "CLS-SIERRA-02");
+    if (cluster) expect(cluster.pairState).toBe("watch");
+  });
+
+  it("counts only blocking WARN checks without a FAIL", () => {
+    expect(readinessWarningChecks([
+      { checkNo: 5, result: "WARN", blocking: true }, { checkNo: 5, result: "WARN", blocking: true },
+      { checkNo: 13, result: "WARN", blocking: false },
+      { checkNo: 7, result: "WARN", blocking: true }, { checkNo: 7, result: "FAIL", blocking: true },
+      { checkNo: 9, status: "WARN", blocking: true },
+    ])).toEqual([5, 9]);
+    expect(readinessWarningChecks(null)).toEqual([]);
+    expect(readyWord(0)).toBe("Ready");
+    expect(readyWord(2)).toBe("Ready · 2 warnings");
+    expect(readyWord(1, "Ready (> 24 h)")).toBe("Ready (> 24 h) · 1 warning");
   });
 });
 
