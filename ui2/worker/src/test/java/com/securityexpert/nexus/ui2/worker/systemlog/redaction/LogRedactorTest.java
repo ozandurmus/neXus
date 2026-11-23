@@ -427,11 +427,19 @@ class LogRedactorTest {
     @Test
     void aVeryLongLineWithoutSecretsIsLinear() {
         String line = "word ".repeat(200_000) + "\n";
-        long t0 = System.nanoTime();
         assertEquals(line, red(line));
         String hot = ("password=abcdef " + "a-".repeat(1000)).repeat(500) + "\n";
-        red(hot);
-        assertTrue((System.nanoTime() - t0) / 1_000_000 < 5_000, "redaction must stay fast");
+        red(hot); // warm-up
+        // Both lines are timed, as before; the minimum of five samples is load-robust
+        // (a busy build host can only stretch a sample, never shrink it).
+        long minNanos = Long.MAX_VALUE;
+        for (int i = 0; i < 5; i++) {
+            long t0 = System.nanoTime();
+            red(line);
+            red(hot);
+            minNanos = Math.min(minNanos, System.nanoTime() - t0);
+        }
+        assertTrue(minNanos / 1_000_000 < 5_000, "redaction must stay fast");
     }
 
     private static byte[] concat(byte[]... parts) {

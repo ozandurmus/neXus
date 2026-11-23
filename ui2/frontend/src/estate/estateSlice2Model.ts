@@ -18,7 +18,7 @@ import type {
 import { PRODUCT_NAME } from "../brand/product";
 import { formatBytes } from "../shell/bytes";
 import { isPastFresh } from "../shell/freshness";
-import { clusterModeWord, jobTypeLabel, vendorLabel } from "../shell/presenters";
+import { clusterModeWord, jobTypeLabel, readinessReasonLabel, vendorLabel } from "../shell/presenters";
 import { vendorDisplayName } from "../shell/States";
 import { DISPLAY_TZ } from "../shell/time";
 import { actorUnknown, BACKUP_STALE_DAYS, type SourceRead } from "../screens/overview/attentionRules";
@@ -28,7 +28,14 @@ import { familyOf } from "../screens/ComplianceScreen";
 import { orderMembers } from "../screens/DeviceShared";
 import { groupClusters, haReadinessItems, primaryReasonWord } from "../screens/HaReadinessList";
 import { withFirewallNames } from "../screens/policyFirewalls";
-import { primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "../screens/ReadinessChecksTable";
+import {
+  isActiveRole,
+  isStandbyRole,
+  observedRoles,
+  primaryReportsPeer,
+  primaryRolesConfirmed,
+  readinessStopReason,
+} from "../screens/ReadinessChecksTable";
 import {
   newestIso,
   oldestIso,
@@ -83,6 +90,8 @@ export function buildCalendarDays(now: Date, count: number): ReadonlyArray<{
 // 1. FAILOVER BOARD MODEL (HA pairs + VSX chassis + Virtual Systems + Matrix)
 // ============================================================================
 
+export const UNSUPPORTED_PAIRS_CAP = 10;
+
 export type FailoverBoardColumn = "not_ready" | "unknown" | "ready_stale" | "ready_fresh";
 
 export interface FailoverMemberRef {
@@ -123,10 +132,12 @@ export interface FailoverBoardUnit {
 export interface UnsupportedFailoverCluster {
   readonly clusterRef: string;
   readonly title: string;
+  readonly name: string;
   readonly vendor: string;
   readonly vendorName: string;
   readonly members: readonly FailoverMemberRef[];
   readonly note: string;
+  readonly unsupportedReason: string;
 }
 
 export interface FailoverCheckColumn {
@@ -139,6 +150,7 @@ export interface FailoverMatrixCell {
   readonly state: Extract<TileState, "ok" | "act" | "watch" | "unk" | "na">;
   readonly word: string;
   readonly summary: string;
+  readonly observedAt?: string | null;
 }
 
 export interface FailoverBoardModel {
@@ -162,6 +174,7 @@ export interface FailoverBoardModel {
     readonly vsUnits: number;
   };
   readonly newestEvaluatedAt: string | null;
+  readonly latestObservedAt: string | null;
 }
 
 /**
@@ -187,6 +200,7 @@ export function evaluateCheckMatrixCell(
       state: "unk",
       word: "UNKNOWN",
       summary: "No pre-check observations recorded for this unit",
+      observedAt: null,
     };
   }
   const matching = unitChecks.filter((c) => normalizeCheckKey(c.title, c.checkNo) === columnKey);
@@ -195,9 +209,11 @@ export function evaluateCheckMatrixCell(
       state: "na",
       word: "Not applicable",
       summary: "Not part of this unit's pre-check set",
+      observedAt: null,
     };
   }
 
+  const observedAt = newestIso(matching.map((c) => c.observedAt));
   const evaluated = matching.filter((c) => c.result !== "NOT_EVALUATED");
   const pool = evaluated.length > 0 ? evaluated : matching;
   const detailText = matching
@@ -209,6 +225,7 @@ export function evaluateCheckMatrixCell(
       state: "unk",
       word: "UNKNOWN",
       summary: detailText || "Not evaluated",
+      observedAt,
     };
   }
 
@@ -218,6 +235,7 @@ export function evaluateCheckMatrixCell(
       state: "act",
       word: "Blocks",
       summary: detailText,
+      observedAt,
     };
   }
 
@@ -230,6 +248,7 @@ export function evaluateCheckMatrixCell(
       state: "unk",
       word: "UNKNOWN",
       summary: detailText,
+      observedAt,
     };
   }
 
@@ -238,6 +257,7 @@ export function evaluateCheckMatrixCell(
       state: "watch",
       word: "Review",
       summary: detailText,
+      observedAt,
     };
   }
 
@@ -245,6 +265,7 @@ export function evaluateCheckMatrixCell(
     state: "ok",
     word: "Pass",
     summary: detailText,
+    observedAt,
   };
 }
 
@@ -325,6 +346,7 @@ export function buildFailoverBoardModel(inputs: {
     vendor: string | undefined,
     rawMembers: ReadonlyArray<{ device_id: string; hostname: string | null; ha_role: string | null }>,
     checks: readonly ReadinessCheck[],
+    obsAt?: string | null,
   ): {
     readonly activeMembers: readonly FailoverMemberRef[];
     readonly standbyMembers: readonly FailoverMemberRef[];
@@ -353,18 +375,41 @@ export function buildFailoverBoardModel(inputs: {
       };
     }
 
+    const resolvedChecks: ReadinessCheck[] = checks.map((c) => {
+      if (c.device_id) return c;
+      const byName = rawMembers.find((m) => m.hostname === c.member || m.device_id === c.member);
+      return byName ? { ...c, device_id: byName.device_id } : c;
+    });
+    const observed =
+      resolvedChecks.length > 0
+        ? observedRoles(resolvedChecks, rawMembers, obsAt ?? null, vendor)
+        : new Map<string, { role: string; at?: string }>();
+
+    const roleFor = (m: { device_id: string; ha_role: string | null }): string => {
+      const obsRole = observed.get(m.device_id)?.role;
+      if (obsRole) return obsRole.toLowerCase();
+      const invRole = (m.ha_role ?? "unknown").toLowerCase();
+      if (observed.size > 0) {
+        const hasObservedActive = [...observed.values()].some((v) => isActiveRole(v.role));
+        const hasObservedStandby = [...observed.values()].some((v) => isStandbyRole(v.role));
+        if (hasObservedActive && isActiveRole(invRole)) return "unknown";
+        if (hasObservedStandby && isStandbyRole(invRole)) return "unknown";
+      }
+      return invRole;
+    };
+
     const ordered = [...rawMembers].sort(
-      (a, b) => Number((a.ha_role ?? "").toLowerCase() !== "active") - Number((b.ha_role ?? "").toLowerCase() !== "active"),
+      (a, b) => Number(!isActiveRole(roleFor(a))) - Number(!isActiveRole(roleFor(b))),
     );
     const refs: FailoverMemberRef[] = ordered.map((m) => ({
       deviceId: m.device_id,
       name: m.hostname ?? estateById.get(m.device_id)?.name ?? m.device_id.slice(0, 8),
-      role: (m.ha_role ?? "unknown").toLowerCase(),
+      role: roleFor(m),
       inEstate: estateById.has(m.device_id),
     }));
     return {
-      activeMembers: refs.filter((r) => r.role === "active" || r.role === "primary"),
-      standbyMembers: refs.filter((r) => r.role === "standby" || r.role === "passive" || r.role === "secondary"),
+      activeMembers: refs.filter((r) => isActiveRole(r.role)),
+      standbyMembers: refs.filter((r) => isStandbyRole(r.role)),
       allMembers: refs,
     };
   };
@@ -372,16 +417,34 @@ export function buildFailoverBoardModel(inputs: {
   for (const item of items) {
     const { cluster, vendor } = item;
     const orderedClusterDevices = orderMembers(cluster.members);
+    const mergeMembers = (rowMembers?: CpFailoverSummary["members"]) => {
+      const source = rowMembers?.length ? rowMembers : orderedClusterDevices;
+      return source.map((m) => {
+        const dev = orderedClusterDevices.find((d) => d.device_id === m.device_id);
+        const rm = rowMembers?.find((r) => r.device_id === m.device_id);
+        return {
+          device_id: m.device_id,
+          hostname: m.hostname ?? rm?.hostname ?? dev?.hostname ?? null,
+          ha_role: m.ha_role ?? rm?.ha_role ?? dev?.ha_role ?? null,
+        };
+      });
+    };
     if (failover.state === "ok" && item.status === "UNSUPPORTED") {
-      const mRefs = buildMemberRefs(vendor, orderedClusterDevices, []);
+      const mRefs = buildMemberRefs(vendor, mergeMembers(item.base?.members), [], null);
       const listedOnly = vendor === "cisco_asa" || item.units.some((u) => u.readinessAvailable === false);
+      const defaultReason = listedOnly
+        ? "Readiness switch not active for this pair"
+        : "Readiness pre-checks not supported for this vendor";
+      const unsupportedReason = item.base?.refusalReason ?? item.base?.failoverRefusal ?? defaultReason;
       unsupported.push({
         clusterRef: cluster.ref,
         title: cluster.title,
+        name: cluster.title,
         vendor: vendor ?? "unknown",
         vendorName: vendorDisplayName(vendor),
         members: mRefs.allMembers,
-        note: listedOnly ? "Readiness switch not active for this pair" : "Readiness pre-checks not supported for this vendor",
+        note: readinessReasonLabel(unsupportedReason),
+        unsupportedReason,
       });
       continue;
     }
@@ -458,8 +521,8 @@ export function buildFailoverBoardModel(inputs: {
     else clusterReadyFresh++;
 
     const baseChecks = baseRow?.readiness?.checks ?? [];
-    const baseMembers = baseRow?.members?.length ? baseRow.members : orderedClusterDevices;
-    const baseMemberRefs = buildMemberRefs(vendor, baseMembers, baseChecks);
+    const baseMembers = mergeMembers(baseRow?.members);
+    const baseMemberRefs = buildMemberRefs(vendor, baseMembers, baseChecks, baseObsAt);
     const baseReason =
       failover.state === "restricted"
         ? "Readiness summary restricted for this account"
@@ -502,8 +565,8 @@ export function buildFailoverBoardModel(inputs: {
       const vsRawStatus: "READY" | "NOT_READY" | "UNKNOWN" = vsRow.readiness?.status ?? "UNKNOWN";
       const vsClass = classifyUnit(vsRawStatus, vsObsAt);
       const vsChecks = vsRow.readiness?.checks ?? [];
-      const vsMembers = vsRow.members?.length ? vsRow.members : orderedClusterDevices;
-      const vsMemberRefs = buildMemberRefs(vsRow.vendor ?? vendor, vsMembers, vsChecks);
+      const vsMembers = mergeMembers(vsRow.members);
+      const vsMemberRefs = buildMemberRefs(vsRow.vendor ?? vendor, vsMembers, vsChecks, vsObsAt);
       const vsName = vsRow.virtual_system?.trim() || vsRow.unitId;
       units.push({
         key: `${cluster.ref}::vs::${vsRow.unitId}`,
@@ -598,8 +661,14 @@ export function buildFailoverBoardModel(inputs: {
       vsUnits: vsUnitsCount,
     },
     newestEvaluatedAt: newestIso(sortedUnits.map((u) => u.observedAt)),
+    latestObservedAt: newestIso([
+      ...activeDevices.map((d) => d.inventory_collected_at),
+      model?.newestEvidenceAt ?? null,
+    ]),
   };
 }
+
+export const buildFailoverBoard = buildFailoverBoardModel;
 
 // ============================================================================
 // 2. CHANGES MODEL (Per day, grouped by person, before/after diffs)

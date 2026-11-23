@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { EstateAsOfView } from "../src/auth/adminApi";
 import {
+  REWIND_TRANSITION_CAP,
   buildRewindSnapshot,
   countLens,
   diffSnapshots,
+  mergeRewindWarnings,
   nearestSnap,
   rewindRingFor,
   snapPoints,
+  transitionSummaryLine,
 } from "../src/estate/estateRewindModel";
 import { resolveEstateRoute, rewindHref } from "../src/estate/estateRouting";
 
@@ -93,5 +96,20 @@ describe("rewindRingFor", () => {
     expect(label).toContain("changed");
     expect(label).not.toContain("unchanged");
     expect(ring.word).not.toBe("unchanged");
+  });
+});
+
+describe("transition summary and warnings", () => {
+  it("states the transition count with unit words and the lens label", () => {
+    expect(REWIND_TRANSITION_CAP).toBe(25);
+    expect(transitionSummaryLine(1, "failover")).toBe("1 transition on Failover");
+    expect(transitionSummaryLine(3, "backups")).toBe("3 transitions on Backups");
+    expect(transitionSummaryLine(0, "compliance")).toBe("0 transitions on Controls");
+  });
+
+  it("merges warnings from Moment A and B only when compared, deduplicated and non-empty", () => {
+    expect(mergeRewindWarnings(["w1", " ", "w2"], ["w2", "w3"], true)).toEqual(["w1", "w2", "w3"]);
+    expect(mergeRewindWarnings(["w1"], ["w9"], false)).toEqual(["w1"]);
+    expect(mergeRewindWarnings(undefined, undefined, true)).toEqual([]);
   });
 });

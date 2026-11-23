@@ -2,17 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import { getEstateAsOf, type EstateAsOfView } from "../auth/adminApi";
 import { formatUtc } from "../shell/time";
-import { EstateCard, EvidenceStamp, StateBadge, TileSwatch } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge, TileSwatch } from "./EstatePrimitives";
 import {
   REWIND_LENSES,
   REWIND_LENS_LABEL,
+  REWIND_TRANSITION_CAP,
   REWIND_WINDOW_DAYS,
   buildRewindSnapshot,
   countLens,
   diffSnapshots,
+  mergeRewindWarnings,
   nearestSnap,
   rewindRingFor,
   snapPoints,
+  transitionSummaryLine,
   type RewindLens,
   type RewindSnapshot,
 } from "./estateRewindModel";
@@ -98,11 +101,22 @@ export function EstateRewindScreen({
     else setAtA(new Date(Math.max(floorMs, liveAt.getTime() - days * 86_400_000)).toISOString());
   };
 
+  /** Moment B jump target for a chip: the nearest stored evidence time to `days` ago, else the window floor. */
+  const bTargetFor = (days: number) => {
+    const i = nearestSnap(points, liveAt.getTime() - days * 86_400_000);
+    return i >= 0 ? points[i] : new Date(Math.max(floorMs, liveAt.getTime() - days * 86_400_000)).toISOString();
+  };
+
+  const snapA = loadA.state === "ok" ? loadA.snap : null;
+  const snapB = loadB.state === "ok" ? loadB.snap : null;
+  const warnings = mergeRewindWarnings(snapA?.warnings, snapB?.warnings, compare);
+
   const diff = useMemo(
     () => (compare && loadA.state === "ok" && loadB.state === "ok" ? diffSnapshots(loadA.snap, loadB.snap) : null),
     [compare, loadA, loadB],
   );
   const shown = diff ? diff.filter((t) => t.lens === lens) : null;
+  const shownRows = (shown ?? []).slice(0, REWIND_TRANSITION_CAP);
   const changedIds = new Set(shown?.map((t) => t.unit.id) ?? []);
   const movedById = new Map((shown ?? []).map((t) => [t.unit.id, t.direction] as const));
   const asOfNow = (iso: string) => new Date(iso);
@@ -137,6 +151,15 @@ export function EstateRewindScreen({
             <Box key={c.days} component="button" type="button" onClick={() => jump(c.days)} sx={chipSx(false)}>{c.label}</Box>
           ))}
         </Box>
+        {compare ? (
+          <Box data-testid="rewind-jump-b-strip" sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center", mt: 1.5 }}>
+            <Box component="span" sx={{ fontSize: 12.5, color: ev.ink3 }}>Jump B to</Box>
+            <Box component="button" type="button" aria-pressed={atB === null} onClick={() => setAtB(null)} sx={chipSx(atB === null)}>Live (now)</Box>
+            {chips.map((c) => (
+              <Box key={`b-${c.days}`} component="button" type="button" onClick={() => setAtB(bTargetFor(c.days))} sx={chipSx(false)}>{c.label}</Box>
+            ))}
+          </Box>
+        ) : null}
         <Box sx={{ mt: 1.5 }}>
           <Box
             component="input"
@@ -175,12 +198,23 @@ export function EstateRewindScreen({
         ))}
       </Box>
 
-      {loadA.state === "failed" || loadB.state === "failed" ? (
-        <EstateCard sx={{ p: 2 }}><span role="alert">Rewind read failed: stored evidence could not be read for this moment.</span></EstateCard>
-      ) : null}
-      {loadA.state === "ok" && loadA.snap.warnings.length > 0 ? (
+      {loadA.state === "failed" || (compare && loadB.state === "failed") ? (
         <EstateCard sx={{ p: 2 }}>
-          {loadA.snap.warnings.map((w, i) => (<Box key={i} sx={{ color: ev.watch }}>{w}</Box>))}
+          <Box role="alert" sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+            <StateBadge state="unk" word="UNKNOWN" dense />
+            <span>Rewind read failed: stored evidence could not be read for this moment.</span>
+            <EvidenceStamp at={null} source="rewind read" missingLabel="UNKNOWN" />
+          </Box>
+        </EstateCard>
+      ) : null}
+      {warnings.length > 0 ? (
+        <EstateCard sx={{ p: 2 }}>
+          {warnings.map((w, i) => (
+            <Box key={i} sx={{ display: "flex", gap: 1, alignItems: "center", color: ev.ink2 }}>
+              <StateBadge state="watch" word="Warning" dense />
+              <span>{w}</span>
+            </Box>
+          ))}
         </EstateCard>
       ) : null}
 
@@ -248,17 +282,21 @@ export function EstateRewindScreen({
 
       {compare && shown ? (
         <EstateCard sx={{ p: 2 }}>
-          <Box component="h2" sx={{ m: 0, fontSize: 17, fontWeight: 650, mb: 1 }}>Every transition</Box>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "baseline", mb: 1 }}>
+            <Box component="h2" sx={{ m: 0, fontSize: 17, fontWeight: 650 }}>Every transition</Box>
+            <Box component="span" sx={{ fontSize: 13, color: ev.ink2 }} data-testid="rewind-transitions-count">{transitionSummaryLine(shown.length, lens)}</Box>
+            <EvidenceStamp at={snapA?.asOf ?? null} source="then" now={liveAt} missingLabel="moment A not loaded" />
+          </Box>
           <Box component="table" data-testid="rewind-transitions" sx={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr><th align="left">Unit</th><th align="left">Then</th><th align="left">Now</th><th align="left">Direction</th><th align="left">Evidence then</th><th align="left">Evidence now</th></tr>
             </thead>
             <tbody>
-              {shown.map((t) => (
+              {shownRows.map((t) => (
                 <tr key={`${t.unit.id}:${t.lens}`}>
                   <td><Box component="a" href={dossierHref(t.unit.id, origin)} aria-label={`${t.unit.name}: open dossier at this moment`} sx={{ color: ev.accent, textDecoration: "none", borderRadius: "3px", "&:focus-visible": { outline: `2px solid ${ev.accent}`, outlineOffset: "2px" } }}>{t.unit.name}</Box></td>
-                  <td><StateBadge state={t.then.state} word={t.then.word} dense /></td>
-                  <td><StateBadge state={t.now.state} word={t.now.word} dense /></td>
+                  <td><StateBadge state={t.then.state} word={t.then.word} dense />{t.then.detail ? <Box component="span" sx={{ ml: 1, fontSize: 12, color: ev.ink3 }}>{t.then.detail}</Box> : null}</td>
+                  <td><StateBadge state={t.now.state} word={t.now.word} dense />{t.now.detail ? <Box component="span" sx={{ ml: 1, fontSize: 12, color: ev.ink3 }}>{t.now.detail}</Box> : null}</td>
                   <td>{t.direction === "worse" ? "got worse" : t.direction === "better" ? "got better" : "changed"}</td>
                   <td>{loadA.state === "ok" ? <EvidenceStamp at={t.then.evidenceAt} now={asOfNow(loadA.snap.asOf)} /> : null}</td>
                   <td>{loadB.state === "ok" ? <EvidenceStamp at={t.now.evidenceAt} now={asOfNow(loadB.snap.asOf)} /> : null}</td>
@@ -266,6 +304,7 @@ export function EstateRewindScreen({
               ))}
             </tbody>
           </Box>
+          <MoreFooter shown={shownRows.length} total={shown.length} noun="transitions" testId="rewind-transitions-more" />
           <Box sx={{ color: ev.ink3, fontSize: 12.5, mt: 1 }}>The cause of a transition is not inferred; each side is the newest stored read at or before its moment.</Box>
         </EstateCard>
       ) : null}

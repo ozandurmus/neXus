@@ -2,21 +2,26 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import { failoverExecutionDisabled, failoverVendorLabel } from "../screens/HaReadinessList";
+import { readinessStopReason } from "../screens/ReadinessChecksTable";
+import { plural } from "../shell/plural";
+import { readinessReasonLabel, vendorLabel } from "../shell/presenters";
 import { formatStamp } from "../shell/time";
 import {
   EstateCard,
   EvidenceStamp,
   HaPairTiles,
+  MoreFooter,
   StateBadge,
   TileSwatch,
   VendorTag,
 } from "./EstatePrimitives";
 import { EstateFailoverCellDrawer, PER_UNIT_PRECHECK_NOTE, type FailoverCellTarget } from "./EstateFailoverCellDrawer";
 import { EstateFailoverIncidents } from "./EstateFailoverIncidents";
-import { readinessStopReason } from "../screens/ReadinessChecksTable";
 import { dossierHref, standardHaHref } from "./estateRouting";
 import {
   buildFailoverBoardModel,
+  UNSUPPORTED_PAIRS_CAP,
   type FailoverBoardUnit,
   type FailoverCheckColumn,
   type FailoverMatrixCell,
@@ -170,6 +175,18 @@ function BoardUnitCard({
         </Typography>
       ) : null}
 
+      {unit.failoverRefusal ? (
+        <Typography data-testid="failover-unit-refusal" sx={{ fontSize: "12px", color: ev.ink2, mt: "3px" }}>
+          {`Failover gate: ${readinessReasonLabel(unit.failoverRefusal)}`}
+        </Typography>
+      ) : null}
+
+      {failoverExecutionDisabled(unit.vendor) ? (
+        <Typography data-testid="failover-execution-disabled" sx={{ fontSize: "12px", color: ev.ink2, mt: "3px" }}>
+          {`Readiness only — failover execution not enabled for ${failoverVendorLabel(unit.vendor)}`}
+        </Typography>
+      ) : null}
+
       {unit.unitKind === "VSX_CHASSIS" ? (
         <Typography sx={{ fontSize: "11.5px", color: ev.ink3, mt: "3px" }}>
           {PER_UNIT_PRECHECK_NOTE}
@@ -229,6 +246,9 @@ function toCellTarget(open: {
     checkTitle: open.col.title,
     cell: open.cell,
     standardHref: standardHaHref(open.unit.clusterRef),
+    unit: open.unit,
+    vendor: open.unit.vendor,
+    failoverRefusal: open.unit.failoverRefusal,
   };
 }
 
@@ -576,6 +596,7 @@ export function EstateFailoverScreen({
                   sx={{
                     display: "inline-flex",
                     alignItems: "center",
+                    flexWrap: "wrap",
                     gap: "6px",
                     bgcolor: ev.surface,
                     border: `1px solid ${focusedRef === u.clusterRef ? ev.accent : ev.line}`,
@@ -595,6 +616,24 @@ export function EstateFailoverScreen({
                   <span style={{ fontFamily: ESTATE_MONO, fontWeight: 600, fontSize: "12px" }}>{u.clusterTitle}</span>
                   <UnitKindTag kind={u.unitKind} vsName={u.virtualSystemName} />
                   <EvidenceStamp at={u.observedAt} now={now} />
+                  {u.failoverRefusal ? (
+                    <Box
+                      component="span"
+                      data-testid="failover-unit-refusal"
+                      sx={{ width: "100%", fontSize: "11.5px", color: ev.ink2 }}
+                    >
+                      {`Failover gate: ${readinessReasonLabel(u.failoverRefusal)}`}
+                    </Box>
+                  ) : null}
+                  {failoverExecutionDisabled(u.vendor) ? (
+                    <Box
+                      component="span"
+                      data-testid="failover-execution-disabled"
+                      sx={{ width: "100%", fontSize: "11.5px", color: ev.ink2 }}
+                    >
+                      {`Readiness only — failover execution not enabled for ${failoverVendorLabel(u.vendor)}`}
+                    </Box>
+                  ) : null}
                 </Box>
               ))}
             </Box>
@@ -901,27 +940,62 @@ export function EstateFailoverScreen({
             <Typography component="h2" sx={{ fontSize: "15px", fontWeight: 650 }}>
               {board.unsupported.length} enrolled {board.unsupported.length === 1 ? "pair" : "pairs"} without readiness pre-checks
             </Typography>
+            <Box
+              component="span"
+              sx={{
+                fontFamily: ESTATE_MONO,
+                fontSize: "12px",
+                fontWeight: 650,
+                px: "7px",
+                py: "1px",
+                borderRadius: "999px",
+                bgcolor: ev.surface2,
+                color: ev.ink2,
+                border: `1px solid ${ev.line}`,
+              }}
+            >
+              {plural(board.unsupported.length, "pair", "pairs")}
+            </Box>
+            <Box sx={{ ml: "auto" }}>
+              <EvidenceStamp
+                at={board.latestObservedAt}
+                source="inventory"
+                now={now}
+                missingLabel="no inventory timestamp"
+              />
+            </Box>
           </Box>
           <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
-            {board.unsupported.map((cl) => (
-              <Box
-                component="li"
-                key={cl.clusterRef}
-                sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "12.5px" }}
-              >
-                <span style={{ fontFamily: ESTATE_MONO, fontWeight: 650 }}>{cl.title}</span>
-                <VendorTag label={cl.vendorName} />
-                <span style={{ color: ev.ink3 }}>{cl.note}</span>
+            {board.unsupported.slice(0, UNSUPPORTED_PAIRS_CAP).map((cl) => {
+              const memberNames = (cl.members ?? []).map((m) => m.name).join(" / ") || "members UNKNOWN";
+              return (
                 <Box
-                  component="a"
-                  href={standardHaHref(cl.clusterRef)}
-                  sx={{ ml: "auto", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+                  component="li"
+                  key={cl.clusterRef}
+                  data-unsupported-pair={cl.clusterRef}
+                  sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "12.5px" }}
                 >
-                  Standard HA →
+                  <span style={{ fontFamily: ESTATE_MONO, fontWeight: 650 }}>{cl.name ?? cl.title}</span>
+                  <VendorTag label={vendorLabel(cl.vendor)} />
+                  <span style={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>{memberNames}</span>
+                  <span style={{ color: ev.ink3 }}>{readinessReasonLabel(cl.unsupportedReason ?? cl.note)}</span>
+                  <Box
+                    component="a"
+                    href={standardHaHref(cl.clusterRef)}
+                    sx={{ ml: "auto", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+                  >
+                    Standard HA →
+                  </Box>
                 </Box>
-              </Box>
-            ))}
+              );
+            })}
           </Box>
+          <MoreFooter
+            shown={Math.min(board.unsupported.length, UNSUPPORTED_PAIRS_CAP)}
+            total={board.unsupported.length}
+            noun="unsupported pairs"
+            testId="failover-unsupported-more"
+          />
         </EstateCard>
       ) : null}
 

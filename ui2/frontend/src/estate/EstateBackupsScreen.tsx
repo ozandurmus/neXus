@@ -10,8 +10,8 @@ import {
   type BackupStoreQuotas,
   type JobEventView,
 } from "../auth/adminApi";
-import { sizeAnomalyWord } from "../screens/BackupDeviationCard";
 import { LatestAttemptCell, useLatestBackupAttempts } from "../screens/BackupAttempts";
+import { EstateBackupsDeviationsQuotas } from "./EstateBackupsDeviationsQuotas";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { formatBytes } from "../shell/bytes";
 import { isRestricted } from "../shell/States";
@@ -269,8 +269,10 @@ function LatestFailedAttempts({ rows }: { readonly rows: readonly EstateBackupRo
 
 export function EstateBackupsScreen({
   initialQuery = "",
+  onNavigate,
 }: {
   readonly initialQuery?: string;
+  readonly onNavigate?: (route: { readonly kind: "dossier"; readonly deviceId: string }) => void;
 }) {
   const { loading, fatalError, overview, backups, model, refresh } = useEstateData();
   const [filterMode, setFilterMode] = useState<BackupFilterMode>("all");
@@ -411,8 +413,6 @@ export function EstateBackupsScreen({
       </EstateCard>
     );
   }
-
-  const openSizeAnomalies = backups.state === "ok" ? (backups.value.deviations?.size_anomalies ?? []) : [];
 
   return (
     <Box data-testid="estate-backups-screen">
@@ -634,47 +634,14 @@ export function EstateBackupsScreen({
         </Box>
       </EstateCard>
 
-      {/* Open Size Anomalies Callout */}
-      {openSizeAnomalies.length > 0 ? (
-        <EstateCard sx={{ mt: "14px", p: "12px 18px" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", mb: "6px" }}>
-            <StateBadge state="watch" word={`${openSizeAnomalies.length} open size ${openSizeAnomalies.length === 1 ? "anomaly" : "anomalies"}`} />
-            <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-              The last good archive is retained alongside the newest anomalous copy until a security administrator accepts the new size in standard Backups.
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {openSizeAnomalies.map((anom) => (
-              <Box
-                key={anom.device_id}
-                sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: "12.5px" }}
-              >
-                <Box
-                  component="a"
-                  href={dossierHref(anom.device_id)}
-                  sx={{ fontFamily: ESTATE_MONO, fontWeight: 700, color: ev.accent, textDecoration: "none" }}
-                >
-                  {anom.hostname ?? anom.device_id}
-                </Box>
-                <span style={{ fontFamily: ESTATE_MONO, fontWeight: 650, color: ev.watch }}>
-                  {sizeAnomalyWord(anom)}
-                </span>
-                <span style={{ color: ev.ink2 }}>
-                  {formatBytes(anom.median_bytes)} → {formatBytes(anom.plaintext_bytes)}
-                </span>
-                <EvidenceStamp at={anom.detected_at} source="detected" now={now} />
-                <Box
-                  component="a"
-                  href={standardBackupsHref(anom.hostname ?? undefined)}
-                  sx={{ ml: "auto", color: ev.accent, fontWeight: 600, textDecoration: "none" }}
-                >
-                  Review in standard Backups →
-                </Box>
-              </Box>
-            ))}
-          </Box>
-        </EstateCard>
-      ) : null}
+      <EstateBackupsDeviationsQuotas
+        deviations={backups.state === "ok" ? (backups.value.deviations ?? null) : null}
+        backupsState={backups.state}
+        quotas={quotas}
+        backupEvidenceAt={backupEvidenceAt ?? lensModel.lastFleetRunAt}
+        now={now}
+        onNavigate={onNavigate}
+      />
 
       <LatestFailedAttempts rows={failedAttemptRows} />
       <EstateBackupsAttemptsDrawer unit={attemptsUnit} onClose={() => setAttemptsUnit(null)} />
