@@ -5,6 +5,9 @@
  * shape the block needs is checked here; anything else is UNKNOWN, never a count of 0 and never OK.
  */
 
+import { isRecord } from "../shell/malformedResponse";
+import { parseTimeMs } from "./estateModel";
+
 /** Items listed per context and per kind (interfaces, routes); anything beyond is counted in "+N more". */
 export const DOSSIER_CLUSTER_ROW_CAP = 5;
 export const DOSSIER_CLUSTER_NOT_CLUSTER_TEXT = "Not a cluster unit";
@@ -46,12 +49,8 @@ export type DossierClusterModel =
 
 type Obj = Readonly<Record<string, unknown>>;
 
-function isObject(v: unknown): v is Obj {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
 function nameOf(v: unknown, key: string): string {
-  if (!isObject(v)) return DOSSIER_CLUSTER_UNKNOWN_NAME;
+  if (!isRecord(v)) return DOSSIER_CLUSTER_UNKNOWN_NAME;
   const raw = v[key];
   return typeof raw === "string" && raw.trim() !== "" ? raw : DOSSIER_CLUSTER_UNKNOWN_NAME;
 }
@@ -59,7 +58,7 @@ function nameOf(v: unknown, key: string): string {
 function collectedAtOf(payload: Obj): string | null {
   const raw = payload.collected_at;
   if (typeof raw !== "string" || raw.trim() === "") return null;
-  return Number.isNaN(new Date(raw).getTime()) ? null : raw;
+  return parseTimeMs(raw) === null ? null : raw;
 }
 
 /**
@@ -75,11 +74,11 @@ export function buildDossierClusterModel(
   if (!read.ok) return { status: "failed" };
 
   const payload = read.value;
-  if (!isObject(payload) || !Array.isArray(payload.contexts)) return { status: "malformed" };
+  if (!isRecord(payload) || !Array.isArray(payload.contexts)) return { status: "malformed" };
 
   const contexts: DossierClusterContextRow[] = [];
   for (const ctx of payload.contexts as readonly unknown[]) {
-    if (!isObject(ctx)) return { status: "malformed" };
+    if (!isRecord(ctx)) return { status: "malformed" };
     if (!Array.isArray(ctx.interfaces) || !Array.isArray(ctx.routes)) return { status: "malformed" };
     const interfaces = ctx.interfaces as readonly unknown[];
     const routes = ctx.routes as readonly unknown[];
