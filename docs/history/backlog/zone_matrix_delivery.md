@@ -13,3 +13,64 @@ status: in_progress · target: Council 2026-11-13; bank inputs pending
 Step 4b-1 (V267 durable runs and findings, own pool, startup recovery) shipped 1588f36f; step 4b-2 (lifecycle, triggers, routes, tabs) open.
 
 Step 4a (finding lifecycle and per-policy staleness as pure functions, 24 h interim STALE threshold, no storage) on main in e6f0167e; PO answers in PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS (529776a9).
+
+## 2026-11-23 acceptance traceability (steps 1-3)
+
+Controlling text: `docs/design/ZONE_MATRIX_CONTRACT.md` section 10.2 (FROZEN, revision 2), delivery order in 10.1. Steps 1-3 are on main
+(V216, V220, V228 and the evaluation engine). Step 4 (durable runs, finding lifecycle, staleness) is being built in other lanes and is
+not covered here. Counts and test names only, no data. Abbreviations: `Acc` = `ZoneMatrixAcceptanceCriteriaTest` (service),
+`Eval` = `ZoneMatrixEvaluatorTest`, `Svc` = `ZoneMatrixServiceTest`, `Two` = `ZoneMatrixStepTwoTest`, `Part` = `ZonePartitionTest`,
+`Sec` = `ZoneMatrixSecurityTest`, `Schema` = `ZoneMatrixSchemaTest` (integration-tests, needs PostgreSQL), `Arch` = `Ui2ArchitectureTest`.
+
+Status: `PROVEN` = a test proves the whole sentence for the steps delivered; `PARTIAL` = delivered part proven, the rest named;
+`DEFECT` = disabled test (none); `STEP n` = belongs to a later delivery step.
+
+| ZM | Status | Proof or what is missing |
+| --- | --- | --- |
+| ZM-1 | PROVEN | `Acc#zm1_partitionPutsEveryAddressInExactlyOneZoneAcrossBothFamiliesAndRefusesDuplicates` (IPv4 and IPv6 random nested blocks, contiguous cover, counts sum to the address space, longest prefix, cross-zone duplicate refused); `Part#partitionEqualsBruteForceLongestPrefixOnRandomBlocks`, `Part#theSameBlockInTwoZonesIsRefusedAndWithinOneZoneIsReported`; service refusal `Svc#invalidEditsChangeNothing` (`ZONE_BLOCK_DUPLICATE`) |
+| ZM-2 | PROVEN | `Acc#zm2_publishedVersionStaysByteIdenticalWhileEditsGoToTheNextDraft` (service and store); `Schema#publishedVersionsAreImmutableAndHistoryIsAppendOnly` (trigger level, database test, not run in this lane: no Docker) |
+| ZM-3 | PROVEN | `Acc#zm3_citationHashRecomputesFromStoredContent`; `Eval#zm3_zm4_zm5_zm9_statementsVendorZoneIgnoreAndDeterministicCitation`; `Svc#anEditorWithComplianceAdminLetsASecurityAdminPublishButNotAConfirmerOrEditor` publishes hash-bound |
+| ZM-4 | PROVEN | `Eval#zm3_zm4_zm5_zm9_...` (vendor zones ignored), `Eval#zm14_...`, `Eval#zm19_zm21_zm27_zm30_...` (a decided violation wins over an undecided IPv6 part); `Acc#zm4_everyUndecidedRuleCarriesAReasonFromTheFixedList` |
+| ZM-5 | PROVEN | `Acc#zm5_anyServiceInAllowListedPairAndAnyServiceInDenyAllPairAreViolations`; `Eval#zm5_zm41_unassignedToUnassignedStaysDenyAll...` |
+| ZM-6 | PROVEN | `Acc#zm6_disabledDenyAndNatRulesNeverViolateAndAreCountedSeparately` (Palo Alto and Check Point, NAT sections); `Eval#zm6_zm24_zm25_notApplicableCountsSchedulesAndHygieneCoverFlag` |
+| ZM-7 | PROVEN | `Acc#zm7_collectionFailureGivesIncompleteCoverageAndNeverZero`; `Eval#zm7_zm26_headlineNeverShowsZeroWhenUndecidedOrIncompleteOrNotEvaluated` |
+| ZM-8 | STEP 4 | runs start on completed collections only |
+| ZM-9 | PROVEN | `Eval#zm3_zm4_zm5_zm9_...` (same snapshot, version and engine give equal rule findings and headline) |
+| ZM-10 | PROVEN | `Eval#zm10_zm33_serviceRbacWitnessAuditMaskingAndZeroSensitiveDataInLogs` (planted names, masked projection, log events); `Svc#viewsHideBlocksUnlessPermittedAndMaskForAiview`; `Two#theMaskedViewHidesNamesTextAndPeople` |
+| ZM-11 | STEP 6 | evidence report |
+| ZM-12 | PARTIAL | `ZoneMatrixScaleMeasurementTest#zm12_tenLargestSyntheticPoliciesAgainstFiveHundredZonesAndTwoHundredThousandBlocksStayWithinBudget` proves the budget on synthetic policies; the counts-only measurement on the 10 largest stored policies is still open (real environment) |
+| ZM-13 | PROVEN | `Arch#zm13_zone_matrix_never_reaches_device_transport_or_commands` (named device-facing packages) and `Arch#zm13_zone_matrix_has_no_dependency_on_the_job_engine_worker_scheduler_cli_or_capability_registry` (the whole job engine, worker, scheduler, CLI, capability registry, directory client) |
+| ZM-14 | PROVEN | `Eval#zm14_paloAltoPublicDestinationNatToDenyAllServerNeverCompliantAndCpGroupWithExclusionFailsClosed` |
+| ZM-15 | PROVEN | `Eval#identityApplicationsAskInformAndApplicationDefaultFollowStep3UpperBounds` (rule `cp-4` access role with an outside proxy is `NOT_EVALUABLE`, `cp-5` violates with `IDENTITY_IGNORED`); the test named `zm15_nat...` is the NAT dual view, not this criterion |
+| ZM-16 | PROVEN | `Eval#zm16_checkPointMultipleOrderedLayersCheckWitnessAgainstOtherLayersAndHeadlineExcludesUnproven` |
+| ZM-17 | PROVEN | `Eval#zm17_checkPointApplyLayerParentAndInlineChildIntersection`; `Acc#zm17_applyLayerParentIsNeverActionSemanticsNotModelled` |
+| ZM-18 | PROVEN | `Acc#zm18_panDefaultOverrideWithActionAllowCarriesDefaultRule` (local and Panorama pre/post default sections, deny override counted not found); `Eval#zm18_zm20_paloAltoDefaultOverridesAndLocalVsPanoramaCoverage` |
+| ZM-19 | PARTIAL | mixed IPv4/IPv6 object gives "IPv6 not evaluated": `Eval#zm19_zm21_zm27_zm30_...`; reporting its IPv4 violation once per-family resolution lands is STEP 7 |
+| ZM-20 | PROVEN | `Eval#zm18_zm20_paloAltoDefaultOverridesAndLocalVsPanoramaCoverage` (`PAN_LOCAL_RULES_NOT_COLLECTED`, `PAN_INTRAZONE_DEFAULT_ALLOW`, `PAN_DEFAULT_RULE_LEVELS_NOT_COLLECTED`, coverage INCOMPLETE) |
+| ZM-21 | PROVEN | `Eval#zm19_zm21_zm27_zm30_...` (shared rule uid across two sections counts once) |
+| ZM-22 | PROVEN | `Svc#publishingNeedsTwoPeopleAndACompliancePerson` (`SELF_APPROVAL` canonical ids, `COMPLIANCE_ROLE_MISSING`, root and replay_viewer `PRINCIPAL_NOT_ELIGIBLE`, `REQUEST_CHANGED`); `Svc#anEditorWithComplianceAdminLetsASecurityAdminPublishButNotAConfirmerOrEditor`; `Two#aConfirmerIsAParticipantOfTheFourEyesRule`; `Acc#zm22_fourEyesCountsTheEditorsOfTheCurrentDraftOnly` |
+| ZM-23 | PROVEN | `Two#onlyComplianceConfirmsAndAChangeResetsTheConfirmation`; `Sec#everyRouteResolvesToItsActionAndTheRolesMatchTheContract` (confirm route is compliance_admin only) |
+| ZM-24 | PROVEN | `Eval#zm6_zm24_zm25_...` (ended one-time window is `NOT_APPLICABLE` with its date and counted; within the time-zone margin stays `TIME_IGNORED` violation); `Eval#identityApplications...` (`IDENTITY_IGNORED`) |
+| ZM-25 | PARTIAL | `COVERED_BY_EARLIER_DENY` with covering rule id on a violation: `Eval#zm6_zm24_zm25_...`. The "same install targets" condition is decided by the hygiene conflict analysis and is not pinned here; "toggling keeps first-observed" is STEP 4 |
+| ZM-26 | PARTIAL | evaluation-level headline never renders "0" for incomplete coverage or undecided rules: `Eval#zm7_zm26_...`, `Acc#zm7_...`; "distinct open" findings and a stale policy are STEP 4 |
+| ZM-27 | PROVEN | `Eval#zm19_zm21_zm27_zm30_...` |
+| ZM-28 | STEP 6 | report file hash and CSV escaping |
+| ZM-29 | PROVEN | `Acc#zm29_publishDiffListsMovedAddressesWithEffectiveCounts`; `Part#movesListAddressesThatChangeOwner`; `Svc#addressesLeavingAZoneNeedARationaleAndTheOldVersionRetires` |
+| ZM-30 | PARTIAL | headline and Matrix tab show no BDDK pass or score: `Eval#zm19_zm21_zm27_zm30_...`, frontend `ZoneMatrixStepTwo.test.tsx` ("never renders compliant, BDDK, pass, score, percent or green in the Matrix tab"); report title and "N of M cells confirmed" header are STEP 6 |
+| ZM-31 | STEP 6 | report follows the caller's screen view |
+| ZM-32 | STEP 6 | report period and resolved findings |
+| ZM-33 | PROVEN | `Sec#everyRouteResolvesToItsActionAndTheRolesMatchTheContract` (viewer and aiview hold neither `zone_matrix_zones_read` nor edit, evaluate or publish); `Eval#zm10_zm33_...` (witness refused without the right, `WITNESS_VIEW` audit row, fail-closed when the row cannot be written); `Svc#viewsHideBlocksUnlessPermittedAndMaskForAiview`, `Svc#aViewIsRefusedWhenItsAuditRowCannotBeWritten`, `Svc#addressesLeavingAZoneNeedARationaleAndTheOldVersionRetires` (lookup audit row) |
+| ZM-34 | STEP 4 | `BECAME_UNDECIDED`, rule missing from an uncollected scope |
+| ZM-35 | STEP 4 | `STALE` and "at least N" on the Overview |
+| ZM-36 | PARTIAL | loosening list with required rationale: `Two#theDiffListsEveryLooseningChangeAndPublishNeedsARationale`, `Two#unassignedShrinkingIntoAZoneAsStrictAsUnassignedIsNotLoosening`; findings resolved by a version change listed per version and shown on the Overview for 7 days are STEP 4 and STEP 5 |
+| ZM-37 | PARTIAL | audit capture names only ids, change kind and hashes: `Acc#zm37_auditCaptureFunctionsNameOnlyAllowlistedColumns` (migration text) and `Schema#publishedVersionsAreImmutableAndHistoryIsAppendOnly` (database, audit row has `content_sha256` and no `content`; not run in this lane); append-only revisions: same Schema test; no delete route or store method for revisions: `Acc#zm37_noDeleteRouteAndAppendOnlyStoreSurface`. Runs and findings do not exist yet: STEP 4. A database-level test of the exact audit key set was not added because no database was available to run it |
+| ZM-38 | STEP 6 | blocks appendix opt-in, `report_raw_view` |
+| ZM-39 | STEP 4 | own run pool, heap ceiling, timeout, pod kill |
+| ZM-40 | PARTIAL | total-block cap (200,000 accepted, one more refused, draft unchanged), per-zone cap, 500-zone cap, name, description, rationale, service-count and block-text bounds refuse and never truncate: `Acc#zm40_capsRefuseAndNeverTruncate`, `Acc#zm40_requestFieldBoundsAreRefusedNotTruncated`; `Two#cellsFollowTheStatementRulesAndRefusedLinesAreReportedOneByOne` (`TOO_MANY_SERVICES`). No byte-level HTTP body limit exists on the edit routes (`ZoneMatrixController`, outside this lane's fix scope); the size of a request is bounded today only through those field limits |
+| ZM-41 | PROVEN | `Two#unassignedToUnassignedIsDenyAllWhateverTheDefault`; `Two#cellsFollowTheStatementRulesAndRefusedLinesAreReportedOneByOne` (`ALLOW_ANY` default refused, `INVALID_DEFAULT`); `Eval#zm5_zm41_unassignedToUnassignedStaysDenyAll...` |
+| ZM-42 | STEP 4 | `firstObservedAnyVersion` |
+
+Counts (42 criteria): PROVEN 24, PARTIAL 8, STEP 4 five (ZM-8, ZM-34, ZM-35, ZM-39, ZM-42), STEP 6 five (ZM-11, ZM-28, ZM-31, ZM-32, ZM-38), DEFECT 0.
+Partial rows and their open part: ZM-12 (real-environment measurement), ZM-19 (STEP 7), ZM-25 (install-target pin; first-observed STEP 4), ZM-26 (STEP 4), ZM-30 (STEP 6),
+ZM-36 (STEP 4/5), ZM-37 (runs and findings STEP 4; exact audit key set at database level), ZM-40 (no byte-level body limit).
+No code contradicted the contract in this pass: no test was disabled and no production code changed.
