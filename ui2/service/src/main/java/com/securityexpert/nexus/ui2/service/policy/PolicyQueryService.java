@@ -689,6 +689,17 @@ public final class PolicyQueryService {
     private final Map<String, CachedHygiene> hygieneCache = new LinkedHashMap<>(8, 0.75f, true);
     /** At most two analyses run at once (each is single-threaded and CPU bound; the service pod has 4 CPUs). */
     private final java.util.concurrent.Semaphore hygieneSlots = new java.util.concurrent.Semaphore(2, true);
+    @FunctionalInterface
+    interface HygieneComputer {
+        PolicyHygiene.Result compute(PolicySnapshot snapshot, int days, java.time.Instant now);
+    }
+
+    private volatile HygieneComputer hygieneComputer = this::compute;
+
+    void setHygieneComputer(HygieneComputer hygieneComputer) {
+        this.hygieneComputer = Objects.requireNonNull(hygieneComputer);
+    }
+
     /**
      * Single flight per snapshot: the first request for a snapshot (and threshold) computes, concurrent requests for the
      * same one wait for that result, and other snapshots compute independently. The cache lock only guards the 4-entry
@@ -712,7 +723,7 @@ public final class PolicyQueryService {
         if (compute) {
             hygieneSlots.acquireUninterruptibly();
             try {
-                entry.result().complete(compute(snapshot, days, now));
+                entry.result().complete(hygieneComputer.compute(snapshot, days, now));
             } catch (RuntimeException | Error failed) {
                 entry.result().completeExceptionally(failed);
                 synchronized (hygieneCache) { hygieneCache.remove(id, entry); }
@@ -725,7 +736,7 @@ public final class PolicyQueryService {
             throw failed;
         }
     }
-    private PolicyHygiene.Result compute(PolicySnapshot snapshot, int days, java.time.Instant now) {
+    PolicyHygiene.Result compute(PolicySnapshot snapshot, int days, java.time.Instant now) {
         return PolicyHygiene.analyze(snapshot, days, now, PolicyHygiene.TOTAL_WORK, breadthObjects(snapshot, inventoryIndex(snapshot)), zoneUniverse(snapshot, now));
     }
     /**

@@ -76,26 +76,53 @@ class PolicyHygieneQueryTest {
         assertEquals(2, query.analysis(replaced, 90).rules().size());
     }
     @Test void concurrentRequestsShareOneAnalysisAndOtherSnapshotsAreNotBlocked() throws Exception {
-        var large = SyntheticPolicies.large("CP", 12_000, 7);
+        var large = SyntheticPolicies.large("CP", 200, 7);
         var small = PolicyHygieneTest.snapshot(List.of(PolicyHygieneTest.rule("r1", "host", "port", "allow", true)), PolicyHygieneTest.objects());
-        var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        var service = new PolicyQueryService(mock(TransactionBoundary.class), mapper, names, null, ips);
+        var largeRuns = new java.util.concurrent.atomic.AtomicInteger();
+        var largeEntered = new java.util.concurrent.CountDownLatch(1);
+        var releaseLarge = new java.util.concurrent.CountDownLatch(1);
+        service.setHygieneComputer((snapshot, days, now) -> {
+            if (snapshot == large) {
+                largeRuns.incrementAndGet();
+                largeEntered.countDown();
+                try {
+                    assertTrue(releaseLarge.await(10, java.util.concurrent.TimeUnit.SECONDS), "timed out waiting to release large analysis");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError("interrupted while holding large analysis", e);
+                }
+            }
+            return service.compute(snapshot, days, now);
+        });
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(3);
         try {
-            var start = new java.util.concurrent.CountDownLatch(1);
+            var submitted = new java.util.concurrent.CountDownLatch(3);
             List<java.util.concurrent.Future<PolicyHygiene.Result>> same = new ArrayList<>();
-            for (int i = 0; i < 3; i++) same.add(pool.submit(() -> { start.await(); return query.analysis(large, 90); }));
-            start.countDown();
-            // The small snapshot is answered without waiting for the large analysis (no timing precondition: the large run may finish first).
-            long begun = System.nanoTime();
-            var other = query.analysis(small, 90);
-            long waited = (System.nanoTime() - begun) / 1_000_000;
-            assertTrue(waited < 500, "small snapshot waited " + waited + " ms");
+            for (int i = 0; i < 3; i++) {
+                same.add(pool.submit(() -> {
+                    submitted.countDown();
+                    submitted.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                    return service.analysis(large, 90);
+                }));
+            }
+            assertTrue(submitted.await(5, java.util.concurrent.TimeUnit.SECONDS), "worker tasks did not start in time");
+            assertTrue(largeEntered.await(5, java.util.concurrent.TimeUnit.SECONDS), "large analysis did not enter compute");
+            // While large is held in flight, a different snapshot completes without blocking and no large future is done.
+            var other = service.analysis(small, 90);
             assertEquals("NOT_SHADOWED", other.rules().get("r1").shadowStatus());
-            // Single flight: every concurrent caller of the large snapshot receives the one computed result.
-            var first = same.get(0).get(60, java.util.concurrent.TimeUnit.SECONDS);
-            for (var future : same) assertSame(first, future.get(60, java.util.concurrent.TimeUnit.SECONDS));
-            assertSame(first, query.analysis(large, 90));
-            assertEquals(12_000, first.rules().size());
-        } finally { pool.shutdownNow(); }
+            assertTrue(same.stream().noneMatch(java.util.concurrent.Future::isDone), "large analysis finished before release");
+            // Single flight: releasing the held computation lets all concurrent callers receive the same instance.
+            releaseLarge.countDown();
+            var first = same.get(0).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            for (var future : same) assertSame(first, future.get(10, java.util.concurrent.TimeUnit.SECONDS));
+            assertSame(first, service.analysis(large, 90));
+            assertEquals(1, largeRuns.get());
+            assertEquals(200, first.rules().size());
+        } finally {
+            releaseLarge.countDown();
+            pool.shutdownNow();
+        }
     }
     @Test void aiviewMasksListRuleAndCsvAndRetainsSafeEvidence() throws Exception {
         var original = PolicyHygieneTest.rule("r1", "host", "port", "allow", true);
