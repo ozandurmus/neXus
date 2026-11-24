@@ -460,12 +460,11 @@ export function ComplianceScreen() {
           title="Checks with evidence"
           count={overview ? `${overview.evidence_coverage_pct}%` : null}
           badge={{
-            label: !overview ? "UNKNOWN" : totalChecks !== null
-              ? `of ${totalChecks.toLocaleString("en-US")} checks · ${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls`
-              : `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls`,
+            // The check total moved to the note: badge and total together overflowed the card (PO 2026-11-24).
+            label: !overview ? "UNKNOWN" : `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls`,
             tone: "neutral",
           }}
-          note={overview ? `Checks whose data was collected · ${overview.assured_compliance_pct}% of all checks are evidenced and pass` : "Checks whose data was collected"}
+          note={overview ? `Checks whose data was collected${totalChecks !== null ? `, of ${totalChecks.toLocaleString("en-US")} checks` : ""} · ${overview.assured_compliance_pct}% of all checks are evidenced and pass` : "Checks whose data was collected"}
         />
         <ComplianceMetricCard
           title="Critical failing checks"
