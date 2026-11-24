@@ -70,7 +70,7 @@
       "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
       "status": "in_progress",
       "priority": "P1",
-      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b), slice 2 (V258, 084c89d7) and slice 3 run-end notifications (V266, 8420aaf1) on main; not real-env validated.",
+      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b), slice 2 (V258, 084c89d7) and slice 3 run-end notifications (V266, 8420aaf1) on main; not real-env validated. Real-env checklist DRAFT (cbc1713c).",
       "note": ""
     },
     {

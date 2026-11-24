@@ -20,9 +20,9 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0406` — **AUTOMATED_VALIDATED** (2026-11-24): HA policy divergence read, zone matrix durable runs (V267),
-aiview sweep, HA screen redesign; after `0405` ASA failover contract PO answers (DRAFT), `0404` ASA ACL_NOT_BOUND unknown;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0406`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0407` — **AUTOMATED_VALIDATED** (2026-11-24): CP sync lost-update warning, Script Execution checklist;
+after `0406` HA policy divergence read, zone matrix runs (V267), HA screen redesign, `0405` ASA failover answers;
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0407`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
@@ -30,7 +30,7 @@ Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.
 
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
 
-Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262, `UI2_POLICY_CHUNK_GC=off` disables), window-preserving requeue (V263), the HA & failover screen redesign. Backup cutover prepared, not performed. The Estate view is read-only and paused. Not real-environment validated.
+Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), the HA & failover screen redesign, a CP sync warning. Backup cutover prepared, not performed. The Estate view is read-only and paused. Not real-environment validated.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
 
