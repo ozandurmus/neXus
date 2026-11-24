@@ -155,6 +155,41 @@ class InventoryControllerTest {
     }
 
     @Test
+    void getDeviceInventoryExposesAManagedDevicesHealthAndNullsWhereNoneWasRead() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        devices.byId.put("device-1", device("device-1"));
+        FakeDeviceInventoryRepository inventoryRepository = new FakeDeviceInventoryRepository();
+        com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember reporter =
+                new com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember("m-1", "MD-BRAVO-02", Optional.of("192.0.2.15"),
+                        Optional.of("Reporter"), Optional.empty(), Optional.empty(), false, false, false, Optional.empty(),
+                        Optional.of("FULLY_MANAGED"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                        Optional.empty(), List.of()).withHealth(new com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember.Health(
+                                "ERROR", 1, 0, Optional.of("2026-11-24T10:12:23"), List.of("Error: Unknown error")));
+        com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember unread =
+                new com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember("m-2", "MD-CHARLIE-03", Optional.empty(),
+                        Optional.empty(), Optional.empty(), Optional.empty(), false, false, false, Optional.empty(), Optional.empty(),
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), List.of());
+        inventoryRepository.recordRun(new InventoryRun("run-1", "device-1", "job-1", Instant.parse("2026-11-24T10:00:00Z"), 0, List.of(),
+                List.of(), Optional.empty(), List.of(reporter, unread), null), "actor", "action-1");
+        InventoryController controller = new InventoryController(
+                new InventoryQueryService(devices, new FakeJobRecordDao(), inventoryRepository), unusedCollectService());
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> members = (List<Map<String, Object>>) controller.getDeviceInventory("device-1").getBody().get("grid_members");
+
+        Map<String, Object> first = members.get(0);
+        assertEquals("ERROR", first.get("health_state"));
+        assertEquals(1, first.get("health_errors"));
+        assertEquals(0, first.get("health_warnings"));
+        assertEquals("2026-11-24T10:12:23", first.get("health_checked_at"));
+        assertEquals(List.of("Error: Unknown error"), first.get("health_messages"));
+        Map<String, Object> second = members.get(1);
+        assertEquals(null, second.get("health_state"), "no health read: null (the screen says UNKNOWN), never a state");
+        assertEquals(null, second.get("health_messages"));
+        assertEquals(true, second.containsKey("health_state"));
+    }
+
+    @Test
     void getDeviceInventoryReturns200WithNullCollectedAtAndEmptyContextsWhenNeverCollected() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         devices.byId.put("device-1", device("device-1"));

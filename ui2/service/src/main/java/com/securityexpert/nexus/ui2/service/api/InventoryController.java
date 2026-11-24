@@ -167,6 +167,12 @@ public final class InventoryController {
         body.put("cpu_percent", m.cpuPercent().orElse(null));
         body.put("db_percent", m.dbPercent().orElse(null));
         body.put("services", m.services().stream().map(sv -> Map.of("service", sv.service(), "status", sv.status())).toList());
+        // V271: a Management Center's managed-device health (manager-reported); absent = not read, which the screen shows as UNKNOWN.
+        body.put("health_state", m.health().map(GridMember.Health::state).orElse(null));
+        body.put("health_errors", m.health().map(GridMember.Health::errors).orElse(null));
+        body.put("health_warnings", m.health().map(GridMember.Health::warnings).orElse(null));
+        body.put("health_checked_at", m.health().flatMap(GridMember.Health::checkedAt).orElse(null));
+        body.put("health_messages", m.health().map(GridMember.Health::messages).orElse(null));
         return body;
     }
 

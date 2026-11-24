@@ -365,6 +365,9 @@ public final class Ui2WorkerMain {
                         .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults),
                 fortiManagerExecutor);
         httpsVendorExecutor.withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults);
+        // PO 2026-11-24: the Management Center managed-device health read (GET /api/devices/status) -- off unless
+        // UI2_MC_DEVICE_HEALTH_READ is set, and even then never sent while its gate row is absent (health recorded UNKNOWN).
+        httpsVendorExecutor.withMcDeviceHealth(com.securityexpert.nexus.ui2.worker.backup.https.McDeviceHealthRead.fromEnvironment(gateRegistry));
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch)
                 .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults)
                 .withConfigRelationSink(asaRelationSink(transactionBoundary))
