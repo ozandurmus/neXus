@@ -469,7 +469,12 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
           missing.push(member.hostname ?? member.device_id);
         }
       }
-      if (!cancelled) setState({ cluster: loaded.length > 0 ? projectCluster(loaded) : null, missing, error: null, loading: false, textForbidden });
+      if (cancelled) return;
+      const projected = loaded.length > 0 ? projectCluster(loaded) : null;
+      // The "Differences only" default is set in the same update as the cluster: set in a later effect, one frame showed
+      // the full view with the switch off (a visible flash, and the cause of a flaky test on 2026-11-24).
+      if (projected) { defaultedFor.current = projected; setDiffOnly(projected.diffCount > 0); }
+      setState({ cluster: projected, missing, error: null, loading: false, textForbidden });
     })();
     return () => {
       cancelled = true;
