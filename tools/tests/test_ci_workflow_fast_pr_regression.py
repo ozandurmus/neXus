@@ -167,14 +167,13 @@ def test_component_selections_are_explicit_and_separate():
     assert "npm --prefix ui2/frontend test -- tests/App.test.tsx" in targeted_block
 
 
-def test_full_regression_runs_for_major_prs_and_manual_dispatch():
+def test_full_regression_runs_on_manual_dispatch_only():
+    """PO 2026-11-24: the delivery Mac's pretest runs the suite before the merge; GitHub runs the full suite only on dispatch."""
     full_block = _job_block(_read_workflow(), "full-regression")
     assert "needs: regression-scope" in full_block
-    assert (
-        "if: always() && (github.event_name == 'workflow_dispatch' || "
-        "github.event_name == 'push' || "
-        "needs.regression-scope.outputs.classification == 'full')"
-    ) in full_block
+    assert "if: always() && github.event_name == 'workflow_dispatch'" in full_block
+    assert "github.event_name == 'push'" not in full_block
+    assert "classification == 'full'" not in full_block
     full_suite_lines = [line.strip() for line in full_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert full_suite_lines, (
         "the `full-regression` job must still run "
@@ -195,24 +194,24 @@ def test_full_regression_job_retains_the_same_cheap_gates():
         assert expected in full_block, f"full-regression gate missing: {expected!r}"
 
 
-def test_pull_request_schedules_validate_and_conditionally_full_regression():
+def test_pull_request_schedules_validate_but_not_full_regression():
     text = _read_workflow()
     validate_block = _job_block(text, "validate")
     full_block = _job_block(text, "full-regression")
     assert "if: github.event_name == 'pull_request' || github.event_name == 'push'" in validate_block
-    assert "needs.regression-scope.outputs.classification == 'full'" in full_block
+    assert "github.event_name == 'pull_request'" not in full_block
     assert "if: github.event_name == 'workflow_dispatch'" not in validate_block
 
 
-def test_push_to_main_runs_validation_and_full_regression():
-    """Post-merge push to main triggers validate, dependency-scan and full-regression."""
+def test_push_to_main_runs_validation_but_not_full_regression():
+    """Post-merge push to main triggers validate and dependency-scan; full regression runs on manual dispatch only."""
     text = _read_workflow()
     validate_block = _job_block(text, "validate")
     dep_block = _job_block(text, "dependency-scan")
     full_block = _job_block(text, "full-regression")
     assert "github.event_name == 'push'" in validate_block
     assert "github.event_name == 'push'" in dep_block
-    assert "github.event_name == 'push'" in full_block
+    assert "github.event_name == 'push'" not in full_block
     assert "github.event_name == 'workflow_dispatch'" in full_block
 
 
