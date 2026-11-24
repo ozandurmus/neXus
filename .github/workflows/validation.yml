@@ -320,13 +320,15 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — PO decision 2026-09-16 successor + 2026-11-14
-  # post-merge validation: runs on manual dispatch, push to main, and
-  # closed-path classifications that require it.
-  # `always()` preserves workflow_dispatch and push when the PR-only scope job skips.
+  # FULL INTEGRATION REGRESSION — manual dispatch only (PO 2026-11-24: the ship's
+  # pretest on the delivery Mac runs the full suite for a 'full' change and the
+  # scoped suite (module, dependents, architecture tests) otherwise; running the
+  # full suite again on GitHub for every PR and push only delayed ships).
+  # Replaces the 2026-09-16 / 2026-11-14 PR-classification and push-to-main triggers.
+  # `always()` keeps workflow_dispatch running when the PR-only scope job skips.
   full-regression:
     needs: regression-scope
-    if: always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'push' || needs.regression-scope.outputs.classification == 'full')
+    if: always() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
