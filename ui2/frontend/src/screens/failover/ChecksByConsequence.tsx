@@ -59,10 +59,12 @@ function EntryRow({ entry, action }: { entry: CheckEntry; action?: ReactNode }) 
   const [first, second] = entry.cells;
   return <Box data-check-entry={entry.no} sx={{ display: "grid", gridTemplateColumns: "minmax(140px, 22%) 1fr 1fr", columnGap: 1.5, py: 0.75,
     borderTop: `1px solid ${m3.outlineVar}` }}>
-    <Box><Typography variant="body2" sx={{ fontWeight: 600 }}>{entry.title}</Typography>{action}</Box>
+    <Box><Typography variant="body2" sx={{ fontWeight: 600 }}>{entry.title}</Typography></Box>
     {entry.same
       ? <Box sx={{ gridColumn: "2 / span 2" }}><Cell cell={first} caption="Both members" /></Box>
       : <><Cell cell={first} /><Cell cell={second} /></>}
+    {/* The action spans the row: inside the narrow title column a wide button overlapped the member cells (PO 2026-11-24). */}
+    {action && <Box data-check-action sx={{ gridColumn: "1 / -1", mt: 1 }}>{action}</Box>}
   </Box>;
 }
 

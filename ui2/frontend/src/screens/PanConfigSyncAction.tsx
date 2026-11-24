@@ -113,8 +113,13 @@ function adoptableRecord(unit: Unit): PanConfigSyncRecord | null {
   return phase === "SETTLING" || phase === "STILL_FAILS" ? latest : null;
 }
 
-export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
+/** Refusals a fresh pre-check run clears: the action offers that run instead of a dead button (PO 2026-11-24 "tıklanamıyor"). */
+const STALE_READINESS = new Set(["READINESS_NOT_FRESH", "READINESS_REQUIRED"]);
+
+export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000, onRecheck, recheckBusy = false, recheckRunning = false }: {
   unit: Unit; members?: ReadinessMember[]; onDone?: () => void; pollMs?: number;
+  /** Runs the unit's pre-checks (the header's Re-check); offered when the only refusal is stale or missing pre-checks. */
+  onRecheck?: () => void; recheckBusy?: boolean; recheckRunning?: boolean;
 }) {
   const facts = unit.configSync;
   const [dialog, setDialog] = useState(false);
@@ -212,14 +217,20 @@ export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
   };
   const running = open(record?.state);
   const accepted = isAccepted(record);
+  const stale = Boolean(onRecheck && facts.refusal && STALE_READINESS.has(facts.refusal));
   const readinessLine = readiness
     ?? (syncPhase.phase === "SETTLING" ? configSyncSettlingText(syncPhase.requestedAt)
       : syncPhase.phase === "STILL_FAILS" ? "Pre-checks finished: Configuration sync still fails." : null);
   const isSettling = readinessLine ? readinessLine.startsWith(CONFIG_SYNC_SETTLING) : false;
   return <Box data-config-sync sx={{ mt: 0.5 }} onClick={event => event.stopPropagation()}>
-    {facts.canRun && !running && !isSettling && <M3Button deviceJob emphasis="tonal" disabled={busy || Boolean(facts.refusal)}
-      onClick={() => { setError(null); setDialog(true); }}>Sync configuration to passive</M3Button>}
-    {facts.canRun && facts.refusal && !record && !isSettling && <Typography variant="caption" component="div" sx={{ color: m3.onSurfaceVar }}>{configSyncText(facts.refusal)}</Typography>}
+    {facts.canRun && !running && !isSettling && (stale
+      ? <M3Button deviceJob emphasis="tonal" disabled={busy || recheckBusy} onClick={() => { setError(null); onRecheck?.(); }}>
+          {recheckRunning ? "Running the pre-checks…" : "Re-check, then sync"}</M3Button>
+      : <M3Button deviceJob emphasis="tonal" disabled={busy || Boolean(facts.refusal)}
+          onClick={() => { setError(null); setDialog(true); }}>Sync configuration to passive</M3Button>)}
+    {facts.canRun && facts.refusal && !record && !isSettling && <Typography variant="caption" component="div" sx={{ color: m3.onSurfaceVar }}>
+      {stale ? "The pre-checks are older than 60 minutes. This runs them again; if configuration sync still fails, Sync configuration to passive is offered here."
+        : configSyncText(facts.refusal)}</Typography>}
     {record && <Typography role="status" variant="body2">{running && record.deviceStatus !== "success" ? stageText[record.state] ?? record.state
       : accepted ? configSyncText("CONFIG_SYNC_REQUESTED") : configSyncText(record.outcome)}</Typography>}
     {readinessLine && <Typography role="status" variant="body2">{readinessLine}</Typography>}
