@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0407",
+      "status": "automated_validated",
+      "title": "CP readiness lost-update warning and Script Execution real-environment checklist",
+      "summary": "A small Check Point sync lost-update rate (at most 10 per hour) is a non-blocking WARN, and the readiness table reads a WARN row with an unknown member as Unknown (2004ac57). A DRAFT real-environment checklist for Script Execution slices 1-3 was added (cbc1713c, docs only).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0406",
       "status": "automated_validated",
       "title": "HA policy divergence reads, zone matrix durable runs (V267), aiview raw-versus-masked sweep and HA screen redesign",

@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0406 · Track: PCP.x · Generated: 2026-11-24T00:18:40Z
+Build: NXS-LOCAL-0407 · Track: PCP.x · Generated: 2026-11-24T01:18:15Z
 
 ## Now
-- NXS-LOCAL-0406 — HA policy divergence reads, zone matrix durable runs (V267), aiview raw-versus-masked sweep and HA screen redesign (automated_validated)
+- NXS-LOCAL-0407 — CP readiness lost-update warning and Script Execution real-environment checklist (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -149,8 +149,8 @@ Build: NXS-LOCAL-0406 · Track: PCP.x · Generated: 2026-11-24T00:18:40Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0407 (automated_validated)
 - NXS-LOCAL-0406 (automated_validated)
 - NXS-LOCAL-0405 (automated_validated)
 - NXS-LOCAL-0404 (automated_validated)
 - NXS-LOCAL-0403 (automated_validated)
-- NXS-LOCAL-0402 (automated_validated)
