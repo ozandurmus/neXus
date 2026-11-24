@@ -31,7 +31,7 @@ class ConnectedRoutePrefixTest {
 
     @Test
     void oneContainingConnectedRouteOnTheSameInterfaceGivesThePrefixAndKeepsTheRole() {
-        List<ParsedInterface> result = InventoryCapabilityExecutor.applyUniqueConnectedRoutePrefixes(
+        List<ParsedInterface> result = CheckPointClishParser.applyUniqueConnectedRoutePrefixes(
                 List.of(bare("eth1", "192.0.2.10")), List.of(connected("192.0.2.0/24", "eth1"),
                         connected("198.51.100.0/24", "eth1")));
         assertEquals("192.0.2.10/24", address(result));
@@ -40,14 +40,14 @@ class ConnectedRoutePrefixTest {
 
     @Test
     void twoDifferentContainingNetworksAreAmbiguousAndLeaveTheAddressBare() {
-        assertEquals("192.0.2.10", address(InventoryCapabilityExecutor.applyUniqueConnectedRoutePrefixes(
+        assertEquals("192.0.2.10", address(CheckPointClishParser.applyUniqueConnectedRoutePrefixes(
                 List.of(bare("eth1", "192.0.2.10")), List.of(connected("192.0.2.0/24", "eth1"),
                         connected("192.0.2.0/25", "eth1")))));
     }
 
     @Test
     void aRouteOnAnotherInterfaceOrANonConnectedRouteNeverGivesAPrefix() {
-        assertEquals("192.0.2.10", address(InventoryCapabilityExecutor.applyUniqueConnectedRoutePrefixes(
+        assertEquals("192.0.2.10", address(CheckPointClishParser.applyUniqueConnectedRoutePrefixes(
                 List.of(bare("eth1", "192.0.2.10")), List.of(connected("192.0.2.0/24", "eth2"),
                         new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("eth1"),
                                 InventoryRoute.PROTOCOL_STATIC, Optional.empty())))));
@@ -55,7 +55,7 @@ class ConnectedRoutePrefixTest {
 
     @Test
     void anAddressThatAlreadyHasAPrefixIsUnchanged() {
-        assertEquals("192.0.2.10/28", address(InventoryCapabilityExecutor.applyUniqueConnectedRoutePrefixes(
+        assertEquals("192.0.2.10/28", address(CheckPointClishParser.applyUniqueConnectedRoutePrefixes(
                 List.of(bare("eth1", "192.0.2.10/28")), List.of(connected("192.0.2.0/24", "eth1")))));
     }
 }

@@ -29,7 +29,7 @@ class CheckPointClishParserTest {
                 	ipv4-address 10.0.0.1/24
                 """;
 
-        List<ParsedInterface> ifaces = InventoryCapabilityExecutor.parseClishInterfaces(output);
+        List<ParsedInterface> ifaces = CheckPointClishParser.parseClishInterfaces(output);
         assertEquals(2, ifaces.size());
 
         ParsedInterface eth0 = ifaces.stream().filter(i -> i.name().equals("eth0")).findFirst().orElseThrow();
@@ -67,7 +67,7 @@ class CheckPointClishParserTest {
                 description:
                 """;
 
-        List<ParsedInterface> ifaces = InventoryCapabilityExecutor.parseClishInterfaces(output);
+        List<ParsedInterface> ifaces = CheckPointClishParser.parseClishInterfaces(output);
         assertEquals(3, ifaces.size());
 
         ParsedInterface dmz = ifaces.stream().filter(i -> i.name().equals("DMZ")).findFirst().orElseThrow();
@@ -81,11 +81,11 @@ class CheckPointClishParserTest {
         ParsedInterface wan = ifaces.stream().filter(i -> i.name().equals("WAN")).findFirst().orElseThrow();
         assertEquals(InventoryInterface.STATE_DOWN, wan.state());
 
-        List<ParsedRoute> routes = InventoryCapabilityExecutor.parseClishRoutes("""
+        List<ParsedRoute> routes = CheckPointClishParser.parseClishRoutes("""
                 C        192.0.2.0/24 is directly connected, LAN1
                 S        0.0.0.0/0 via 198.51.100.1, WAN
                 """);
-        List<ParsedInterface> enriched = InventoryCapabilityExecutor.applyConnectedRoutePrefixes(ifaces, routes);
+        List<ParsedInterface> enriched = CheckPointClishParser.applyConnectedRoutePrefixes(ifaces, routes);
         ParsedInterface lan1Enriched = enriched.stream().filter(i -> i.name().equals("LAN1")).findFirst().orElseThrow();
         assertEquals("192.0.2.1/24", lan1Enriched.addresses().get(0).address(), "prefix from LAN1's own connected route");
         ParsedInterface wanEnriched = enriched.stream().filter(i -> i.name().equals("WAN")).findFirst().orElseThrow();
@@ -101,7 +101,7 @@ class CheckPointClishParserTest {
                 DMZ          ethernet  down      0.0.0.0           0.0.0.0
                 """;
 
-        List<ParsedInterface> ifaces = InventoryCapabilityExecutor.parseClishInterfaces(output);
+        List<ParsedInterface> ifaces = CheckPointClishParser.parseClishInterfaces(output);
         assertEquals(3, ifaces.size());
 
         ParsedInterface lan1 = ifaces.stream().filter(i -> i.name().equals("LAN1")).findFirst().orElseThrow();
@@ -127,7 +127,7 @@ class CheckPointClishParserTest {
                 B        172.16.0.0/16 [20/0] via 10.2.2.2, eth2
                 """;
 
-        List<ParsedRoute> routes = InventoryCapabilityExecutor.parseClishRoutes(output);
+        List<ParsedRoute> routes = CheckPointClishParser.parseClishRoutes(output);
         assertEquals(4, routes.size());
 
         ParsedRoute r0 = routes.get(0);
