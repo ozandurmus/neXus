@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-11-24",
-  "reviewed_current_build": "NXS-LOCAL-0411",
+  "reviewed_current_build": "NXS-LOCAL-0412",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -173,6 +173,8 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "policy_insights_p1_checkpoint": "java_feature",
+    "policy_insights_design_followups": "java_debt",
     "add_device_discovery_failure_class_visible": "java_feature",
     "CP-SHELL-M2-LAB-READ": "java_debt",
     "ubi_base_glibc_fix_pending": "java_debt",

@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0411 · Track: PCP.x · Generated: 2026-11-24T13:52:13Z
+Build: NXS-LOCAL-0412 · Track: PCP.x · Generated: 2026-11-24T16:07:39Z
 
 ## Now
-- NXS-LOCAL-0411 — Behaviour-neutral splits: Check Point CLISH parser, replay-viewer check reuse, Packet Analysis client module (automated_validated)
+- NXS-LOCAL-0412 — Policy Insights frozen (PO 2026-11-24), four unused static helpers removed (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -41,6 +41,7 @@ Build: NXS-LOCAL-0411 · Track: PCP.x · Generated: 2026-11-24T13:52:13Z
 - P2/planned pan_change_actor_submitted_join_gap
 - P2/planned path_analysis_phase_b
 - P2/planned platform_backup_step1_host_roll
+- P2/planned policy_insights_p1_checkpoint
 - P2/planned policy_install_p2_p4
 - P2/planned product_rename_identity
 - P2/planned reports_r2
@@ -69,6 +70,7 @@ Build: NXS-LOCAL-0411 · Track: PCP.x · Generated: 2026-11-24T13:52:13Z
 - P3/planned legacy_python_separation
 - P3/planned old_export_copies_disposal
 - P3/planned opt_nexus_step_d_delete_old_copies
+- P3/planned policy_insights_design_followups
 - P3/planned preview_golden_database_rollout
 - P3/planned radware_cc_identity_and_defensepro_reads
 - P3/planned script_run_launcher_stdout_race
@@ -149,8 +151,8 @@ Build: NXS-LOCAL-0411 · Track: PCP.x · Generated: 2026-11-24T13:52:13Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0412 (automated_validated)
 - NXS-LOCAL-0411 (automated_validated)
 - NXS-LOCAL-0410 (automated_validated)
 - NXS-LOCAL-0409 (automated_validated)
 - NXS-LOCAL-0408 (automated_validated)
-- NXS-LOCAL-0407 (automated_validated)
