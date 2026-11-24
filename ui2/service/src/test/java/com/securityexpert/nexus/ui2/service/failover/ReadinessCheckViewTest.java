@@ -182,6 +182,14 @@ class ReadinessCheckViewTest {
         assertEquals("Same policy on both members; installed within 10 min",
             row(false,10,"PASS","{\"fwStat\":{\"reason\":\"POLICY_MATCH\"}}").get("summary"));
     }
+    @Test void smallLostUpdateIncreaseIsAWarningWithRateText() throws Exception {
+        var warn=row(false,9,"WARN","{\"syncStatus\":\"OK\",\"lostUpdates\":36,\"lostUpdatesIncrease\":35,"
+            +"\"elapsedSeconds\":21600,\"warnPerHour\":10,\"baselineAt\":\"2026-09-30T12:00:00Z\"}");
+        assertEquals("Sync OK; +35 lost updates in 6 h (below 10 per hour)",warn.get("summary"));
+        assertEquals("WARN",warn.get("result"));
+        assertEquals("Sync OK; +1 lost updates in 4.1 h (below 10 per hour)",row(false,9,"WARN",
+            "{\"lostUpdatesIncrease\":1,\"elapsedSeconds\":14760,\"warnPerHour\":10}").get("summary"));
+    }
     @Test void tunedRulesExplainFailuresAndMaskTableAddresses() throws Exception {
         assertEquals("Same policy, installed 2 h apart (limit 10 min)",row(false,10,"FAIL",
             "{\"reason\":\"INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":7200}").get("summary"));
