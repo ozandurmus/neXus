@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0409",
+      "status": "automated_validated",
+      "title": "Zone matrix acceptance-criteria traceability and tests, ExpertWorkbook summary split, Collect now menu split",
+      "summary": "Zone matrix ZM-1..ZM-42 traceability table (24 PROVEN, 8 PARTIAL, 10 later steps) with tests for the untested criteria and a second ZM-13 architecture rule (9f7f3544). Behaviour-neutral file splits: the Packet Analysis workbook summary sheet (b636bcb2) and the inventory Collect now menu (2aeb70cf).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0408",
       "status": "automated_validated",
       "title": "Zone matrix lifecycle functions, policy hygiene UNKNOWN reasons, HA re-check flow, ASA/FortiGate cutover lookup, Add device failure copy and parser pin tests",

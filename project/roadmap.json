@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0408",
+  "current_build": "NXS-LOCAL-0409",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,8 +150,8 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0408",
-      "title": "Zone matrix lifecycle functions, policy hygiene UNKNOWN reasons, HA re-check flow, ASA/FortiGate cutover lookup, Add device failure copy and parser pin tests",
+      "build": "NXS-LOCAL-0409",
+      "title": "Zone matrix acceptance-criteria traceability and tests, ExpertWorkbook summary split, Collect now menu split",
       "status": "automated_validated",
       "started": "2026-11-24",
       "completed": "2026-11-24"

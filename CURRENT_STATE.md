@@ -20,9 +20,10 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0408` — **AUTOMATED_VALIDATED** (2026-11-24): zone matrix step 4a lifecycle functions (no storage), hygiene UNKNOWN reasons, HA Re-check flow, Add device failure copy;
+`NXS-LOCAL-0409` — **AUTOMATED_VALIDATED** (2026-11-24): zone matrix ZM-1..ZM-42 traceability (24 PROVEN, 8 PARTIAL, 10 later steps) with tests, two behaviour-neutral file splits;
+before it `0408` zone matrix step 4a lifecycle functions (no storage), hygiene UNKNOWN reasons, HA Re-check flow, Add device failure copy;
 after `0407` CP sync warning, `0406` HA policy divergence, zone matrix runs (V267);
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0408`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0409`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
