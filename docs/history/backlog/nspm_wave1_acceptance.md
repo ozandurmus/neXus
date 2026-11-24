@@ -13,3 +13,5 @@ Target (full): docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md
 2026-11-10 (plan refresh): policy credibility and hygiene work shipped in NXS-LOCAL-0380 (PRs 695-761) with live counts (unresolved CP objects 32,429 to 670; earlier-rule UNKNOWN 60,217 to 56,085). Next levers (POLICY_UNKNOWN_REDUCTION_PLAN_2026_11_05.md section 0.1): CP access roles, PAN source-user, CP gateway objects. PO acceptance still open.
 
 2026-11-14 backlog truth: still open (P2, size S). Today: Features live; formal PO acceptance and next unknown-reduction levers open. Evidence: PRs 569, 644, 695-761 shipped; PO acceptance still open; next levers in POLICY_UNKNOWN_REDUCTION_PLAN_2026_11_05
+
+Hygiene fleet summary counts UNKNOWN shadowing verdicts by reason and by blocker reason (02329517).

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-11-24",
-  "reviewed_current_build": "NXS-LOCAL-0407",
+  "reviewed_current_build": "NXS-LOCAL-0408",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -359,6 +359,7 @@
     "aci_segmentation_step1": "java_feature",
     "asa_fortigate_policy_model": "java_feature",
     "asa_port_operator_a0_asa_14_defect": "java_debt",
+    "fortigate_a0_fg_18_20_defects": "java_debt",
     "topology_sources_apic_citrix_f5": "java_feature",
     "rule_recertification_campaigns": "java_feature",
     "cp_advisories_jumbo": "java_feature",

@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0408",
+      "status": "automated_validated",
+      "title": "Zone matrix lifecycle functions, policy hygiene UNKNOWN reasons, HA re-check flow, ASA/FortiGate cutover lookup, Add device failure copy and parser pin tests",
+      "summary": "Zone matrix step 4a finding lifecycle and 24 h interim staleness as pure functions (e6f0167e); the hygiene fleet summary counts UNKNOWN verdicts by reason (02329517); HA detail offers Re-check then sync (39c1b07e); the Add device dialog map",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0408.md"
+    },
+    {
       "build": "NXS-LOCAL-0407",
       "status": "automated_validated",
       "title": "CP readiness lost-update warning and Script Execution real-environment checklist",
