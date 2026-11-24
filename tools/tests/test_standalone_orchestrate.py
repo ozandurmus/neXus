@@ -371,7 +371,7 @@ def test_merge_does_not_squash_on_other_failures(monkeypatch):
         return subprocess.CompletedProcess(cmd, 1, "", "checks failing")
     monkeypatch.setattr(sa.subprocess, "run", fake_run)
     assert sa._merge_pull_request("https://example/pr/1").returncode == 1
-    assert len(calls) == 1
+    assert [c[2] for c in calls] == ["merge", "view"]   # no squash; the state is asked once
 
 
 # ---- merge resilience (2026-11-15: 502 Bad Gateway x2 and "Merge already in progress" stopped a ship) -------------
@@ -441,9 +441,9 @@ def test_transient_merge_answer_lands_on_a_later_state_read(monkeypatch):
 @pytest.mark.parametrize("answer", ["checks failing", "GraphQL: Pull request is not mergeable", "HTTP 403: Forbidden",
                                     "GraphQL: Pull request #502 has conflicts (mergePullRequest)"])
 def test_other_merge_errors_are_never_retried(monkeypatch, answer):
-    calls, sleeps = _gh_stub(monkeypatch, [(1, answer)], [])
+    calls, sleeps = _gh_stub(monkeypatch, [(1, answer)], ["OPEN"])
     assert sa._merge_pull_request("https://example/pr/502").returncode == 1
-    assert [c[2] for c in calls] == ["merge"] and sleeps == []
+    assert [c[2] for c in calls] == ["merge", "view"] and sleeps == []   # state asked once, never a retry
 
 
 def test_squash_fallback_still_applies_inside_a_retry(monkeypatch):
@@ -477,3 +477,64 @@ def test_git_fetch_retries_a_ref_lock_race_only(monkeypatch):
     with pytest.raises(SystemExit):
         sa._git("update-ref", "refs/heads/x", "HEAD")
     assert len(calls) == 1
+
+
+# ---- any merge-call error asks GitHub for the state first (2026-11-24 review: merges landed while the call errored) ----
+
+@pytest.mark.parametrize("answer", ["GraphQL: Pull request is not mergeable", "HTTP 403: Forbidden", "EOF",
+                                    "error connecting to api.github.com", "unexpected end of JSON input"])
+def test_any_merge_error_with_the_pr_merged_on_github_is_not_a_failure(monkeypatch, answer):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, answer)], ["MERGED"])
+    merge = sa._merge_pull_request("https://example/pr/1")
+    assert merge.returncode == 0
+    assert [c[2] for c in calls] == ["merge", "view"] and sleeps == []
+
+
+def test_a_merge_call_that_cannot_run_is_checked_against_github_too(monkeypatch):
+    seen = []
+
+    def fake_run(cmd, **kw):
+        seen.append(cmd[:3])
+        if cmd[:3] == ["gh", "pr", "merge"]:
+            raise OSError("gh vanished")
+        return subprocess.CompletedProcess(cmd, 0, json.dumps({"state": "MERGED", "mergedAt": "x"}), "")
+    monkeypatch.setattr(sa.subprocess, "run", fake_run)
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert seen == [["gh", "pr", "merge"], ["gh", "pr", "view"]]
+
+
+def test_an_open_pr_after_a_refusal_stays_a_failure(monkeypatch):
+    _gh_stub(monkeypatch, [(1, "GraphQL: Pull request is not mergeable")], ["OPEN"])
+    merge = sa._merge_pull_request("https://example/pr/1", head="a" * 40)
+    assert merge.returncode == 1 and "not mergeable" in merge.stderr
+
+
+def test_unreadable_github_state_falls_back_to_the_tree_on_main(monkeypatch):
+    _gh_stub(monkeypatch, [(1, "EOF")], [None])
+    monkeypatch.setattr(sa, "_change_is_on_main", lambda head, base="origin/main": head == "a" * 40)
+    assert sa._merge_pull_request("https://example/pr/1", head="a" * 40).returncode == 0
+    _gh_stub(monkeypatch, [(1, "EOF")], [None])
+    assert sa._merge_pull_request("https://example/pr/1", head="b" * 40).returncode == 1
+
+
+def test_a_known_open_state_never_consults_the_tree_check(monkeypatch):
+    _gh_stub(monkeypatch, [(1, "EOF")], ["OPEN"])
+    monkeypatch.setattr(sa, "_change_is_on_main", lambda *a, **k: pytest.fail("GitHub answered; git must not overrule"))
+    assert sa._merge_pull_request("https://example/pr/1", head="a" * 40).returncode == 1
+
+
+def test_change_is_on_main_recognises_a_rebase_merged_patch(tmp_path, monkeypatch):
+    work = _make_repo(tmp_path)
+    _g(work, "switch", "-q", "-c", "lane")
+    (work / "b.txt").write_text("b\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "change")
+    head = _g(work, "rev-parse", "HEAD")
+    _g(work, "switch", "-q", "main")
+    (work / "c.txt").write_text("c\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "other work")
+    monkeypatch.setattr(sa, "REPO_ROOT", work)
+    _g(work, "push", "-q", "origin", "main")
+    assert sa._change_is_on_main(head) is False                      # not merged yet
+    _g(work, "cherry-pick", head)                                    # what GitHub's rebase merge does: a new commit id
+    _g(work, "push", "-q", "origin", "main")
+    assert sa._change_is_on_main(head) is True

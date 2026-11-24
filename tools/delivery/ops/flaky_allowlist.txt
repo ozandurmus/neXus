@@ -1,0 +1,20 @@
+# Tests that may be re-run ONCE when they fail in the pretest or in main-green (tools/delivery/ops/ops_lib.sh).
+# Format: "<kind> <name>"; kind = java (simple or fully qualified class name) or vitest (path as vitest prints it).
+# Everything not listed fails on the first red. A test that looks security-relevant (security, authz, credential,
+# redaction, sanitizer, privacy, secret, crypto, tls, masking, admission, lease, session, token ...) is never re-run,
+# even if it is listed here. Each entry needs evidence: a line in flaky-tests.log or a named failure, and a debt lane
+# that fixes the cause. Remove an entry when its cause is fixed.
+#
+# Process-timing / load-sensitive Java tests (flaky-tests.log 2026-11-22..24)
+java ScriptRunBrokerTest
+java BackgroundSnapshotTest
+java PolicyHygieneQueryTest
+java HealthControllerTest
+# Vitest files that failed in a full run and passed alone (flaky-tests.log 2026-11-24)
+vitest tests/ConfigurationClusterDetail.test.tsx
+vitest tests/DevicesReview.test.tsx
+vitest tests/FleetSummary.test.tsx
+vitest tests/PolicyLiveShapes.test.tsx
+vitest tests/PolicyScreen.test.tsx
+vitest tests/PolicyTabs.test.tsx
+vitest tests/EstateSlice2Screens.test.tsx

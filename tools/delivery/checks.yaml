@@ -1,0 +1,207 @@
+# One check manifest for the delivery lane harness (docs/design/LANE_HARNESS_V1_2026_11_24.md, DRAFT).
+#
+# `tools/delivery/lane_harness.py` runs `steps` in the order written here, cheapest first. The same file is meant to be
+# read by the ship pretest, so a check is added once and runs in the lane, in the pretest and (through `ci_twin`) is
+# pinned to the GitHub `validate` job by tools/tests/test_lane_harness.py: a `validate` step with no twin here and no
+# entry under `ci_exempt` fails that test, so a CI-only check is a manifest defect.
+#
+# Step fields
+#   id          unique, stable (appears in harness-report.json)
+#   builtin     a function of lane_harness.py (git / queue / language logic that a command line cannot express)
+#   cmd         argv list, run in the worktree (`{python}` is this interpreter, `{base}` the base ref)
+#   profiles    which `--profile` runs it: lane (default, everything) and/or pretest (tests only, what jt.sh ran)
+#   when        regex over the changed paths; the step runs only when one path matches
+#   when_not    paths matching this regex are ignored for `when`
+#   tree_bound  true: the result depends only on the tree, so `--reuse-report` may reuse a PASS for the same tree id
+#   severity    block (default) or warn
+#   ci_twin     the GitHub `validate` / `integration` step name this step mirrors
+#   timeout_s   per-step wall limit; a timeout is a failure
+#   group       a heavy step group (tools / java / frontend). Consecutive grouped steps form one block whose groups run at
+#               the same time, up to `--jobs` (default 3); steps inside a group stay in the order written. Ungrouped steps
+#               are barriers: the cheap gates above the block run first and one after another. `--jobs 1` is the plain
+#               order of this file. A group is one resource: the java group is the only one that runs Gradle.
+#               Placeholders in `cmd`: {python} {base} {worktree} {pytest_workers} (xdist workers, derived from the CPU
+#               count and --jobs) {snapshot} (an export of HEAD: exactly the files the commit contains).
+#
+# Python tooling tests: the `validate` job runs the whole of tools/tests (`python -m pytest -q -n 2 --dist worksteal`,
+# its `full-regression` job `-n auto --dist worksteal`); the harness runs the same selection minus the browser test
+# (Playwright Chromium is not installed on the lane Mac) with the worker count taken from the machine, not from CI's
+# two-core runner.
+
+version: 1
+
+# Names the model in the trailer of every commit the harness makes itself (derived-file re-render); the address half
+# is built in lane_harness.py so no mailbox appears in a repository file.
+commit_trailer_model: "Claude Sonnet 5.5"
+
+# Tier C: paths a lane must not change without a person looking (the ship runner's GUARD, PO 2026-11-23). A branch
+# whose meta carries allow_paths=1 (or `--allow-paths`) is not held.
+guarded_paths: '^(\.github/|\.githooks/|deploy/|scripts/|tools/delivery/|security/|ui2/service/src/main/resources/db/migration/|ui2/capability-registry/src/main/resources/capabilities/|ui2/sanitizer/)|^ui2/[^/]+/src/(main|test)/java/.*/(transport|credential|failover|authz|redaction|security|lease|admission)/|Allowlist\.java$|GateRegistry'
+
+# Rendered files: a conflict on these is resolved by re-rendering (the ship runner's GEN).
+generated_paths: '^(docs/design/DECISION_RECORD_SUCCESSOR_INDEX\.md|ui2/service/src/test/resources/authorization/route-authorization-decision-table\.golden\.txt|tools/security/aiview_leak_audit/routes\.json)$'
+
+# Tier B: production code outside the Estate UI gets a cross-family review (lane-runner.sh).
+tier_b_paths: '^ui2/[^/]+/src/main/|^ui2/frontend/src/'
+tier_b_exclude: '^ui2/frontend/src/estate/'
+
+# Flyway: a new migration version must be above main's highest and must not collide with a queued ship entry's.
+migrations:
+  dir: ui2/service/src/main/resources/db/migration
+  pattern: '^V([0-9]+)__.*\.sql$'
+  # warn: a gap above the next free number is reported; block: it fails the lane.
+  gap_policy: warn
+
+# Words ui2/ must not contain (DIR-10, Ui2ArchitectureTest). Assembled by concatenation like the test does.
+forbidden_tokens_under_ui2:
+  - ["main.", "py"]
+  - ["pyth", "on"]
+  - ["conso", "le/"]
+  - ["_runner", ".py"]
+  - ["_collector", ".py"]
+forbidden_tokens_exclude_dirs: [build, node_modules, fixtures, .gradle, architecture-tests]
+forbidden_tokens_skip_suffixes: [.md]
+
+# Test classes that may be re-run once after a failure (flaky retry allowlist, council item 9). Empty on purpose: a
+# class lands here only through a reviewed change, and names that look security-relevant are refused regardless.
+flaky_allowlist: []
+
+# validate-job steps that have no local twin by design.
+ci_exempt:
+  - "Fetch origin/main for the privacy-gate baseline"
+  - "Resolve privacy-gate baseline ref"
+  - "Install dependencies"
+  - "Prepare declared Chromium test runtime"
+  - "Whitespace / conflict-marker check"
+
+# Derived files: re-rendered and auto-committed (never failed) when stale. `check` exits 0 when current.
+derived:
+  - id: successor_index
+    check: ["{python}", "tools/delivery/successor_index.py", "--check"]
+    render: ["{python}", "tools/delivery/successor_index.py", "render"]
+    add: ["docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md"]
+    message: "Re-render the decision-record successor index"
+  - id: build_history_index
+    check: ["{python}", "tools/delivery/build_history_index.py", "--check"]
+    render: ["{python}", "tools/delivery/build_history_index.py"]
+    add: ["docs/history/INDEX.md"]
+    message: "Re-render the build-history index"
+  - id: project_queue
+    when: '^project/'
+    check: ["{python}", "tools/delivery/project_queue.py", "check"]
+    render: ["{python}", "tools/delivery/project_queue.py", "render"]
+    add: ["project/QUEUE.md"]
+    message: "Re-render the project queue"
+  - id: repo_inventory
+    builtin: repo_inventory
+    add: ["docs/repo_inventory.csv"]
+    message: "Add repository inventory rows for new or removed live tooling tests"
+  - id: route_decision_table
+    # Needs Gradle (it runs the decision-table test in record mode and has no cheap staleness check), so it runs only
+    # when a controller, a security class or the table itself changed; the scoped Java run still fails a stale table.
+    when: '^(ui2/service/src/main/java/.*(Controller|Security|Authoriz|Interceptor|GateChain)[^/]*\.java$|ui2/service/src/test/resources/authorization/)'
+    render: ["./gradlew", "{gradle_flags}", "-q", ":service:test", "--tests", "*RouteAuthorizationDecisionTableTest*", "--offline"]
+    render_cwd: ui2
+    render_env:
+      UI2_DECISION_TABLE_RECORD: "{worktree}/ui2/service/src/test/resources/authorization/route-authorization-decision-table.golden.txt"
+    after: ["{python}", "tools/security/aiview_leak_audit/gen_routes.py"]
+    add:
+      - ui2/service/src/test/resources/authorization/route-authorization-decision-table.golden.txt
+      - tools/security/aiview_leak_audit/routes.json
+    message: "Re-render the route authorization decision table"
+
+steps:
+  # 1. Git hygiene and the agent's own outcome (2 seconds).
+  - {id: agent_outcome, builtin: agent_outcome}
+  - {id: preconditions, builtin: preconditions}
+  # 2. Fresh-main merge-tree conflict pre-check (read only).
+  - {id: main_conflict, builtin: main_conflict}
+  # 3. Tier C classification and the declared paths; Tier B is recorded for the reviewer.
+  - {id: guarded_paths, builtin: guarded_paths}
+  - {id: declared_paths, builtin: declared_paths}
+  # 4. Derived files: re-rendered and committed, not failed.
+  - {id: derived_files, builtin: derived_files}
+  # 5. Cheap static checks.
+  - {id: whitespace, builtin: whitespace, severity: warn}
+  - id: privacy_gate
+    # Scans an export of HEAD, not the directory: an ignored build output (ui2/frontend/dist, ui2/service/build) is not
+    # in the commit and is not in GitHub's clean checkout either, so it must not be a finding here.
+    cmd: ["{python}", "tools/privacy/repository_privacy_check.py", "--privacy-baseline-ref", "{base}",
+          "--scan-root", "{snapshot}", "--git-cwd", "{worktree}"]
+    tree_bound: false          # baselined against main, so the verdict moves with main
+    ci_twin: "Repository privacy gate"
+    timeout_s: 300
+  - {id: secret_scan, builtin: secret_scan}
+  - {id: forbidden_tokens, builtin: forbidden_tokens, when: '^ui2/', tree_bound: true}
+  - {id: migration_rule, builtin: migration_rule}
+  - {id: test_integrity, builtin: test_integrity, severity: warn}
+  - {id: queue_overlap, builtin: queue_overlap, severity: warn}
+  # 6. Project-state and tooling tests, the same selection `validate` runs (minus the Playwright browser test).
+  - id: project_state_consistency
+    cmd: ["{python}", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tools/tests/test_live_project_governance.py"]
+    profiles: [lane, pretest]
+    tree_bound: true
+    ci_twin: "Project-state consistency"
+    timeout_s: 300
+  - id: build_history_index_current
+    cmd: ["{python}", "tools/delivery/build_history_index.py", "--check"]
+    profiles: [lane, pretest]
+    tree_bound: true
+    ci_twin: "Build history index is current"
+    timeout_s: 120
+  - id: project_queue_current
+    cmd: ["{python}", "tools/delivery/project_queue.py", "check"]
+    profiles: [lane, pretest]
+    tree_bound: true
+    ci_twin: "Project queue is current"
+    timeout_s: 120
+  - id: project_file_budgets
+    cmd: ["{python}", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tools/tests/test_project_files_budget.py"]
+    profiles: [lane, pretest]
+    tree_bound: true
+    ci_twin: "Project file size budgets"
+    timeout_s: 300
+  - id: live_tooling_regression
+    # `validate` runs `python -m pytest -q -n 2 --dist worksteal` over pytest.ini's testpaths (the `full-regression` job
+    # `-n auto`); the browser test is the only exclusion, and it is not part of the declared lane runtime. The worker
+    # count is a machine property: {pytest_workers} is 5 on a 10-core Mac at --jobs 3.
+    cmd: ["{python}", "-m", "pytest", "-q", "-n", "{pytest_workers}", "--dist", "worksteal", "-p", "no:cacheprovider",
+          "--ignore=tools/tests/test_orchestrator_dashboard_browser.py"]
+    group: tools
+    profiles: [lane, pretest]
+    tree_bound: true
+    ci_twin: "Live tooling regression"
+    timeout_s: 1800
+  # 7. Java: scoped by pretest_scope.py (module, dependents, architecture tests), the full suite when unsure.
+  - {id: java_scoped, builtin: java_scoped, group: java, profiles: [lane, pretest], tree_bound: true, timeout_s: 3000}
+  # A project/ change is read by the Java ProjectPlanReaderTest (2026-11-23: an archive move broke main).
+  - id: java_project_plan_reader
+    when: '^project/'
+    cmd: ["./gradlew", "{gradle_flags}", "-q", ":service:test", "--tests", "*ProjectPlanReaderTest*", "--offline"]
+    cwd: ui2
+    group: java
+    profiles: [lane, pretest]
+    tree_bound: true
+    timeout_s: 900
+  # 8. Frontend: the production build first (the Java group waits for the same bundle instead of building it again),
+  #    then tsc and vitest (fails closed).
+  - {id: frontend_build, builtin: frontend_build, group: frontend, profiles: [lane, pretest], tree_bound: true, timeout_s: 900}
+  - {id: frontend_tsc, builtin: frontend_tsc, group: frontend, profiles: [lane, pretest], tree_bound: true, timeout_s: 900}
+  - {id: frontend_vitest, builtin: frontend_vitest, group: frontend, profiles: [lane, pretest], tree_bound: true, timeout_s: 1800}
+  # 9. PostgreSQL 16 integration suite, when the workflow's own path rule would run it.
+  - id: integration
+    builtin: integration
+    group: java                # after the scoped Java run: one Gradle at a time in ui2/
+    profiles: [lane, pretest]
+    tree_bound: true
+    # The `integration` job's rule: any changed path outside ui2/frontend/ that is under ui2/ or docs/operations/sql/,
+    # or the workflow file itself.
+    when: '^(ui2/|docs/operations/sql/|\.github/workflows/validation\.yml$)'
+    when_not: '^ui2/frontend/'
+    ci_twin: "PostgreSQL 16 integration suite"
+    timeout_s: 3000
+    gradle_args: ["-PfrontendPrebuilt=true", ":integration-tests:test"]
+    # Hand-off to the HOST-A runner when `--integration hosta` is given (exit 0 pass, 1 test failure, 2 setup failure).
+    hosta_cmd: ["bash", "tools/delivery/hosta_integration.sh"]
+  # 10. The brief's own acceptance commands (`accept=` lines of the lane meta).
+  - {id: accept, builtin: accept, timeout_s: 1800}

@@ -22,6 +22,11 @@ def _git(cwd: Path, *args: str, env=None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, env=env)
 
 
+#: The mirrors borrow the source's objects instead of copying them. A full local clone of a checkout with a large
+#: loose-object store took 50-250 seconds per clone on a loaded machine (four tests, two clones each: the wall time of
+#: the whole tooling suite); the hook under test never reads those objects through any other path.
+_SHARE = ("--shared",)
+
 #: Deterministic fixture branch name -- independent of whether the source
 #: checkout (`ROOT`) is on a named branch or a detached HEAD (as CI's
 #: checkout commonly is), so `rev-parse --abbrev-ref HEAD` in the clone
@@ -34,7 +39,7 @@ def _fixture_clone(tmp_path: Path) -> tuple[Path, Path]:
     real object history, real `utils/`, real `.githooks/pre-push`, so the
     hook's own imports resolve exactly as they do in a real checkout."""
     bare = tmp_path / "origin.git"
-    assert _git(tmp_path, "clone", "-q", "--bare", str(ROOT), str(bare)).returncode == 0
+    assert _git(tmp_path, "clone", "-q", "--bare", *_SHARE, str(ROOT), str(bare)).returncode == 0
 
     clone = tmp_path / "clone"
     assert _git(tmp_path, "clone", "-q", str(bare), str(clone)).returncode == 0
@@ -52,14 +57,14 @@ def test_fixture_clone_resolves_a_named_branch_from_a_detached_source_head(tmp_p
     the literal string "HEAD" -- reproduce that source shape here and
     assert `_fixture_clone` still lands the clone on `_FIXTURE_BRANCH`."""
     detached_source = tmp_path / "detached-source.git"
-    assert _git(tmp_path, "clone", "-q", "--bare", str(ROOT), str(detached_source)).returncode == 0
+    assert _git(tmp_path, "clone", "-q", "--bare", *_SHARE, str(ROOT), str(detached_source)).returncode == 0
     head_sha = _git(detached_source, "rev-parse", "HEAD").stdout.strip()
     _git(detached_source, "symbolic-ref", "--delete", "HEAD")
     assert _git(detached_source, "update-ref", "--no-deref", "HEAD", head_sha).returncode == 0
     assert _git(detached_source, "symbolic-ref", "-q", "HEAD").returncode != 0
 
     bare = tmp_path / "origin.git"
-    assert _git(tmp_path, "clone", "-q", "--bare", str(detached_source), str(bare)).returncode == 0
+    assert _git(tmp_path, "clone", "-q", "--bare", *_SHARE, str(detached_source), str(bare)).returncode == 0
     clone = tmp_path / "clone"
     assert _git(tmp_path, "clone", "-q", str(bare), str(clone)).returncode == 0
     _git(clone, "config", "user.email", "t@example.com")
