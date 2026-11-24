@@ -153,4 +153,3 @@ export function useFailoverUnit({ unit, shown, singleAdmin, onRefreshUnits }: { 
     pending, bound, active, readinessActive, resuming, idle, canOperate, canRunChecks, failoverOffered, sequenceOffered, allVirtualSystems, vs0Refused, sequenceRefused, chassis, single, verdict, readinessAt, refused,
     noteText, executionDisabled, requestFailover, confirm, secondApprove, runChecks, retry, refresh };
 }
-export type FailoverUnitState = ReturnType<typeof useFailoverUnit>;

@@ -27,7 +27,7 @@ import type { CpFailoverSummary, DeviceSummary, FailoverIncident } from "../auth
 import { Icon, type IconName } from "../shell/Icon";
 import { StatePanel, VendorBadge, vendorDisplayName } from "../shell/States";
 import { formatStamp, relativeAge } from "../shell/time";
-import { FRESH_UNDER_MS, isPastFresh } from "../shell/freshness";
+import { isPastFresh } from "../shell/freshness";
 import { urlParam } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
 import { isActiveRole, isStandbyRole, observedRoles, primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "./ReadinessChecksTable";
@@ -47,12 +47,6 @@ const statuses: Record<Status, { label: string; icon: IconName; bg: string; ink:
   UNKNOWN: { label: statusWord("UNKNOWN"), icon: "info", bg: m3.scHigh, ink: m3.onSurfaceVar, order: 1 },
   UNSUPPORTED: { label: "Not supported", icon: "lock", bg: m3.scLow, ink: m3.onSurfaceVar, order: 3 },
 };
-
-/**
- * A readiness evaluation this old is flagged as stale: the edge of "fresh" on the product's one freshness scale
- * (`shell/freshness.ts`, UI review 2026-11-05 B1). Presentation only: the status value itself is never changed by age.
- */
-export const READINESS_STALE_AFTER_MS = FRESH_UNDER_MS;
 
 function evaluationAgeMs(at: string | null | undefined, now: Date): number | null {
   if (!at) return null;
@@ -119,9 +113,6 @@ export function readinessFreshness(items: ReturnType<typeof haReadinessItems>, n
 export function canRunReadiness(row?: CpFailoverSummary) {
   return row?.canRunReadiness === true;
 }
-
-/** The one-line rule that tells the three non-ready words apart (UI review 2026-10-18, F-12). */
-export const READINESS_RULE = "Not ready: a pre-check found a blocking condition · UNKNOWN: readiness could not be established (no result, or not enough evidence) · neither is Ready.";
 
 /** The lead blocking check in words (its own summary) when the stored reason is only the generic "pre-check failed". */
 function leadCheckReason(row: CpFailoverSummary): string | null {
