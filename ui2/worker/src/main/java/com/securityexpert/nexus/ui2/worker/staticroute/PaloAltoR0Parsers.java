@@ -6,11 +6,9 @@ import static com.securityexpert.nexus.ui2.worker.staticroute.StaticRouteR0Parse
 
 import java.io.StringReader;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -160,7 +158,7 @@ final class PaloAltoR0Parsers {
             for (Element routeEntry : directChildEntries(srContainer)) {
                 String rName = routeEntry.getAttribute("name");
                 String rDest = uniqueChildText(routeEntry, "destination").orElse("");
-                Optional<String> normalizedDest = normalizeDevicePrefix(rDest);
+                Optional<String> normalizedDest = StaticRouteR0Parsers.normalizeDevicePrefix(rDest);
                 boolean matchesTarget = (targetRouteName != null && targetRouteName.equals(rName))
                         || (normalizedDest.isPresent() && normalizedDest.get().equals(targetDestinationCidr));
                 if (matchesTarget && hasTemplateSrcAttribute(routeEntry, true)) {
@@ -183,7 +181,8 @@ final class PaloAltoR0Parsers {
         Optional<Element> result = uniqueChild(response.get(), "result");
         if (result.isEmpty()) {
             // Empty <response status="success"/> or <result/> means zero static routes in that VR.
-            return new ConfiguredRoutesParse(STATUS_PASS, "PARSED", List.of(), computeRoutesDigest(List.of()));
+            return new ConfiguredRoutesParse(
+                    STATUS_PASS, "PARSED", List.of(), StaticRouteR0Parsers.computeRoutesDigest(List.of()));
         }
         Element container = uniqueChild(result.get(), "static-route").orElse(result.get());
         List<Element> entries = directChildEntries(container);
@@ -196,7 +195,7 @@ final class PaloAltoR0Parsers {
             }
             boolean tpl = hasTemplateSrcAttribute(entry, true);
             Optional<String> rawDest = uniqueChildText(entry, "destination");
-            Optional<String> destCidr = rawDest.flatMap(PaloAltoR0Parsers::normalizeDevicePrefix);
+            Optional<String> destCidr = rawDest.flatMap(StaticRouteR0Parsers::normalizeDevicePrefix);
             if (destCidr.isEmpty()) {
                 return new ConfiguredRoutesParse(STATUS_UNKNOWN, "ANSWER_NOT_RECOGNISED", List.of(), null);
             }
@@ -234,7 +233,8 @@ final class PaloAltoR0Parsers {
                     unsupported = true;
                     unsupportedDetail = nhChildren.isEmpty() ? "empty_nexthop" : nhChildren.get(0).getTagName();
                 } else {
-                    Optional<String> nh = normalizeDeviceIpv4(nhChildren.get(0).getTextContent().strip());
+                    Optional<String> nh =
+                            StaticRouteR0Parsers.normalizeDeviceIpv4(nhChildren.get(0).getTextContent().strip());
                     if (nh.isEmpty()) {
                         return new ConfiguredRoutesParse(STATUS_UNKNOWN, "ANSWER_NOT_RECOGNISED", List.of(), null);
                     }
@@ -256,7 +256,8 @@ final class PaloAltoR0Parsers {
                     unsupportedDetail));
         }
 
-        return new ConfiguredRoutesParse(STATUS_PASS, "PARSED", routes, computeRoutesDigest(routes));
+        return new ConfiguredRoutesParse(
+                STATUS_PASS, "PARSED", routes, StaticRouteR0Parsers.computeRoutesDigest(routes));
     }
 
     /**
@@ -299,33 +300,33 @@ final class PaloAltoR0Parsers {
             List<InventoryRoute> ribRoutes) {
         Optional<Element> response = parsePanXmlResponse(xml, StaticRoutePreview.OUTPUT_LIMIT_BYTES);
         if (response.isEmpty() || !"success".equals(response.get().getAttribute("status"))) {
-            return unknownPath(representativeHost, "PATH_LOOKUP_UNAVAILABLE");
+            return StaticRouteR0Parsers.unknownPath(representativeHost, "PATH_LOOKUP_UNAVAILABLE");
         }
         Optional<Element> result = uniqueChild(response.get(), "result");
         if (result.isEmpty()) {
-            return unknownPath(representativeHost, "ANSWER_NOT_RECOGNISED");
+            return StaticRouteR0Parsers.unknownPath(representativeHost, "ANSWER_NOT_RECOGNISED");
         }
         Optional<String> nhType = uniqueChildText(result.get(), "nh").map(s -> s.toLowerCase(Locale.ROOT));
         if (nhType.filter(t -> t.equals("discard") || t.equals("drop")).isPresent()) {
-            return unknownPath(representativeHost, "FIB_DISCARD_ROUTE");
+            return StaticRouteR0Parsers.unknownPath(representativeHost, "FIB_DISCARD_ROUTE");
         }
         Optional<String> iface = uniqueChildText(result.get(), "interface").filter(s -> !s.isBlank());
         Optional<String> nhIp = uniqueChildText(result.get(), "ip").filter(s -> !s.isBlank())
-                .flatMap(PaloAltoR0Parsers::normalizeDeviceIpv4);
+                .flatMap(StaticRouteR0Parsers::normalizeDeviceIpv4);
         if (iface.isEmpty()) {
-            return unknownPath(representativeHost, "ANSWER_NOT_RECOGNISED");
+            return StaticRouteR0Parsers.unknownPath(representativeHost, "ANSWER_NOT_RECOGNISED");
         }
         int hostInt = StaticRoutePreview.parseIpv4ToInt(representativeHost, "REPRESENTATIVE_HOST_INVALID");
-        Optional<InventoryRoute> lpm = longestPrefixMatch(ribRoutes, hostInt);
+        Optional<InventoryRoute> lpm = StaticRouteR0Parsers.longestPrefixMatch(ribRoutes, hostInt);
         Optional<String> xmlPrefix = uniqueChildText(result.get(), "prefix")
                 .or(() -> uniqueChildText(result.get(), "destination"))
-                .flatMap(PaloAltoR0Parsers::normalizeDevicePrefix);
+                .flatMap(StaticRouteR0Parsers::normalizeDevicePrefix);
 
         String selectedPrefix = xmlPrefix
                 .or(() -> lpm.map(InventoryRoute::destination))
                 .orElse("UNKNOWN");
         if ("UNKNOWN".equals(selectedPrefix)) {
-            return unknownPath(representativeHost, "PREFIX_NOT_RESOLVED");
+            return StaticRouteR0Parsers.unknownPath(representativeHost, "PREFIX_NOT_RESOLVED");
         }
         String nextHop = nhIp.orElseGet(() -> lpm.flatMap(InventoryRoute::nextHop).orElse("CONNECTED"));
         String protocol = lpm.map(InventoryRoute::protocol).orElse(InventoryRoute.PROTOCOL_UNKNOWN);
@@ -339,99 +340,6 @@ final class PaloAltoR0Parsers {
                 iface.get(),
                 protocol,
                 digest);
-    }
-
-    private static Optional<InventoryRoute> longestPrefixMatch(List<InventoryRoute> routes, int hostIpInt) {
-        if (routes == null || routes.isEmpty()) {
-            return Optional.empty();
-        }
-        InventoryRoute best = null;
-        int bestLen = -1;
-        for (InventoryRoute r : routes) {
-            if (r.active().isPresent() && !r.active().get()) {
-                continue;
-            }
-            Optional<StaticRoutePreview.ParsedPrefix> parsed = parseRoutePrefix(r.destination());
-            if (parsed.isEmpty()) {
-                continue;
-            }
-            StaticRoutePreview.ParsedPrefix p = parsed.get();
-            if (StaticRoutePreview.prefixContains(p.networkInt(), p.prefixLen(), hostIpInt) && p.prefixLen() > bestLen) {
-                best = r;
-                bestLen = p.prefixLen();
-            }
-        }
-        return Optional.ofNullable(best);
-    }
-
-    private static Optional<StaticRoutePreview.ParsedPrefix> parseRoutePrefix(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return Optional.empty();
-        }
-        if ("0.0.0.0/0".equals(raw) || "default".equalsIgnoreCase(raw)) {
-            return Optional.of(new StaticRoutePreview.ParsedPrefix(0, 0, 0, "0.0.0.0/0", "0.0.0.0", "0.0.0.0"));
-        }
-        int slash = raw.indexOf('/');
-        String ipStr = slash >= 0 ? raw.substring(0, slash) : raw;
-        int len = 32;
-        if (slash >= 0) {
-            String lenStr = raw.substring(slash + 1);
-            if (!lenStr.matches("\\d{1,2}")) {
-                return Optional.empty();
-            }
-            len = Integer.parseInt(lenStr);
-            if (len < 0 || len > 32) {
-                return Optional.empty();
-            }
-        }
-        Optional<String> normIp = normalizeDeviceIpv4(ipStr);
-        if (normIp.isEmpty()) {
-            return Optional.empty();
-        }
-        int ipInt = StaticRoutePreview.parseIpv4ToInt(normIp.get(), "ROUTE_PREFIX_INVALID");
-        int maskInt = StaticRoutePreview.netmaskFromPrefixLen(len);
-        int netInt = ipInt & maskInt;
-        String netIp = StaticRoutePreview.formatIpv4(netInt);
-        return Optional.of(new StaticRoutePreview.ParsedPrefix(
-                netInt, len, maskInt, netIp + "/" + len, netIp, StaticRoutePreview.formatIpv4(maskInt)));
-    }
-
-    private static Optional<String> normalizeDevicePrefix(String raw) {
-        return parseRoutePrefix(raw).map(StaticRoutePreview.ParsedPrefix::canonicalCidr);
-    }
-
-    private static Optional<String> normalizeDeviceIpv4(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return Optional.empty();
-        }
-        try {
-            int ipInt = StaticRoutePreview.parseIpv4ToInt(raw.strip(), "IPV4_INVALID");
-            return Optional.of(StaticRoutePreview.formatIpv4(ipInt));
-        } catch (StaticRoutePreview.ValidationException e) {
-            return Optional.empty();
-        }
-    }
-
-    private static BeforePathObservation unknownPath(String representativeHost, String reasonCode) {
-        return new BeforePathObservation(representativeHost, STATUS_UNKNOWN, reasonCode, null, null, null, null, null);
-    }
-
-    private static String computeRoutesDigest(List<ConfiguredStaticRoute> routes) {
-        List<String> lines = routes.stream()
-                .map(r -> String.join("|",
-                        Objects.toString(r.destinationCidr(), ""),
-                        Objects.toString(r.nextHopIp(), ""),
-                        Objects.toString(r.interfaceName(), ""),
-                        Objects.toString(r.distance(), ""),
-                        Objects.toString(r.metric(), ""),
-                        Objects.toString(r.priority(), ""),
-                        Objects.toString(r.routeName(), ""),
-                        Objects.toString(r.comment(), ""),
-                        String.valueOf(r.templateManaged()),
-                        String.valueOf(r.unsupportedAttribute())))
-                .sorted(Comparator.naturalOrder())
-                .toList();
-        return StaticRoutePreview.sha256Hex(String.join("\n", lines));
     }
 
     private static Optional<Element> parsePanXmlResponse(String xml, int maxBytes) {

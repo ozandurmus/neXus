@@ -775,7 +775,7 @@ public final class StaticRouteR0Parsers {
                 netInt, len, maskInt, netIp + "/" + len, netIp, StaticRoutePreview.formatIpv4(maskInt)));
     }
 
-    private static Optional<String> normalizeDevicePrefix(String raw) {
+    static Optional<String> normalizeDevicePrefix(String raw) {
         return parseRoutePrefix(raw).map(StaticRoutePreview.ParsedPrefix::canonicalCidr);
     }
 
@@ -818,11 +818,11 @@ public final class StaticRouteR0Parsers {
         return Optional.empty();
     }
 
-    private static BeforePathObservation unknownPath(String representativeHost, String reasonCode) {
+    static BeforePathObservation unknownPath(String representativeHost, String reasonCode) {
         return new BeforePathObservation(representativeHost, STATUS_UNKNOWN, reasonCode, null, null, null, null, null);
     }
 
-    private static String computeRoutesDigest(List<ConfiguredStaticRoute> routes) {
+    static String computeRoutesDigest(List<ConfiguredStaticRoute> routes) {
         List<String> lines = routes.stream()
                 .map(r -> String.join("|",
                         Objects.toString(r.destinationCidr(), ""),
