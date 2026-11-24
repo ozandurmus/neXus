@@ -488,6 +488,20 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "status", "inventory_status", "policy_status", "action", "proto", "side" ->
                     result.put(key, value);
+                // V271: a Management Center's managed-device health. The state is a closed vocabulary; the texts are vendor
+                // text the worker already scrubbed once (addresses, hostnames, identifiers), masked here a second time.
+                case "health_state" -> result.put(key, value);
+                case "health_messages" -> {
+                    if (value instanceof List<?> texts) {
+                        List<Object> maskedTexts = new ArrayList<>(texts.size());
+                        for (Object item : texts) {
+                            maskedTexts.add(item instanceof String text ? topologyPseudonymizer.maskText(ipMasker.maskText(text)) : item);
+                        }
+                        result.put(key, maskedTexts);
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 // Advisory matching (ADVISORY_MATCHING_CONTRACT.md section 8): an advisory row and a device verdict row hold public
                 // vendor text and product versions, never identities. The IP masker would read a four-part version such as
                 // 9.18.4.50 as an address, so these keys pass through, and only on rows that carry an advisory id (every

@@ -411,3 +411,42 @@ the Product Owner literally:
   devices, never *N* requests)*.
 - Or, if §3.1 shows per-device **C2** is required instead:
   **"approve GET /api/devices/{uuid}/health on each enrolled Management Center, once per inventory run per managed device, read-only"**.
+
+---
+
+## 6. Implementation status (2026-11-24, lane `q-20261124-1700-G527-D48-p1-mc-device-health-read-code`)
+
+Status of this section: informational; the document above stays `DRAFT -- DO NOT FREEZE` and approves nothing.
+
+**Code present, switch off, gate row pending PO literal approval.** Per the PO decision of 2026-11-24 the code and tests for
+candidate `C1` (`GET /api/devices/status`) exist; the first live request to the Management Center happens only after the
+Product Owner approves the exact literal in §5.2.
+
+- **No gate row.** There is no `gate_registry` row, no Flyway migration that seeds one and no entry in
+  `gate_registry_fixture.yaml` for `GET /api/devices/status`. `McDeviceHealthRead` resolves the exact key (`bluecoat`,
+  `bluecoat_management_center`, `not_applicable`, `HTTPS`, `GET /api/devices/status`) through `GateResolver` on every run; a
+  missing, unsigned, ambiguous or non-read row, or an unusable registry, means "not approved".
+- **Switch.** `UI2_MC_DEVICE_HEALTH_READ` (default off; `1`/`true`/`on`/`yes` turn it on; read once at worker start).
+  Both the switch and the gate are required before any request is sent.
+- **Behaviour by state** (`HttpsVendorExecutor.inventoryManagementCenter`, `HttpsVendorPlan.MC_DEVICES_STATUS`):
+
+  | Switch | Gate | Request | Recorded health of every managed device |
+  |---|---|---|---|
+  | off | any | none | none (columns `NULL`); the screen shows `UNKNOWN` · "not read" |
+  | on | absent / not signed off | none | `UNKNOWN`, reason `GATE_NOT_APPROVED`; the inventory run still completes |
+  | on | approved | one `GET`, `SHORT` (30 s), `TEXT_MAX` (1 MiB), no retry, `withoutRecording`, right after `GET /api/devices` | parsed per uuid; non-2xx / truncated / unparseable answer = `UNKNOWN` `HEALTH_READ_FAILED`; a device absent from the answer = `UNKNOWN` `NOT_IN_STATUS_ANSWER` |
+
+- **Parser** (`ManagementCenterDeviceStatus`, in memory, raw JSON discarded): state from `monitorState` only (`ERROR`, `WARNING`,
+  `OK`, `INACTIVE`; any other token, including the documented example `MONITORED`, or a missing value = `UNKNOWN`); an `OK` that
+  lists errors or warnings is raised to `ERROR` / `WARNING`, never lowered; error and warning counts; `checkDate` as sent when it
+  has an ISO date-time shape; at most three texts of 160 characters with IPv4/IPv6 literals, hostnames, e-mail addresses, uuids,
+  long hex runs and the run's own device names / hosts / serials replaced by placeholders. `properties` and `startDate` are dropped.
+- **Storage:** `V271__grid_member_manager_health.sql` -- five nullable, additive columns on `grid_member` (`health_state`,
+  `health_errors`, `health_warnings`, `health_checked_at`, `health_messages`), no backfill. The proposal's sketch of six columns
+  (`connection_state`, `health_summary`) is narrowed to what `StatusData` documents.
+- **API and screen:** the managed-device body carries the five fields (aiview: state passes, texts masked twice);
+  `ManagedDevicesPanel` shows a Health column for a Management Center: ERROR red, WARNING amber, OK green, INACTIVE neutral,
+  UNKNOWN neutral hatched with its reason; the vendor text is in the tooltip.
+- **Still open for the morning:** the PO's literal approval of `GET /api/devices/status`; then the gate row (a migration plus
+  `gate_registry_fixture.yaml`, with `docs/design/` gate entries), the real `monitorState` vocabulary of `MC-ALPHA-01` (`4.1.3.2`)
+  from the first approved read, and a real-environment validation. Nothing here is `REAL_ENV_VALIDATED`.

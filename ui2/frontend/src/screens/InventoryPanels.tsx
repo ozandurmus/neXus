@@ -1414,7 +1414,7 @@ export function DeviceInventoryPanels({
           ...(isManager ? [{
             label: "Managed estate",
             panel: hasManagedDevices
-              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} selected={activeContext} onSelect={setActiveContext} />
+              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} selected={activeContext} onSelect={setActiveContext} showHealth={device.vendor_hint === "bluecoat"} />
               : managedEstate ?? <EmptyPanel title="Managed estate" body="What this management server manages is read by discovery; open Administration to run Import from manager." />,
           }] : []),
           ...(!singleDeviceHasNoNetworkEvidence ? [{

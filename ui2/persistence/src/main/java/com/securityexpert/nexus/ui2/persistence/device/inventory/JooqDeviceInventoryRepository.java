@@ -45,13 +45,18 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
             for (GridMember m : run.gridMembers()) {
                 dsl.execute("insert into grid_member(member_id, run_id, host_name, vip_address, platform, hardware_type, hypervisor, "
                         + "grid_master, master_candidate, ha_enabled, ha_status, node_status, replication, disk_percent, memory_percent, "
-                        + "cpu_percent, db_percent, services) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, "
-                        + "{13}, {14}, {15}, {16}, {17})",
+                        + "cpu_percent, db_percent, services, health_state, health_errors, health_warnings, health_checked_at, health_messages) "
+                        + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, "
+                        + "{13}, {14}, {15}, {16}, {17}, {18}, {19}, {20}, {21}, {22})",
                         m.memberId(), run.runId(), m.hostName(), m.vipAddress().orElse(null), m.platform().orElse(null),
                         m.hardwareType().orElse(null), m.hypervisor().orElse(null), m.gridMaster(), m.masterCandidate(), m.haEnabled(),
                         m.haStatus().orElse(null), m.nodeStatus().orElse(null), m.replication().orElse(null),
                         m.diskPercent().orElse(null), m.memoryPercent().orElse(null), m.cpuPercent().orElse(null), m.dbPercent().orElse(null),
-                        m.services().stream().map(sv -> sv.service() + "=" + sv.status()).collect(java.util.stream.Collectors.joining(",")));
+                        m.services().stream().map(sv -> sv.service() + "=" + sv.status()).collect(java.util.stream.Collectors.joining(",")),
+                        m.health().map(GridMember.Health::state).orElse(null), m.health().map(GridMember.Health::errors).orElse(null),
+                        m.health().map(GridMember.Health::warnings).orElse(null),
+                        m.health().flatMap(GridMember.Health::checkedAt).orElse(null),
+                        m.health().map(h -> packMessages(h.messages())).orElse(null));
             }
             if (run.gridSummary() != null) {
                 InfobloxGridSummary s = run.gridSummary();
@@ -261,7 +266,8 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
 
         Result<Record> memberRows = dsl.fetch("select member_id, host_name, vip_address, platform, hardware_type, hypervisor, grid_master, "
                 + "master_candidate, ha_enabled, ha_status, node_status, replication, disk_percent, memory_percent, cpu_percent, db_percent, "
-                + "services from grid_member where run_id = {0} order by grid_master desc, master_candidate desc, host_name", runId);
+                + "services, health_state, health_errors, health_warnings, health_checked_at, health_messages "
+                + "from grid_member where run_id = {0} order by grid_master desc, master_candidate desc, host_name", runId);
         List<GridMember> gridMembers = memberRows.stream().map(row -> new GridMember(row.get("member_id", String.class),
                 row.get("host_name", String.class), Optional.ofNullable(row.get("vip_address", String.class)),
                 Optional.ofNullable(row.get("platform", String.class)), Optional.ofNullable(row.get("hardware_type", String.class)),
@@ -270,7 +276,8 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                 Optional.ofNullable(row.get("ha_status", String.class)), Optional.ofNullable(row.get("node_status", String.class)),
                 Optional.ofNullable(row.get("replication", String.class)), Optional.ofNullable(row.get("disk_percent", Integer.class)),
                 Optional.ofNullable(row.get("memory_percent", Integer.class)), Optional.ofNullable(row.get("cpu_percent", Integer.class)),
-                Optional.ofNullable(row.get("db_percent", Integer.class)), parseServices(row.get("services", String.class)))).toList();
+                Optional.ofNullable(row.get("db_percent", Integer.class)), parseServices(row.get("services", String.class)),
+                health(row))).toList();
 
         Result<Record> summaryRows = dsl.fetch("select dns_views, dns_views_at_least, auth_zones, auth_zones_at_least, "
                 + "dhcp_networks, dhcp_networks_at_least, dhcp_ranges, dhcp_ranges_at_least, top_networks, licenses "
@@ -300,6 +307,35 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
             return List.of();
         }
         return java.util.Arrays.stream(packed.split(",")).map(String::strip).filter(t -> !t.isEmpty()).toList();
+    }
+
+    /** The health texts as one newline-separated value (V271; each text is single-line by construction); {@code null} for none. */
+    static String packMessages(List<String> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return null;
+        }
+        String packed = messages.stream().map(t -> t.replaceAll("[\\r\\n]+", " ").strip()).filter(t -> !t.isEmpty())
+                .collect(java.util.stream.Collectors.joining("\n"));
+        return packed.isEmpty() ? null : packed;
+    }
+
+    /** {@link #packMessages} back to texts. */
+    static List<String> unpackMessages(String packed) {
+        if (packed == null || packed.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(packed.split("\n")).map(String::strip).filter(t -> !t.isEmpty()).toList();
+    }
+
+    /** A V271 member health: empty when health_state is NULL (a run without the read) or not a closed state. */
+    private static Optional<GridMember.Health> health(Record row) {
+        String state = optional(row, "health_state", String.class).orElse(null);
+        if (state == null || !GridMember.HEALTH_STATES.contains(state)) {
+            return Optional.empty();
+        }
+        return Optional.of(new GridMember.Health(state, optional(row, "health_errors", Integer.class).orElse(0),
+                optional(row, "health_warnings", Integer.class).orElse(0), optional(row, "health_checked_at", String.class),
+                unpackMessages(optional(row, "health_messages", String.class).orElse(null))));
     }
 
     /** {@code DNS=WORKING,DHCP=INACTIVE} back to pairs; malformed items skipped. */

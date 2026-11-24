@@ -31,9 +31,42 @@ export function managementTone(status: string): Tone {
   return /^(UP|MANAGED|FULLY_MANAGED|CONNECTED)$/.test(status.trim()) ? "neutral" : "warn";
 }
 
+/** The closed reasons a managed device's health is UNKNOWN, in the screen's words (V271). */
+const HEALTH_REASONS: Readonly<Record<string, string>> = {
+  GATE_NOT_APPROVED: "read not approved yet",
+  HEALTH_READ_FAILED: "read failed",
+  NOT_IN_STATUS_ANSWER: "not in the Management Center's answer",
+  AMBIGUOUS_STATUS: "listed more than once",
+};
+
+/**
+ * A managed device's Management Center health as a chip: ERROR red, WARNING amber, OK green, INACTIVE neutral, and UNKNOWN
+ * (also a device whose health was never read) neutral with its reason -- never green. The vendor texts go in the tooltip.
+ */
+export function managedHealth(m: GridMemberView): { readonly tone: Tone; readonly label: string; readonly detail: string | null; readonly title: string } {
+  const state = m.health_state ?? "UNKNOWN";
+  const errors = m.health_errors ?? 0;
+  const warnings = m.health_warnings ?? 0;
+  const messages = m.health_messages ?? [];
+  const reasonToken = messages.find((t) => t in HEALTH_REASONS);
+  const counts = [errors > 0 ? plural(errors, "error") : null, warnings > 0 ? plural(warnings, "warning") : null].filter((c): c is string => c !== null).join(", ");
+  const tone: Tone = state === "ERROR" ? "bad" : state === "WARNING" ? "warn" : state === "OK" ? "ok" : state === "INACTIVE" ? "neutral" : "unknown";
+  const label = state === "ERROR" ? "Error" : state === "WARNING" ? "Warning" : state === "OK" ? "OK" : state === "INACTIVE" ? "Inactive" : "UNKNOWN";
+  const reason = state === "UNKNOWN"
+    ? (m.health_state == null ? "not read" : reasonToken ? HEALTH_REASONS[reasonToken] : null)
+    : null;
+  const detail = reason ?? (counts || null);
+  const texts = reasonToken ? [] : messages;
+  const title = ["Manager-reported (Management Center)", ...texts, m.health_checked_at ? `Checked ${m.health_checked_at}` : null, reason]
+    .filter((t): t is string => !!t).join("\n");
+  return { tone, label, detail, title };
+}
+
 /** A Symantec Management Center's managed devices (ProxySG, Reporter, WSS) as it lists them; values read, never inferred. */
-export function ManagedDevicesPanel({ members, selected, onSelect }: {
+export function ManagedDevicesPanel({ members, selected, onSelect, showHealth }: {
   readonly members: readonly GridMemberView[];
+  /** The Health column: always for a Management Center (its unread health is UNKNOWN, never absent); otherwise only when a member carries one. */
+  readonly showHealth?: boolean;
   readonly selected?: string | null;
   readonly onSelect?: (name: string | null) => void;
 }) {
@@ -45,7 +78,10 @@ export function ManagedDevicesPanel({ members, selected, onSelect }: {
   const hasDeployment = members.some((m) => deployment(m) !== null);
   // Widths at 1440 (post-release review 2026-10-20, N12): the header words stay whole, the address and version columns
   // are mono and clip with the full value on hover, DEPLOYMENT keeps 110 px.
-  const widths = hasDeployment ? ["19%", "15%", "11%", "14%", "16%", "13%", "12%"] : ["22%", "17%", "12%", "16%", "17%", "16%"];
+  const withHealth = showHealth ?? members.some((m) => m.health_state != null);
+  const widths = withHealth
+    ? (hasDeployment ? ["16%", "13%", "9%", "11%", "13%", "16%", "12%", "10%"] : ["19%", "15%", "10%", "13%", "15%", "17%", "11%"])
+    : (hasDeployment ? ["19%", "15%", "11%", "14%", "16%", "13%", "12%"] : ["22%", "17%", "12%", "16%", "17%", "16%"]);
   const selectedMember = members.find(m => m.virtual_system === selected);
   const shown = selectedMember ? [selectedMember] : members;
   return (
@@ -71,6 +107,7 @@ export function ManagedDevicesPanel({ members, selected, onSelect }: {
               <TableCell>Type</TableCell>
               <TableCell>Model</TableCell>
               <TableCell>OS version</TableCell>
+              {withHealth && <TableCell>Health</TableCell>}
               <TableCell>Management</TableCell>
               {hasDeployment && <TableCell>Deployment</TableCell>}
             </TableRow>
@@ -85,6 +122,15 @@ export function ManagedDevicesPanel({ members, selected, onSelect }: {
                 <TableCell sx={{ whiteSpace: "nowrap" }} title={m.platform ?? undefined}>{m.platform ?? "\u2014"}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap" }} title={m.hardware_type ?? undefined}>{m.hardware_type ?? "\u2014"}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap", fontFamily: MONO, fontSize: 12.5 }} title={m.hypervisor ?? undefined}>{m.hypervisor ?? "\u2014"}</TableCell>
+                {withHealth && <TableCell sx={{ whiteSpace: "nowrap" }} data-health-cell>
+                  {(() => {
+                    const h = managedHealth(m);
+                    return <Stack direction="row" spacing={0.75} alignItems="center">
+                      <StatusChip tone={h.tone} label={h.label} dense title={h.title} />
+                      {h.detail && <Typography variant="caption" color="text.secondary" title={h.title} noWrap>{h.detail}</Typography>}
+                    </Stack>;
+                  })()}
+                </TableCell>}
                 <TableCell sx={{ whiteSpace: "nowrap" }}>{m.node_status ? <StatusChip tone={managementTone(m.node_status)} label={managementWord(m.node_status)} dense /> : "\u2014"}</TableCell>
                 {hasDeployment && <TableCell sx={{ whiteSpace: "nowrap" }} title={deployment(m) ?? undefined}>{deployment(m) ? statusWord(deployment(m)) : "\u2014"}</TableCell>}
               </TableRow>
