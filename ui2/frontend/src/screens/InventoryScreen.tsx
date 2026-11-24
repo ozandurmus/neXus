@@ -639,10 +639,12 @@ function FlatDeviceList({
                 model={firstMember?.model}
                 hostname={clusterTitle}
               />
-              <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+              {/* The name keeps at least ~12 characters; the chips wrap below it instead of squeezing it to one letter (PO 2026-11-24). */}
+              <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap", rowGap: 0.5 }}>
                 <Typography
                   variant="body2"
-                  sx={{ fontWeight: 600, fontSize: 13, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  data-cluster-name
+                  sx={{ fontWeight: 600, fontSize: 13, flex: "1 1 auto", minWidth: 96, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                   title={clusterTitle}
                 >
                   {clusterTitle}
