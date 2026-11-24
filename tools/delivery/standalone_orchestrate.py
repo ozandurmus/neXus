@@ -153,26 +153,69 @@ def _merge_once(url: str, head: str | None = None) -> "subprocess.CompletedProce
 
 def _pull_request_merged(url: str) -> bool:
     """True only when `gh pr view --json state,mergedAt` positively says MERGED; an unreadable answer is not merged."""
-    view = subprocess.run(["gh", "pr", "view", url, "--json", "state,mergedAt"], cwd=str(REPO_ROOT),
-                          capture_output=True, text=True)
-    if view.returncode != 0:
-        return False
+    return _pull_request_state(url) == "MERGED"
+
+
+def _pull_request_state(url: str) -> str | None:
+    """The pull request's state ("MERGED", "OPEN", "CLOSED") as GitHub answers it, or None when it cannot be read."""
     try:
-        return json.loads(view.stdout or "{}").get("state") == "MERGED"
+        view = subprocess.run(["gh", "pr", "view", url, "--json", "state,mergedAt"], cwd=str(REPO_ROOT),
+                              capture_output=True, text=True)
+    except OSError:
+        return None
+    if view.returncode != 0:
+        return None
+    try:
+        state = json.loads(view.stdout or "{}").get("state")
     except (ValueError, AttributeError):
+        return None
+    return state if isinstance(state, str) else None
+
+
+def _change_is_on_main(head: str, base: str = "origin/main") -> bool:
+    """True when the shipped commit's change is on `base`: the commit itself, or (a rebase merge rewrites commits) every
+    commit of `base..head` has its patch already upstream (`git cherry` marks them `-`). Anything unreadable is False."""
+    try:
+        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=str(REPO_ROOT), capture_output=True, text=True,
+                       timeout=120)
+        if subprocess.run(["git", "merge-base", "--is-ancestor", head, base], cwd=str(REPO_ROOT),
+                          capture_output=True, text=True, timeout=60).returncode == 0:
+            return True
+        cherry = subprocess.run(["git", "cherry", base, head], cwd=str(REPO_ROOT), capture_output=True, text=True,
+                                timeout=60)
+    except (OSError, subprocess.SubprocessError):
         return False
+    marks = [line[:1] for line in cherry.stdout.splitlines() if line.strip()]
+    return cherry.returncode == 0 and bool(marks) and all(mark == "-" for mark in marks)
+
+
+def _merge_landed(url: str, head: str | None) -> bool:
+    """After a merge call that errored: did the merge happen anyway? GitHub's PR state answers first; only when GitHub
+    cannot be read is the shipped tree looked for on main (2026-11-24: two merges landed while the call errored, the
+    runner called them failed and re-queued them, and the merged commit was not deployed)."""
+    state = _pull_request_state(url)
+    if state is not None:
+        return state == "MERGED"
+    return bool(head) and _change_is_on_main(head)
 
 
 def _merge_pull_request(url: str, head: str | None = None) -> "subprocess.CompletedProcess[str]":
-    """Merge the pull request, surviving a GitHub hiccup.
+    """Merge the pull request, surviving a GitHub hiccup, and never calling a merge that happened a failure.
 
     On a 5xx / "Bad Gateway" / "Merge already in progress" answer the merge may nevertheless have happened or still be
     running: re-read the state first; MERGED means carry on, otherwise retry after 20 s, 40 s and 80 s (three retries at
-    most). Any other error returns at once, never retried."""
-    merge = _merge_once(url, head)
+    most). After ANY other error (or an exception from the call) the state is asked once before the failure is
+    declared: MERGED, or GitHub unreadable and the shipped change already on main, means the merge landed. A refusal
+    is never retried."""
+    try:
+        merge = _merge_once(url, head)
+    except OSError as exc:
+        merge = subprocess.CompletedProcess(["gh", "pr", "merge"], 1, "", f"gh could not run: {exc}")
     retries = 0
+    asked = False  # the state was read for the merge answer we hold now
     while merge.returncode != 0 and _TRANSIENT_MERGE_ANSWER.search((merge.stderr or "") + (merge.stdout or "")):
-        if _pull_request_merged(url):
+        asked = True
+        if _merge_landed(url, head):
             print("merge answered with a transient error but the pull request is MERGED; continuing", flush=True)
             return subprocess.CompletedProcess(merge.args, 0, merge.stdout, "")
         if retries >= len(MERGE_RETRY_WAITS_S):
@@ -182,7 +225,15 @@ def _merge_pull_request(url: str, head: str | None = None) -> "subprocess.Comple
         print(f"merge answered with a transient GitHub error; pull request not merged yet, retry {retries}/"
               f"{len(MERGE_RETRY_WAITS_S)} in {wait} s", flush=True)
         time.sleep(wait)
-        merge = _merge_once(url, head)
+        try:
+            merge = _merge_once(url, head)
+        except OSError as exc:
+            merge = subprocess.CompletedProcess(["gh", "pr", "merge"], 1, "", f"gh could not run: {exc}")
+        asked = False
+    if merge.returncode != 0 and not asked and _merge_landed(url, head):
+        print("merge call failed but GitHub reports the pull request merged (or its change is on main); continuing",
+              flush=True)
+        return subprocess.CompletedProcess(merge.args, 0, merge.stdout, "")
     return merge
 
 
@@ -858,6 +909,59 @@ def _check_verdict(rollup: list[dict]) -> tuple[str, list[str], list[str]]:
     return ("pass" if succeeded else "none"), failed, pending
 
 
+def _gh_json(args: list[str]):
+    """`gh ... --json` parsed, or None when gh failed or answered garbage (a re-run is best effort, never a verdict)."""
+    try:
+        r = subprocess.run(["gh", *args], cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout or "null")
+    except ValueError:
+        return None
+
+
+def _rerun_missing_checks(url: str, sleep=None) -> bool:
+    """A check that never appeared: close and reopen the pull request, which fires GitHub's `reopened` trigger again.
+    Best effort; returns whether both calls were accepted."""
+    sleep = sleep or time.sleep
+    try:
+        closed = subprocess.run(["gh", "pr", "close", url], cwd=str(REPO_ROOT), capture_output=True, text=True,
+                                timeout=120)
+        sleep(3)
+        reopened = subprocess.run(["gh", "pr", "reopen", url], cwd=str(REPO_ROOT), capture_output=True, text=True,
+                                  timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return closed.returncode == 0 and reopened.returncode == 0
+
+
+def _rerun_pending_checks(url: str, pending: list[str] | tuple[str, ...] = (), sleep=None) -> int:
+    """Checks stuck pending: cancel each unfinished workflow run of the pull request's head commit and run it again.
+    Best effort; returns how many runs were re-run. `pending` only names them for the log."""
+    sleep = sleep or time.sleep
+    view = _gh_json(["pr", "view", url, "--json", "headRefName,headRefOid"])
+    if not isinstance(view, dict) or not view.get("headRefName") or not view.get("headRefOid"):
+        return 0
+    runs = _gh_json(["run", "list", "--branch", str(view["headRefName"]), "--limit", "30",
+                     "--json", "databaseId,status,headSha"])
+    rerun = 0
+    for run in runs if isinstance(runs, list) else []:
+        if not isinstance(run, dict) or run.get("headSha") != view["headRefOid"] or run.get("status") == "completed":
+            continue
+        run_id = str(run.get("databaseId"))
+        subprocess.run(["gh", "run", "cancel", run_id], cwd=str(REPO_ROOT), capture_output=True, text=True)
+        for _ in range(6):                      # a cancelled run can be re-run only once it has completed
+            sleep(10)
+            again = subprocess.run(["gh", "run", "rerun", run_id], cwd=str(REPO_ROOT), capture_output=True, text=True)
+            if again.returncode == 0:
+                rerun += 1
+                break
+    return rerun
+
+
 def _wait_for_checks(url: str, timeout: float = CHECKS_TIMEOUT_S, poll: float = CHECKS_POLL_S,
                      empty_grace: float = CHECKS_EMPTY_GRACE_S, sleep=None, clock=None) -> None:
     """Block until every non-skipped GitHub check on the pull request has succeeded; stop the ship otherwise.
@@ -867,9 +971,11 @@ def _wait_for_checks(url: str, timeout: float = CHECKS_TIMEOUT_S, poll: float = 
     that keeps erroring all stop the ship with the pull request left open for a human to look at."""
     sleep = sleep or time.sleep
     clock = clock or time.monotonic
-    started = clock()
+    started = window = clock()
     errors = 0
     last = None
+    reran = False
+    pending: list[str] = []
     while True:
         view = subprocess.run(["gh", "pr", "view", url, "--json", "statusCheckRollup", "-q", ".statusCheckRollup"],
                               cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120)
@@ -900,14 +1006,28 @@ def _wait_for_checks(url: str, timeout: float = CHECKS_TIMEOUT_S, poll: float = 
                                  + "; not merged")
             if verdict == "none" and rollup:
                 raise SystemExit("every pull request check was skipped (" + url + "); not merged")
-            if verdict == "none" and clock() - started >= empty_grace:
+            if verdict == "none" and clock() - window >= empty_grace:
+                if not reran:
+                    # 2026-11-24 review: a check that never shows up is re-run once before the ship fails.
+                    reran, window, last = True, clock(), None
+                    print(json.dumps({"checks": "rerun", "why": "missing"}), flush=True)
+                    _rerun_missing_checks(url, sleep)
+                    sleep(poll)
+                    continue
                 raise SystemExit("no pull request check appeared within " + str(int(empty_grace))
                                  + " s (" + url + "); not merged")
             state = (verdict, tuple(sorted(pending)))
             if state != last:
                 print(json.dumps({"checks": "waiting", "pending": sorted(pending)[:8]}), flush=True)
                 last = state
-        if clock() - started >= timeout:
+        if clock() - window >= timeout:
+            if not reran and rollup is not None:
+                # A check still pending at the timeout is re-run once (cancel + run again) before the ship fails.
+                reran, window, last = True, clock(), None
+                print(json.dumps({"checks": "rerun", "why": "pending", "pending": sorted(pending)[:8]}), flush=True)
+                _rerun_pending_checks(url, pending, sleep)
+                sleep(poll * 2)
+                continue
             raise SystemExit("pull request checks still pending after " + str(int(timeout)) + " s (" + url
                              + "); not merged")
         sleep(poll)
@@ -1552,15 +1672,17 @@ def _ship(args: argparse.Namespace) -> int:
         # Every way out (a failed preview or pretest, no verdict, SIGINT/SIGTERM/SIGHUP, a pass) stops the remote gate,
         # waits for its runner thread, and only then deletes the verdict file the thread can no longer recreate.
         _close_security_pregate(pregate, pregate_path, previous_ship)
+    # Merge only after GitHub's own checks have passed (2026-11-03: the merge used to run 4 s after PR creation).
+    # The wait comes BEFORE the deploy lock (2026-11-24 review): a slow or stuck check (up to 45 min) must hold only this
+    # ship's preview lock, never the deploy lock that every other ship's merge and deploy queue behind.
+    if skip_checks is None:
+        _wait_for_checks(url)
     # Pipelined ships: wait here (not before the preview) for the ship ahead to finish its deploy.
     if _PREVIEW_LOCK_HANDLE is not None:
         _acquire_deploy_lock(_PREVIEW_LOCK_HANDLE, _SHIP_NAME)
     # The branch must still be the commit that was previewed and scanned; GitHub enforces the same for the PR head.
     if _git("rev-parse", branch) != ship_commit:
         raise SystemExit("branch moved after the preview and security gate checked " + ship_commit[:12] + "; not merged")
-    # Merge only after GitHub's own checks have passed (2026-11-03: the merge used to run 4 s after PR creation).
-    if skip_checks is None:
-        _wait_for_checks(url)
     # No --delete-branch: gh would delete the local branch a lane worktree still has checked out.
     merge = _merge_pull_request(url, head=ship_commit)
     if merge.returncode != 0:
