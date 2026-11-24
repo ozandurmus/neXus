@@ -272,4 +272,43 @@ describe("SystemHealthPanel", () => {
     expect(reasonWords("SOMETHING_ELSE")).toBeNull();
     expect(sparklineWords(FRESH, 7)).toBe("CPU p95 over 7 days, 0 stored: ; threshold 85 %; 0 of 0 days over");
   });
+
+  it("says where CPU and memory came from: SNMP samples, sar, or no source; an SNMP poll without an answer is UNKNOWN with its reason", async () => {
+    const snmpPan = device({ device_id: "d-pan-snmp", hostname: "FW-BRAVO-03", vendor_hint: "palo_alto",
+      cpu: { level: "NORMAL", reason: null, threshold_percent: 85, newest_p95_percent: 22, days_over_threshold: 0, longest_run_over_threshold: 0,
+        days: [{ day: "2026-10-19", status: "SNMP", p95_percent: 22, max_percent: 30, samples: 288, cpus: null, unparsed_rows: 0 }],
+        day_basis: "SNMP sample time, calendar day in Europe/Istanbul", source: "SNMP", dataplane_newest_p95_percent: 64 },
+      memory: { level: "EVIDENCED", reason: null, newest_used_p95_percent: 47, source: "SNMP" },
+      restarts: PAN.restarts, crash: PAN.crash });
+    const silentPan = device({ device_id: "d-pan-silent", hostname: "FW-BRAVO-04", vendor_hint: "palo_alto", state: "UNKNOWN", state_reason: "SNMP_NO_ANSWER",
+      cpu: { level: "UNKNOWN", reason: "SNMP_NO_ANSWER", threshold_percent: 85, newest_p95_percent: null, days_over_threshold: 0, longest_run_over_threshold: 0,
+        days: [], day_basis: "x", source: "SNMP", dataplane_newest_p95_percent: null },
+      memory: { level: "UNKNOWN", reason: "SNMP_NO_ANSWER", newest_used_p95_percent: null, source: "SNMP" },
+      restarts: PAN.restarts, crash: PAN.crash });
+    const sarCp = device({ device_id: "d-sar", hostname: "FW-ROMEO-02",
+      cpu: { ...CALM.cpu, source: "SAR" }, memory: { ...CALM.memory, source: "SAR" } });
+    stub(() => ({ status: 200, body: body({ devices: [snmpPan, silentPan, sarCp, PAN] }) }));
+    render(withTheme(<SystemHealthPanel now={NOW} />));
+    const table = await screen.findByRole("table", { name: "Device health table" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    const cellsOf = (i: number) => within(rows[i]).getAllByRole("cell").map((c) => c.textContent);
+
+    expect(cellsOf(0)[3]).toContain("22 %");
+    expect(cellsOf(0)[3]).toContain("SNMP");
+    expect(cellsOf(0)[4]).toBe("47 %SNMP");
+    expect(within(rows[0]).getByText("22 %")).toHaveAttribute("title", "management plane; data plane 64 %");
+
+    expect(cellsOf(1)[3]).toContain("UNKNOWN");
+    expect(cellsOf(1)[3]).not.toContain("No source");
+    expect(cellsOf(1)[4]).toContain("UNKNOWN");
+    expect(reasonWords("SNMP_NO_ANSWER")).toBe("the device did not answer SNMP polls");
+    expect(reasonWords("SNMP_AUTH_REFUSED")).toContain("refused");
+
+    expect(cellsOf(2)[3]).toContain("sar");
+    expect(cellsOf(2)[4]).toBe("56 %sar");
+
+    expect(cellsOf(3)[3]).toBe("No source");
+    expect(cellsOf(3)[4]).toBe("No source");
+    expect(within(rows[3]).queryByTestId("metric-source")).toBeNull();
+  });
 });

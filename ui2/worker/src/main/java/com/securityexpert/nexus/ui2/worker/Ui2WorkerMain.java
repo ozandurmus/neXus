@@ -588,6 +588,10 @@ public final class Ui2WorkerMain {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        // SNMP device metrics (SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md): read-only SNMPv3 polling of the pilot vendors,
+        // idle until an admin turns the fleet switch on (Administration > SNMP polling).
+        var snmpPoller = com.securityexpert.nexus.ui2.worker.snmp.SnmpPollerRuntime.start(transactionBoundary, gateRegistry,
+                resolverComponents);
         health.markStarted();
 
         // Graceful drain on SIGTERM (a rollout): stop claiming, finish what is running, up to
@@ -603,6 +607,7 @@ public final class Ui2WorkerMain {
             // A draining pod stays live (the kubelet must not kill the drain) and leaves readiness.
             health.markDraining();
             claimLoops.forEach(WorkerClaimLoop::requestStop);
+            snmpPoller.close();
             executor.shutdown();
             reconcilerExecutor.shutdown();
             try {

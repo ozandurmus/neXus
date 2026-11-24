@@ -109,6 +109,7 @@ org.reactivestreams:reactive-streams:1.0.3=testRuntimeClasspath
 org.slf4j:jul-to-slf4j:2.0.18=testRuntimeClasspath
 org.slf4j:slf4j-api:2.0.12=testCompileClasspath
 org.slf4j:slf4j-api:2.0.18=testRuntimeClasspath
+org.snmp4j:snmp4j:3.13.2=testRuntimeClasspath
 org.springframework.boot:spring-boot-autoconfigure:4.0.8=testRuntimeClasspath
 org.springframework.boot:spring-boot-http-converter:4.0.8=testRuntimeClasspath
 org.springframework.boot:spring-boot-jackson2:4.0.8=testRuntimeClasspath

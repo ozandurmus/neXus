@@ -67,6 +67,15 @@ export function reasonWords(code: string | null | undefined): string | null {
     case "COLLECTION_OFF": return "collection is off for this device";
     case "SYSTEM_LOG_DISABLED_ON_MANAGEMENT": return "management servers are not collected (setting off)";
     case "NO_COLLECTION_RUN_RECORDED": return "no collection run has been recorded yet";
+    case "SNMP_NO_ANSWER": return "the device did not answer SNMP polls";
+    case "SNMP_AUTH_REFUSED": return "the device refused the SNMPv3 user, authentication or privacy";
+    case "SNMP_NO_CREDENTIAL": return "no usable SNMPv3 credential is chosen for this device";
+    case "SNMP_CREDENTIAL_UNSUITABLE": return "the chosen credential is not authPriv with SHA-2 and AES";
+    case "SNMP_NO_ADDRESS": return "the device has no management address";
+    case "SNMP_GATE_MISSING": return "an SNMP read of this vendor has no signed-off gate row";
+    case "SNMP_CPU_NOT_ANSWERED": return "SNMP polls answered without a CPU value";
+    case "SNMP_MEMORY_NOT_ANSWERED": return "SNMP polls answered without a memory value";
+    case "SNMP_NO_SAMPLE_IN_WINDOW": return "no answered SNMP poll in the window";
     default: return code.startsWith("CPWD_LAST_OUTCOME_") ? "the newest cpwd read did not end in data" : null;
   }
 }
@@ -118,6 +127,18 @@ export function Sparkline({ device, windowDays, today }: { readonly device: Syst
 
 function percent(v: number | null): string {
   return v === null ? "UNKNOWN" : `${Math.round(v)} %`;
+}
+
+/** The source word beside a CPU or memory figure: SNMP samples or the sar texts (the Check Point fallback). */
+export function sourceWord(source: "SNMP" | "SAR" | null | undefined): string | null {
+  return source === "SNMP" ? "SNMP" : source === "SAR" ? "sar" : null;
+}
+
+function SourceTag({ source }: { readonly source: "SNMP" | "SAR" | null | undefined }) {
+  const word = sourceWord(source);
+  if (!word) return null;
+  return <Box component="span" data-testid="metric-source" title={source === "SNMP" ? "from SNMP polls" : "from the stored sar texts"}
+    sx={{ ...TYPE.label, color: m3.onSurfaceVar, ml: 0.75 }}>{word}</Box>;
 }
 
 /** `UNKNOWN` hatched, `No source` neutral, else the value; one presentation for every fact cell. */
@@ -289,10 +310,16 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
         ? <FactValue level="NOT_APPLICABLE" value="" />
         : <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             {d.cpu.days.length > 0 ? <Sparkline device={d} windowDays={data.window_days} today={today} /> : null}
-            <FactValue level={d.cpu.level} value={percent(d.cpu.newest_p95_percent)} title={reasonWords(d.cpu.reason) ?? undefined} />
+            <FactValue level={d.cpu.level} value={percent(d.cpu.newest_p95_percent)} title={reasonWords(d.cpu.reason)
+              ?? (d.cpu.dataplane_newest_p95_percent != null ? `management plane; data plane ${percent(d.cpu.dataplane_newest_p95_percent)}` : undefined)} />
+            <SourceTag source={d.cpu.source} />
           </Box> },
     { key: "memory", header: "Memory used p95", width: 128, align: "right",
-      render: (d) => <FactValue level={d.memory.level} value={percent(d.memory.newest_used_p95_percent)} title={reasonWords(d.memory.reason) ?? "sar %memused, newest stored day"} /> },
+      render: (d) => <>
+        <FactValue level={d.memory.level} value={percent(d.memory.newest_used_p95_percent)} title={reasonWords(d.memory.reason)
+          ?? (d.memory.source === "SNMP" ? "SNMP memory used, newest day" : "sar %memused, newest stored day")} />
+        {d.memory.level !== "NOT_APPLICABLE" && <SourceTag source={d.memory.source} />}
+      </> },
     { key: "restarts", header: "Restarts (7 d)", width: 120, align: "right",
       title: (d) => d.restarts.count === null ? (reasonWords(d.restarts.reason) ?? "UNKNOWN") : `${d.restarts.count} restart lines in ${data.window_days} d · at most ${d.restarts.max_in_one_hour} in one hour${d.restarts.busiest_hour ? ` (${d.restarts.busiest_hour})` : ""} · rule ${d.restarts.rule}`,
       render: (d) => d.restarts.count === null

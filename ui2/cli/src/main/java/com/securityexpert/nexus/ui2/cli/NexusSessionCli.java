@@ -143,6 +143,10 @@ final class NexusSessionCli {
         System.out.println("  syslog-spike-data <deviceId>                   Spike Detective directories: time, member classes, sizes");
         System.out.println("  syslog-settings                                collection settings: retention, caps, the management-server and spike-data switches");
         System.out.println("  syslog-settings-set <key>=<value> ...          security_admin; e.g. spike_data_enabled=true raw_retention_days=45 (audited)");
+        System.out.println("  snmp-polling                                   Administration > SNMP polling: switch, interval, credentials, scope, last outcomes");
+        System.out.println("  snmp-polling-set <key>=<value> ...             security_admin (audited); enabled=true interval_s=300 scope_mode=VENDORS|DEVICES");
+        System.out.println("                                                 default_credential_reference_id=<ref>|null; vendor=<vendor>:on|off[:<ref>] (repeat: the");
+        System.out.println("                                                 whole vendor list); device=<id>:polled|excluded[:<ref>] (repeat) or devices=none");
         System.out.println("  schedules                                      scheduled job families: ON/OFF/LOCKED, last run, next window, who changed it");
         System.out.println("  schedule-set <family> on|off <reason>          security_admin/operation_admin; audited; inside business hours add "
                 + BUSINESS_HOURS_ACK_FLAG);
@@ -340,6 +344,11 @@ final class NexusSessionCli {
                     yield print(call("PUT", SCHEDULES + "/" + scheduleFamily(args[1]), scheduleBody(args[2], args[3])));
                 }
                 case "syslog-settings" -> print(call("GET", SYSLOG_SETTINGS, null));
+                case "snmp-polling" -> print(call("GET", SNMP_POLLING, null));
+                case "snmp-polling-set" -> {
+                    require(args, 2, "snmp-polling-set <key>=<value> [<key>=<value> ...]");
+                    yield print(call("PUT", SNMP_POLLING, snmpPollingBody(args)));
+                }
                 case "syslog-settings-set" -> {
                     require(args, 2, "syslog-settings-set <key>=<value> [<key>=<value> ...]");
                     yield print(call("PUT", SYSLOG_SETTINGS, json(settingsBody(args))));
@@ -959,6 +968,54 @@ final class NexusSessionCli {
      * other value is sent as a string and refused by the service with the key named. Keys are the service's own
      * closed list; a key outside it is refused there too, so a misspelt key never silently changes nothing.
      */
+    /** Administration > SNMP polling ({@code snmp-polling} / {@code snmp-polling-set}; security_admin). */
+    static final String SNMP_POLLING = "/api/v2/config/snmp-polling";
+    private static final Pattern SNMP_ROW = Pattern.compile("([A-Za-z0-9_.:-]{1,128}?):(on|off|polled|excluded)(?::([A-Za-z0-9_.:-]{1,128}))?");
+
+    /**
+     * {@code snmp-polling-set}: scalar keys as {@link #settingsBody} types them ({@code null} is JSON null);
+     * {@code vendor=<vendor>:on|off[:<ref>]} and {@code device=<id>:polled|excluded[:<ref>]} build the vendor and device
+     * lists (each sent whole, as the screen does); {@code devices=none} sends an empty device list. The service validates
+     * every key and value and refuses the whole body on any problem.
+     */
+    static String snmpPollingBody(String[] args) {
+        List<String> scalars = new ArrayList<>();
+        List<String> vendors = new ArrayList<>();
+        List<String> devices = new ArrayList<>();
+        boolean clearDevices = false;
+        for (int i = 1; i < args.length; i++) {
+            int eq = args[i].indexOf('=');
+            String key = eq > 0 ? args[i].substring(0, eq) : "";
+            String value = eq > 0 ? args[i].substring(eq + 1).strip() : "";
+            if (key.equals("vendor") || key.equals("device")) {
+                Matcher m = SNMP_ROW.matcher(value);
+                boolean vendor = key.equals("vendor");
+                if (!m.matches() || vendor != (m.group(2).equals("on") || m.group(2).equals("off"))) {
+                    throw new UsageException(vendor ? "vendor=<vendor>:on|off[:<credentialRef>], got: " + args[i]
+                            : "device=<deviceId>:polled|excluded[:<credentialRef>], got: " + args[i]);
+                }
+                boolean in = m.group(2).equals("on") || m.group(2).equals("polled");
+                String row = "{\"" + (vendor ? "vendor" : "device_id") + "\":\"" + escape(m.group(1)) + "\",\"in_scope\":" + in
+                        + ",\"credential_reference_id\":" + (m.group(3) == null ? "null" : "\"" + escape(m.group(3)) + "\"") + "}";
+                (vendor ? vendors : devices).add(row);
+            } else if (key.equals("devices") && value.equals("none")) {
+                clearDevices = true;
+            } else if (key.matches("[a-z][a-z0-9_]{0,63}") && !key.equals("vendors") && !key.equals("devices")) {
+                String typed;
+                if (value.equals("true") || value.equals("false") || value.equals("null") || value.matches("[0-9]{1,18}")) typed = value;
+                else typed = "\"" + escape(value) + "\"";
+                scalars.add("\"" + key + "\":" + typed);
+            } else {
+                throw new UsageException("snmp-polling-set <key>=<value> [<key>=<value> ...], got: " + args[i]);
+            }
+        }
+        if (clearDevices && !devices.isEmpty()) throw new UsageException("devices=none and device=... cannot be combined");
+        List<String> parts = new ArrayList<>(scalars);
+        if (!vendors.isEmpty()) parts.add("\"vendors\":[" + String.join(",", vendors) + "]");
+        if (!devices.isEmpty() || clearDevices) parts.add("\"devices\":[" + String.join(",", devices) + "]");
+        return "{" + String.join(",", parts) + "}";
+    }
+
     static Map<String, Object> settingsBody(String[] args) {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         for (int i = 1; i < args.length; i++) {

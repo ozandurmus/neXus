@@ -589,7 +589,18 @@ class AuditRedactionPolicyTest {
             "topology_link_override.created_by", "topology_link_override.link_kind",
             "topology_link_override.orphaned_at", "topology_link_override.override_id",
             "topology_link_override.reason_code", "topology_link_override.revoked_at",
-            "topology_link_override.revoked_by");
+            "topology_link_override.revoked_by",
+            // snmp_polling_settings, snmp_polling_override (V268): switches, bounds, closed vocabularies, opaque device
+            // ids, opaque credential reference ids and admin actor/timestamps; no secret or address
+            "snmp_polling_settings.default_credential_reference_id", "snmp_polling_settings.enabled",
+            "snmp_polling_settings.hourly_retention_days", "snmp_polling_settings.interval_s",
+            "snmp_polling_settings.raw_retention_days", "snmp_polling_settings.scope_mode",
+            "snmp_polling_settings.settings_id", "snmp_polling_settings.updated_at",
+            "snmp_polling_settings.updated_by",
+            "snmp_polling_override.credential_reference_id", "snmp_polling_override.device_id",
+            "snmp_polling_override.in_scope", "snmp_polling_override.override_key",
+            "snmp_polling_override.scope_kind", "snmp_polling_override.updated_at",
+            "snmp_polling_override.updated_by", "snmp_polling_override.vendor");
 
     /**
      * Column-name fragments that mark a value as secret, credential-bearing or
@@ -616,6 +627,8 @@ class AuditRedactionPolicyTest {
             // Identifiers of a credential reference, never the credential.
             "credential_references.credential_reference_id",
             "devices.credential_reference_id",
+            "snmp_polling_settings.default_credential_reference_id",
+            "snmp_polling_override.credential_reference_id",
             // A digest, already non-reversible.
             "credential_failure_alert.credential_ref_digest",
             "job_step_attempt.fingerprint_sha256",

@@ -429,4 +429,104 @@ class SystemHealthServiceTest {
         assertEquals("FAILED", failedComp.get("state"));
         assertEquals("COMPUTATION_FAILED: IllegalStateException", failedComp.get("reason"));
     }
+
+    // ---------------------------------------------------------------- SNMP source (SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md)
+
+    private static com.securityexpert.nexus.ui2.persistence.snmp.SnmpPolling.DailyFigures snmpDay(LocalDate day, double cpu,
+            Double dataplane, Double mem) {
+        return new com.securityexpert.nexus.ui2.persistence.snmp.SnmpPolling.DailyFigures(day, 288, 288,
+                java.math.BigDecimal.valueOf(cpu), java.math.BigDecimal.valueOf(cpu + 3),
+                dataplane == null ? null : java.math.BigDecimal.valueOf(dataplane), mem == null ? null : java.math.BigDecimal.valueOf(mem));
+    }
+
+    private static com.securityexpert.nexus.ui2.persistence.snmp.SnmpPollingRepository snmp(
+            Map<String, List<com.securityexpert.nexus.ui2.persistence.snmp.SnmpPolling.DailyFigures>> days,
+            Map<String, String> outcomes) {
+        var repo = org.mockito.Mockito.mock(com.securityexpert.nexus.ui2.persistence.snmp.SnmpPollingRepository.class);
+        when(repo.daily(org.mockito.ArgumentMatchers.any(Instant.class), eq("Europe/Istanbul"))).thenReturn(days);
+        when(repo.lastOutcomes()).thenReturn(outcomes);
+        return repo;
+    }
+
+    @Test
+    void snmpSamplesAreTheFirstSourceAndSarStaysTheCheckPointFallback() throws Exception {
+        LocalDate d = LocalDate.of(2026, 10, 19);
+        // cp-hot has sar days over the threshold, but SNMP days below it: SNMP wins.
+        storeSar(CP_HOT, d, sarText(92, 12, true));
+        // cp-calm has only sar.
+        storeSar(CP_CALM, d, sarText(20, 6, false));
+        var service = service().withSnmp(snmp(Map.of(
+                CP_HOT, List.of(snmpDay(d.minusDays(1), 40, null, 55.5), snmpDay(d, 42, null, 56.0)),
+                PAN, List.of(snmpDay(d.minusDays(2), 88, 70.0, 30.0), snmpDay(d.minusDays(1), 90, 71.0, 31.0),
+                        snmpDay(d, 91, 72.0, 32.0))), Map.of(CP_HOT, "OK", PAN, "OK")));
+        service.refreshNow(NOW);
+        var body = service.health(NOW);
+
+        var hot = row(body, CP_HOT);
+        assertEquals("SNMP", part(hot, "cpu").get("source"));
+        assertEquals("NORMAL", part(hot, "cpu").get("level"));
+        assertEquals(42.0, part(hot, "cpu").get("newest_p95_percent"));
+        assertEquals("SNMP", part(hot, "memory").get("source"));
+        assertEquals(56.0, part(hot, "memory").get("newest_used_p95_percent"));
+        assertTrue(String.valueOf(part(hot, "cpu").get("day_basis")).startsWith("SNMP sample time"));
+        @SuppressWarnings("unchecked")
+        var days = (List<Map<String, Object>>) part(hot, "cpu").get("days");
+        assertEquals(2, days.size());
+        assertEquals("SNMP", days.get(1).get("status"));
+        assertEquals(45.0, days.get(1).get("max_percent"));
+
+        var calm = row(body, CP_CALM);
+        assertEquals("SAR", part(calm, "cpu").get("source"));
+        assertEquals("SAR", part(calm, "memory").get("source"));
+
+        var pan = row(body, PAN);
+        assertEquals("SNMP", part(pan, "cpu").get("source"));
+        assertEquals("CRITICAL", pan.get("state"), "three SNMP days above 85 % in a row: the unchanged rule");
+        assertEquals("CPU_P95_OVER_THRESHOLD_3_DAYS_IN_A_ROW", pan.get("state_reason"));
+        assertEquals(72.0, part(pan, "cpu").get("dataplane_newest_p95_percent"));
+        assertEquals(32.0, part(pan, "memory").get("newest_used_p95_percent"));
+        assertEquals("NOT_APPLICABLE", part(pan, "restarts").get("level"));
+
+        var mds = row(body, MDS);
+        assertEquals("NOT_APPLICABLE", part(mds, "cpu").get("level"), "management servers are not polled in wave 1");
+        assertNull(part(mds, "cpu").get("source"));
+    }
+
+    @Test
+    void aPolledGatewayWithoutAnAnswerIsUnknownWithThePollReasonNeverNoSource() throws Exception {
+        LocalDate d = LocalDate.of(2026, 10, 19);
+        storeSar(CP_CALM, d, sarText(20, 6, true));
+        var service = service().withSnmp(snmp(Map.of(), Map.of(PAN, "SNMP_NO_ANSWER", CP_CALM, "SNMP_AUTH_REFUSED")));
+        service.refreshNow(NOW);
+        var body = service.health(NOW);
+
+        var pan = row(body, PAN);
+        assertEquals("UNKNOWN", part(pan, "cpu").get("level"));
+        assertEquals("SNMP_NO_ANSWER", part(pan, "cpu").get("reason"));
+        assertEquals("SNMP", part(pan, "cpu").get("source"));
+        assertEquals("UNKNOWN", part(pan, "memory").get("level"));
+        assertEquals("SNMP_NO_ANSWER", part(pan, "memory").get("reason"));
+        assertEquals("UNKNOWN", pan.get("state"));
+
+        var calm = row(body, CP_CALM);
+        assertEquals("SAR", part(calm, "cpu").get("source"), "Check Point falls back to sar while SNMP does not answer");
+        assertEquals("NORMAL", part(calm, "cpu").get("level"));
+    }
+
+    @Test
+    void withoutSnmpStateAPaloAltoGatewayKeepsNoSourceAndAnSnmpFailureNeverBreaksTheSnapshot() {
+        var noState = service().withSnmp(snmp(Map.of(), Map.of()));
+        noState.refreshNow(NOW);
+        var pan = row(noState.health(NOW), PAN);
+        assertEquals("NOT_APPLICABLE", part(pan, "cpu").get("level"));
+        assertNull(part(pan, "cpu").get("source"));
+
+        var broken = org.mockito.Mockito.mock(com.securityexpert.nexus.ui2.persistence.snmp.SnmpPollingRepository.class);
+        when(broken.daily(org.mockito.ArgumentMatchers.any(Instant.class), anyString()))
+                .thenThrow(new IllegalStateException("db down"));
+        var service = service().withSnmp(broken);
+        service.refreshNow(NOW);
+        assertEquals("READY", part(service.health(NOW), "computation").get("state"));
+        assertEquals("NOT_APPLICABLE", part(row(service.health(NOW), PAN), "cpu").get("level"));
+    }
 }
