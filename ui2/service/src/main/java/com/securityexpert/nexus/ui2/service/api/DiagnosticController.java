@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.service.device.diagnostic.DiagnosticService;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
@@ -127,7 +128,7 @@ public final class DiagnosticController {
     }
 
     private static boolean isMasked(HttpServletRequest request) {
-        return Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
+        return PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
     }
 
     private boolean isAdministrator(HttpServletRequest request) {

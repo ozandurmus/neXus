@@ -15,6 +15,7 @@ import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleCatalogImport;
 import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleProjection;
 import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleService;
 import com.securityexpert.nexus.ui2.service.lifecyclesource.LifecycleSourceService;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 
@@ -50,7 +51,7 @@ public final class LifecycleController {
 
     @GetMapping("/api/v2/lifecycle/catalog")
     public Map<String, Object> catalog(HttpServletRequest request) {
-        boolean masked = Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
+        boolean masked = masked(request);
         boolean manage = !masked && rbac.evaluate(actor(request), Optional.of(RoleToken.SECURITY_ADMIN), Instant.now()).outcome().proceeds();
         return Map.of("entries", catalog.list().stream().map(e -> LifecycleProjection.catalog(e, masked)).toList(), "can_manage", manage);
     }
@@ -144,6 +145,6 @@ public final class LifecycleController {
 
     private static String actor(HttpServletRequest request) { return (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE); }
     private static String value(String value) { return value == null ? "" : value; }
-    private static boolean masked(HttpServletRequest request) { return Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)); }
+    private static boolean masked(HttpServletRequest request) { return PrivacyMaskingResponseBodyAdvice.isReplayViewer(request); }
     private static ResponseEntity<?> readOnly() { return ResponseEntity.status(403).body(Map.of("error", "READ_ONLY_PERSONA")); }
 }
