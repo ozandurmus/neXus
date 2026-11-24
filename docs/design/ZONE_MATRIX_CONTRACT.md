@@ -682,3 +682,11 @@ Origin in brackets: `R1` revision 1; `N`, `C`, `S` the network/vendor, complianc
 - Whether hygiene results are reachable from the run within its budget (measured in delivery step 3).
 - A rule with `any` on one side and IPv4-only values on the other: whether its IPv6 part can be treated as empty
   needs vendor evidence (NAT64); until then it is not COMPLIANT.
+
+## Amendment 2026-11-23 (interim staleness threshold)
+
+PO answer, chat 2026-11-23 (authorization ref PO-2026-11-23-ayyas-midday), recorded in
+`PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md`. Until the bank states its own value for the snapshot staleness
+threshold (6.2 item 9), a policy snapshot older than 24 hours is `STALE` (5.9). The value is interim and set by the
+Product Owner, not the bank; the product labels it as interim and never presents it as the bank's value. It stays interim
+until the bank answers; 6.2 item 9 remains a bank input. No earlier text of this contract is changed.
