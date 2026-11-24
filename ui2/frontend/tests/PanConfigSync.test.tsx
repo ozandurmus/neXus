@@ -201,3 +201,19 @@ it("the HA readiness row shows the settling message with the request time during
   expect(within(screen.getByRole("row", { name: "CLS-BRAVO-02" })).getByText("Configuration sync still fails")).toBeInTheDocument();
   expect(screen.queryByText(expectedSettling)).toBeNull();
 });
+
+it("offers the pre-check run instead of a dead button when the only refusal is stale pre-checks", () => {
+  const recheck = vi.fn();
+  const { rerender } = render(<PanConfigSyncAction unit={unit({ refusal: "READINESS_NOT_FRESH" })} onRecheck={recheck} />);
+  fireEvent.click(screen.getByRole("button", { name: "Re-check, then sync" }));
+  expect(recheck).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("button", { name: "Sync configuration to passive" })).toBeNull();
+  rerender(<PanConfigSyncAction unit={unit({ refusal: "READINESS_NOT_FRESH" })} onRecheck={recheck} recheckBusy recheckRunning />);
+  expect(screen.getByRole("button", { name: "Running the pre-checks…" })).toBeDisabled();
+  // Any other refusal keeps the disabled sync button and its reason.
+  rerender(<PanConfigSyncAction unit={unit({ refusal: "OPEN_INCIDENT" })} onRecheck={recheck} />);
+  expect(screen.getByRole("button", { name: "Sync configuration to passive" })).toBeDisabled();
+  // Fresh pre-checks: the sync itself is offered.
+  rerender(<PanConfigSyncAction unit={unit()} onRecheck={recheck} />);
+  expect(screen.getByRole("button", { name: "Sync configuration to passive" })).toBeEnabled();
+});

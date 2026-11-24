@@ -119,7 +119,8 @@ export function FailoverDetail({ unit, units, singleAdmin, summaryRows = [], inc
       {!uf.readinessActive && stop && <Typography variant="body2" sx={{ mb: 1 }}>{stop}</Typography>}
       <ChecksByConsequence checks={checks} members={unit.members ?? []} vendor={unit.vendor} observedAt={checkedAt}
         rowAction={checkNo => checkNo === 4 && unit.vendor === "palo_alto"
-          ? <PanConfigSyncAction unit={unit} onDone={() => { onRefreshUnits(); void uf.refresh(); }} /> : null} />
+          ? <PanConfigSyncAction unit={unit} onDone={() => { onRefreshUnits(); void uf.refresh(); }}
+            onRecheck={uf.canRunChecks ? uf.runChecks : undefined} recheckBusy={uf.readinessActive || !uf.idle} recheckRunning={uf.readinessActive} /> : null} />
       <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 1 }}>Failover runs re-check everything at start.</Typography>
     </Box>
     {!isVirtualSystem(unit) && virtualSystems.length > 0 && <Box component="section" aria-label="Virtual systems">
