@@ -118,9 +118,17 @@ public final class HttpsVendorExecutor {
 
     /** Lifecycle reads, group A (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
     private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
+    /** The Management Center managed-device health read (candidate C1): off, and gate-checked, until wired by the composition root. */
+    private McDeviceHealthRead mcDeviceHealth = McDeviceHealthRead.OFF;
     private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
     private com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
             com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.NONE;
+
+    /** Wires the managed-device health read of {@link #inventoryManagementCenter} (switch and gate; default never read). */
+    public HttpsVendorExecutor withMcDeviceHealth(McDeviceHealthRead mcDeviceHealth) {
+        this.mcDeviceHealth = Objects.requireNonNull(mcDeviceHealth, "mcDeviceHealth");
+        return this;
+    }
 
     public HttpsVendorExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
         this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
@@ -577,7 +585,25 @@ public final class HttpsVendorExecutor {
             return new InventoryOutcome.Failed("the Management Center device list answered HTTP " + r.status());
         }
         JsonNode list = JSON.readTree(r.body());
-        List<GridMember> managed = ManagementCenterDevices.parse(list);
+        Optional<ManagementCenterDeviceStatus.Answer> healthRead = Optional.empty();
+        String healthFailure = null;
+        if (mcDeviceHealth.enabled()) {
+            if (!mcDeviceHealth.gateApproved()) {
+                healthFailure = ManagementCenterDeviceStatus.GATE_NOT_APPROVED;
+            } else {
+                healthRead = mcDeviceStatusRead(target, creds, list);
+                if (healthRead.isEmpty()) {
+                    healthFailure = ManagementCenterDeviceStatus.HEALTH_READ_FAILED;
+                }
+            }
+        }
+        final Optional<ManagementCenterDeviceStatus.Answer> statusAnswer = healthRead;
+        final String statusFailure = healthFailure;
+        List<GridMember> managed = ManagementCenterDevices.parse(list, !mcDeviceHealth.enabled() ? null
+                : uuid -> statusAnswer.isPresent() ? ManagementCenterDeviceStatus.healthFor(statusAnswer.get(), uuid)
+                        : GridMember.Health.unknown(statusFailure));
+        LOG.log(System.Logger.Level.INFO, "[MC_DEVICE_HEALTH] {0}", mcDeviceHealth.enabled()
+                ? healthStateCounts(managed) + (statusFailure == null ? "" : " (" + statusFailure + ")") : "read off");
         LOG.log(System.Logger.Level.INFO, "[HTTPS_INVENTORY] management center lists {0} device(s), types {1}, field names {2}",
                 managed.size(), ManagementCenterDevices.typeCounts(list), HttpsVendorPlan.fieldNames(list));
         Optional<String> names = managed.isEmpty() ? Optional.empty()
@@ -596,6 +622,44 @@ public final class HttpsVendorExecutor {
         lifecycleMcDeviceLicenses(target, creds, list, deviceId);
         lifecycleMcShowLicenses(target, creds, list, deviceId);
         return new InventoryOutcome.Completed(List.of(), managed, names, identity);
+    }
+
+    /**
+     * {@code GET /api/devices/status} once (candidate C1; only called when the switch is on and the gate is approved): {@code SHORT},
+     * {@code TEXT_MAX}, no retry, outside any job transcript. Empty on any failure -- an HTTP status other than 2xx, a truncated or
+     * unparseable answer, an I/O error -- which the caller records as UNKNOWN, never OK; a lost lease still propagates.
+     */
+    private Optional<ManagementCenterDeviceStatus.Answer> mcDeviceStatusRead(Target target, Credentials creds, JsonNode devices) {
+        try {
+            return com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> {
+                try {
+                    TextResponse r = client.get(target, HttpsVendorPlan.MC_DEVICES_STATUS, creds, SHORT, TEXT_MAX);
+                    if (!r.ok() || r.truncated()) {
+                        LOG.log(System.Logger.Level.INFO, "[MC_DEVICE_HEALTH] status read not used: HTTP {0}, truncated {1}", r.status(), r.truncated());
+                        return Optional.<ManagementCenterDeviceStatus.Answer>empty();
+                    }
+                    return ManagementCenterDeviceStatus.parse(JSON.readTree(r.body()), ManagementCenterDevices.identifyingTexts(devices));
+                } catch (IOException e) {
+                    LOG.log(System.Logger.Level.INFO, "[MC_DEVICE_HEALTH] status read not used: {0}", e.getClass().getSimpleName());
+                    return Optional.<ManagementCenterDeviceStatus.Answer>empty();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Optional.<ManagementCenterDeviceStatus.Answer>empty();
+                }
+            });
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            return Optional.empty();
+        }
+    }
+
+    /** The health states of the members as counts only (no names), for the log. */
+    private static String healthStateCounts(List<GridMember> members) {
+        java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+        for (GridMember m : members) {
+            counts.merge(m.health().map(GridMember.Health::state).orElse("(none)"), 1, Integer::sum);
+        }
+        return counts.toString();
     }
 
     /** The result of an HTTP lifecycle read: a 2xx answer is handed on, 401 and 403 are a refusal, any other status a failure. */

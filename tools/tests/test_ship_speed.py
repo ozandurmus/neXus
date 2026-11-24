@@ -180,19 +180,87 @@ def test_a_failing_check_stops_the_ship_immediately(monkeypatch):
     assert clock.now == 0
 
 
-def test_checks_that_never_finish_time_out_without_merging(monkeypatch):
+@pytest.fixture
+def reruns(monkeypatch):
+    """Record the best-effort re-run calls instead of letting them reach gh."""
+    seen = []
+    monkeypatch.setattr(sa, "_rerun_missing_checks", lambda url, sleep=None: seen.append(("missing", url)) or True)
+    monkeypatch.setattr(sa, "_rerun_pending_checks",
+                        lambda url, pending=(), sleep=None: seen.append(("pending", url, tuple(pending))) or 1)
+    return seen
+
+
+def test_checks_that_never_finish_are_rerun_once_then_time_out_without_merging(monkeypatch, reruns):
     clock = Clock()
     gh_returning(monkeypatch, rollup(run_item("validate", "IN_PROGRESS", "")))
     with pytest.raises(SystemExit, match="still pending after 900 s"):
         sa._wait_for_checks("u", timeout=900, poll=15, sleep=clock.sleep, clock=clock)
-    assert clock.now == 900
+    assert reruns == [("pending", "u", ("validate",))]            # re-run exactly once, never twice
+    assert 1800 <= clock.now <= 1800 + 15 * 3                      # one full window before and one after the re-run
 
 
-def test_no_check_appearing_at_all_is_a_failure_after_the_grace_period(monkeypatch):
+def test_a_pending_check_that_finishes_after_the_rerun_lets_the_ship_proceed(monkeypatch, reruns, capsys):
+    clock = Clock()
+    pending = rollup(run_item("validate", "IN_PROGRESS", ""))
+    # 900 s of pending polls, then the re-run window: still pending once, then success.
+    gh_returning(monkeypatch, *([pending] * 61), rollup(run_item("validate")))
+    sa._wait_for_checks("u", timeout=900, poll=15, sleep=clock.sleep, clock=clock)
+    assert reruns == [("pending", "u", ("validate",))]
+    assert '"why": "pending"' in capsys.readouterr().out
+
+
+def test_a_failed_check_is_never_rerun(monkeypatch, reruns):
+    gh_returning(monkeypatch, rollup(run_item("validate", conclusion="FAILURE")))
+    with pytest.raises(SystemExit, match="checks failed"):
+        sa._wait_for_checks("u", sleep=lambda s: None, clock=Clock())
+    assert reruns == []
+
+
+def test_no_check_appearing_is_rerun_once_before_it_is_a_failure(monkeypatch, reruns):
     clock = Clock()
     gh_returning(monkeypatch, rollup())
     with pytest.raises(SystemExit, match="no pull request check appeared within 120 s"):
         sa._wait_for_checks("u", poll=15, empty_grace=120, sleep=clock.sleep, clock=clock)
+    assert reruns == [("missing", "u")]
+    assert clock.now >= 240
+
+
+def test_a_missing_check_that_appears_after_the_rerun_is_waited_for(monkeypatch, reruns):
+    clock = Clock()
+    gh_returning(monkeypatch, *([rollup()] * 10), rollup(run_item("validate")))
+    sa._wait_for_checks("u", poll=15, empty_grace=120, sleep=clock.sleep, clock=clock)
+    assert reruns == [("missing", "u")]
+
+
+def test_the_missing_check_rerun_closes_and_reopens_the_pull_request(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sa.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    assert sa._rerun_missing_checks("u", sleep=lambda s: None) is True
+    assert [c[:3] for c in calls] == [["gh", "pr", "close"], ["gh", "pr", "reopen"]]
+
+
+def test_the_pending_check_rerun_cancels_and_reruns_only_unfinished_runs_of_the_head_commit(monkeypatch):
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "pr", "view"]:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"headRefName": "b", "headRefOid": "abc"}), "")
+        if cmd[:3] == ["gh", "run", "list"]:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps([
+                {"databaseId": 1, "status": "queued", "headSha": "abc"},
+                {"databaseId": 2, "status": "completed", "headSha": "abc"},
+                {"databaseId": 3, "status": "in_progress", "headSha": "old"}]), "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(sa.subprocess, "run", run)
+    assert sa._rerun_pending_checks("u", ["validate"], sleep=lambda s: None) == 1
+    assert [c[:4] for c in calls if c[1] == "run" and c[2] in ("cancel", "rerun")] == [
+        ["gh", "run", "cancel", "1"], ["gh", "run", "rerun", "1"]]
+
+
+def test_the_pending_check_rerun_survives_unreadable_answers(monkeypatch):
+    monkeypatch.setattr(sa.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"))
+    assert sa._rerun_pending_checks("u", [], sleep=lambda s: None) == 0
 
 
 def test_checks_appearing_late_are_still_waited_for(monkeypatch):

@@ -24,6 +24,15 @@ final class ManagementCenterDevices {
     }
 
     static List<GridMember> parse(JsonNode list) {
+        return parse(list, null);
+    }
+
+    /**
+     * The same members, each carrying the health {@code healthByUuid} gives for its device {@code uuid} (null: the health read
+     * was not made, so no member carries one). A device whose uuid is missing or does not validate gets {@code healthByUuid}'s
+     * answer for {@code null}, which the caller makes UNKNOWN.
+     */
+    static List<GridMember> parse(JsonNode list, java.util.function.Function<String, GridMember.Health> healthByUuid) {
         List<GridMember> out = new ArrayList<>();
         for (JsonNode d : items(list)) {
             Optional<String> name = text(d, "name");
@@ -37,13 +46,26 @@ final class ManagementCenterDevices {
             text(d, "deploymentStatus").ifPresent(v -> services.add(new GridMember.ServiceStatus("DEPLOYMENT", v.toUpperCase(java.util.Locale.ROOT))));
             // Slots: platform = the device type, hardware type = model, "hypervisor" = the OS version (the table shows
             // "platform · hypervisor" under the model) -- the member-fact shape is reused, not stretched with new columns.
-            out.add(new GridMember(UUID.randomUUID().toString(), name.get(), text(d, "host"), type.map(ManagementCenterDevices::typeLabel),
+            GridMember member = new GridMember(UUID.randomUUID().toString(), name.get(), text(d, "host"), type.map(ManagementCenterDevices::typeLabel),
                     text(d, "model").or(() -> text(d, "platform")), version, false, false, false, Optional.empty(),
                     text(d, "managementStatus").map(v -> v.toUpperCase(java.util.Locale.ROOT)), Optional.empty(), Optional.empty(),
-                    Optional.empty(), Optional.empty(), Optional.empty(), services));
+                    Optional.empty(), Optional.empty(), Optional.empty(), services);
+            out.add(healthByUuid == null ? member
+                    : member.withHealth(healthByUuid.apply(text(d, "uuid").filter(HttpsVendorPlan::isMcDeviceUuid).orElse(null))));
         }
         out.sort(Comparator.comparing(GridMember::hostName, String.CASE_INSENSITIVE_ORDER));
         return List.copyOf(out);
+    }
+
+    /** The names, hosts and serial numbers the list carries -- the texts a health message is scrubbed of. */
+    static List<String> identifyingTexts(JsonNode list) {
+        List<String> out = new ArrayList<>();
+        for (JsonNode d : items(list)) {
+            for (String field : List.of("name", "host", "serialNumber", "hardwareSerialNumber", "applianceId")) {
+                text(d, field).ifPresent(out::add);
+            }
+        }
+        return out;
     }
 
     /** The device identifiers of the list, in the list's order, each validated with the MC identifier pattern; others are dropped. */

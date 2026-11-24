@@ -94,8 +94,14 @@ describe("Managed estate is a tab under the device header", () => {
     // column is left out when no device reports one (post-release review 2026-10-18, R17): a column of dashes said nothing.
     const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
     expect(table).toHaveStyle({ tableLayout: "fixed" });
-    expect(table.querySelectorAll("colgroup col")).toHaveLength(6);
+    expect(table.querySelectorAll("colgroup col")).toHaveLength(vendor === "bluecoat" ? 7 : 6);
     expect(screen.queryByRole("columnheader", { name: "Deployment" })).toBeNull();
+    // a Management Center always shows Health (V271): a device whose health was not read is UNKNOWN, never absent
+    if (vendor === "bluecoat") {
+      expect(screen.getByRole("columnheader", { name: "Health" })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole("columnheader", { name: "Health" })).toBeNull();
+    }
     // the management state in sentence case and neutral grey: an expected state is not an alarm
     expect(screen.getByText("Fully managed").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
   });
@@ -125,7 +131,7 @@ describe("Managed estate is a tab under the device header", () => {
     render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager("bluecoat")} /></ThemeProvider>);
     await screen.findByRole("button", { name: "FW-JULIET-06" });
     const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
-    expect(table.querySelectorAll("colgroup col")).toHaveLength(7);
+    expect(table.querySelectorAll("colgroup col")).toHaveLength(8);
     within(table).getAllByRole("columnheader").forEach((th) => expect(getComputedStyle(th).whiteSpace).toBe("nowrap"));
     const address = within(table).getByText("198.51.100.123");
     expect(address).toHaveAttribute("title", "198.51.100.123");

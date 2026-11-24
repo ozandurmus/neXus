@@ -55,7 +55,9 @@ def test_cmd_ship_releases_both_locks_and_waits_for_the_deploy_lock_only_before_
     assert sa._DEPLOY_LOCK is None and sa._PREVIEW_LOCK_HANDLE is None
 
 
-def test_the_merge_point_takes_the_deploy_lock_before_the_checks():
+def test_the_merge_point_waits_for_the_checks_before_it_takes_the_deploy_lock():
+    """2026-11-24 review: a stuck check (up to 45 min) must not sit on the lock every other ship's merge waits for."""
     text = (ROOT / "tools" / "delivery" / "standalone_orchestrate.py").read_text()
+    checks = text.index("        _wait_for_checks(url)\n    # Pipelined ships: wait here")
     lock = text.index("_acquire_deploy_lock(_PREVIEW_LOCK_HANDLE, _SHIP_NAME)")
-    assert lock < text.index("_wait_for_checks(url)\n    # No --delete-branch") < text.index("merge = _merge_pull_request(url, head=ship_commit)")
+    assert checks < lock < text.index("merge = _merge_pull_request(url, head=ship_commit)")

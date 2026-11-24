@@ -1209,6 +1209,13 @@ export interface GridMemberView {
   readonly cpu_percent: number | null;
   readonly db_percent: number | null;
   readonly services: readonly { readonly service: string; readonly status: string }[];
+  /** A Management Center's managed-device health (V271, manager-reported); absent or null when the read was not made. */
+  readonly health_state?: "ERROR" | "WARNING" | "OK" | "INACTIVE" | "UNKNOWN" | null;
+  readonly health_errors?: number | null;
+  readonly health_warnings?: number | null;
+  readonly health_checked_at?: string | null;
+  /** At most three scrubbed vendor texts, or the closed reason token of an UNKNOWN (GATE_NOT_APPROVED, HEALTH_READ_FAILED, ...). */
+  readonly health_messages?: readonly string[] | null;
 }
 
 export interface DeviceInventory {

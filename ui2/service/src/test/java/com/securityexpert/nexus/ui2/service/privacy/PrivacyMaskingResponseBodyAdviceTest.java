@@ -209,6 +209,30 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void managedDeviceHealthKeepsItsStateAndMasksItsTextsForAiview() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> member = new LinkedHashMap<>();
+        member.put("virtual_system", "SG-EXAMPLEBANK-1");
+        member.put("address", "192.0.2.14");
+        member.put("services", List.of());
+        member.put("grid_master", false);
+        member.put("health_state", "ERROR");
+        member.put("health_errors", 1);
+        member.put("health_checked_at", "2026-11-24T10:12:23");
+        member.put("health_messages", List.of("Error: cannot reach 198.51.100.7 for SG-EXAMPLEBANK-1"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(Map.of("grid_members", List.of(member)), null, null,
+                null, serverRequest, null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = ((List<Map<String, Object>>) result.get("grid_members")).get(0);
+        assertThat(masked.get("health_state")).isEqualTo("ERROR");
+        assertThat(masked.get("health_errors")).isEqualTo(1);
+        assertThat(masked.get("health_checked_at")).isEqualTo("2026-11-24T10:12:23");
+        assertThat(masked.get("health_messages").toString()).doesNotContain("198.51.100.7", "EXAMPLEBANK");
+    }
+
+    @Test
     void gridSummaryMasksNetworkAndLicenseMember() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
         Map<String, Object> body = Map.of("grid_summary", Map.of(
