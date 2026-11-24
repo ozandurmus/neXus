@@ -20,7 +20,6 @@ export const READINESS: Readonly<Record<string, { readonly tone: StateRole; read
 };
 export const readinessOf = (code: string | null | undefined) => READINESS[code ?? ""] ?? { tone: "unknown" as StateRole, word: "UNKNOWN" };
 
-export const DECISIONS = ["WOULD_DROP", "NOT_DECIDED", "NOT_EVALUABLE", "WOULD_ALLOW"] as const;
 export const DECISION: Readonly<Record<string, { readonly tone: StateRole; readonly word: string }>> = {
   WOULD_DROP: { tone: "bad", word: "Would drop" },
   NOT_DECIDED: { tone: "warn", word: "Not decided" },
