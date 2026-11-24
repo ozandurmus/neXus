@@ -17,7 +17,6 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.securityexpert.nexus.ui2.jobs.supportbundle.SupportBundleKind;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -304,10 +303,5 @@ public final class SupportBundleDownloadService {
         } catch (RuntimeException e) {
             return "UNKNOWN";
         }
-    }
-
-    /** Kind helper for callers (controller). */
-    public static boolean isTextKind(String kind) {
-        return SupportBundleKind.fromId(kind).isPresent() && TEXT_KINDS.contains(kind);
     }
 }

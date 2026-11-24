@@ -62,10 +62,6 @@ public final class ScriptSchedule {
         }
     }
 
-    public static boolean isValidFiveFieldCron(String cron) {
-        return normalizeFiveFieldCron(cron).isPresent();
-    }
-
     /** Computes the next five fire instants strictly after {@code from} in {@link #zone()}. */
     public static List<Instant> nextFiveFires(String cron, Instant from) {
         return nextFiveFires(cron, from, zone());

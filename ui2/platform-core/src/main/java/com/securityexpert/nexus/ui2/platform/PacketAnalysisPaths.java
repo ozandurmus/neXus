@@ -58,10 +58,6 @@ public final class PacketAnalysisPaths {
         return runDir(root, caseId, jobId).resolve("report.json");
     }
 
-    public static Path findingsExportFile(Path root, String caseId, String jobId) {
-        return runDir(root, caseId, jobId).resolve("findings-v11.json");
-    }
-
     public static Path projectDuckDb(Path root, String caseId) {
         return caseDir(root, caseId).resolve("project.duckdb");
     }

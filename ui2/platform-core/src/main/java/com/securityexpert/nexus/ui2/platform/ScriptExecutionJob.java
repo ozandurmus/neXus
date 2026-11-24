@@ -61,32 +61,6 @@ public final class ScriptExecutionJob {
         return ref.scriptId() + "@" + ref.version();
     }
 
-    /** Parses {@code <script_id>@<version>} from {@code jobs.target_ref}. */
-    public static Optional<TargetRef> parseTargetRef(String targetRef) {
-        if (targetRef == null || targetRef.isBlank()) {
-            return Optional.empty();
-        }
-        String trimmed = targetRef.strip();
-        int at = trimmed.lastIndexOf('@');
-        if (at <= 0 || at == trimmed.length() - 1) {
-            return Optional.empty();
-        }
-        String scriptId = trimmed.substring(0, at).strip();
-        String versionPart = trimmed.substring(at + 1).strip();
-        if (scriptId.isEmpty()) {
-            return Optional.empty();
-        }
-        try {
-            int version = Integer.parseInt(versionPart);
-            if (version < 1) {
-                return Optional.empty();
-            }
-            return Optional.of(new TargetRef(scriptId, version));
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
-    }
-
     /** Returns {@code true} when {@code runAs} is exactly one of {@link #RUN_AS_ALLOWLIST}. */
     public static boolean isAllowedRunAs(String runAs) {
         return runAs != null && RUN_AS_ALLOWLIST.contains(runAs.strip()) && runAs.strip().equals(runAs);
