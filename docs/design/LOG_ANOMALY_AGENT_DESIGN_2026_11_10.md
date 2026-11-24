@@ -5,6 +5,11 @@ command, outbound connection or credential. Implementation needs the security re
 in §12 and a frozen contract derived from it. Every value marked PROVISIONAL is a starting value, and every UNKNOWN
 stays UNKNOWN until measured or cited.
 
+*Pointer 2026-11-24:* the detector sections of this design (§4.2, §4.3, §4.4 except its RATIFIED 2026-11-11
+amendment, §8.1 detector rows, §8.2, §10 phases 1 and 1b) are superseded by the DRAFT
+[LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md](LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md) §1.3. The text below is kept
+unchanged; the masking, egress, provider, gateway and explanation sections remain this design's.
+
 - **Request (PO, 2026-11-10):** an agent inside the product that uses Claude and Antigravity/Gemini, first for device
   system-log analysis and anomaly explanation.
 - **Conditions set in the PO session (2026-11-10):** only masked data leaves the product; deterministic detection runs
@@ -286,6 +291,9 @@ The PO should accept these explicitly, because no masking removes them:
 Request-scoped aliases and relative dates limit linking across requests. They do not make a single request anonymous.
 
 ## 4. Detection split
+
+*Pointer 2026-11-24:* §4.2 to §4.4 are superseded by
+[LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md](LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md) (DRAFT); §4.1 and §4.5 to §4.8 stand.
 
 ### 4.1 Rules
 
