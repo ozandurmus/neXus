@@ -15,12 +15,14 @@ import {
 
 const ENGINE = "../service/src/main/java/com/securityexpert/nexus/ui2/service/policy/CutoverAssessment.java";   // vitest runs from ui2/frontend
 
-/** The quoted members of a `Set.of(...)` constant of the engine, read from its source so a new code cannot slip past the scan. */
+/** The quoted members of a `Set.of(...)` or `List.of(...)` constant of the engine, read from its source so a new code cannot slip past the scan. */
 function engineSet(name: string): string[] {
   const source = readFileSync(ENGINE, "utf8");
-  const match = new RegExp(`${name}\\s*=\\s*Set\\.of\\(([^;]*?)\\);`, "s").exec(source);
+  const match = new RegExp(`\\b${name}\\s*=\\s*(?:Set|List)\\.of\\(([^;]*?)\\);`, "s").exec(source);
   if (!match) throw new Error(`${name} not found in the engine source`);
-  return [...match[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const codes = [...match[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  expect(codes.length, `${name} should contain at least one quoted code`).toBeGreaterThan(0);
+  return codes;
 }
 
 const everyText = (): string[] => {
@@ -57,6 +59,10 @@ describe("ACI-1 cutover wording", () => {
   it("ACI-1 no readiness verdict and no decision is shown in the success (green) state; the best verdict is neutral", () => {
     for (const [code, entry] of Object.entries(READINESS)) expect(entry.tone, code).not.toBe("ok");
     for (const code of Object.keys(DECISION)) expect(DECISION[code].tone, code).not.toBe("ok");
+    for (const code of engineSet("DECISION_ORDER")) {
+      expect(DECISION[code], code).toBeDefined();
+      expect(DECISION[code].tone, code).not.toBe("ok");
+    }
     expect(READINESS.NO_BLOCKERS_IN_EVALUATED_FLOWS.tone).toBe("neutral");
     expect(READINESS.NO_BLOCKERS_IN_EVALUATED_FLOWS.word).toBe("No blockers in evaluated flows");
     expect(DECISION.WOULD_ALLOW.tone).toBe("neutral");
@@ -67,6 +73,10 @@ describe("ACI-1 cutover wording", () => {
 
   it("ACI-1 every readiness verdict, decision, flag and coverage code of the engine has its own words (nothing falls through to a bare code)", () => {
     for (const code of engineSet("READINESS")) expect(READINESS[code], code).toBeDefined();
+    for (const code of engineSet("DECISION_ORDER")) {
+      expect(DECISION[code], code).toBeDefined();
+      expect(decisionOf(code).word, code).not.toBe(code);
+    }
     for (const code of engineSet("DIRECTIONS")) expect(DIRECTION[code], code).toBeDefined();
     for (const code of engineSet("COVERAGE")) {
       const sentence = coverageText({ code });

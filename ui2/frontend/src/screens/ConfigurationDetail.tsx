@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -438,7 +438,6 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
   const [diffOnly, setDiffOnly] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
   const [pendingJump, setPendingJump] = useState<string | null>(null);
-  const defaultedFor = useRef<ClusterProjection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -473,7 +472,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
       const projected = loaded.length > 0 ? projectCluster(loaded) : null;
       // The "Differences only" default is set in the same update as the cluster: set in a later effect, one frame showed
       // the full view with the switch off (a visible flash, and the cause of a flaky test on 2026-11-24).
-      if (projected) { defaultedFor.current = projected; setDiffOnly(projected.diffCount > 0); }
+      setDiffOnly(Boolean(projected && projected.diffCount > 0));
       setState({ cluster: projected, missing, error: null, loading: false, textForbidden });
     })();
     return () => {
@@ -482,11 +481,6 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
   }, [clusterRef, members.map((m) => m.device_id).join(",")]);
 
   const cluster = state.cluster;
-  useEffect(() => {
-    if (!cluster || defaultedFor.current === cluster) return;
-    defaultedFor.current = cluster;
-    setDiffOnly(cluster.diffCount > 0);
-  }, [cluster]);
 
   const nameOf = (id: string) => members.find((m) => m.device_id === id)?.hostname ?? id;
   const first = members[0];
