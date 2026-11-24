@@ -49,9 +49,16 @@ public final class LifecycleService {
         this.vendor = vendor;
     }
 
+    /** Stored fleet projection plus raw read outcomes and platform facts loaded in the same pass (RPT-17). */
+    public record FleetSnapshot(List<Map<String, Object>> devices,
+            Map<String, List<DeviceLifecycleRepository.Read>> readsByDevice,
+            Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> platformFacts) {
+        public static final FleetSnapshot EMPTY = new FleetSnapshot(List.of(), Map.of(), Map.of());
+    }
+
     /** The operator catalog and the vendor entries, loaded once per request (V144 and V219). */
-    private LifecycleMatcher.Catalog lifecycleCatalog() {
-        return new LifecycleMatcher.Catalog(catalog.list(), vendor == null ? List.of() : vendor.entries(), Instant.now());
+    private LifecycleMatcher.Catalog lifecycleCatalog(Instant now) {
+        return new LifecycleMatcher.Catalog(catalog.list(), vendor == null ? List.of() : vendor.entries(), now);
     }
 
     /** The three stored maps and the platform facts are loaded once per request, never per device. */
@@ -64,16 +71,27 @@ public final class LifecycleService {
         }
     }
 
-    private Loaded load() { return new Loaded(stored.readsByDevice(), stored.licenseItemsByDevice(), stored.livePatchByDevice(), facts.findAll()); }
+    private Loaded load() {
+        var reads = stored.readsByDevice();
+        var items = stored.licenseItemsByDevice();
+        var patches = stored.livePatchByDevice();
+        var allFacts = facts.findAll();
+        return new Loaded(reads == null ? Map.of() : reads, items == null ? Map.of() : items,
+                patches == null ? Map.of() : patches, allFacts == null ? Map.of() : allFacts);
+    }
 
     public List<Map<String, Object>> fleet(LocalDate today) {
-        var entries = lifecycleCatalog();
+        return fleetSnapshot(today, Instant.now()).devices();
+    }
+
+    public FleetSnapshot fleetSnapshot(LocalDate today, Instant now) {
+        var entries = lifecycleCatalog(now);
         var inventory = catalog.storedInventory();
         var loaded = load();
         var all = devices.listAll();
         var rows = all.stream().map(d -> LifecycleProjection.device(d, entries, inventory.get(d.deviceId()), today, loaded.of(d.deviceId()))).toList();
-        addVulnerabilities(all, rows, inventory, loaded);
-        return rows;
+        addVulnerabilities(all, rows, inventory, loaded, now);
+        return new FleetSnapshot(rows, loaded.reads(), loaded.facts());
     }
 
     /**
@@ -81,7 +99,8 @@ public final class LifecycleService {
      * loaded once for the whole fleet. Model and version are the stored inventory values the rest of this payload shows.
      */
     private void addVulnerabilities(List<com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> all,
-            List<Map<String, Object>> rows, Map<String, LifecycleCatalogRepository.StoredInventory> inventory, Loaded loaded) {
+            List<Map<String, Object>> rows, Map<String, LifecycleCatalogRepository.StoredInventory> inventory, Loaded loaded,
+            Instant now) {
         if (advisories == null) return;
         try {
             var facts = all.stream().map(d -> {
@@ -93,7 +112,7 @@ public final class LifecycleService {
                 return new AdvisoryEstate.DeviceFacts(d.deviceId(), d.vendorHint(), d.role(), inv == null ? null : inv.model(),
                         version, d.observedHostname().orElse(null));
             }).toList();
-            var byDevice = advisories.vulnerabilities(facts, Instant.now());
+            var byDevice = advisories.vulnerabilities(facts, now);
             for (var row : rows) row.put("vulnerabilities", byDevice.get((String) row.get("device_id")));
         } catch (RuntimeException e) {
             // The advisory store is an addition to this view: a failure there must not take the Lifecycle view down.
@@ -102,13 +121,14 @@ public final class LifecycleService {
     }
 
     public Optional<Map<String, Object>> device(String id) {
-        var entries = lifecycleCatalog();
+        Instant now = Instant.now();
+        var entries = lifecycleCatalog(now);
         var inventory = catalog.storedInventory();
         var loaded = load();
         return devices.listAll().stream().filter(d -> d.deviceId().equals(id)).findFirst()
                 .map(d -> {
                     var row = LifecycleProjection.device(d, entries, inventory.get(id), LocalDate.now(ZoneOffset.UTC), loaded.of(id));
-                    addVulnerabilities(List.of(d), List.of(row), inventory, loaded);
+                    addVulnerabilities(List.of(d), List.of(row), inventory, loaded, now);
                     return row;
                 });
     }

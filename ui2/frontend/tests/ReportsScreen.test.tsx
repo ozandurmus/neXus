@@ -9,6 +9,7 @@ const templates = [
   { template_id: "RPT-02", title: "Framework compliance and evidence coverage", audience: "Auditor", question: "How do the firewalls comply?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: true, missing_reads: [] },
   { template_id: "RPT-03", title: "Backup coverage and anomalies", audience: "Operations", question: "Which targets have an archive?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: false, missing_reads: [] },
   { template_id: "RPT-05", title: "HA and failover readiness", audience: "Operations", question: "Which clusters are ready?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: false, missing_reads: ["cp_failover_read"] },
+  { template_id: "RPT-17", title: "Lifecycle and licensing", audience: "Auditor", question: "Which licences, subscriptions and support contracts are expired or expiring within 30 or 90 days?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: false, missing_reads: [] },
 ] as const;
 
 function catalogue(rawView: boolean, masked: boolean): ReportCatalogue {
@@ -24,6 +25,46 @@ const doc: ReportDocumentView = {
     tables: [{ id: "targets", title: "Backup targets", columns: [{ key: "device", label: "Device" }, { key: "state", label: "State" }],
       rows: [[{ text: "FW-TANGO-04", kind: "DEVICE" }, { text: "NO ARCHIVE", kind: "STATUS" }]], empty_text: "none" }],
     notes: [] }],
+};
+
+const lifecycleDoc: ReportDocumentView = {
+  template_id: "RPT-17", title: "Lifecycle and licensing", audience: "Auditor",
+  question: "Which licences, subscriptions and support contracts are expired or expiring within 30 or 90 days?",
+  generated_at: "2026-11-24T09:00:00Z", projection: "MASKED", parameters: { from: "2026-11-18", to: "2026-11-24" },
+  data_as_of: [
+    { plane: "lifecycle", newest: "2026-11-24T06:00:00Z", oldest: "2026-11-22T06:00:00Z", covered: 2, total: 3, stale: 1, unit: "devices" },
+    { plane: "inventory", newest: "2026-11-24T06:00:00Z", oldest: "2026-11-24T06:00:00Z", covered: 3, total: 3, stale: 0, unit: "devices" },
+  ],
+  notices: ["NO EVIDENCE: 1 of 3 devices have no lifecycle evidence; they are shown as UNKNOWN, never as pass or fail."],
+  sections: [
+    { id: "licensing", title: "Licences, subscriptions and support contracts", data_as_of: [],
+      kpis: [{ label: "Expired", value: "1", tone: "BAD" }, { label: "Expiring within 30 days", value: "1", tone: "WARN" }],
+      tables: [{ id: "licensing_items", title: "Expired and expiring items",
+        columns: [{ key: "device", label: "Device" }, { key: "item", label: "Item" }, { key: "state", label: "State" }],
+        rows: [
+          [{ text: "FW-TANGO-04", kind: "DEVICE" }, { text: "CPSB-IPS", kind: "TEXT" }, { text: "EXPIRED", kind: "STATUS" }],
+          [{ text: "FW-TANGO-04", kind: "DEVICE" }, { text: "CPSB-URLF", kind: "TEXT" }, { text: "WITHIN 30 DAYS", kind: "STATUS" }],
+        ], empty_text: "none" }],
+      notes: [] },
+    { id: "advisories", title: "Advisory exposure (CISA KEV and critical/high)", data_as_of: [],
+      kpis: [{ label: "Affected by CISA KEV (exploited)", value: "1", tone: "BAD" }],
+      tables: [{ id: "advisory_affected", title: "Devices matching advisories",
+        columns: [{ key: "device", label: "Device" }, { key: "state", label: "Status" }],
+        rows: [[{ text: "FW-TANGO-04", kind: "DEVICE" }, { text: "EXPLOITED", kind: "STATUS" }]], empty_text: "none" }],
+      notes: [] },
+    { id: "live_patch_hotfix", title: "Live Patch and hotfix currency", data_as_of: [],
+      kpis: [{ label: "Check Point Live Patch not active", value: "1", tone: "WARN" }],
+      tables: [{ id: "live_patch_hotfix", title: "Live Patch and hotfix levels",
+        columns: [{ key: "device", label: "Device" }, { key: "state", label: "State" }],
+        rows: [[{ text: "FW-TANGO-04", kind: "DEVICE" }, { text: "NOT ACTIVE", kind: "STATUS" }]], empty_text: "none" }],
+      notes: [] },
+    { id: "coverage", title: "Lifecycle read coverage and freshness", data_as_of: [],
+      kpis: [{ label: "Newest lifecycle read age", value: "3 h", tone: "OK" }],
+      tables: [{ id: "no_lifecycle_read", title: "Devices with no lifecycle read",
+        columns: [{ key: "device", label: "Device" }, { key: "state", label: "State" }],
+        rows: [[{ text: "FW-JULIET-06", kind: "DEVICE" }, { text: "NO READ", kind: "STATUS" }]], empty_text: "none" }],
+      notes: [] },
+  ],
 };
 
 function run(over: Partial<ReportRunView> = {}): ReportRunView {
@@ -43,7 +84,10 @@ function server(opts: { rawView?: boolean; masked?: boolean; runs?: ReportRunVie
     const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
     if (url === "/session/status") return json({ csrf_token: "csrf" });
     if (url === "/api/v2/reports/catalogue") return json(catalogue(opts.rawView ?? false, opts.masked ?? true));
-    if (url === "/api/v2/reports/preview") return json(doc);
+    if (url === "/api/v2/reports/preview") {
+      const req = init?.body ? JSON.parse(String(init.body)) as { template_id?: string } : {};
+      return json(req.template_id === "RPT-17" ? lifecycleDoc : doc);
+    }
     if (url === "/api/v2/reports/runs" && method === "POST") return json(run({ state: "SUCCEEDED" }), 202);
     if (url === "/api/v2/reports/runs") return json({ runs: opts.runs ?? [], permissions: { masked: opts.masked ?? true, raw_view: opts.rawView ?? false } });
     return json({}, 404);
@@ -64,6 +108,33 @@ describe("Reports screen (Reports R1)", () => {
     expect(screen.getByText("How do the firewalls comply?")).toBeInTheDocument();
     // a report whose underlying domain read is missing says so and cannot be opened
     expect(screen.getByText("Needs read access: cp_failover_read")).toBeInTheDocument();
+    const rpt17Card = document.querySelector("[data-report-card='RPT-17']") as HTMLElement;
+    expect(rpt17Card).not.toBeNull();
+    expect(within(rpt17Card).getByText("RPT-17 · Auditor")).toBeInTheDocument();
+    expect(within(rpt17Card).getByText("Lifecycle and licensing")).toBeInTheDocument();
+  });
+
+  it("opens RPT-17 Lifecycle and licensing from its catalogue card and previews all four sections without a framework selector", async () => {
+    const calls = server();
+    render(<ReportsScreen />);
+    await screen.findByText("Lifecycle and licensing");
+    const rpt17Card = document.querySelector("[data-report-card='RPT-17']") as HTMLElement;
+    fireEvent.click(within(rpt17Card).getByRole("button", { name: "Run & preview" }));
+    expect(screen.queryByLabelText("Framework")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(await screen.findByText("Licences, subscriptions and support contracts")).toBeInTheDocument();
+    expect(screen.getByText("Advisory exposure (CISA KEV and critical/high)")).toBeInTheDocument();
+    expect(screen.getByText("Live Patch and hotfix currency")).toBeInTheDocument();
+    expect(screen.getByText("Lifecycle read coverage and freshness")).toBeInTheDocument();
+    expect(screen.getAllByText("FW-TANGO-04").length).toBeGreaterThan(0);
+    expect(screen.getByText("FW-JULIET-06")).toBeInTheDocument();
+    expect(screen.getByText("EXPIRED")).toBeInTheDocument();
+    expect(screen.getByText("WITHIN 30 DAYS")).toBeInTheDocument();
+    expect(screen.getByText("EXPLOITED")).toBeInTheDocument();
+    expect(screen.getByText("NO READ")).toBeInTheDocument();
+    const preview = calls.find(c => c.url === "/api/v2/reports/preview")!;
+    expect(preview.body).toMatchObject({ template_id: "RPT-17", projection: "MASKED" });
+    expect((preview.body as Record<string, unknown>).framework).toBeUndefined();
   });
 
   it("previews on screen with data as of, stale notices and the masked stamp, and offers PDF, XLSX and CSV", async () => {

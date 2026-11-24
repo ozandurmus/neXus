@@ -14,10 +14,10 @@ export const FRAMEWORK_LABELS: Readonly<Record<string, string>> = {
 
 export function toneOf(word: string): Tone {
   const w = word.toUpperCase();
-  if (["OK", "HEALTHY", "READY", "CURRENT", "SUCCEEDED", "RESOLVED"].includes(w)) return "ok";
-  if (["BAD", "AT RISK", "NOT_READY", "FAILED", "NO ARCHIVE", "CRITICAL"].includes(w)) return "bad";
-  if (["WARN", "STALE", "OPEN", "HIGH"].includes(w)) return "warn";
-  if (w === "UNKNOWN") return "unknown";
+  if (["OK", "HEALTHY", "READY", "CURRENT", "SUCCEEDED", "RESOLVED", "COLLECTED"].includes(w)) return "ok";
+  if (["BAD", "AT RISK", "NOT_READY", "FAILED", "NO ARCHIVE", "CRITICAL", "EXPIRED", "EXPLOITED", "MISSING", "NO READ", "UNREGISTERED", "OUT_OF_COMPLIANCE"].includes(w)) return "bad";
+  if (["WARN", "STALE", "OPEN", "HIGH", "WITHIN 30 DAYS", "WITHIN 90 DAYS", "CRITICAL_HIGH", "NOT ACTIVE", "STORED"].includes(w)) return "warn";
+  if (["UNKNOWN", "NOT_EVALUATED", "NOT_COLLECTED", "VERSION_UNKNOWN", "NOT_COVERED"].includes(w)) return "unknown";
   return "neutral";
 }
 

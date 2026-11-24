@@ -123,6 +123,7 @@ function RunPanel({ catalogue, error, template, onTemplate, onGenerated }: {
   const [run, setRun] = useState<ReportRunView | null>(null);
   const poll = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (poll.current) clearTimeout(poll.current); }, []);
+  useEffect(() => { setDoc(null); setFailure(null); setMessage(null); }, [template]);
   if (error) return <Alert severity="error">The report catalogue could not be read: {error}</Alert>;
   if (!catalogue) return <Typography>Reading the report catalogue…</Typography>;
   const card = catalogue.templates.find(t => t.template_id === template) ?? catalogue.templates[0];

@@ -53,7 +53,8 @@ class ReportMaskingBytesTest {
             assertTrue(rawScan.contains("synthetic-raw"), template.id() + " " + renderer.format()
                     + ": the scan must see raw names in the RAW file, or the masked check proves nothing");
         }
-        if (template == ReportTemplate.RPT_02 || template == ReportTemplate.RPT_03 || template == ReportTemplate.RPT_01) {
+        if (template == ReportTemplate.RPT_02 || template == ReportTemplate.RPT_03 || template == ReportTemplate.RPT_01
+                || template == ReportTemplate.RPT_17) {
             assertTrue(scan(ReportFormat.CSV, new CsvReportRenderer().render(masked)).contains("FW-"),
                     "device names are pseudonyms, not blanks");
         }

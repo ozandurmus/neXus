@@ -27,6 +27,7 @@ public interface ReportBuilder {
             case RPT_02 -> new ComplianceCoverageBuilder();
             case RPT_03 -> new BackupCoverageBuilder();
             case RPT_05 -> new HaReadinessBuilder();
+            case RPT_17 -> new LifecycleLicensingBuilder();
         };
     }
 

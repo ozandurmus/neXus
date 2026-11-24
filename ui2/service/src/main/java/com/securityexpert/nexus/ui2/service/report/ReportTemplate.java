@@ -27,7 +27,12 @@ public enum ReportTemplate {
     RPT_05("RPT-05", "HA and failover readiness", "Operations",
             "Which HA clusters are ready for failover, which are not and why, and which readiness results are too old to "
                     + "rely on?",
-            List.of(ActionRegistry.CP_FAILOVER_READ), false);
+            List.of(ActionRegistry.CP_FAILOVER_READ), false),
+    RPT_17("RPT-17", "Lifecycle and licensing", "Auditor",
+            "Which licences, subscriptions and support contracts are expired or expiring within 30 or 90 days, which "
+                    + "devices match exploited or critical/high advisories, what Live Patch and hotfix levels are stored, "
+                    + "and which devices have no lifecycle read?",
+            List.of(ActionRegistry.DEVICE_READ), false);
 
     private final String id;
     private final String title;
