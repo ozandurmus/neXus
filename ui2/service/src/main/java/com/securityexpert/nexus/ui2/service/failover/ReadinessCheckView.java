@@ -244,12 +244,11 @@ public final class ReadinessCheckView {
             case 5 -> count(d,"count"," ARP entries");
             case 6 -> connectionSummary(pass,d);
             case 8 -> rate(d.path("bytesPerSecond"))+(pass || !measuredRate(d.path("bytesPerSecond")) ? "" : ", below tolerance");
-            case 9 -> (pass ? d.path("baselineRecorded").asBoolean(false) ? "Sync OK, baseline recorded"
+            case 9 -> "WARN".equals(status) ? syncWarning(d)+sentRejects(d) : (pass ? d.path("baselineRecorded").asBoolean(false) ? "Sync OK, baseline recorded"
                 : d.has("baselineAt") ? "Sync OK, no lost-counter increase"
                     +(d.path("counterReset").asBoolean(false) ? "; counter reset, baseline recorded" : "")
                 : "Sync OK, 0 lost updates" : syncFailure(d))
-                +(d.path("sentRejectNotifications").isIntegralNumber()
-                    ? " ("+d.path("sentRejectNotifications").asLong()+" sent rejects)" : "");
+                +sentRejects(d);
             case 10 -> policySummary(status,d);
             case 11 -> pass ? "No pnotes in problem state" : "Pnotes in problem state";
             case 12 -> pass ? d.path("noneConfigured").asBoolean(false) ? "No bonds configured" : "Required bond links up" : "Bond links not ready";
@@ -440,6 +439,20 @@ public final class ReadinessCheckView {
         if(!d.path("installSkewSeconds").isIntegralNumber()) return "an unknown interval";
         long seconds=d.path("installSkewSeconds").asLong();
         return seconds%3600==0?seconds/3600+" h":seconds%60==0?seconds/60+" min":seconds+" s";
+    }
+
+    private static String sentRejects(JsonNode d) {
+        return d.path("sentRejectNotifications").isIntegralNumber()
+            ? " ("+d.path("sentRejectNotifications").asLong()+" sent rejects)" : "";
+    }
+    /** PO 2026-11-23: a small lost-update increase is a warning; the limit and the elapsed time come from the check evidence. */
+    private static String syncWarning(JsonNode d) {
+        JsonNode increase=d.path("lostUpdatesIncrease"),seconds=d.path("elapsedSeconds"),limit=d.path("warnPerHour");
+        if(!increase.isIntegralNumber() || !seconds.isIntegralNumber() || !limit.isIntegralNumber())
+            return "Sync OK; lost-update increase within the warning rate";
+        double hours=seconds.asLong()/3600.0;
+        return "Sync OK; +"+increase.bigIntegerValue()+" lost updates in "
+            +String.format(Locale.ROOT,"%.1f",hours).replace(".0","")+" h (below "+limit.asLong()+" per hour)";
     }
 
     private static String syncFailure(JsonNode d) {

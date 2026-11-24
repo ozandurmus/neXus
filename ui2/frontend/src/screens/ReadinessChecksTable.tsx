@@ -109,12 +109,14 @@ export function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = 
     const first = checks.find(check => check.checkNo === no)!;
     const blocking = checks.some(check => check.checkNo === no && check.blocking);
     const failed = blocking && members.some(check => check?.result === "FAIL");
-    const passed = blocking && members.every(check => check?.result === "PASS");
+    // A WARN is a pass-with-warning (PO 2026-11-23): amber, never counted as passed; a FAIL on either member wins.
+    // A row reads as a warning only when every member is WARN or PASS: UNKNOWN or a missing member stays Unknown.
+    // The warning row itself may be non-blocking (the readiness model marks WARN rows blocking=false).
+    const warned = !failed && members.some(check => check?.result === "WARN")
+      && members.every(check => check?.result === "WARN" || check?.result === "PASS");
+    const passed = blocking && !warned && members.every(check => check?.result === "PASS");
     // Palo Alto config sync off on one member: the row is still blocking, but only that member's own cell is red.
     const perMember = failed && members.some(check => check?.memberSync !== undefined);
-    // WARN: non-blocking warning (VS0 policy row, PO 2026-11-23) or a blocking check that warns (PAN idle session sync, PO 2026-11-23); a FAIL on either member wins.
-    const warned = !failed && members.some(check => check?.result === "WARN")
-      && (!blocking || members.every(check => check?.result === "PASS" || check?.result === "WARN"));
     return { no, title: first.title, members, blocking, failed, passed, perMember, warned };
   });
 }
@@ -225,8 +227,8 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
       </Box>
       {canRun && <M3Button deviceJob emphasis="outlined" disabled={running || disabled} onClick={onRun}>Run pre-checks</M3Button>}
     </Stack>
-    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1.5, my: 2.5 }}>
-      {[["Passed", rows.filter(row => row.passed).length], ["Blocking", blocking], ["Info", rows.filter(row => !row.blocking && !row.warned).length]].map(([label, count]) =>
+    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1.5, my: 2.5 }}>
+      {[["Passed", rows.filter(row => row.passed).length], ["Blocking", blocking], ["Warning", rows.filter(row => row.warned).length], ["Info", rows.filter(row => !row.blocking && !row.warned).length]].map(([label, count]) =>
         <Box key={label} aria-label={`${label}: ${count}`} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, px: 2, py: 1 }}>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{label}</Typography>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>{count}</Typography>

@@ -161,7 +161,7 @@ class CpFailoverJobExecutorTest {
     static final class Script {
         String lostReplyStep, runtimeErrorStep;
         boolean notSentTransportFailure;
-        boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
+        boolean down,up,stuck,badPre,badPost,badSync,warnSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
         boolean extraTableRows,reverseActive,observerLocalIndices;
@@ -301,7 +301,7 @@ class CpFailoverJobExecutorTest {
                     }
                     if(cmd.endsWith("cphaprob syncstat")) return new ExecResult.Completed(
                         "Delta Sync Statistics\nSync status: OK\nDrops:\nLost updates................................. "
-                            +(badSync&&!first&&!down?"1":"0")+"\nLost bulk update events...................... 0\nSent reject notifications.................... 4554\nReceived reject notifications................ 0\n",0);
+                            +(badSync&&!first&&!down?"50":warnSync&&!first&&!down?"5":"0")+"\nLost bulk update events...................... 0\nSent reject notifications.................... 4554\nReceived reject notifications................ 0\n",0);
                     if(cmd.endsWith("fw stat")) return new ExecResult.Completed(
                         "HOST POLICY DATE\nlocalhost "+((badPolicy&&!first&&!down || changedPolicyPost&&down)?"Other_Policy":"Sample_Policy")
                             +" 10Sep2018 14:01:25 : [>eth0]\n",0);
@@ -866,12 +866,23 @@ class CpFailoverJobExecutorTest {
     @Test void readinessUsesStoredCounterBaselineAndRecordsIncrease() {
         Store store=new Store(); store.kind="READINESS";
         store.previous=Optional.of(new JooqCpFailoverRepository.Check("pre",A,null,9,"PASS",
-            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.parse("2026-09-30T12:00:00Z")));
+            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.now().minusSeconds(600)));
         Script script=new Script(); script.badSync=true;
         run(store,script);
         check(store.checks.contains("pre:9:FAIL"));
-        check(store.derivedValues.stream().anyMatch(d -> d.contains("\"lostUpdatesIncrease\":1")));
+        check(store.derivedValues.stream().anyMatch(d -> d.contains("\"lostUpdatesIncrease\":50")));
         check("NOT_READY".equals(store.outcome));
+    }
+    /** PO 2026-11-23: a small lost-update rate is recorded as WARN and neither blocks nor makes the run NOT_READY. */
+    @Test void readinessSmallLostUpdateRateWarnsWithoutBlocking() {
+        Store store=new Store(); store.kind="READINESS";
+        store.previous=Optional.of(new JooqCpFailoverRepository.Check("pre",A,null,9,"PASS",
+            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.now().minusSeconds(6*3600)));
+        Script script=new Script(); script.warnSync=true;
+        run(store,script);
+        check(store.checks.contains("pre:9:WARN"));
+        check(store.derivedValues.stream().anyMatch(d -> d.contains("\"lostUpdatesIncrease\":5") && d.contains("\"warnPerHour\":10")));
+        check(!"NOT_READY".equals(store.outcome));
     }
     private static final String LOGIN_WARNING="Warning! Synthetic boot password reminder.\n";
     private static final String VS_CONTEXT="Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n";
@@ -1287,7 +1298,7 @@ class CpFailoverJobExecutorTest {
     @Test void syncFailureStopsBeforeWrite() {
         Store store=new Store();
         store.previous=Optional.of(new JooqCpFailoverRepository.Check("pre",A,null,9,"PASS",
-            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.parse("2026-09-30T12:00:00Z")));
+            "{\"lostUpdates\":0,\"lostBulkUpdateEvents\":0}",Instant.now().minusSeconds(600)));
         Script script=new Script(); script.badSync=true; run(store,script);
         check(store.state.equals("STOPPED") && "STATE_SYNC_NOT_READY".equals(store.outcome));
         check(script.downCount==0 && script.upCount==0);
