@@ -73,6 +73,10 @@ elif [ "$SECURITY_CONFIGURED" = 0 ]; then
   echo '{"security_gate":"not_configured"}'
 else
   CHANGES_STARTED=1
+  # PO 2026-11-23: when the pre-merge gate (security_host.py pregate, run by the ship beside the preview) left a PASS for
+  # this commit's TREE under the same gate policy and gate day, the Job started below skips only the tree-determined
+  # scans (semgrep, gitleaks over the tree, trivy fs/config); the Git history and EVERY image built below are still
+  # scanned. `gate` re-checks the verdict after the Job passes and runs the full gate otherwise.
   # Ship deploy speed (PO 2026-11-23): the security source snapshot and the gate Job start (about 40 s) run in the
   # background, beside the build context and the image builds, instead of before them. The commands, their order and
   # their arguments are unchanged; nothing reaches the security gate or the rollout before both have finished (the
@@ -83,7 +87,8 @@ else
     python3 "$REPO/tools/security/security_host.py" snapshot --config "$HOME/.config/nexus/security.json" \
       --rules "$HOME/.config/nexus/security-rules"
     if [ -f "$SECURITY_JOB_FILE" ]; then
-      python3 "$REPO/tools/security/security_host.py" start --config "$HOME/.config/nexus/security.json" --commit "$COMMIT_SHA" > "$SECURITY_JOB_FILE"
+      python3 "$REPO/tools/security/security_host.py" start --config "$HOME/.config/nexus/security.json" \
+        --commit "$COMMIT_SHA" --repo "$REPO" --rules "$HOME/.config/nexus/security-rules" > "$SECURITY_JOB_FILE"
       timing source_snapshot "$phase_start"
     fi
   ) &
@@ -249,8 +254,9 @@ fi
 
 if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then
   gate_start=$SECONDS
-  echo "Running security-gate on the freshly built digest..."
+  echo "Running security-gate on the freshly built digests..."
   python3 "$REPO/tools/security/security_host.py" gate --config "$HOME/.config/nexus/security.json" \
+    --rules "$HOME/.config/nexus/security-rules" --repo "$REPO" \
     --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" ${PA_IMAGE:+--image "$PA_IMAGE"} \
     ${SX_IMAGE:+--image "$SX_IMAGE"} \
     --commit "$COMMIT_SHA" --job-name "$SECURITY_JOB"

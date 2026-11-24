@@ -371,6 +371,13 @@ def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp
     main_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "b" * 64
     pa_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "c" * 64
     sx_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "d" * 64
+    # The deploy gate gets what it needs to check a pre-merge verdict (start) and to re-check it (gate); the old
+    # all-or-nothing `reuse` step is gone (every deployed digest is always scanned).
+    for call in executed:
+        if call[:2] == ["python3", "tools/security/security_host.py"] and call[2] in ("start", "gate"):
+            assert call[call.index("--repo") + 1] == str(home / "nexus")
+            assert call[call.index("--rules") + 1] == str(home / ".config/nexus/security-rules")
+    assert not any(c[:3] == ["python3", "tools/security/security_host.py", "reuse"] for c in executed)
     gates = [c for c in executed if c[:3] == ["python3", "tools/security/security_host.py", "gate"]]
     if mode in ("pass", "gate-failure", "pa-off", "sx-failure", "side-off"):
         images = [gates[0][i + 1] for i, a in enumerate(gates[0]) if a == "--image"]
