@@ -450,3 +450,30 @@ def test_squash_fallback_still_applies_inside_a_retry(monkeypatch):
     calls, sleeps = _gh_stub(monkeypatch, [(1, BAD_GATEWAY), (1, "GraphQL: This branch can't be rebased"), (0, "")], ["OPEN"])
     assert sa._merge_pull_request("https://example/pr/1").returncode == 0
     assert [c[-1] for c in calls if c[2] == "merge"] == ["--rebase", "--rebase", "--squash"]
+
+
+def test_git_fetch_retries_a_ref_lock_race_only(monkeypatch):
+    calls = []
+    answers = [(1, "error: cannot lock ref 'refs/remotes/origin/main': is at a but expected b"), (0, "")]
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        rc, err = answers.pop(0)
+        return types.SimpleNamespace(returncode=rc, stdout="", stderr=err)
+
+    monkeypatch.setattr(sa.subprocess, "run", fake_run)
+    monkeypatch.setattr(sa.time, "sleep", lambda s: None)
+    sa._git("fetch", "-q", "origin")
+    assert len(calls) == 2
+
+    calls.clear()
+    answers[:] = [(1, "fatal: could not read from remote repository")]
+    with pytest.raises(SystemExit):
+        sa._git("fetch", "-q", "origin")
+    assert len(calls) == 1
+
+    calls.clear()
+    answers[:] = [(1, "error: cannot lock ref 'refs/heads/x'")]
+    with pytest.raises(SystemExit):
+        sa._git("update-ref", "refs/heads/x", "HEAD")
+    assert len(calls) == 1
