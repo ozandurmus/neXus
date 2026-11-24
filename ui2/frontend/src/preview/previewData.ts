@@ -69,15 +69,6 @@ export const ALIGNMENT: readonly AlignmentRow[] = [
   { device: "FW-BRAVO-02-M1", setting: "dns.resolver[1]", expected: "dns-pri.example.test", effective: "dns-pri.example.test", state: "Aligned" },
 ];
 
-export const ALIGNMENT_TOTALS: readonly { readonly label: string; readonly n: number }[] = [
-  { label: "Aligned", n: 31 },
-  { label: "Member-specific", n: 5 },
-  { label: "Local override", n: 6 },
-  { label: "Difference observed", n: 3 },
-  { label: "Effective drift", n: 2 },
-  { label: "Out of sync", n: 1 },
-];
-
 export interface InventoryRow {
   readonly kind: "CP" | "VSX" | "PAN" | "MDS";
   readonly name: string;

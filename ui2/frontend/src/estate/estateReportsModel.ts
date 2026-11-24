@@ -208,8 +208,3 @@ export function runDocument(run: ReportRunView): RunDocument {
   }
   return { available: true, sections };
 }
-
-/** Evidence age of a run, from the newest plane timestamp (UNKNOWN when the run carries none). */
-export function runEvidenceAgeLabel(run: ReportRunView, now: Date): string {
-  return evidenceAgeLabel(newestEvidenceAt(run), now);
-}
