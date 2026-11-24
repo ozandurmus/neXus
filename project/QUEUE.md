@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0412 · Track: PCP.x · Generated: 2026-11-24T16:07:39Z
+Build: NXS-LOCAL-0413 · Track: PCP.x · Generated: 2026-11-24T17:34:53Z
 
 ## Now
-- NXS-LOCAL-0412 — Policy Insights frozen (PO 2026-11-24), four unused static helpers removed (automated_validated)
+- NXS-LOCAL-0413 — FortiGate policy-lookup validation read DRAFT proposal, Packet Analysis format tests (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -151,8 +151,8 @@ Build: NXS-LOCAL-0412 · Track: PCP.x · Generated: 2026-11-24T16:07:39Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0413 (automated_validated)
 - NXS-LOCAL-0412 (automated_validated)
 - NXS-LOCAL-0411 (automated_validated)
 - NXS-LOCAL-0410 (automated_validated)
 - NXS-LOCAL-0409 (automated_validated)
-- NXS-LOCAL-0408 (automated_validated)
