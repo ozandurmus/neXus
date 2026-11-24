@@ -58,7 +58,7 @@ export function coverageText(item: CutoverCoverageItem): string {
     case "NAT_NOT_EVALUATED": return "The target policy holds NAT rules. NAT is not evaluated, so a translated flow may match a different rule.";
     case "TARGET_NOT_EVALUABLE": return "No evaluable policy is stored for the target firewall (policy not collected for its vendor yet): every flow is not evaluable.";
     case "TARGET_SNAPSHOT_INCOMPLETE": return "The stored target policy snapshot is incomplete: some of its parts failed to collect.";
-    case "ZONE_PAIR_MISSING": return "Palo Alto target without both zones: every flow stays not decided.";
+    case "ZONE_PAIR_MISSING": return "Target without both zones or interfaces (Palo Alto, Cisco ASA, FortiGate): every flow stays not decided.";
     case "IPV6_FLOWS_SET_ASIDE": return `${count(item)} IPv6 rows set aside; this step assesses IPv4 only.`;
     case "INVALID_ROWS": return `${count(item)} rows could not be read.`;
     case "OUT_OF_SCOPE_FLOWS": return `${count(item)} rows fall outside this segment's blocks and peers and were not assessed.`;

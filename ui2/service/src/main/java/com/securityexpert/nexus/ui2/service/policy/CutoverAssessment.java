@@ -28,8 +28,11 @@ public final class CutoverAssessment {
     public static final int MAX_BLOCKS = 4096;
     public static final int MAX_SOURCES_LISTED = 50;
     static final int WORK = 250_000;
-    /** Vendors whose stored policy the lookup evaluates. An ASA or FortiGate policy model joins here (PO 2026-11-14, Q8). */
-    public static final Set<String> LOOKUP_VENDORS = Set.of("CP", "PAN");
+    /** Vendors whose stored policy the lookup evaluates (Cisco ASA and FortiGate joined with delivery step 9 of the ASA/FortiGate policy design). */
+    public static final Set<String> LOOKUP_VENDORS = Set.of("CP", "PAN", "ASA", "FGT");
+
+    /** Vendors whose decision depends on the arrival and exit interface or zone. */
+    static final Set<String> ZONE_VENDORS = Set.of("PAN", "ASA", "FGT");
 
     public static final String VENDOR_POLICY_NOT_COLLECTED = "VENDOR_POLICY_NOT_COLLECTED";
     public static final String VENDOR_POLICY_NOT_EVALUABLE = "VENDOR_POLICY_NOT_EVALUABLE";
@@ -268,8 +271,8 @@ public final class CutoverAssessment {
     }
 
     /**
-     * The target: its policy, the zone the redirected traffic arrives in on the segment side and on the peer side (Palo
-     * Alto; never inferred from routing), and what is known about its snapshot.
+     * The target: its policy, the zone (Palo Alto), ASA interface nameif or FortiGate interface or zone the redirected traffic
+     * arrives in on the segment side and on the peer side (never inferred from routing), and what is known about its snapshot.
      */
     public record Target(FlowPolicy policy, String segmentZone, String peerZone, boolean snapshotIncomplete, boolean natPresent) {
         public Target {
@@ -281,7 +284,8 @@ public final class CutoverAssessment {
             if (value.length() > 200 || value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("ZONE_INVALID: zone names are at most 200 characters");
             return value;
         }
-        boolean zonePairMissing() { return policy.evaluable() && "PAN".equals(policy.vendor()) && (segmentZone.isEmpty() || peerZone.isEmpty()); }
+        /** Palo Alto zones, Cisco ASA interface names and FortiGate interfaces or zones are never inferred from routing; Check Point needs none. */
+        boolean zonePairMissing() { return policy.evaluable() && ZONE_VENDORS.contains(policy.vendor()) && (segmentZone.isEmpty() || peerZone.isEmpty()); }
     }
 
     // ---- run --------------------------------------------------------------------------------------------------
