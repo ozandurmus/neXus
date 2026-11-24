@@ -13,3 +13,5 @@ status: in_progress · target: ACI decision 2026-11-14
 2026-11-23 (lane q-398): HA_POLICY_DIVERGENT (record decision 6, design 5.1) shipped as a read-only comparison: `HaPolicyPairing` hashes each member snapshot canonically (HAPOL1, per-member ids/times/hits excluded) and `GET /api/v2/policy/ha-pairs` (policy_read, masked for aiview) reports SAME / HA_POLICY_DIVERGENT / UNKNOWN per ASA and FortiGate pair and context, only for pairs whose `ha_pair_identity` is MATCH. Nothing is merged yet: "count once" in hygiene and the zone matrix is the follow-up lane; live validation against stored pairs is open.
 
 Cutover analysis now decides ASA and FortiGate targets through PolicyLookup (design step 9, merged lane q-376; superseded no-picker test dropped in 3ea02652).
+
+2026-11-23: FortiGate policy-lookup validation read researched from official Fortinet documentation and proposed for PO literal approval (DRAFT, approves nothing): docs/design/FORTIGATE_POLICY_LOOKUP_VALIDATION_READ_PROPOSAL_2026_11_23.md
