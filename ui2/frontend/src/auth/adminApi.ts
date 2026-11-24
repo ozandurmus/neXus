@@ -3174,8 +3174,15 @@ export interface SystemHealthDevice {
     readonly level: HealthFactLevel; readonly reason: string | null; readonly threshold_percent: number;
     readonly newest_p95_percent: number | null; readonly days_over_threshold: number; readonly longest_run_over_threshold: number;
     readonly days: readonly SystemHealthSarDay[]; readonly day_basis: string;
+    /** Where CPU came from: SNMP samples, sar texts (Check Point fallback), or null (no source). */
+    readonly source?: "SNMP" | "SAR" | null;
+    /** Palo Alto over SNMP: the data plane's newest-day p95 (cpu is the management plane). */
+    readonly dataplane_newest_p95_percent?: number | null;
   };
-  readonly memory: { readonly level: "EVIDENCED" | "UNKNOWN" | "NOT_APPLICABLE"; readonly reason: string | null; readonly newest_used_p95_percent: number | null };
+  readonly memory: {
+    readonly level: "EVIDENCED" | "UNKNOWN" | "NOT_APPLICABLE"; readonly reason: string | null; readonly newest_used_p95_percent: number | null;
+    readonly source?: "SNMP" | "SAR" | null;
+  };
   readonly restarts: {
     readonly level: HealthFactLevel; readonly reason: string | null; readonly count: number | null; readonly max_in_one_hour: number | null;
     readonly termination_lines: number | null; readonly busiest_hour: string | null; readonly rule: string;
@@ -3255,6 +3262,71 @@ export type SystemLogSettingsPatch = Partial<Pick<SystemLogSettingsView, SystemL
 export const getSystemLogSettings = () => call<SystemLogSettingsView>("/api/v2/config/system-logs", "GET");
 export const saveSystemLogSettings = (patch: SystemLogSettingsPatch) =>
   call<SystemLogSettingsView>("/api/v2/config/system-logs", "PUT", patch);
+
+// ---------------------------------------------------------------------------------------------------------------
+// SNMP polling (SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md section 11, option B; `GET/PUT /api/v2/config/snmp-polling`).
+// The fleet switch, the interval, the fleet default credential and per-vendor / per-device rows. Credentials are
+// picked from the credential store by opaque reference; the browser never sees a secret or a username.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type SnmpScopeMode = "VENDORS" | "DEVICES";
+
+export interface SnmpVendorRow {
+  readonly vendor: string;
+  readonly in_scope: boolean;
+  readonly credential_reference_id: string | null;
+}
+
+export interface SnmpDeviceRow {
+  readonly device_id: string;
+  readonly in_scope: boolean;
+  readonly credential_reference_id: string | null;
+}
+
+export interface SnmpCredentialOption {
+  readonly credential_reference_id: string;
+  readonly display_name: string;
+  readonly security_level: string | null;
+  readonly auth_protocol: string | null;
+  readonly priv_protocol: string | null;
+  /** authPriv with SHA-2 authentication and AES privacy: the only kind the poller uses. */
+  readonly suitable: boolean;
+}
+
+export interface SnmpPollingView {
+  readonly enabled: boolean;
+  readonly interval_s: number;
+  readonly scope_mode: SnmpScopeMode;
+  readonly default_credential_reference_id: string | null;
+  readonly raw_retention_days: number;
+  readonly hourly_retention_days: number;
+  readonly vendors: readonly SnmpVendorRow[];
+  readonly devices: readonly SnmpDeviceRow[];
+  readonly credentials: readonly SnmpCredentialOption[];
+  readonly eligible_devices: readonly { readonly device_id: string; readonly vendor: string }[];
+  /** Devices by the outcome of their last poll in the last day (OK, PARTIAL, SNMP_NO_ANSWER, ...). */
+  readonly last_outcome_counts: Readonly<Record<string, number>>;
+  readonly pilot_vendors: readonly string[];
+  readonly interval_min_s: number;
+  readonly interval_max_s: number;
+  readonly warnings: readonly string[];
+  readonly updated_at: string | null;
+  readonly updated_by: string | null;
+  readonly can_write: boolean;
+}
+
+export interface SnmpPollingPatch {
+  readonly enabled?: boolean;
+  readonly interval_s?: number;
+  readonly scope_mode?: SnmpScopeMode;
+  readonly default_credential_reference_id?: string | null;
+  readonly vendors?: readonly SnmpVendorRow[];
+  readonly devices?: readonly SnmpDeviceRow[];
+}
+
+export const getSnmpPolling = () => call<SnmpPollingView>("/api/v2/config/snmp-polling", "GET");
+export const saveSnmpPolling = (patch: SnmpPollingPatch) =>
+  call<SnmpPollingView>("/api/v2/config/snmp-polling", "PUT", patch);
 
 // ---------------------------------------------------------------------------------------------------------------
 // Scheduled jobs: one on/off switch per scheduled job family (Administration > Platform > Scheduled jobs)

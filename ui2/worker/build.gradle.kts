@@ -21,6 +21,8 @@ dependencies {
     // (contract section 1: no real device; container-hosted-endpoint tests
     // are disabled placeholders, see WorkerTransportContainerPlaceholderTest).
     implementation(libs.jsch)
+    // SNMPv3 device metrics poller (worker/snmp): GET and GETBULK of gated OIDs only, never SET.
+    implementation(libs.snmp4j)
     implementation(libs.jackson.databind)
 
     testImplementation(libs.junit.jupiter)

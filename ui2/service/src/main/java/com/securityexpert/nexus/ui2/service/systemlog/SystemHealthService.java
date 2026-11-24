@@ -93,8 +93,14 @@ public final class SystemHealthService {
             Fact cpu, List<SarDay> sarDays, Double newestCpuP95, int daysOver, int consecutiveOver, Double memP95,
             Fact restarts, CpwdRestartLines.Summary cpwd, Fact crash, int newAlerts, Instant newestAlertAt,
             String collectionState, String collectionReason, Instant lastJobAt, String lastJobId,
-            Map<String, String> outcomes, LocalDate logsDay) {
+            Map<String, String> outcomes, LocalDate logsDay, String metricSource, Double newestDataplaneP95) {
     }
+
+    /** Where CPU and memory came from: SNMP samples (design SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md), sar texts, or none. */
+    static final String SOURCE_SNMP = "SNMP";
+    static final String SOURCE_SAR = "SAR";
+    /** The SNMP pilot vendors (PO decision 4). */
+    static final java.util.Set<String> SNMP_VENDORS = java.util.Set.of("check_point", "palo_alto");
 
     record Snapshot(Instant computedAt, long durationMs, int threshold, List<DeviceHealth> devices, boolean alertsTruncated,
             boolean storeAvailable) {
@@ -117,6 +123,14 @@ public final class SystemHealthService {
     });
     private volatile Snapshot latest;
     private volatile String lastFailureReason;
+    /** SNMP device metrics (V268); null = no SNMP source wired (CPU and memory from sar only). */
+    private volatile com.securityexpert.nexus.ui2.persistence.snmp.SnmpPollingRepository snmp;
+
+    /** Adds SNMP samples as the first CPU and memory source; sar stays the Check Point fallback. */
+    public SystemHealthService withSnmp(com.securityexpert.nexus.ui2.persistence.snmp.SnmpPollingRepository snmpRepository) {
+        this.snmp = snmpRepository;
+        return this;
+    }
 
     /**
      * A failed read (store, decrypt or parse) is never cached for good: it is retried on a later refresh, first after
@@ -230,6 +244,33 @@ public final class SystemHealthService {
             }
         }
 
+        Map<String, List<SarDay>> snmpDays = new HashMap<>();
+        Map<String, Double> snmpDataplane = new HashMap<>();
+        Map<String, String> snmpOutcomes = Map.of();
+        var snmpRepository = snmp;
+        if (snmpRepository != null) {
+            try {
+                Instant snmpSince = since.atStartOfDay(ZONE).toInstant();
+                for (var e : snmpRepository.daily(snmpSince, ZONE.getId()).entrySet()) {
+                    List<SarDay> days = new ArrayList<>();
+                    Double dataplane = null;
+                    for (var f : e.getValue()) {
+                        if (f.answered() <= 0 || f.day().isBefore(since) || f.day().isAfter(today)) continue;
+                        days.add(new SarDay(f.day(), null, new SarDailyText.Summary(-1, f.answered(), dbl(f.cpuP95()),
+                                dbl(f.cpuMax()), f.answered(), dbl(f.memP95()), 0, true), SOURCE_SNMP));
+                        dataplane = dbl(f.cpuDataplaneP95());
+                    }
+                    if (!days.isEmpty()) {
+                        snmpDays.put(e.getKey(), List.copyOf(days));
+                        if (dataplane != null) snmpDataplane.put(e.getKey(), dataplane);
+                    }
+                }
+                snmpOutcomes = snmpRepository.lastOutcomes();
+            } catch (RuntimeException unavailable) {
+                LOG.log(System.Logger.Level.WARNING, "SNMP samples unreadable cause={0}", unavailable.getClass().getSimpleName());
+            }
+        }
+
         Set<String> sarSeen = new HashSet<>();
         Set<String> cpwdSeen = new HashSet<>();
         List<DeviceHealth> out = new ArrayList<>();
@@ -237,7 +278,8 @@ public final class SystemHealthService {
             boolean target = targetIds.contains(d.deviceId());
             Map<String, FleetRunRow> deviceRuns = runs.getOrDefault(d.deviceId(), Map.of());
             out.add(one(d, target, includeManagement, deviceRuns, alertsByDevice.getOrDefault(d.deviceId(), List.of()),
-                    now, today, since, sarSeen, cpwdSeen));
+                    now, today, since, sarSeen, cpwdSeen, snmpDays.getOrDefault(d.deviceId(), List.of()),
+                    snmpDataplane.get(d.deviceId()), snmpOutcomes.get(d.deviceId())));
         }
         sarByFile.keySet().retainAll(sarSeen);
         cpwdByChunk.keySet().retainAll(cpwdSeen);
@@ -249,7 +291,8 @@ public final class SystemHealthService {
     }
 
     private DeviceHealth one(DeviceSummaryRecord d, boolean target, boolean includeManagement, Map<String, FleetRunRow> runs,
-            List<CrashAlertRow> alerts, Instant now, LocalDate today, LocalDate since, Set<String> sarSeen, Set<String> cpwdSeen) {
+            List<CrashAlertRow> alerts, Instant now, LocalDate today, LocalDate since, Set<String> sarSeen, Set<String> cpwdSeen,
+            List<SarDay> snmpDays, Double snmpDataplaneP95, String snmpOutcome) {
         boolean checkPoint = "check_point".equals(d.vendorHint());
         boolean management = "management_server".equals(d.role());
 
@@ -293,17 +336,57 @@ public final class SystemHealthService {
             }
         }
 
-        // ---- CPU and memory (sar)
+        // ---- CPU and memory: SNMP samples first (pilot gateways), then sar (Check Point), else no source
         Fact cpu;
         List<SarDay> sarDays = List.of();
         Double newestP95 = null;
         Double memP95 = null;
+        Double dataplaneP95 = null;
+        String metricSource = null;
         int daysOver = 0, consecutive = 0;
-        if (!checkPoint || management) {
-            cpu = Fact.NOT_APPLICABLE;
+        boolean snmpVendor = SNMP_VENDORS.contains(d.vendorHint()) && !management;
+        if (snmpVendor && !snmpDays.isEmpty()) {
+            metricSource = SOURCE_SNMP;
+            sarDays = snmpDays;
+            dataplaneP95 = snmpDataplaneP95;
+            int streak = 0, longest = 0;
+            boolean anyP95 = false;
+            for (SarDay day : sarDays) {
+                Double p95 = day.summary().cpuBusyP95();
+                if (p95 == null) {
+                    streak = 0;
+                    continue;
+                }
+                anyP95 = true;
+                if (p95 > threshold) {
+                    daysOver++;
+                    streak++;
+                    longest = Math.max(longest, streak);
+                } else {
+                    streak = 0;
+                }
+            }
+            consecutive = longest;
+            SarDay newest = sarDays.get(sarDays.size() - 1);
+            newestP95 = newest.summary().cpuBusyP95();
+            memP95 = newest.summary().memUsedP95();
+            if (!anyP95) cpu = new Fact("UNKNOWN", "SNMP_CPU_NOT_ANSWERED");
+            else if (consecutive >= CPU_DAYS_CRITICAL) cpu = new Fact("CRITICAL", "CPU_P95_OVER_THRESHOLD_" + consecutive + "_DAYS_IN_A_ROW");
+            else if (daysOver > 0) cpu = new Fact("ATTENTION", "CPU_P95_OVER_THRESHOLD_" + daysOver + "_DAYS");
+            else cpu = new Fact("NORMAL", null);
+        } else if (!checkPoint || management) {
+            // A pilot gateway the poller tried without an answer is UNKNOWN with the poll's reason, never "no source".
+            if (snmpVendor && snmpOutcome != null) {
+                metricSource = SOURCE_SNMP;
+                cpu = new Fact("UNKNOWN", "OK".equals(snmpOutcome) || "PARTIAL".equals(snmpOutcome)
+                        ? "SNMP_NO_SAMPLE_IN_WINDOW" : snmpOutcome);
+            } else {
+                cpu = Fact.NOT_APPLICABLE;
+            }
         } else if (store == null) {
             cpu = new Fact("UNKNOWN", "SYSTEM_LOG_STORE_UNAVAILABLE");
         } else {
+            metricSource = SOURCE_SAR;
             sarDays = sarDays(d.deviceId(), now, since, today, sarSeen);
             if (sarDays.isEmpty()) {
                 cpu = new Fact("UNKNOWN", "NO_SAR_DAY_STORED");
@@ -400,11 +483,11 @@ public final class SystemHealthService {
         }
         if (worst == Integer.MAX_VALUE && "OFF".equals(collectionState)) stateReason = "COLLECTION_OFF";
 
-        LocalDate logsDay = !sarDays.isEmpty() ? sarDays.get(sarDays.size() - 1).day()
+        LocalDate logsDay = SOURCE_SAR.equals(metricSource) && !sarDays.isEmpty() ? sarDays.get(sarDays.size() - 1).day()
                 : lastJobAt != null ? lastJobAt.atZone(ZONE).toLocalDate() : null;
         return new DeviceHealth(d, target, state, stateReason, cpu, sarDays, newestP95, daysOver, consecutive, memP95,
                 restarts, cpwd, crash, newAlerts, newestAlertAt, collectionState, collectionReason, lastJobAt, lastJobId,
-                outcomes, logsDay);
+                outcomes, logsDay, metricSource, dataplaneP95);
     }
 
     /** The stored sar days of the window, oldest first, one per calendar day (the newest fetch of a day wins). */
@@ -518,6 +601,9 @@ public final class SystemHealthService {
         rules.put("unknown", "a fact with no evidence (no sar day, cpwd not collected or a cpwd chunk unreadable, crash listing not run) outranks Normal; a device with no applicable fact is UNKNOWN");
         rules.put("state_order", STATE_ORDER);
         rules.put("p95", "nearest rank over the day's samples of the sar \"all\" CPU row, busy = 100 - %idle");
+        rules.put("p95_snmp", "where SNMP samples exist (Check Point and Palo Alto gateways): nearest rank over the day's "
+                + "answered polls; Check Point procUsage, Palo Alto management-plane hrProcessorLoad; sar is the Check Point "
+                + "fallback");
         Map<String, Object> restartRule = new LinkedHashMap<>();
         restartRule.put("id", CpwdRestartLines.RULE_ID);
         restartRule.put("status", CpwdRestartLines.RULE_STATUS);
@@ -571,7 +657,7 @@ public final class SystemHealthService {
             cpu.put("evidenced", evidenced);
             cpu.put("unknown", unknown);
             cpu.put("not_applicable", notApplicable);
-            cpu.put("basis", "newest stored sar day is yesterday or today and its p95 is above the threshold");
+            cpu.put("basis", "newest SNMP or stored sar day is yesterday or today and its p95 is above the threshold");
             kpis.put("cpu_over_threshold", cpu);
 
             int notOk = 0;
@@ -608,6 +694,7 @@ public final class SystemHealthService {
         Map<String, Object> cpu = new LinkedHashMap<>();
         cpu.put("level", h.cpu().level());
         cpu.put("reason", h.cpu().reason());
+        cpu.put("source", h.metricSource());
         cpu.put("threshold_percent", threshold);
         cpu.put("newest_p95_percent", round(h.newestCpuP95()));
         cpu.put("days_over_threshold", h.daysOver());
@@ -625,12 +712,19 @@ public final class SystemHealthService {
             days.add(d);
         }
         cpu.put("days", days);
-        cpu.put("day_basis", "device mtime of the sar file, calendar day in " + JobWindowPolicy.ZONE);
+        boolean bySnmp = SOURCE_SNMP.equals(h.metricSource());
+        cpu.put("day_basis", bySnmp ? "SNMP sample time, calendar day in " + JobWindowPolicy.ZONE
+                : "device mtime of the sar file, calendar day in " + JobWindowPolicy.ZONE);
+        // Palo Alto: cpu is hrProcessorLoad of the management plane; the data plane's newest-day p95 is shown beside it.
+        cpu.put("dataplane_newest_p95_percent", round(h.newestDataplaneP95()));
         m.put("cpu", cpu);
 
         Map<String, Object> mem = new LinkedHashMap<>();
         mem.put("level", "NOT_APPLICABLE".equals(h.cpu().level()) ? "NOT_APPLICABLE" : h.memP95() == null ? "UNKNOWN" : "EVIDENCED");
-        mem.put("reason", "NOT_APPLICABLE".equals(h.cpu().level()) ? null : h.memP95() == null ? (h.sarDays().isEmpty() ? "NO_SAR_DAY_STORED" : "SAR_TEXT_WITHOUT_MEMORY_SECTION") : null);
+        mem.put("reason", "NOT_APPLICABLE".equals(h.cpu().level()) ? null : h.memP95() == null
+                ? (bySnmp ? (h.sarDays().isEmpty() ? h.cpu().reason() : "SNMP_MEMORY_NOT_ANSWERED")
+                        : h.sarDays().isEmpty() ? "NO_SAR_DAY_STORED" : "SAR_TEXT_WITHOUT_MEMORY_SECTION") : null);
+        mem.put("source", h.metricSource());
         mem.put("newest_used_p95_percent", round(h.memP95()));
         m.put("memory", mem);
 
@@ -673,6 +767,10 @@ public final class SystemHealthService {
             }
         }
         return best == null ? null : best + ":00 device time";
+    }
+
+    private static Double dbl(java.math.BigDecimal v) {
+        return v == null ? null : v.doubleValue();
     }
 
     private static Double round(Double v) {

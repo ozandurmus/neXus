@@ -72,6 +72,10 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_SETTINGS_READ = "system_log_settings_read";
     /** Phase B section 14: writes the settings row ({@code PUT /api/v2/config/system-logs}); security_admin, never aiview. */
     public static final String SYSTEM_LOG_SETTINGS_WRITE = "system_log_settings_write";
+    /** Administration > SNMP polling ({@code GET /api/v2/config/snmp-polling}); security_admin; aiview masked read-only via UI2_AIVIEW_READONLY_ADMIN. */
+    public static final String SNMP_POLLING_SETTINGS_READ = "snmp_polling_settings_read";
+    /** Writes SNMP polling settings ({@code PUT /api/v2/config/snmp-polling}); security_admin, never aiview. */
+    public static final String SNMP_POLLING_SETTINGS_WRITE = "snmp_polling_settings_write";
     /** The configurable local-account password policy ({@code GET /api/v2/config/local-password-policy}); security_admin, never aiview. */
     public static final String LOCAL_PASSWORD_POLICY_READ = "local_password_policy_read";
     /** Writes the local password policy ({@code PUT /api/v2/config/local-password-policy}); security_admin, never aiview. */
@@ -362,7 +366,7 @@ public final class ActionRegistry {
      * {@code can_write=false} for aiview; no write, raw, export or download action is ever in this set.
      */
     public static final java.util.Set<String> AIVIEW_READONLY_ADMIN_READS = java.util.Set.of(
-            SYSTEM_LOG_SETTINGS_READ, LOCAL_PASSWORD_POLICY_READ, LOCAL_AUTH_MODE_READ);
+            SYSTEM_LOG_SETTINGS_READ, LOCAL_PASSWORD_POLICY_READ, LOCAL_AUTH_MODE_READ, SNMP_POLLING_SETTINGS_READ);
 
     public ActionRegistry() {
         this("true".equalsIgnoreCase(OverwatchEnv.getOrDefault(AIVIEW_READONLY_ADMIN_ENV, "false").strip()));
@@ -446,6 +450,9 @@ public final class ActionRegistry {
         // Settings read and write are security_admin only (contract section 14), like the notification settings.
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // SNMP polling settings (SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md section 11): security_admin, like the credentials.
+        register(new ActionDescriptor(SNMP_POLLING_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SNMP_POLLING_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LOCAL_PASSWORD_POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LOCAL_PASSWORD_POLICY_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LOCAL_AUTH_MODE_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));

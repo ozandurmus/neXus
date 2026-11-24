@@ -29,6 +29,7 @@ import { LocalSignInScopePanel } from "../components/settings/LocalSignInScopePa
 import { SamlSettingsPanel } from "../components/settings/SamlSettingsPanel";
 import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
 import { SystemLogSettingsPanel } from "../components/settings/SystemLogSettingsPanel";
+import { SnmpPollingPanel } from "../components/settings/SnmpPollingPanel";
 
 interface AdminSectionDef {
   readonly slug: string;
@@ -75,6 +76,8 @@ const PAGES: readonly AdminPageDef[] = [
       { slug: "device-management", label: "Device management", panel: <DeviceManagementPane /> },
       { slug: "inventory-exclusions", label: "Inventory exclusions", panel: <InventoryExclusionsPanel /> },
       { slug: "credentials", administratorOnly: true, label: "Credentials", panel: <CredentialsPanel /> },
+      // SNMP device metrics (SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md, option B): which stored SNMPv3 credential polls where.
+      { slug: "snmp-polling", administratorOnly: true, label: "SNMP polling", panel: <SnmpPollingPanel /> },
       // A per-device trust setting belongs with the registry, not with access control (UI review 2026-10-18, 2.7).
       { slug: "ssh-trust", label: "SSH trust", panel: <SshHostKeyPanel settings /> },
     ],

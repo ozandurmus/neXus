@@ -350,6 +350,14 @@ public final class AuditPresentationAllowlist {
             Map.entry("local_auth_mode_settings", Set.of("mode", "settings_id", "updated_at", "updated_by")),
             Map.entry("local_break_glass_event", Set.of(
                     "actor_fingerprint", "alert", "event_id", "kind", "occurred_at", "outcome")),
+            // V268: SNMP polling settings and overrides hold switches, bounds, closed vocabularies, opaque device ids and
+            // opaque credential reference ids -- never a secret or an address.
+            Map.entry("snmp_polling_settings", Set.of(
+                    "default_credential_reference_id", "enabled", "hourly_retention_days", "interval_s",
+                    "raw_retention_days", "scope_mode", "settings_id", "updated_at", "updated_by")),
+            Map.entry("snmp_polling_override", Set.of(
+                    "credential_reference_id", "device_id", "in_scope", "override_key", "scope_kind", "updated_at",
+                    "updated_by", "vendor")),
             Map.entry("system_log_settings", Set.of(
                     "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
                     "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",
