@@ -14,6 +14,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportReadRepository;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportRunStore;
 import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
+import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleService;
 import com.securityexpert.nexus.ui2.service.privacy.ReportProjectionMasker;
 import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
@@ -42,11 +43,13 @@ public class ReportConfiguration {
 
     @Bean
     public ReportService reportService(TransactionBoundary transactionBoundary, DeviceRepository deviceRepository,
-            ObjectProvider<CpFailoverService> failover, TopologyNamePseudonymizer names, SubnetPreservingIpMasker addresses,
+            ObjectProvider<CpFailoverService> failover, ObjectProvider<LifecycleService> lifecycle,
+            TopologyNamePseudonymizer names, SubnetPreservingIpMasker addresses,
             DeviceCompositionConfiguration.ArtefactStoreAccess artefactStoreAccess, RbacEvaluator rbac,
             ActionRegistry registry, ReportExecutor executor) {
         ReportService service = new ReportService(
-                new JooqReportData(new JooqReportReadRepository(transactionBoundary), deviceRepository, failover.getIfAvailable()),
+                new JooqReportData(new JooqReportReadRepository(transactionBoundary), deviceRepository,
+                        failover.getIfAvailable(), lifecycle.getIfAvailable()),
                 new JooqReportRunStore(transactionBoundary), reportStore(artefactStoreAccess, transactionBoundary),
                 new ReportDocumentMasker(new ReportProjectionMasker(names, addresses)), executor,
                 new ReportAccess(rbac, registry), Clock.systemUTC());

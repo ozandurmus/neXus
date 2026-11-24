@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.report;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -9,21 +10,29 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportReadRepository;
 import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
+import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleService;
 
 /**
  * Production {@link ReportData}: the read-only report queries (read-only transactions with a statement timeout), the
- * device list, and the failover summary the Operations screen shows (database reads only; no job, no device contact).
+ * device list, and the failover and lifecycle summaries the screens show (database reads only; no job, no device contact).
  */
 public final class JooqReportData implements ReportData {
 
     private final JooqReportReadRepository reads;
     private final DeviceRepository devices;
     private final CpFailoverService failover;
+    private final LifecycleService lifecycle;
 
     public JooqReportData(JooqReportReadRepository reads, DeviceRepository devices, CpFailoverService failover) {
+        this(reads, devices, failover, null);
+    }
+
+    public JooqReportData(JooqReportReadRepository reads, DeviceRepository devices, CpFailoverService failover,
+            LifecycleService lifecycle) {
         this.reads = Objects.requireNonNull(reads, "reads");
         this.devices = Objects.requireNonNull(devices, "devices");
         this.failover = failover;
+        this.lifecycle = lifecycle;
     }
 
     @Override
@@ -66,5 +75,14 @@ public final class JooqReportData implements ReportData {
                     r == null ? null : r.outcome(), r == null ? null : r.observedAt(),
                     r == null ? null : r.failedCheck(), r == null ? null : r.stopCode());
         }).toList();
+    }
+
+    @Override
+    public LifecycleService.FleetSnapshot lifecycleSnapshot(LocalDate today, Instant now) {
+        if (lifecycle == null) {
+            // An absent source is not a "no read recorded" fact: fail the run instead of fabricating NO READ.
+            throw new IllegalStateException("Lifecycle service is unavailable; lifecycle evidence cannot be read");
+        }
+        return lifecycle.fleetSnapshot(today, now);
     }
 }

@@ -163,9 +163,49 @@ class ReportsApiTest {
         JsonNode aiview = jsonOf(mvc.perform(read(BASE + "/catalogue", "synthetic-aiview")).andReturn());
         assertTrue(aiview.path("permissions").path("masked").asBoolean());
         assertFalse(aiview.path("permissions").path("raw_view").asBoolean());
-        assertEquals(4, aiview.path("templates").size());
+        assertEquals(5, aiview.path("templates").size());
         JsonNode admin = jsonOf(mvc.perform(read(BASE + "/catalogue", "synthetic-secadmin")).andReturn());
         assertTrue(admin.path("permissions").path("raw_view").asBoolean());
+    }
+
+    @Test
+    void rpt17LifecycleAndLicensingAppearsInCatalogueAndRendersMaskedForAiview() throws Exception {
+        JsonNode catalogue = jsonOf(mvc.perform(read(BASE + "/catalogue", "synthetic-aiview")).andReturn());
+        JsonNode rpt17 = null;
+        for (JsonNode card : catalogue.path("templates")) {
+            if ("RPT-17".equals(card.path("template_id").asText())) rpt17 = card;
+        }
+        org.junit.jupiter.api.Assertions.assertNotNull(rpt17, "RPT-17 must be in the catalogue");
+        assertEquals("Lifecycle and licensing", rpt17.path("title").asText());
+        assertFalse(rpt17.path("framework_parameter").asBoolean());
+        assertEquals(0, rpt17.path("missing_reads").size());
+
+        var preview = mvc.perform(post(BASE + "/preview", "synthetic-aiview", body("RPT-17", "MASKED", null))).andReturn();
+        assertEquals(200, preview.getResponse().getStatus());
+        assertEquals("true", preview.getResponse().getHeader(PrivacyMaskingResponseBodyAdvice.MASKED_HEADER));
+        String previewText = preview.getResponse().getContentAsString();
+        for (String value : ReportTestSupport.rawValues()) {
+            assertFalse(previewText.contains(value), "RPT-17 aiview preview leaks a raw value");
+        }
+        JsonNode doc = jsonOf(preview);
+        assertEquals("RPT-17", doc.path("template_id").asText());
+        assertEquals("MASKED", doc.path("projection").asText());
+        assertEquals(4, doc.path("sections").size());
+
+        for (String format : List.of("PDF", "XLSX", "CSV")) {
+            JsonNode run = jsonOf(mvc.perform(post(BASE + "/runs", "synthetic-aiview", body("RPT-17", "MASKED", format)))
+                    .andExpect(status().isAccepted()).andReturn());
+            assertEquals("SUCCEEDED", run.path("state").asText(), format);
+            var download = mvc.perform(read(BASE + "/runs/" + run.path("run_id").asText() + "/download", "synthetic-aiview"))
+                    .andReturn();
+            assertEquals(200, download.getResponse().getStatus(), format);
+            byte[] bytes = streamed(download).getResponse().getContentAsByteArray();
+            assertTrue(bytes.length > 0, format);
+            String latin1 = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+            for (String value : ReportTestSupport.rawValues()) {
+                assertFalse(latin1.contains(value), "RPT-17 " + format + " download leaks a raw value");
+            }
+        }
     }
 
     @Test

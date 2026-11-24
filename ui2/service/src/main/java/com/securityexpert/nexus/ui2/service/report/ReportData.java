@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.report;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -8,6 +9,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportReadRepository.BackupRow;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportReadRepository.ComplianceRow;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportReadRepository.DeviationRow;
+import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleService;
 
 /**
  * What the R1 report builders read: stored evidence only (contract "Data sources": the neXus database and the existing
@@ -37,4 +39,9 @@ public interface ReportData {
 
     /** Failover units as the Operations screen lists them, read under the requesting actor's own reader check. */
     List<HaUnit> haUnits(String actor);
+
+    /** Stored lifecycle, licensing, Live Patch and advisory snapshot as the Lifecycle screen computes it (RPT-17). */
+    default LifecycleService.FleetSnapshot lifecycleSnapshot(LocalDate today, Instant now) {
+        return LifecycleService.FleetSnapshot.EMPTY;
+    }
 }
