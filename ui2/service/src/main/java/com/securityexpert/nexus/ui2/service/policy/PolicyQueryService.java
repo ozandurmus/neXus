@@ -734,15 +734,35 @@ public final class PolicyQueryService {
      * the way {@link #hygiene} counts ("rules carrying at least one finding of the class"). Takes one analysis slot, so it
      * never runs beside more than one interactive analysis.
      */
-    Map<String, Integer> hygieneCounts(PolicySnapshot snapshot, int days) {
+    Map<String, Integer> hygieneCounts(PolicySnapshot snapshot, int days) { return hygieneReport(snapshot, days).classes(); }
+    /** The reason key of an UNKNOWN shadowing verdict (or of a blocker) that carries no reason literal. */
+    static final String NO_REASON = "unknown reason";
+    /**
+     * What one snapshot's analysis says besides the per-class counts: how many rules are UNKNOWN for each shadowing reason,
+     * and how many rules sit behind a named blocker per the blocker's own reason. Keys are the engine's fixed reason
+     * literals ({@link PolicyHygiene#REASONS}) or {@link #NO_REASON}, never rule, object or address names.
+     */
+    record HygieneReport(Map<String, Integer> classes, Map<String, Integer> unknownReasons, Map<String, Integer> blockerReasons) {}
+    /** {@link #hygieneCounts} plus the UNKNOWN reasons, from the same single analysis (one slot, no second pass over the snapshot). */
+    HygieneReport hygieneReport(PolicySnapshot snapshot, int days) {
         hygieneSlots.acquireUninterruptibly();
         PolicyHygiene.Result result;
         try { result = compute(snapshot, days, java.time.Instant.now()); }
         finally { hygieneSlots.release(); }
         Map<String, Integer> counts = new TreeMap<>(); PolicyHygiene.CLASSES.forEach(c -> counts.put(c, 0));
-        result.rules().values().forEach(a -> a.findings().stream().map(PolicyHygiene.Finding::findingClass).distinct().forEach(c -> counts.merge(c, 1, Integer::sum)));
-        return counts;
+        Map<String, Integer> unknown = new TreeMap<>(), blockers = new TreeMap<>();
+        for (var a : result.rules().values()) {
+            a.findings().stream().map(PolicyHygiene.Finding::findingClass).distinct().forEach(c -> counts.merge(c, 1, Integer::sum));
+            if (!"UNKNOWN".equals(a.shadowStatus())) continue;
+            unknown.merge(reasonKey(a.shadowReason()), 1, Integer::sum);
+            if (PolicyHygiene.EARLIER_UNSUPPORTED.equals(a.shadowReason()) && a.blockingRuleId() != null) {
+                var blocker = result.rules().get(a.blockingRuleId());
+                blockers.merge(reasonKey(blocker == null ? null : blocker.shadowReason()), 1, Integer::sum);
+            }
+        }
+        return new HygieneReport(counts, unknown, blockers);
     }
+    private static String reasonKey(String reason) { return reason == null || reason.isBlank() ? NO_REASON : reason; }
     private Map<String, Object> ruleView(Rule r, PolicySnapshot snapshot, PolicyHygiene.Result analysis) {
         var rule = map(r); rule.put("identityFallback", r.uuid() == null || r.uuid().isEmpty());
         var assessment = analysis.rules().get(r.id());
