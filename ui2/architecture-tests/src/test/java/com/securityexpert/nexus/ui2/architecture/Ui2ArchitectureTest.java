@@ -177,6 +177,7 @@ class Ui2ArchitectureTest {
         rule.check(classes);
     }
 
+    /** ZM-13 (ZONE_MATRIX_CONTRACT.md 10.2): no code path of the feature issues a device command or writes to a device. */
     @Test
     void zm13_zone_matrix_never_reaches_device_transport_or_commands() {
         assertPackageNonEmpty("..service.zonematrix..");
@@ -186,6 +187,22 @@ class Ui2ArchitectureTest {
                 .should().dependOnClassesThat().resideInAnyPackage(
                         WORKER, CAPABILITY, "..jobs.transport..", "..jobs.executor..", "..jobs.diagnostic..",
                         "..jobs.pathvalidation..", "..jobs.policy..", "..jobs.failover..");
+        rule.check(classes);
+    }
+
+    /**
+     * ZM-13 (ZONE_MATRIX_CONTRACT.md 10.2), second half: the rule above names the known device-facing job packages; this
+     * one closes the door for any package added later. No zone matrix class (service, persistence, bridge, controller,
+     * configuration) depends on the job engine, the worker, the scheduler, the CLI, the capability registry or the
+     * directory client at all. The feature reads stored policies and writes only its own version tables.
+     */
+    @Test
+    void zm13_zone_matrix_has_no_dependency_on_the_job_engine_worker_scheduler_cli_or_capability_registry() {
+        assertPackageNonEmpty("..service.zonematrix..");
+        assertPackageNonEmpty("..persistence.zonematrix..");
+        ArchRule rule = noClasses().that().resideInAnyPackage("..service.zonematrix..", "..persistence.zonematrix..")
+                .or().haveSimpleNameStartingWith("ZoneMatrix")
+                .should().dependOnClassesThat().resideInAnyPackage(JOBS, WORKER, SCHEDULER, CLI, CAPABILITY, LDAP);
         rule.check(classes);
     }
 
