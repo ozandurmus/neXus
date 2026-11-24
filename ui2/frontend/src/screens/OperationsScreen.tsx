@@ -337,7 +337,7 @@ export function OperationsScreen() {
         title="Operations"
         subtitle={operationsHeadline({ stats: jobStatsFailed ? "failed" : jobStats, clusters: clusters ? clusters.length : null,
           ready: readinessCounts.ready, unknown: readinessCounts.unknown, window: jobWindow })}
-        actions={<M3Button emphasis="filled" lockedReason="Schedule authoring is not available yet">Schedule collection</M3Button>}
+        actions={<M3Button emphasis="outlined" href="?screen=administration&tab=scheduled-jobs">Collection schedules</M3Button>}
       />
       <M3Tabs
         ariaLabel="Operations sections"

@@ -192,7 +192,8 @@ describe("KPI badges state facts, not judgements (post-release review 2026-10-18
     // B4: the headline figure is the evidenced pass share (34.7 %), never the assured share that counts unevidenced as failed
     expect(await screen.findByText("17.5% have no evidence")).toBeInTheDocument();
     expect(screen.getByText("34.7%")).toBeInTheDocument();
-    expect(screen.getByText("of 2,448 checks · 102 of 105 firewalls")).toBeInTheDocument();
+    expect(screen.getByText("102 of 105 firewalls")).toBeInTheDocument();
+    expect(screen.getByText(/of 2,448 checks/)).toBeInTheDocument();
     expect(screen.getByText("172 critical · 3 firewalls")).toBeInTheDocument();
     expect(screen.queryByText(/Improvement Needed|High Assurance|Immediate Action|Zero Critical/)).toBeNull();
   });

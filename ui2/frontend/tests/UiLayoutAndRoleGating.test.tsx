@@ -100,11 +100,12 @@ describe("read-only roles see locked controls with a role reason", () => {
     expect(screen.getByRole("button", { name: "Run Fleet Backup · Next window: 00:00" })).toBeDisabled();
   });
 
-  it("locks the Operations header action for everyone: Schedule collection has no handler or endpoint yet", async () => {
+  it("links the Operations header to the collection schedules instead of a dead Schedule collection button", async () => {
     vi.stubGlobal("fetch", vi.fn(() => jsonResponse(200, { devices: [], items: [] })));
     render(as(adminPlanes, <OperationsScreen />));
-    const button = await screen.findByRole("button", { name: "Schedule collection · Schedule authoring is not available yet" });
-    expect(button).toBeDisabled();
+    const link = await screen.findByRole("link", { name: "Collection schedules" });
+    expect(link).toHaveAttribute("href", "?screen=administration&tab=scheduled-jobs");
+    expect(screen.queryByRole("button", { name: /Schedule collection/ })).toBeNull();
   });
 
   it("locks the device Backup tab's reason field and Request backup button, and states the role reason", async () => {
