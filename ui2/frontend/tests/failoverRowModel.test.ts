@@ -21,63 +21,63 @@ const summary = (ref: string, status: "READY" | "NOT_READY" | "UNKNOWN" | null, 
   masked: false, canRunReadiness: true,
   readiness: status ? { status, observedAt: AT, failedCheck: status === "NOT_READY" ? "State synchronization" : "", checks: checks as never } : null, ...extra });
 const itemFor = (ref: string, vendor: string, rows: CpFailoverSummary[]) => haReadinessItems([cluster(ref, vendor)], { [ref]: rows })[0];
-const incident = (over: Partial<FailoverIncident>): FailoverIncident => ({ incidentRef: "inc-1", clusterId: "x", unitId: "x", cluster_member_ref: "CLS-OTHER", reason: "r",
+const incident = (over: Partial<FailoverIncident>): FailoverIncident => ({ incidentRef: "inc-1", clusterId: "x", unitId: "x", cluster_member_ref: "CLS-OSCAR-09", reason: "r",
   openedAt: AT, incidentActive: true, blocksEstate: false, unresolvedSends: 0, members: [], ...over });
 
 describe("rowState", () => {
   it("a READY Check Point cluster can be failed over", () => {
-    const item = itemFor("CLS-A", "check_point", [summary("CLS-A", "READY")]);
+    const item = itemFor("CLS-ALPHA-01", "check_point", [summary("CLS-ALPHA-01", "READY")]);
     expect(rowState(item, item.base, [], false)).toBe("CAN_FAIL_OVER");
   });
   it("a READY Cisco ASA pair is readiness only, never failover-able", () => {
-    const item = itemFor("CLS-A", "cisco_asa", [{ ...summary("CLS-A", "READY"), vendor: "cisco_asa", readinessAvailable: true }]);
+    const item = itemFor("CLS-ALPHA-01", "cisco_asa", [{ ...summary("CLS-ALPHA-01", "READY"), vendor: "cisco_asa", readinessAvailable: true }]);
     expect(rowState(item, item.base, [], false)).toBe("READINESS_ONLY");
   });
   it("READY with a server refusal is blocked", () => {
-    const item = itemFor("CLS-A", "check_point", [summary("CLS-A", "READY", { failoverRefusal: "VSX_MODE_UNKNOWN" })]);
+    const item = itemFor("CLS-ALPHA-01", "check_point", [summary("CLS-ALPHA-01", "READY", { failoverRefusal: "VSX_MODE_UNKNOWN" })]);
     expect(rowState(item, item.base, [], false)).toBe("BLOCKED");
-    const refused = itemFor("CLS-B", "check_point", [summary("CLS-B", "READY", { refusalReason: "OPEN_INCIDENT" })]);
+    const refused = itemFor("CLS-BRAVO-01", "check_point", [summary("CLS-BRAVO-01", "READY", { refusalReason: "OPEN_INCIDENT" })]);
     expect(rowState(refused, refused.base, [], false)).toBe("BLOCKED");
   });
   it("no readiness is unknown, and so is every row when the summary read failed", () => {
-    const none = itemFor("CLS-A", "check_point", [summary("CLS-A", null)]);
+    const none = itemFor("CLS-ALPHA-01", "check_point", [summary("CLS-ALPHA-01", null)]);
     expect(rowState(none, none.base, [], false)).toBe("UNKNOWN");
-    const ready = itemFor("CLS-B", "check_point", [summary("CLS-B", "READY")]);
+    const ready = itemFor("CLS-BRAVO-01", "check_point", [summary("CLS-BRAVO-01", "READY")]);
     expect(rowState(ready, ready.base, [], true)).toBe("UNKNOWN");
   });
   it("unreadable incidents turn a would-be Ready row into Unknown, and leave blocked, refused and incident rows as they are", () => {
-    const ready = itemFor("CLS-A", "check_point", [summary("CLS-A", "READY")]);
+    const ready = itemFor("CLS-ALPHA-01", "check_point", [summary("CLS-ALPHA-01", "READY")]);
     expect(rowState(ready, ready.base, [], false, true)).toBe("UNKNOWN");
     expect(rowState(ready, ready.base, [], false, false)).toBe("CAN_FAIL_OVER");
     expect(incidentsUnreadableRow("UNKNOWN", "READY", false, true)).toBe(true);
     expect(incidentsUnreadableRow("UNKNOWN", "READY", true, true)).toBe(false);
     expect(incidentsUnreadableRow("UNKNOWN", "UNKNOWN", false, true)).toBe(false);
-    const notReady = itemFor("CLS-B", "check_point", [summary("CLS-B", "NOT_READY")]);
+    const notReady = itemFor("CLS-BRAVO-01", "check_point", [summary("CLS-BRAVO-01", "NOT_READY")]);
     expect(rowState(notReady, notReady.base, [], false, true)).toBe("BLOCKED");
-    const refused = itemFor("CLS-C", "check_point", [summary("CLS-C", "READY", { failoverRefusal: "VSX_MODE_UNKNOWN" })]);
+    const refused = itemFor("CLS-CHARLIE-01", "check_point", [summary("CLS-CHARLIE-01", "READY", { failoverRefusal: "VSX_MODE_UNKNOWN" })]);
     expect(rowState(refused, refused.base, [], false, true)).toBe("BLOCKED");
-    expect(rowState(ready, ready.base, [incident({ cluster_member_ref: "CLS-A" })], false, true)).toBe("INCIDENT");
+    expect(rowState(ready, ready.base, [incident({ cluster_member_ref: "CLS-ALPHA-01" })], false, true)).toBe("INCIDENT");
   });
   it("an open incident on the cluster comes first; an estate fence reaches executable vendors only", () => {
-    const item = itemFor("CLS-A", "check_point", [summary("CLS-A", "READY")]);
-    expect(rowState(item, item.base, [incident({ cluster_member_ref: "CLS-A" })], false)).toBe("INCIDENT");
+    const item = itemFor("CLS-ALPHA-01", "check_point", [summary("CLS-ALPHA-01", "READY")]);
+    expect(rowState(item, item.base, [incident({ cluster_member_ref: "CLS-ALPHA-01" })], false)).toBe("INCIDENT");
     expect(rowState(item, item.base, [incident({ blocksEstate: true })], false)).toBe("INCIDENT");
     expect(rowState(item, item.base, [incident({})], false)).toBe("CAN_FAIL_OVER");
-    const asa = itemFor("CLS-B", "cisco_asa", [{ ...summary("CLS-B", "READY"), vendor: "cisco_asa", readinessAvailable: true }]);
+    const asa = itemFor("CLS-BRAVO-01", "cisco_asa", [{ ...summary("CLS-BRAVO-01", "READY"), vendor: "cisco_asa", readinessAvailable: true }]);
     expect(rowState(asa, asa.base, [incident({ blocksEstate: true })], false)).toBe("READINESS_ONLY");
   });
   it("a NOT_READY chassis is blocked by its own state and is not counted as able to fail over, whatever its virtual systems say", () => {
-    const chassis = summary("CLS-V", "NOT_READY", { unitKind: "VSX_CHASSIS", chassisAction: "FAILOVER" });
-    const vs = { ...summary("CLS-V", "READY"), unitId: "opaque-vs-1", virtual_system: "VS-1", unitKind: "VIRTUAL_SYSTEM" as const };
-    const item = itemFor("CLS-V", "check_point", [chassis, vs]);
+    const chassis = summary("CLS-VICTOR-01", "NOT_READY", { unitKind: "VSX_CHASSIS", chassisAction: "FAILOVER" });
+    const vs = { ...summary("CLS-VICTOR-01", "READY"), unitId: "opaque-vs-1", virtual_system: "VS-1", unitKind: "VIRTUAL_SYSTEM" as const };
+    const item = itemFor("CLS-VICTOR-01", "check_point", [chassis, vs]);
     expect(rowState(item, item.base, [], false)).toBe("BLOCKED");
     expect(rowState(item, vs, [], false)).toBe("CAN_FAIL_OVER");
-    const ready = itemFor("CLS-R", "check_point", [summary("CLS-R", "READY")]);
+    const ready = itemFor("CLS-ROMEO-01", "check_point", [summary("CLS-ROMEO-01", "READY")]);
     const counts = segmentCounts([{ state: rowState(item, item.base, [], false) }, { state: rowState(ready, ready.base, [], false) }]);
     expect(counts).toEqual({ can: 1, blocked: 1, unknown: 0, "readiness-only": 0, all: 2 });
   });
   it("a READY chassis with no offered action is not claimed failover-able; VS0 and the all-virtual-systems action are independent (PO 2026-11-23)", () => {
-    const state = (over: Partial<CpFailoverSummary>) => { const item = itemFor("CLS-V", "check_point", [summary("CLS-V", "READY", { unitKind: "VSX_CHASSIS", ...over })]); return rowState(item, item.base, [], false); };
+    const state = (over: Partial<CpFailoverSummary>) => { const item = itemFor("CLS-VICTOR-01", "check_point", [summary("CLS-VICTOR-01", "READY", { unitKind: "VSX_CHASSIS", ...over })]); return rowState(item, item.base, [], false); };
     expect(state({})).toBe("BLOCKED");
     expect(state({ chassisAction: "FAILOVER" })).toBe("CAN_FAIL_OVER");
     // The VS0 mode is unknown: no VS0 run, but the sequence is still offered.
@@ -95,21 +95,21 @@ describe("rowState", () => {
     expect(allVirtualSystemsLabel(5)).toBe("Fail over all VS (5)");
   });
   it("rolls a chassis up by its virtual systems and never folds unknown into ready", () => {
-    const vs = (n: number, status: "READY" | "NOT_READY" | null) => ({ ...summary("CLS-V", status), unitId: `vs-${n}`, unitKind: "VIRTUAL_SYSTEM" as const });
-    expect(chassisRollup([summary("CLS-V", "READY"), vs(1, "READY"), vs(2, "READY"), vs(3, "NOT_READY"), vs(4, null)])).toBe("4 virtual systems: 2 ready, 1 not ready, 1 unknown");
+    const vs = (n: number, status: "READY" | "NOT_READY" | null) => ({ ...summary("CLS-VICTOR-01", status), unitId: `vs-${n}`, unitKind: "VIRTUAL_SYSTEM" as const });
+    expect(chassisRollup([summary("CLS-VICTOR-01", "READY"), vs(1, "READY"), vs(2, "READY"), vs(3, "NOT_READY"), vs(4, null)])).toBe("4 virtual systems: 2 ready, 1 not ready, 1 unknown");
   });
 });
 
 describe("reasonLine", () => {
   it("names the standby member and its role when only the standby fails state synchronization", () => {
     const checks = [...roles, ...both(9, "State synchronization", ["PASS", "FAIL"], ["Sync OK, 0 lost updates", "Sync status: Lost; +3 lost updates"])];
-    const line = reasonLine(summary("CLS-A", "NOT_READY", {}, checks), members);
+    const line = reasonLine(summary("CLS-ALPHA-01", "NOT_READY", {}, checks), members);
     expect(line).toMatchObject({ title: "State synchronization", headline: "Sync status: Lost", more: 0, where: { text: "on FW-ROMEO-02 (standby)", kind: "member" } });
   });
   it("says the member is not identified when both rows of a pair-level check carry the same text (PAN config sync)", () => {
     const text = "Config sync is disabled on 1 member(s): the running configurations are not kept equal";
     const checks = [...roles, ...both(4, "Configuration sync", ["FAIL", "FAIL"], text)];
-    const line = reasonLine(summary("CLS-A", "NOT_READY", { vendor: "palo_alto" }, checks), members);
+    const line = reasonLine(summary("CLS-ALPHA-01", "NOT_READY", { vendor: "palo_alto" }, checks), members);
     expect(line.where).toEqual({ text: "member not identified by this check", kind: "unidentified" });
     // No semicolon and no " (" in this text: the cut rule leaves it whole (the server wording changes in the display-string lane).
     expect(line.headline).toBe(text);
@@ -118,17 +118,17 @@ describe("reasonLine", () => {
   it("uses the per-member sync state of a PAN config sync row to name the member that has it off", () => {
     const rows = both(4, "Configuration sync", ["FAIL", "FAIL"], "Config sync is OFF on this member", true);
     rows[0].memberSync = "on"; rows[1].memberSync = "off";
-    const line = reasonLine(summary("CLS-A", "NOT_READY", { vendor: "palo_alto" }, [...roles, ...rows]), members);
+    const line = reasonLine(summary("CLS-ALPHA-01", "NOT_READY", { vendor: "palo_alto" }, [...roles, ...rows]), members);
     expect(line.where).toEqual({ text: "on FW-ROMEO-02 (standby)", kind: "member" });
   });
   it("says both members when both fail with different text", () => {
     const checks = [...roles, ...both(3, "Interfaces", ["FAIL", "FAIL"], ["1 of 2 required interfaces up", "0 of 2 required interfaces up"])];
-    expect(reasonLine(summary("CLS-A", "NOT_READY", {}, checks), members).where).toEqual({ text: "on both members", kind: "both" });
+    expect(reasonLine(summary("CLS-ALPHA-01", "NOT_READY", {}, checks), members).where).toEqual({ text: "on both members", kind: "both" });
   });
   it("PAN session synchronization reads 'failed or disabled' without the counters", () => {
     const text = "Session synchronization failed or disabled; active sync enabled; passive sync disabled; passive session setup disabled, sent 0, recv 0";
     const checks = [...roles, ...both(5, "Session synchronization", ["FAIL", "FAIL"], text)];
-    const line = reasonLine(summary("CLS-A", "NOT_READY", { vendor: "palo_alto" }, checks), members);
+    const line = reasonLine(summary("CLS-ALPHA-01", "NOT_READY", { vendor: "palo_alto" }, checks), members);
     expect(line.title).toBe("Session synchronization");
     expect(line.headline).toBe("failed or disabled");
     expect(JSON.stringify(line)).not.toMatch(/sent 0|recv 0/);
@@ -136,7 +136,7 @@ describe("reasonLine", () => {
   it("counts the other blocking checks as +N more and leads with a FAIL before an UNKNOWN", () => {
     const checks = [...roles, ...both(2, "Cluster IP table", ["UNKNOWN", "UNKNOWN"], "Not read"), ...both(3, "Interfaces", ["FAIL", "PASS"], ["0 of 2 up", "2 of 2 up"]),
       ...both(7, "Versions", ["FAIL", "FAIL"], "Differ")];
-    const line = reasonLine(summary("CLS-A", "NOT_READY", {}, checks), members);
+    const line = reasonLine(summary("CLS-ALPHA-01", "NOT_READY", {}, checks), members);
     expect(line.title).toBe("Interfaces");
     expect(line.more).toBe(2);
   });
@@ -152,19 +152,19 @@ describe("reasonLine", () => {
   });
   it("a READY row says how many blocking checks passed and lists its first warning", () => {
     const checks = [...roles, ...both(2, "Cluster IP table", ["PASS", "PASS"], "ok"), ...both(8, "Last failover less than 6 hours ago", ["WARN", "WARN"], "5 h ago", false)];
-    expect(reasonLine(summary("CLS-A", "READY", {}, checks), members)).toEqual({ headline: "2 of 2 blocking checks passed", more: 0, warning: "Last failover less than 6 hours ago" });
+    expect(reasonLine(summary("CLS-ALPHA-01", "READY", {}, checks), members)).toEqual({ headline: "2 of 2 blocking checks passed", more: 0, warning: "Last failover less than 6 hours ago" });
   });
   it("keeps the server's refusal code beside its label", () => {
-    const line = reasonLine(summary("CLS-A", "READY", { refusalReason: "OPEN_INCIDENT" }, roles), members);
+    const line = reasonLine(summary("CLS-ALPHA-01", "READY", { refusalReason: "OPEN_INCIDENT" }, roles), members);
     expect(line.code).toBe("OPEN_INCIDENT");
     expect(line.headline.length).toBeGreaterThan(0);
-    const vsx = reasonLine(summary("CLS-V", "READY", { failoverRefusal: "VIRTUAL_SYSTEM_NOT_READY" }, roles), members);
+    const vsx = reasonLine(summary("CLS-VICTOR-01", "READY", { failoverRefusal: "VIRTUAL_SYSTEM_NOT_READY" }, roles), members);
     expect(vsx.code).toBe("VIRTUAL_SYSTEM_NOT_READY");
   });
   it("Never checked, and the stop reason of a pre-check run that could not finish", () => {
-    expect(reasonLine(summary("CLS-A", null), members).headline).toBe("Never checked");
+    expect(reasonLine(summary("CLS-ALPHA-01", null), members).headline).toBe("Never checked");
     expect(reasonLine(undefined, members).headline).toBe("Never checked");
-    const stopped = reasonLine(summary("CLS-A", "UNKNOWN", { readiness: { status: "UNKNOWN", observedAt: AT, failedCheck: "", stopCode: "COMMAND_UNAVAILABLE", checks: [] } }), members);
+    const stopped = reasonLine(summary("CLS-ALPHA-01", "UNKNOWN", { readiness: { status: "UNKNOWN", observedAt: AT, failedCheck: "", stopCode: "COMMAND_UNAVAILABLE", checks: [] } }), members);
     expect(stopped.headline).toMatch(/^Pre-checks could not finish: /);
     expect(stopped.code).toBe("COMMAND_UNAVAILABLE");
   });
