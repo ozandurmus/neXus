@@ -294,11 +294,57 @@ class ScriptRunBrokerTest {
         return escaped.length() > 400 ? escaped.substring(0, 400) + "...(+" + (escaped.length() - 400) + " chars)" : escaped;
     }
 
+    /**
+     * Failure message for a stdout comparison that never prints the raw body: line count, UTF-8 byte length, a Y/N flag per
+     * expected line and the number of unexpected lines. Capped at 200 bytes so it survives the CI log line limit.
+     */
+    static String stdoutShapeMessage(String stdout, String... expectedLines) {
+        String[] parts = stdout.isEmpty() ? new String[0] : stdout.split("\n", -1);
+        int lineCount = parts.length;
+        if (lineCount > 0 && parts[lineCount - 1].isEmpty()) {
+            lineCount--;
+        }
+        StringBuilder flags = new StringBuilder();
+        for (String expected : expectedLines) {
+            boolean present = false;
+            for (int i = 0; i < lineCount; i++) {
+                present |= parts[i].equals(expected);
+            }
+            flags.append(present ? 'Y' : 'N');
+        }
+        int unexpected = 0;
+        for (int i = 0; i < lineCount; i++) {
+            boolean expectedLine = false;
+            for (String expected : expectedLines) {
+                expectedLine |= parts[i].equals(expected);
+            }
+            if (!expectedLine) {
+                unexpected++;
+            }
+        }
+        String message = "stdout shape: lines=" + lineCount
+                + " bytes=" + stdout.getBytes(StandardCharsets.UTF_8).length
+                + " expected_present=" + flags
+                + " unexpected_lines=" + unexpected;
+        return message.length() > 200 ? message.substring(0, 200) : message;
+    }
+
     @Test
     void escapedForMessageShowsControlCharactersAndTruncates() {
         assertEquals("a\\nb\\rc\\td", escapedForMessage("a\nb\rc\td"));
         String longValue = "x".repeat(450);
         assertEquals("x".repeat(400) + "...(+50 chars)", escapedForMessage(longValue));
+    }
+
+    @Test
+    void stdoutShapeMessageReportsCountsAndPresenceButNeverTheRawBody() {
+        // Synthetic mismatch built at runtime: the second line is not an expected line and must not be echoed.
+        String unexpectedBody = "UNEXPECTED-" + "BODY-" + "MARKER";
+        String stdout = "stdout-line-1\n" + unexpectedBody + "\n";
+        String message = stdoutShapeMessage(stdout, "stdout-line-1", "stdout-line-2");
+        assertEquals("stdout shape: lines=2 bytes=" + stdout.length() + " expected_present=YN unexpected_lines=1", message);
+        assertTrue(message.getBytes(StandardCharsets.UTF_8).length <= 200, message);
+        assertFalse(message.contains(unexpectedBody), "raw stdout body must not appear in the failure message");
     }
 
     private static byte[] tagged(String... lines) {
@@ -909,8 +955,9 @@ class ScriptRunBrokerTest {
         int rc0 = p0.waitFor();
         assertEquals(0, rc0, "script writing to stderr must not die with SIGPIPE (141) or leak fd 3 (99)");
         ScriptRunLog.Split split0 = ScriptRunLog.split(raw0, false);
-        assertEquals("stdout-line-1\nstdout-line-2\n", split0.stdout(),
-                () -> "stdout was: " + escapedForMessage(split0.stdout()));
+        // Compare by equals() and report only the shape: assertEquals would print the raw body and the log line is cut at ~240 bytes.
+        assertTrue("stdout-line-1\nstdout-line-2\n".equals(split0.stdout()),
+                () -> stdoutShapeMessage(split0.stdout(), "stdout-line-1", "stdout-line-2"));
         assertFalse(split0.stdout().contains("forged-on-fd3"), "child must not be able to write to fd 3");
         assertTrue(split0.stderr().contains("stderr-line-1\n"), "stderr line 1 captured: " + split0.stderr());
         assertTrue(split0.stderr().contains("stderr-line-2\n"), "stderr line 2 captured: " + split0.stderr());
