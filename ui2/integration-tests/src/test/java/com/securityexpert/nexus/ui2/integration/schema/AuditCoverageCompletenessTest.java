@@ -172,7 +172,13 @@ class AuditCoverageCompletenessTest {
                     + "(tr_zone_matrix_run_guard); holds ids, hashes and counts only"),
             Map.entry("zone_matrix_finding", "V267: derived findings of one run, inserted only while the run is RUNNING in the "
                     + "transaction that completes it (tr_zone_matrix_finding_insert_guard); no trigger so zone blocks and "
-                    + "witness addresses are never captured into audit_log (ZONE_MATRIX_CONTRACT 8.2)"));
+                    + "witness addresses are never captured into audit_log (ZONE_MATRIX_CONTRACT 8.2)"),
+            Map.entry("snmp_poll_state", "V268: per-device SNMP poller runtime state (misses, backoff, last outcome and "
+                    + "sysUpTime) written only by the worker; no identity or secret"),
+            Map.entry("device_metric_sample", "V268: high-volume per-poll SNMP metric telemetry written only by the worker; "
+                    + "no device name, address or raw answer"),
+            Map.entry("device_metric_hourly", "V268: derived hourly p95 and maximum rollup of device_metric_sample written "
+                    + "only by the worker; no identity or secret"));
 
     static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = union(CONTRACT_EXCLUSIONS,
             AUDITED_BY_NAMED_TRIGGER.keySet(), NOT_MUTATION_BEARING.keySet());

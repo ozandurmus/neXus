@@ -186,7 +186,7 @@ describe("AdministrationScreen tabs", () => {
   });
 
   it.each([
-    ["tab=registry", "Device registry", "Device registry sections", ["Device management", "Inventory exclusions", "Credentials", "SSH trust"]],
+    ["tab=registry", "Device registry", "Device registry sections", ["Device management", "Inventory exclusions", "Credentials", "SNMP polling", "SSH trust"]],
     ["tab=access", "Access and identity", "Access and identity sections", ["Local identities", "Sessions", "Roles and permissions", "LDAP settings", "SAML sign-in", "Local sign-in"]],
     ["tab=platform", "Notifications and logging", "Notifications and logging sections", ["Notifications", "Log collection"]],
   ])("%s is one screen: its own heading and exactly one tab strip, with no second side menu", (query, heading, tabList, tabs) => {
@@ -631,6 +631,19 @@ describe("restricted Administration reads", () => {
       if (slug !== "audit-logs") expect(document.querySelector("[role='tab'][aria-selected='true'] [data-lock-badge]")).not.toBeNull();
       await waitFor(() => expect(fetch).not.toHaveBeenCalled());
     });
+  it("does not mount the restricted SNMP polling panel for a session without the administration-read grant", async () => {
+    window.history.replaceState(null, "", "/?screen=administration&tab=registry&section=snmp-polling");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic viewer", roleTokens: [],
+      permissions: [], canReadAdministration: false, onSignOut: () => {} }}>
+      <AdministrationScreen />
+    </SessionContext.Provider>));
+    expect(await screen.findByText(/This account can not view or change it/)).toBeInTheDocument();
+    expect(document.querySelector("section#admin-section-snmp-polling[data-locked='true']")).not.toBeNull();
+    expect(document.querySelector("[role='tab'][aria-selected='true'] [data-lock-badge]")).not.toBeNull();
+    await waitFor(() => expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("snmp-polling"), expect.anything()));
+  });
   // PO 2026-11-13 amendment: the two pages that came back from Operations keep the access they had there.
   it("opens Scheduled jobs for a session without the administration-read grant: readable, masked, no switch, no lock", async () => {
     vi.stubGlobal("fetch", routedFetch({ ...SCHEDULED_JOBS }));

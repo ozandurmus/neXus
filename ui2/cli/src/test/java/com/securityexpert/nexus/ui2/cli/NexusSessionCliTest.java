@@ -749,4 +749,24 @@ class NexusSessionCliTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void snmpPollingSetBuildsTheScreensBodyAndRefusesMalformedRowsBeforeAnyCall() {
+        assertEquals("{\"enabled\":true,\"interval_s\":300,\"default_credential_reference_id\":null,\"scope_mode\":\"DEVICES\"}",
+                NexusSessionCli.snmpPollingBody(new String[] {"snmp-polling-set", "enabled=true", "interval_s=300",
+                        "default_credential_reference_id=null", "scope_mode=DEVICES"}));
+        assertEquals("{\"vendors\":[{\"vendor\":\"check_point\",\"in_scope\":true,\"credential_reference_id\":\"cred-1\"},"
+                + "{\"vendor\":\"palo_alto\",\"in_scope\":false,\"credential_reference_id\":null}],"
+                + "\"devices\":[{\"device_id\":\"dev-1\",\"in_scope\":false,\"credential_reference_id\":null}]}",
+                NexusSessionCli.snmpPollingBody(new String[] {"snmp-polling-set", "vendor=check_point:on:cred-1",
+                        "vendor=palo_alto:off", "device=dev-1:excluded"}));
+        assertEquals("{\"devices\":[]}", NexusSessionCli.snmpPollingBody(new String[] {"snmp-polling-set", "devices=none"}));
+        for (String bad : new String[] {"vendor=check_point:polled", "device=dev-1:on", "device=dev/1:polled", "Enabled=true",
+                "vendors=x", "enabled"}) {
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                    () -> NexusSessionCli.snmpPollingBody(new String[] {"snmp-polling-set", bad}), bad);
+        }
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> NexusSessionCli.snmpPollingBody(
+                new String[] {"snmp-polling-set", "devices=none", "device=dev-1:polled"}));
+    }
 }

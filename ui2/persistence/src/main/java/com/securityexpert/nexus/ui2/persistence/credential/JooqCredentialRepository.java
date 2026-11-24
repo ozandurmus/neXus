@@ -101,7 +101,11 @@ public final class JooqCredentialRepository implements CredentialRepository {
     @Override
     public boolean isCredentialReferenceInUse(String credentialReferenceId) {
         return transactionBoundary.inTransaction(dsl -> !dsl
-                .fetch("select 1 from devices where credential_reference_id = {0} limit 1", credentialReferenceId)
+                .fetch("select 1 from devices where credential_reference_id = {0} "
+                        // V268: an SNMP polling default or override that names the credential also keeps it.
+                        + "union all select 1 from snmp_polling_settings where default_credential_reference_id = {0} "
+                        + "union all select 1 from snmp_polling_override where credential_reference_id = {0} limit 1",
+                        credentialReferenceId)
                 .isEmpty());
     }
 

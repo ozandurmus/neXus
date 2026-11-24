@@ -38,13 +38,14 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 /**
  * Slice 1 of the aiview masked read-only administrator (UI2_AIVIEW_READONLY_ADMIN, default off). With the switch on, the
- * replay viewer reads exactly three masked settings GETs (system-log settings, local password policy, local auth mode);
+ * replay viewer reads exactly four masked settings GETs (system-log settings, local password policy, local auth mode,
+ * SNMP polling);
  * every write, raw/unmasked view, export and download stays denied, and the switch widens nothing else.
  */
 class AiviewReadonlyAdminFlagTest {
     private static final Set<String> GRANTED = ActionRegistry.AIVIEW_READONLY_ADMIN_READS;
     private static final String[] ROUTES = {"/api/v2/config/system-logs", "/api/v2/config/local-password-policy",
-            "/api/v2/config/local-auth-mode"};
+            "/api/v2/config/local-auth-mode", "/api/v2/config/snmp-polling"};
 
     @Test
     void switchOffLeavesEveryDescriptorSecurityAdminOnly() {

@@ -173,9 +173,10 @@ public class SystemLogReadConfiguration {
             com.securityexpert.nexus.ui2.service.device.diagnostic.SystemLogCollectionService collection,
             @org.springframework.beans.factory.annotation.Value("${ui2.system-health.cpu-p95-threshold-percent:"
                     + SystemHealthService.DEFAULT_CPU_P95_THRESHOLD_PERCENT + "}") int thresholdPercent,
-            @org.springframework.beans.factory.annotation.Value("${ui2.scheduling.enabled:false}") boolean schedulingEnabled) {
+            @org.springframework.beans.factory.annotation.Value("${ui2.scheduling.enabled:false}") boolean schedulingEnabled,
+            com.securityexpert.nexus.ui2.persistence.snmp.SnmpPollingRepository snmpPolling) {
         return new SystemHealthService(repository, new JooqSystemLogCollectionRepository(transactions), collection::targets, devices,
-                artefacts.storeOrNull(), thresholdPercent, schedulingEnabled);
+                artefacts.storeOrNull(), thresholdPercent, schedulingEnabled).withSnmp(snmpPolling);
     }
 
     /**
