@@ -137,7 +137,9 @@ done
 # Already validated counts from security_host.py (or the not_configured marker); preserve it for the ship caller.
 grep -E '^\{"(passed|security_gate)":' /tmp/nexus_build.log || true
 grep -E '^\{"snapshot": "[0-9TZ_a-f]+"\}$' /tmp/nexus_build.log || true
-grep -E '^TIMING [a-z_]+ [0-9]+$' /tmp/nexus_build.log || true
+# Digits allowed in the name (2026-11-23): `TIMING e2e_image_ready` never reached the ship log; the ship's own filter
+# (standalone_orchestrate.py) already takes [a-z_0-9]+.
+grep -E '^TIMING [a-z_0-9]+ [0-9]+$' /tmp/nexus_build.log || true
 # HTTPS since 2026-09-27 (HTTP answers 301); -k: the local CA is not in the host's trust store.
 echo "site $(curl -sk --noproxy '*' -o /dev/null -w '%{http_code}' https://127.0.0.1/)"
 echo "schema $(q "select version || ' ' || success from flyway_schema_history order by installed_rank desc limit 1")"

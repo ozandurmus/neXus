@@ -26,6 +26,9 @@ CONTAINERFILE = "/workspace/ui2/Containerfile.script-exec"
 TAG_SUFFIX = "-sx"
 CACHE_REPO = REGISTRY + "/nexus-ui2-build-cache"
 RESOURCES = {"requests": {"cpu": "500m", "memory": "1Gi"}, "limits": {"cpu": "2", "memory": "4Gi"}}
+# How often the build Job is looked at (was 10 s: a finished build waited up to 10 s more, 2026-11-23). One read-only
+# kubectl get per look.
+BUILD_POLL_S = 3
 DEADLINE_S = 2700
 # Owned by this tool; any template value for them is replaced, never merged.
 OWNED = ("--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--cache-ttl=", "--target=",
@@ -103,7 +106,7 @@ def build(commit, repo, base, timeout=DEADLINE_S, sleep=time.sleep, monotonic=ti
             digest = builds.job_digest(current, NAME)
             if digest:
                 return digest
-        sleep(10)
+        sleep(BUILD_POLL_S)
     raise RuntimeError("script execution image build timed out")
 
 

@@ -25,6 +25,9 @@ CACHE_REPO = REGISTRY + "/nexus-ui2-build-cache"
 # The tshark compile is the long step (first build only; later builds reuse its cached layers). Kaniko holds the
 # compiler, three parallel compile jobs and the snapshot, so the host template's 4 GiB is raised for this Job.
 RESOURCES = {"requests": {"cpu": "500m", "memory": "2Gi"}, "limits": {"cpu": "3", "memory": "8Gi"}}
+# How often the build Job is looked at (was 10 s: a finished build waited up to 10 s more, 2026-11-23). One read-only
+# kubectl get per look.
+BUILD_POLL_S = 3
 DEADLINE_S = 5400
 # Owned by this tool; any template value for them is replaced, never merged.
 OWNED = ("--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--cache-ttl=", "--target=",
@@ -105,7 +108,7 @@ def build(commit, repo, base, timeout=DEADLINE_S, sleep=time.sleep, monotonic=ti
             if digest:
                 return digest
             # Job completion can precede the pod termination message becoming visible.
-        sleep(10)
+        sleep(BUILD_POLL_S)
     raise RuntimeError("packet analysis image build timed out")
 
 

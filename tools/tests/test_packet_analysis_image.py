@@ -351,7 +351,8 @@ def test_scan_shell_scans_and_sboms_both_lines(tmp_path):
 def test_build_script_builds_the_analysis_image_from_the_main_digest_before_the_gate():
     source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
     digest = source.index('IMAGE_DIGEST="')
-    build = source.index('hosta_packet_analysis_image.py" build')
+    build = source.index('hosta_side_images.py" build')
+    assert 'SIDE_FLAGS="--packet-analysis"' in source[:build]
     gate = source.index('tools/security/security_host.py" gate')
     rollout = source.index('python3 "$REPO/tools/delivery/module_deploy.py" --targets')
     assert digest < build < gate < rollout

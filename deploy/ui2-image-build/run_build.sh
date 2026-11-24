@@ -8,13 +8,28 @@ set -euo pipefail
 export KUBECONFIG=~/.kube/config
 
 CHANGES_STARTED=0
+SECURITY_PID=""
+SECURITY_JOB_FILE=""
 report_failure() {
   rc=$?
+  # Ignore repeated TERM/INT while draining the background security snapshot so a second signal cannot orphan it.
+  trap '' TERM INT
+  # Remove the gate Job name file before waiting so the background subshell sees the abort and skips
+  # `security_host.py start` once `snapshot` finishes (releasing security.lock and security-source-loader
+  # without launching an abandoned security-gate Job).
+  if [ -n "$SECURITY_JOB_FILE" ]; then rm -f "$SECURITY_JOB_FILE"; fi
+  # A deploy that stops early never leaves the background security source snapshot half done: it is waited for (its
+  # own command limits bound it), so the security tooling finds the same end state as when it ran in the foreground.
+  if [ -n "$SECURITY_PID" ]; then wait "$SECURITY_PID" 2>/dev/null || true; fi
+  # Remove it again after wait in case `start` was already running and recreated the file via redirection.
+  if [ -n "$SECURITY_JOB_FILE" ]; then rm -f "$SECURITY_JOB_FILE"; fi
   if [ "$rc" -ne 0 ] && [ "$CHANGES_STARTED" = 0 ]; then
     echo "no changes applied" >&2
   fi
 }
 trap report_failure EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 # The deploy tree is /opt/nexus, owned by the non-login service account `nexus` (docs/operations/HOST_A_RUNBOOK.md §2).
 # This script runs as the SSH deploy account, which only reads the tree: every write (git, deploy_info.json) goes
 # through sudo -u nexus, so ownership never drifts and each write is in the sudo log.
@@ -58,11 +73,23 @@ elif [ "$SECURITY_CONFIGURED" = 0 ]; then
   echo '{"security_gate":"not_configured"}'
 else
   CHANGES_STARTED=1
-  python3 "$REPO/tools/security/security_host.py" snapshot --config "$HOME/.config/nexus/security.json" \
-    --rules "$HOME/.config/nexus/security-rules"
-  SECURITY_JOB=$(python3 "$REPO/tools/security/security_host.py" start --config "$HOME/.config/nexus/security.json" --commit "$COMMIT_SHA")
+  # Ship deploy speed (PO 2026-11-23): the security source snapshot and the gate Job start (about 40 s) run in the
+  # background, beside the build context and the image builds, instead of before them. The commands, their order and
+  # their arguments are unchanged; nothing reaches the security gate or the rollout before both have finished (the
+  # join before the gate below), and a failure of either stops the deploy there, before any rollout, as before.
+  # The subshell prints `TIMING source_snapshot` itself when it is done.
+  SECURITY_JOB_FILE="$(mktemp "${TMPDIR:-/tmp}/nexus-security-job.XXXXXX")"
+  (
+    python3 "$REPO/tools/security/security_host.py" snapshot --config "$HOME/.config/nexus/security.json" \
+      --rules "$HOME/.config/nexus/security-rules"
+    if [ -f "$SECURITY_JOB_FILE" ]; then
+      python3 "$REPO/tools/security/security_host.py" start --config "$HOME/.config/nexus/security.json" --commit "$COMMIT_SHA" > "$SECURITY_JOB_FILE"
+      timing source_snapshot "$phase_start"
+    fi
+  ) &
+  SECURITY_PID=$!
 fi
-timing source_snapshot "$phase_start"
+[ -n "$SECURITY_PID" ] || timing source_snapshot "$phase_start"
 phase_start=$SECONDS
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Recording deploy_info.json: commit=$COMMIT_SHA built_at=$BUILT_AT"
@@ -82,7 +109,10 @@ echo "Streaming context..."
 tar -cf - ui2 project docs | kubectl exec -i -n ui2-build ui2-build-context-loader -- sh -c "rm -rf /workspace/ui2 /workspace/project /workspace/docs && tar -xf - -C /workspace && chmod -R a+rX /workspace/ui2 /workspace/project /workspace/docs"
 
 echo "Deleting loader to free PVC..."
-kubectl delete -f deploy/ui2-image-build/20-context-loader.yaml
+# The loader's only process is `sleep infinity` as PID 1, which ignores SIGTERM: the default 30 s grace period was
+# always waited out in full (most of the ~37 s build_context). One second, then SIGKILL; the delete still waits until
+# the pod is gone, so the claim is free exactly as before. The loader holds no state (the stream above has returned).
+kubectl delete -f deploy/ui2-image-build/20-context-loader.yaml --grace-period=1
 
 echo "Starting build job..."
 kubectl -n ui2-build create configmap ui2-build-config --from-literal=image_tag="$(git rev-parse --short=12 HEAD)" --from-literal=commit="$COMMIT_SHA" --dry-run=client -o yaml | kubectl apply -f -
@@ -162,38 +192,59 @@ else
   echo "Digest is $IMAGE_DIGEST"
 fi
 
-# The Packet Analysis engine image (docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md): the main image just built, by
-# digest, plus tshark -- so tshark never enters the main image. Same registry repository, tag <commit12>-pa; scanned
-# by the same gate below, and rolled out to ui2-packet-analysis only (module_deploy.py --packet-analysis-image; the main
-# image has no tshark). NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 skips it and drops packet-analysis from the rollout.
+# The side images, both FROM the main image just built, by digest, and both scanned by the same gate below:
+# - the Packet Analysis engine image (docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md): plus tshark, so tshark never enters
+#   the main image. Tag <commit12>-pa, rolled out to ui2-packet-analysis only (module_deploy.py --packet-analysis-image;
+#   the main image has no tshark). NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 skips it and drops packet-analysis from the
+#   rollout. A failed build fails the deploy.
+# - the script execution image (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 8): plus the section 7
+#   interpreters; it runs only in the per-run script-run-<id> pods. Tag <commit12>-sx, handed to the ui2-script-runner
+#   broker as UI2_SCRIPT_EXEC_IMAGE (module_deploy.py --script-exec-image). NEXUS_BUILD_SCRIPT_EXEC_IMAGE=0 skips it; the
+#   broker then keeps its current execution image. A failed build is optional (2026-11-20: the UBI package CDN answered
+#   503 and stopped two releases): script-runner is dropped from the rollout and the broker keeps its current execution
+#   image (or stays absent, so the product reports the runner unavailable). Everything else still rolls out.
+# Since 2026-11-23 the two build at the same time (hosta_side_images.py; they were one after the other, about 41 s
+# each). Neither can be skipped: the main digest is new on every deploy and a side image carries the main image's jar.
+# The tool prints TIMING packet_analysis_image / script_exec_image / side_images itself (stderr, so the lines reach
+# the log even when it fails) and PA_IMAGE= / SX_IMAGE= on stdout.
 PA_IMAGE=""
-if [ "${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}" != 0 ]; then
-  pa_start=$SECONDS
-  PA_IMAGE="$(python3 "$REPO/tools/delivery/hosta_packet_analysis_image.py" build --commit "$COMMIT_SHA" \
-    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST")"
-  echo "Packet analysis image is $PA_IMAGE"
-  timing packet_analysis_image "$pa_start"
+SX_IMAGE=""
+SIDE_FLAGS=""
+[ "${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}" != 0 ] && SIDE_FLAGS="--packet-analysis"
+[ "${NEXUS_BUILD_SCRIPT_EXEC_IMAGE:-1}" != 0 ] && SIDE_FLAGS="${SIDE_FLAGS:+$SIDE_FLAGS }--script-exec"
+if [ -n "$SIDE_FLAGS" ]; then
+  # shellcheck disable=SC2086 # SIDE_FLAGS is one or two fixed option words.
+  SIDE_IMAGES="$(python3 "$REPO/tools/delivery/hosta_side_images.py" build --commit "$COMMIT_SHA" --repo "$REPO" \
+    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" $SIDE_FLAGS)"
+  PA_IMAGE="$(printf '%s\n' "$SIDE_IMAGES" | sed -n 's/^PA_IMAGE=//p')"
+  SX_IMAGE="$(printf '%s\n' "$SIDE_IMAGES" | sed -n 's/^SX_IMAGE=//p')"
+  if [ "${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}" != 0 ]; then
+    [ -n "$PA_IMAGE" ] || { echo "PACKET ANALYSIS IMAGE: no image reported; deploy stopped" >&2; exit 1; }
+    echo "Packet analysis image is $PA_IMAGE"
+  fi
+  if [ "${NEXUS_BUILD_SCRIPT_EXEC_IMAGE:-1}" != 0 ]; then
+    if [ -n "$SX_IMAGE" ]; then
+      echo "Script execution image is $SX_IMAGE"
+    else
+      SX_FAILED=1
+      echo "WARNING: script execution image build failed or unavailable; script-runner is left out of this rollout"
+    fi
+  fi
 fi
 
-# The script execution image (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 8): the main image just built,
-# by digest, plus the section 7 interpreters; it runs only in the per-run script-run-<id> pods. Tag <commit12>-sx,
-# scanned by the same gate, handed to the ui2-script-runner broker as UI2_SCRIPT_EXEC_IMAGE (module_deploy.py
-# --script-exec-image). NEXUS_BUILD_SCRIPT_EXEC_IMAGE=0 skips it; the broker then keeps its current execution image.
-SX_IMAGE=""
-if [ "${NEXUS_BUILD_SCRIPT_EXEC_IMAGE:-1}" != 0 ]; then
-  sx_start=$SECONDS
-  if SX_IMAGE="$(python3 "$REPO/tools/delivery/hosta_script_exec_image.py" build --commit "$COMMIT_SHA" \
-    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST")"; then
-    echo "Script execution image is $SX_IMAGE"
-  else
-    # 2026-11-20: the UBI package CDN answered 503 and stopped two releases. The execution image is optional for a
-    # release: without it the script-runner target is dropped and the broker keeps its current execution image (or
-    # stays absent, so the product reports the runner unavailable). Everything else still rolls out.
-    SX_IMAGE=""
-    SX_FAILED=1
-    echo "WARNING: script execution image build failed or unavailable; script-runner is left out of this rollout"
+# The background security source snapshot and gate Job start (above) must have finished before the gate.
+if [ -n "$SECURITY_PID" ]; then
+  join_start=$SECONDS
+  if ! wait "$SECURITY_PID"; then
+    SECURITY_PID=""
+    echo "security source snapshot or gate start failed; rollout refused" >&2
+    exit 1
   fi
-  timing script_exec_image "$sx_start"
+  SECURITY_PID=""
+  SECURITY_JOB="$(cat "$SECURITY_JOB_FILE")"
+  rm -f "$SECURITY_JOB_FILE"
+  SECURITY_JOB_FILE=""
+  timing security_snapshot_wait "$join_start"
 fi
 
 if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then

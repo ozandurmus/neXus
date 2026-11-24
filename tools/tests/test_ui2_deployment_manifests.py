@@ -1632,7 +1632,8 @@ def test_script_exec_containerfile_and_image_builder():
 
 def test_run_build_builds_scans_and_hands_over_the_script_exec_image():
     text = (REPO_ROOT / "deploy/ui2-image-build/run_build.sh").read_text(encoding="utf-8")
-    build = text.index('hosta_script_exec_image.py" build')
+    build = text.index('hosta_side_images.py" build')
+    assert "--script-exec" in text[build - 200:build] + text[build:text.index('SX_IMAGE="$(printf')]
     gate = text.index("security_host.py\" gate")
     rollout = text.index('module_deploy.py" --targets')
     assert build < gate < rollout
@@ -1644,8 +1645,11 @@ def test_run_build_builds_scans_and_hands_over_the_script_exec_image():
 def test_run_build_leaves_script_runner_out_when_its_image_fails():
     """2026-11-20: a UBI CDN outage failed the execution image and stopped whole releases; the image is optional."""
     text = (REPO_ROOT / "deploy/ui2-image-build/run_build.sh").read_text(encoding="utf-8")
-    assert 'if SX_IMAGE="$(python3 "$REPO/tools/delivery/hosta_script_exec_image.py" build' in text
+    # Built beside the Packet Analysis image (hosta_side_images.py, 2026-11-23); a missing SX_IMAGE= line is the failure.
+    assert 'SX_IMAGE="$(printf \'%s\\n\' "$SIDE_IMAGES" | sed -n \'s/^SX_IMAGE=//p\')"' in text
     assert "SX_FAILED=1" in text
+    failed = text.index("SX_FAILED=1")
+    assert text.rindex('if [ -n "$SX_IMAGE" ]; then', 0, failed) > text.index('hosta_side_images.py" build')
     drop = text.index('if [ "${SX_FAILED:-0}" = 1 ]; then')
     assert drop < text.index('module_deploy.py" --targets')
     assert '[ "$target" = script-runner ] ||' in text
