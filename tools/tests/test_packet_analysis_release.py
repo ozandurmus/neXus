@@ -254,7 +254,8 @@ def test_the_build_script_rolls_the_engine_image_and_never_the_main_one_to_packe
     assert '${PA_IMAGE:+--packet-analysis-image "$PA_IMAGE"}' in source
     pruning = source[source.index('if [ -z "$PA_IMAGE" ]'):source.index('echo "Updating selected deployments..."')]
     assert 'packet-analysis removed from the rollout targets' in pruning
-    assert source.index('if [ -z "$PA_IMAGE" ]') > source.index('PA_IMAGE="$(python3')
+    assert source.index('if [ -z "$PA_IMAGE" ]') > source.index('hosta_side_images.py" build')
+    assert source.index('if [ -z "$PA_IMAGE" ]') > source.index('PA_IMAGE="$(printf')
 
 
 @pytest.mark.skipif(shutil.which('bash') is None, reason='needs bash')

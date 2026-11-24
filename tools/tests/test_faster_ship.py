@@ -5,7 +5,11 @@ import getpass
 import json
 import os
 from pathlib import Path
+import re
+import signal
+import subprocess
 import sys
+import time
 
 import pytest
 
@@ -175,11 +179,10 @@ def test_scan_shell_runs_only_its_half(tmp_path, mode, expected):
     assert (work / "trivy-image-0.json").exists() == (mode != "trivy-source")
 
 
-@pytest.mark.parametrize("mode", ["pass", "gate-failure", "not-configured", "skip", "invalid-targets",
-                                  "pa-off", "pa-failure"])
-def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp_path, mode):
-    import os
-    import subprocess
+TARGETS = ("service", "worker", "configuration", "compliance", "policy", "script-runner", "packet-analysis")
+
+
+def _prepare_build_script_env(tmp_path, mode, extra_env=None):
     home, tools = tmp_path / "home", tmp_path / "bin"
     (home / "nexus/project").mkdir(parents=True)
     # The old checkout has no delivery scripts; the pull makes them available.
@@ -189,7 +192,10 @@ def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp
     if mode != "not-configured":
         (home / ".config/nexus/security.json").write_text("{}")
     calls = tmp_path / "calls"
-    stub = '''import json, os, sys
+    # mktemp writes here: whatever the outcome, run_build.sh must leave no temporary file behind.
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    stub = '''import json, os, sys, time
 from pathlib import Path
 name = Path(sys.argv[0]).name
 args = sys.argv[1:]
@@ -205,6 +211,7 @@ elif name == 'git' and args == ['pull', 'origin', 'main']:
     (delivery / 'release_snapshot.sh').write_text(
         'exec python3 tools/delivery/release_snapshot.py snapshot "$@"\\n')
     (delivery / 'hosta_packet_analysis_image.py').write_text('# Synthetic analysis image builder\\n')
+    (delivery / 'hosta_side_images.py').write_text('# Synthetic side image builder\\n')
     (delivery / 'tree_modes.py').write_text('# Synthetic tree-mode check\\n')
 elif name == 'python3':
     if args[0] == '-c':
@@ -220,19 +227,53 @@ elif name == 'python3':
         assert args[2:] == ['--commit', 'a' * 40]
         print(json.dumps({'snapshot': '20261005T010000000000Z_' + 'a' * 12}))
     elif args[:2] == ['tools/security/security_host.py', 'start']:
+        if os.environ['TEST_MODE'] == 'start-failure':
+            sys.exit(1)
         print('security-gate-' + 'b' * 12)
     elif args[:2] == ['tools/security/security_host.py', 'gate']:
         sys.exit(1 if os.environ['TEST_MODE'] == 'gate-failure' else 0)
-    elif args[:2] == ['tools/delivery/hosta_packet_analysis_image.py', 'build']:
-        assert args[2:] == ['--commit', 'a' * 40, '--service-image',
-                            'registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'b' * 64], args
+    elif args[:2] == ['tools/security/security_host.py', 'snapshot']:
+        if os.environ.get('TEST_SNAPSHOT_PIDS'):
+            Path(os.environ['TEST_SNAPSHOT_PIDS']).write_text(
+                json.dumps({'pid': os.getpid(), 'ppid': os.getppid()}))
+        if os.environ.get('TEST_SNAPSHOT_STARTED'):
+            Path(os.environ['TEST_SNAPSHOT_STARTED']).touch()
+        if os.environ.get('TEST_SNAPSHOT_WAIT_UNTIL_NO_JOB_FILE') == '1':
+            deadline = time.monotonic() + 5.0
+            tmpdir = Path(os.environ['TMPDIR'])
+            while time.monotonic() < deadline and any(tmpdir.glob('nexus-security-job.*')):
+                time.sleep(0.02)
+        if os.environ.get('TEST_SNAPSHOT_RELEASE'):
+            release = Path(os.environ['TEST_SNAPSHOT_RELEASE'])
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and not release.exists():
+                time.sleep(0.02)
+        if os.environ.get('TEST_SNAPSHOT_FINISHED'):
+            Path(os.environ['TEST_SNAPSHOT_FINISHED']).touch()
+        if os.environ['TEST_MODE'] == 'snapshot-failure':
+            sys.exit(1)
+    elif args[:2] == ['tools/delivery/hosta_side_images.py', 'build']:
+        assert args[2:8] == ['--commit', 'a' * 40, '--repo', os.environ['REPO'], '--service-image',
+                             'registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'b' * 64], args
+        assert set(args[8:]) <= {'--packet-analysis', '--script-exec'} and args[8:], args
+        if os.environ.get('TEST_SIDE_WAIT_FOR_SNAPSHOT'):
+            marker = Path(os.environ['TEST_SIDE_WAIT_FOR_SNAPSHOT'])
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline and not marker.exists():
+                time.sleep(0.02)
+            assert marker.exists(), 'background security snapshot did not start alongside the build'
+        print('TIMING side_images 1', file=sys.stderr)
         if os.environ['TEST_MODE'] == 'pa-failure':
             sys.exit(1)
-        print('registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'c' * 64)
+        if '--packet-analysis' in args:
+            print('PA_IMAGE=registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'c' * 64)
+        if '--script-exec' in args and os.environ['TEST_MODE'] != 'sx-failure':
+            print('SX_IMAGE=registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'd' * 64)
+        if os.environ.get('TEST_BUILD_DONE'):
+            Path(os.environ['TEST_BUILD_DONE']).touch()
     else:
         assert args[:2] in [
             ['tools/delivery/module_deploy.py', '--targets'],
-            ['tools/security/security_host.py', 'snapshot'],
             ['tools/e2e/hosta_e2e_image.py', 'start'],
             ['tools/e2e/hosta_e2e_image.py', 'ensure'],
             ['tools/delivery/tree_modes.py', 'check'],
@@ -249,23 +290,56 @@ elif name == 'kubectl':
         path = tools / name
         path.write_text("#!" + sys.executable + "\n" + stub)
         path.chmod(0o755)
-    result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
-        text=True, timeout=float(os.environ.get("NEXUS_TEST_SUBPROCESS_TIMEOUT", "120")), env={**os.environ, "HOME": str(home), "PATH": str(tools) + ":" + os.environ["PATH"],
-        "REPO": str(home / "nexus"), "NEXUS_TREE_OWNER": getpass.getuser(), "TEST_CALLS": str(calls), "TEST_MODE": mode,
-        "NEXUS_DEPLOY_TARGETS": "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy",
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "PATH": str(tools) + ":" + os.environ["PATH"],
+        "REPO": str(home / "nexus"),
+        "NEXUS_TREE_OWNER": getpass.getuser(),
+        "TEST_CALLS": str(calls),
+        "TEST_MODE": mode,
+        "TMPDIR": str(scratch),
+        "NEXUS_DEPLOY_TARGETS": "unknown" if mode == "invalid-targets" else " ".join(TARGETS),
         "NEXUS_DEPLOY_APPLY_FILES": "synthetic-manifest.yaml",
         "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else "",
-        "NEXUS_BUILD_PACKET_ANALYSIS_IMAGE": "0" if mode == "pa-off" else "1",
-        # The script execution image has the same shape; its order is asserted in test_ui2_deployment_manifests.
-        "NEXUS_BUILD_SCRIPT_EXEC_IMAGE": "0"})
-    assert result.returncode == (2 if mode == "invalid-targets" else 1 if mode in ("gate-failure", "pa-failure") else 0), result.stderr
+        "NEXUS_BUILD_PACKET_ANALYSIS_IMAGE": "0" if mode in ("pa-off", "side-off") else "1",
+        "NEXUS_BUILD_SCRIPT_EXEC_IMAGE": "0" if mode == "side-off" else "1",
+    }
+    if extra_env:
+        env.update(extra_env)
+    return home, calls, scratch, env
+
+
+def _read_executed(calls, home):
     executed = [json.loads(line) for line in calls.read_text().splitlines()]
     for call in executed:
         if call[0] == "python3" and Path(call[1]).is_absolute():
             call[1] = str(Path(call[1]).relative_to(home / "nexus"))
+    return executed
+
+
+def _wait_until(predicate, timeout=10.0, step=0.02):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(step)
+    return predicate()
+
+
+@pytest.mark.parametrize("mode", ["pass", "gate-failure", "not-configured", "skip", "invalid-targets",
+                                  "pa-off", "pa-failure", "sx-failure", "snapshot-failure",
+                                  "start-failure", "side-off"])
+def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp_path, mode):
+    home, calls, scratch, env = _prepare_build_script_env(tmp_path, mode)
+    result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
+        text=True, timeout=float(os.environ.get("NEXUS_TEST_SUBPROCESS_TIMEOUT", "120")), env=env)
+    failing = ("gate-failure", "pa-failure", "snapshot-failure", "start-failure")
+    assert result.returncode == (2 if mode == "invalid-targets" else 1 if mode in failing else 0), result.stderr
+    executed = _read_executed(calls, home)
     assert executed[:3] == [["git", "fetch"], ["git", "checkout", "main"], ["git", "pull", "origin", "main"]]
     assert executed[3] == ["python3", "tools/delivery/module_deploy.py", "--validate-targets",
-                           "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy"]
+                           "unknown" if mode == "invalid-targets" else " ".join(TARGETS)]
     if mode == "invalid-targets":
         assert len(executed) == 4
         assert "no changes applied" in result.stderr
@@ -276,22 +350,147 @@ elif name == 'kubectl':
     assert executed[5][:2] == ["git", "rev-parse"]
     assert executed[6][:3] == ["python3", "tools/delivery/release_snapshot.py", "snapshot"]
     rolled = any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
-    assert rolled == (mode not in ("gate-failure", "pa-failure"))
+    assert rolled == (mode not in failing)
     scanned = any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
-    assert scanned == (mode in ("pass", "gate-failure", "pa-off", "pa-failure"))
-    # The analysis image is built from the main digest after the main build, and gated with it before any rollout.
-    built = [i for i, c in enumerate(executed) if c[:3] == ["python3", "tools/delivery/hosta_packet_analysis_image.py", "build"]]
-    assert len(built) == (0 if mode == "pa-off" else 1)
+    if mode == "pa-failure":
+        # With an instant snapshot stub, start may finish before or be skipped on pa-failure; the slow-snapshot
+        # test below deterministically exercises cancellation while snapshot is still running.
+        pass
+    else:
+        assert scanned == (mode in ("pass", "gate-failure", "pa-off", "sx-failure", "start-failure", "side-off"))
+    # The side images are built from the main digest after the main build (both in one helper call, at the same time),
+    # and gated with it before any rollout. NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 + NEXUS_BUILD_SCRIPT_EXEC_IMAGE=0
+    # skips the side-image helper entirely (frontend fast path).
+    built = [i for i, c in enumerate(executed) if c[:3] == ["python3", "tools/delivery/hosta_side_images.py", "build"]]
+    if mode == "side-off":
+        assert built == []
+    else:
+        assert len(built) == 1
+        assert ("--packet-analysis" in executed[built[0]]) == (mode != "pa-off")
+        assert "--script-exec" in executed[built[0]]
+    main_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "b" * 64
+    pa_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "c" * 64
+    sx_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "d" * 64
     gates = [c for c in executed if c[:3] == ["python3", "tools/security/security_host.py", "gate"]]
-    if mode in ("pass", "gate-failure", "pa-off"):
-        main_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "b" * 64
-        pa_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "c" * 64
+    if mode in ("pass", "gate-failure", "pa-off", "sx-failure", "side-off"):
         images = [gates[0][i + 1] for i, a in enumerate(gates[0]) if a == "--image"]
-        assert images == ([main_image] if mode == "pa-off" else [main_image, pa_image])
+        # Every side image that was built is scanned with the main image; a failed (optional) script execution image
+        # is not, and neither is a side image that was not built.
+        assert images == {"pass": [main_image, pa_image, sx_image], "gate-failure": [main_image, pa_image, sx_image],
+                          "pa-off": [main_image, sx_image], "sx-failure": [main_image, pa_image],
+                          "side-off": [main_image]}[mode]
+        assert gates[0][gates[0].index("--job-name") + 1] == "security-gate-" + "b" * 12
         assert not built or built[0] < executed.index(gates[0])
+        # The background security snapshot and gate start finished before the gate, and both phases were timed.
+        snap = next(i for i, c in enumerate(executed) if c[:3] == ["python3", "tools/security/security_host.py", "start"])
+        assert snap < executed.index(gates[0])
+        assert re.search(r"^TIMING source_snapshot \d+$", result.stdout, re.M)
+        assert re.search(r"^TIMING security_snapshot_wait \d+$", result.stdout, re.M)
     else:
         assert gates == []
+    rollout = next((c for c in executed if c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"]), None)
+    if rollout is not None:
+        # What is rolled out, and with which side image: a failed script execution image drops script-runner and its
+        # image flag; no Packet Analysis image drops packet-analysis and its image flag; side-off skips both side
+        # builds, drops packet-analysis and keeps script-runner (with its existing execution image).
+        dropped = {"sx-failure": {"script-runner"}, "pa-off": {"packet-analysis"},
+                   "side-off": {"packet-analysis"}}.get(mode, set())
+        assert rollout[3] == " ".join(t for t in TARGETS if t not in dropped)
+        flag = lambda name: rollout[rollout.index(name) + 1] if name in rollout else None
+        assert flag("--image") == main_image
+        assert flag("--packet-analysis-image") == (None if mode in ("pa-off", "side-off") else pa_image)
+        assert flag("--script-exec-image") == (None if mode in ("sx-failure", "side-off") else sx_image)
+    if mode == "sx-failure":
+        assert "script-runner is left out of this rollout" in result.stdout
+    # The gate Job name file (mktemp) is removed on every path, including a failed gate, snapshot, start or image build.
+    assert list(scratch.iterdir()) == []
+    if mode in ("snapshot-failure", "start-failure"):
+        assert "security source snapshot or gate start failed; rollout refused" in result.stderr
+        assert not re.search(r"^TIMING source_snapshot \d+$", result.stdout, re.M)
+    if mode in ("not-configured", "skip"):
+        assert re.search(r"^TIMING source_snapshot \d+$", result.stdout, re.M)
     assert '"security_gate":"not_configured"' in result.stdout if mode == "not-configured" else True
+
+
+def test_build_script_early_failure_during_slow_snapshot_drains_snapshot_and_skips_start(tmp_path):
+    pids_file = tmp_path / "snapshot-pids.json"
+    started = tmp_path / "snapshot-started"
+    finished = tmp_path / "snapshot-finished"
+    home, calls, scratch, env = _prepare_build_script_env(tmp_path, "pa-failure", extra_env={
+        "TEST_SNAPSHOT_PIDS": str(pids_file),
+        "TEST_SNAPSHOT_STARTED": str(started),
+        "TEST_SNAPSHOT_WAIT_UNTIL_NO_JOB_FILE": "1",
+        "TEST_SNAPSHOT_FINISHED": str(finished),
+        "TEST_SIDE_WAIT_FOR_SNAPSHOT": str(started),
+    })
+    result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
+                            text=True, timeout=30, env=env)
+    assert result.returncode == 1, result.stderr
+    assert started.exists() and finished.exists()
+    assert list(scratch.iterdir()) == []
+    pids = json.loads(pids_file.read_text())
+    for pid in (pids["pid"], pids["ppid"]):
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+    executed = _read_executed(calls, home)
+    assert any(c[:3] == ["python3", "tools/security/security_host.py", "snapshot"] for c in executed)
+    assert not any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
+    assert not any(c[:3] == ["python3", "tools/security/security_host.py", "gate"] for c in executed)
+    assert not any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
+    assert not re.search(r"^TIMING source_snapshot \d+$", result.stdout, re.M)
+
+
+@pytest.mark.parametrize("sig,expected_rc", [(signal.SIGTERM, 143), (signal.SIGINT, 130)])
+def test_build_script_signal_during_slow_snapshot_drains_snapshot_skips_start_and_cleans_up(tmp_path, sig, expected_rc):
+    pids_file = tmp_path / "snapshot-pids.json"
+    started = tmp_path / "snapshot-started"
+    release = tmp_path / "snapshot-release"
+    finished = tmp_path / "snapshot-finished"
+    build_done = tmp_path / "build-done"
+    home, calls, scratch, env = _prepare_build_script_env(tmp_path, "pass", extra_env={
+        "TEST_SNAPSHOT_PIDS": str(pids_file),
+        "TEST_SNAPSHOT_STARTED": str(started),
+        "TEST_SNAPSHOT_RELEASE": str(release),
+        "TEST_SNAPSHOT_FINISHED": str(finished),
+        "TEST_BUILD_DONE": str(build_done),
+    })
+    proc = subprocess.Popen(
+        ["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
+        preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
+    )
+    try:
+        assert _wait_until(lambda: started.exists() and build_done.exists(), timeout=10.0), \
+            f"build did not reach security join (rc={proc.poll()})"
+        assert proc.poll() is None
+        assert len(list(scratch.glob("nexus-security-job.*"))) == 1
+        # Signal only run_build.sh (not the background subshell) to reproduce the orphan-subshell defect.
+        proc.send_signal(sig)
+        # report_failure must run on the signal, delete SECURITY_JOB_FILE to cancel `start`, and stay alive
+        # waiting for `snapshot` instead of exiting immediately and orphaning it.
+        assert _wait_until(lambda: list(scratch.iterdir()) == [], timeout=10.0), \
+            f"SECURITY_JOB_FILE was not removed on signal (rc={proc.poll()})"
+        assert proc.poll() is None, "run_build.sh exited before draining the background security snapshot"
+        release.touch()
+        stdout, stderr = proc.communicate(timeout=10)
+    finally:
+        release.touch()
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+    assert proc.returncode == expected_rc, stderr
+    assert finished.exists()
+    assert list(scratch.iterdir()) == []
+    pids = json.loads(pids_file.read_text())
+    for pid in (pids["pid"], pids["ppid"]):
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+    executed = _read_executed(calls, home)
+    assert any(c[:3] == ["python3", "tools/security/security_host.py", "snapshot"] for c in executed)
+    assert not any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
+    assert not any(c[:3] == ["python3", "tools/security/security_host.py", "gate"] for c in executed)
+    assert not any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
+    assert not re.search(r"^TIMING source_snapshot \d+$", stdout, re.M)
 
 
 def test_deploy_retries_only_a_base_image_download_failure():
