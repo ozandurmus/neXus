@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.LicenseItem;
@@ -136,5 +137,57 @@ class FortiGateParsersTest {
     void autoupdateWithoutBlocksIsUnparsed() {
         assertEquals(ParseOutcome.UNPARSED, FortiGateAutoupdateParser.parse("Unknown action 0\n").outcome());
         assertEquals(ParseOutcome.EMPTY, FortiGateAutoupdateParser.parse("").outcome());
+    }
+
+    @Test
+    void autoupdateWithAnUnrecognisedFieldStillParsesTheKnownFields() {
+        String raw = AUTOUPDATE.replace("Result: No Updates", "Result: No Updates\nUnrecognised field: 42\nExtra=synthetic");
+        LicenseParse parsed = FortiGateAutoupdateParser.parse(raw);
+        assertEquals(ParseOutcome.COLLECTED, parsed.outcome());
+        assertEquals(3, parsed.items().size(), parsed.items().toString());
+        LicenseItem engine = byLabel(parsed.items(), "AV Engine");
+        assertEquals(LocalDate.of(2027, 5, 11), engine.expiresOn());
+        assertEquals("No Updates", engine.detail());
+        assertEquals("UNKNOWN", byLabel(parsed.items(), "IPS Attack Engine").state());
+    }
+
+    @Test
+    void autoupdateWithAnExpiredDateKeepsTheDateAndTheBlockedResultWords() {
+        String raw = AUTOUPDATE.replace("Contract Expiry Date: Mon May 11 2027\nLast Updated using manual",
+                "Contract Expiry Date: Fri Jan  3 2020\nLast Updated using manual");
+        LicenseItem engine = byLabel(FortiGateAutoupdateParser.parse(raw).items(), "AV Engine");
+        assertEquals(LocalDate.of(2020, 1, 3), engine.expiresOn(), "the date is kept; the view decides EXPIRED from it");
+        assertEquals("No Updates", engine.detail());
+    }
+
+    @Test
+    @Disabled("Parser contradicts the brief: an expired date gives state VALID with expires_on (LIFECYCLE_LICENSE_STORAGE_CONTRACT " +
+            "section 2, the view decides EXPIRED). Open issue for the Product Owner; parser not changed in this lane.")
+    void autoupdateWithAnExpiredDateIsNeverValidState() {
+        String raw = AUTOUPDATE.replace("Contract Expiry Date: Mon May 11 2027\nLast Updated using manual",
+                "Contract Expiry Date: Fri Jan  3 2020\nLast Updated using manual");
+        assertEquals("EXPIRED", byLabel(FortiGateAutoupdateParser.parse(raw).items(), "AV Engine").state());
+    }
+
+    @Test
+    @Disabled("Parser contradicts the brief: a block without a Contract Expiry Date line produces no item at all " +
+            "(only blocks with a contract line are SUBSCRIPTION items), not an UNKNOWN item. " +
+            "Open issue; parser not changed in this lane.")
+    void autoupdateBlockWithoutAContractLineIsUnknown() {
+        LicenseItem botnet = byLabel(FortiGateAutoupdateParser.parse(AUTOUPDATE).items(), "Botnet Domain Database");
+        assertEquals("UNKNOWN", botnet.state());
+        assertNull(botnet.expiresOn());
+    }
+
+    @Test
+    void contractRowWithAnUnrecognisedFieldStillParsesTheKnownRows() {
+        String raw = CONTRACT.replace("HDWR,Mon May 11 2027", "HDWR,Mon May 11 2027\nXFLD,not a date\nExtra=synthetic");
+        LicenseParse parsed = FortiGateContractParser.parse(raw);
+        assertEquals(ParseOutcome.COLLECTED, parsed.outcome());
+        LicenseItem hdwr = byLabel(parsed.items(), "HDWR");
+        assertEquals("SUPPORT_CONTRACT", hdwr.category());
+        assertEquals("VALID", hdwr.state());
+        assertEquals(LocalDate.of(2027, 5, 11), hdwr.expiresOn());
+        assertEquals("UNKNOWN", byLabel(parsed.items(), "XFLD").state());
     }
 }
