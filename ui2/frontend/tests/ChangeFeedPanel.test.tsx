@@ -82,20 +82,37 @@ describe("ChangeFeedPanel", () => {
     expect(screen.getByText(/2026-10-16 12:00 GMT\+3 — 2026-10-17 12:00 GMT\+3 · page 1 · masked view/)).toBeInTheDocument();
   });
 
-  it("keeps the diff collapsed in mono with added and removed lines coloured apart", async () => {
+  it("keeps a free-text diff collapsed in mono with added and removed lines coloured apart", async () => {
+    stub(() => response(page));
+    mount();
+    const list = await screen.findByRole("list", { name: "Change timeline" });
+    const panItem = within(list).getAllByRole("listitem")[1];
+    const details = panItem.querySelector("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(within(panItem).getByText("Diff · 1 added · 1 removed")).toBeInTheDocument();
+    fireEvent.click(within(panItem).getByText("Diff · 1 added · 1 removed"));
+    const removed = within(panItem).getByText("- <action>deny</action>");
+    const added = within(panItem).getByText("+ <action>allow</action>");
+    expect(removed).toHaveAttribute("data-op", "-");
+    expect(added).toHaveAttribute("data-op", "+");
+    expect(getComputedStyle(removed).color).not.toEqual(getComputedStyle(added).color);
+    expect(panItem.querySelector("dl")).toBeNull();
+  });
+
+  it("shows a policy rule diff as a summary and readable rows, with the exact lines behind Raw", async () => {
     stub(() => response(page));
     mount();
     const list = await screen.findByRole("list", { name: "Change timeline" });
     const policyItem = within(list).getAllByRole("listitem")[3];
     const details = policyItem.querySelector("details") as HTMLDetailsElement;
     expect(details.open).toBe(false);
-    expect(within(policyItem).getByText("Diff · 1 added · 1 removed")).toBeInTheDocument();
-    fireEvent.click(within(policyItem).getByText("Diff · 1 added · 1 removed"));
-    const removed = within(policyItem).getByText('- action: "allow"');
-    const added = within(policyItem).getByText('+ action: "deny"');
-    expect(removed).toHaveAttribute("data-op", "-");
-    expect(added).toHaveAttribute("data-op", "+");
-    expect(getComputedStyle(removed).color).not.toEqual(getComputedStyle(added).color);
+    expect(details.querySelector("summary")?.textContent).toBe("Diff · Action: allow → deny");
+    const row = policyItem.querySelector('[data-field="action"]') as HTMLElement;
+    expect(row.querySelector("dt")?.textContent).toBe("Action");
+    expect(row.querySelector("dd")?.textContent).toBe("allow → deny");
+    fireEvent.click(within(details).getByText("Raw"));
+    expect(within(policyItem).getByText('- action: "allow"')).toHaveAttribute("data-op", "-");
+    expect(within(policyItem).getByText('+ action: "deny"')).toHaveAttribute("data-op", "+");
   });
 
   it("names every source and its state in a live coverage row, with the note on hover, and the ordering note", async () => {
