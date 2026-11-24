@@ -151,20 +151,6 @@ describe("new assessment", () => {
     expect(within(panel).getByRole("link", { name: "Open Trace to rebuild the topology" })).toHaveAttribute("href", "?screen=trace&mode=path");
   });
 
-  it("an ASA or FortiGate override has no policy picker and says every flow will be NOT_EVALUABLE", async () => {
-    const panel = await openSegment();
-    fireEvent.click(within(panel).getByLabelText("Override target"));
-    expect(within(panel).getByText(/OPERATOR OVERRIDE/)).toBeInTheDocument();
-    fireEvent.mouseDown(within(panel).getByLabelText(/Target firewall/));
-    fireEvent.click(await screen.findByRole("option", { name: /FW-BRAVO-02/ }));
-    expect(await within(panel).findByText(/every flow will be NOT_EVALUABLE/)).toBeInTheDocument();
-    expect(within(panel).queryByLabelText(/Stored policy installed on it/)).toBeNull();
-    await addFile(panel);
-    fireEvent.click(within(panel).getByRole("button", { name: "Run assessment" }));
-    await waitFor(() => expect(runCutoverAssessment).toHaveBeenCalled());
-    expect(vi.mocked(runCutoverAssessment).mock.calls[0][1].targetOverride).toEqual({ deviceId: "d-asa", segmentZone: "", peerZone: "" });
-  });
-
   it("a Palo Alto override lists only its policies and needs both zones before it runs", async () => {
     const panel = await openSegment();
     fireEvent.click(within(panel).getByLabelText("Override target"));

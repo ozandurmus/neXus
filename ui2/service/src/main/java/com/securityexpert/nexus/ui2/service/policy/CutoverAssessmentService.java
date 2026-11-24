@@ -17,7 +17,8 @@ import java.util.*;
 @Service
 public class CutoverAssessmentService {
     /** Vendor hints of enrolled devices whose policy neXus evaluates through {@link PolicyLookup}. */
-    static final Map<String, String> LOOKUP_VENDOR_HINTS = Map.of("check_point", "CP", "palo_alto", "PAN");
+    static final Map<String, String> LOOKUP_VENDOR_HINTS = Map.of("check_point", "CP", "palo_alto", "PAN",
+        "cisco_asa", "ASA", "fortinet", "FGT");
     private final CutoverRepository repository;
     private final PolicyQueryService policies;
     private final ObjectMapper json;
@@ -121,7 +122,7 @@ public class CutoverAssessmentService {
             String hint = repository.deviceVendor(override.deviceId()).orElseThrow(() -> new NoSuchElementException("DEVICE_NOT_FOUND"));
             provenance.put("targetDeviceId", override.deviceId()); provenance.put("segmentZone", override.segmentZone()); provenance.put("peerZone", override.peerZone());
             if (!LOOKUP_VENDOR_HINTS.containsKey(hint)) {
-                // Enrolled, but neXus collects no evaluable policy for this vendor yet (Cisco ASA, FortiGate: PO 2026-11-14, Q8).
+                // Enrolled, but neXus holds no evaluable policy model for this vendor (Check Point, Palo Alto, Cisco ASA and FortiGate are evaluated).
                 if (override.policyId() != null) throw new IllegalArgumentException("POLICY_NOT_FOR_TARGET: no stored policy is evaluable for this device's vendor");
                 target = new CutoverAssessment.Target(CutoverAssessment.notEvaluable(CutoverAssessment.VENDOR_POLICY_NOT_COLLECTED),
                     override.segmentZone(), override.peerZone(), false, false);
