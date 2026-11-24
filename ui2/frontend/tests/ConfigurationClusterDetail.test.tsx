@@ -145,6 +145,51 @@ describe("Configuration cluster detail after the Fable review", () => {
     expect(screen.getByRole("checkbox", { name: "Differences only" })).not.toBeChecked();
   });
 
+  it("updates Differences only in the same render when switching between a differing cluster and a zero-difference cluster", async () => {
+    const sameA = CP_A.replace("FW-TANGO-01", "FW-BRAVO-01");
+    const sameB = CP_A.replace("FW-TANGO-01", "FW-BRAVO-02");
+    const sameMembers = [
+      member("m3", { hostname: "FW-BRAVO-01", ha_role: "ACTIVE", cluster_member_ref: "CLS-SIERRA-02" }),
+      member("m4", { hostname: "FW-BRAVO-02", ha_role: "PASSIVE", cluster_member_ref: "CLS-SIERRA-02" }),
+    ];
+    const texts: Record<string, string> = { m1: CP_A, m2: CP_B, m3: sameA, m4: sameB };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const id = url.split("/")[2];
+      const cfg = { collected_at: "2026-09-22T22:57:54Z", vendor: "check_point", read_kind: "show_configuration", canonical_hash: "h", text_readable: true,
+        change_state: "unchanged", withheld_line_count: 0, sanitized_text_available: true, index: [], overrides: [], supplementary_runs: [] };
+      if (url === `/devices/${id}/configuration` && id in texts) return Promise.resolve(jsonResponse(200, { ...cfg, device_id: id }));
+      if (url === `/devices/${id}/configuration/text` && id in texts) return Promise.resolve(new Response(texts[id], { status: 200 }));
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    }));
+
+    const { container, rerender } = render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
+    const mismatchedFrames: string[] = [];
+    const observer = new MutationObserver(() => {
+      const toggle = container.querySelector<HTMLInputElement>('input[aria-label="Differences only"]');
+      if (!toggle) return;
+      const text = container.textContent ?? "";
+      if (text.includes("no differences") && toggle.checked) mismatchedFrames.push("no differences rendered while toggle checked");
+      if (text.includes("1 difference") && !toggle.checked) mismatchedFrames.push("1 difference rendered while toggle unchecked");
+    });
+    observer.observe(container, { childList: true, subtree: true, attributes: true, characterData: true });
+    try {
+      await waitFor(() => expect(screen.getByText("1 difference")).toBeInTheDocument());
+      expect(screen.getByRole("checkbox", { name: "Differences only" })).toBeChecked();
+
+      rerender(withTheme(<ClusterConfigurationDetail clusterRef="CLS-SIERRA-02" members={sameMembers} />));
+      await waitFor(() => expect(screen.getByText("no differences")).toBeInTheDocument());
+      expect(screen.getByRole("checkbox", { name: "Differences only" })).not.toBeChecked();
+
+      rerender(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
+      await waitFor(() => expect(screen.getByText("1 difference")).toBeInTheDocument());
+      expect(screen.getByRole("checkbox", { name: "Differences only" })).toBeChecked();
+    } finally {
+      observer.disconnect();
+    }
+    expect(mismatchedFrames).toEqual([]);
+  });
+
   it("renders the per-member identity table with virtual systems collapsed to the cluster", async () => {
     stubConfigs();
     render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
