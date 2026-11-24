@@ -7,7 +7,7 @@
 #   server/manifests (step S1, 2026-11-16; RECOVERY_OFFHOST_AND_KEY_CUSTODY_DESIGN section 7.1). The dump is verified
 #   before encryption; any failed step fails the run and no archive is written. Everything secret stays inside the
 #   work dir (umask 077, removed by the trap) and the age-encrypted archive. Encrypted with age to /etc/nexus/backup/age-recipient.txt; the identity that decrypts it must also
-#   be kept off the host. Keeps the newest 14.
+#   be kept off the host. Keeps the newest 7 (PO 2026-11-24; 14 held 178 GB).
 set -euo pipefail
 umask 077
 OUT=/var/backups/nexus; K3S=/var/lib/rancher/k3s/server
@@ -38,5 +38,5 @@ mkdir -p "$W/etc/ssh-host-keys"; cp -a /etc/ssh/ssh_host_* "$W/etc/ssh-host-keys
 cp -a "$K3S/manifests" "$W/k3s/manifests"
 tar -C "$W" -czf - . | age -R /etc/nexus/backup/age-recipient.txt > "$OUT/nexus-platform-$TS.tar.gz.age.part"
 mv "$OUT/nexus-platform-$TS.tar.gz.age.part" "$OUT/nexus-platform-$TS.tar.gz.age"
-ls -1t "$OUT"/nexus-platform-*.tar.gz.age | tail -n +15 | xargs -r rm -f
+ls -1t "$OUT"/nexus-platform-*.tar.gz.age | tail -n +8 | xargs -r rm -f
 echo "backup $OUT/nexus-platform-$TS.tar.gz.age $(du -h "$OUT/nexus-platform-$TS.tar.gz.age" | cut -f1)"
