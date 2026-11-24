@@ -44,6 +44,7 @@ import { resolveEstateRoute } from "./estate/estateRouting";
 import { DisplayModeProvider, isWall, useDisplayMode } from "./shell/displayMode";
 import { isScreenId, type ScreenId } from "./shell/types";
 import { rewriteLegacyRoute } from "./shell/legacyRoutes";
+import { reloadOnceForStaleChunk } from "./shell/chunkReload";
 import { URL_CHANGE_EVENT, handleInAppLinkClick, useLocationPathname, useLocationSearch } from "./shell/urlParams";
 
 /**
@@ -52,7 +53,15 @@ import { URL_CHANGE_EVENT, handleInAppLinkClick, useLocationPathname, useLocatio
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lazyNamed<M extends Record<string, any>, K extends keyof M>(load: () => Promise<M>, name: K) {
-  return lazy(async () => ({ default: (await load())[name] as ComponentType<any> }));
+  return lazy(async () => {
+    try {
+      return { default: (await load())[name] as ComponentType<any> };
+    } catch (error) {
+      // A chunk removed by a deploy: reload once to the new build instead of a dead section (PO 2026-11-24).
+      if (reloadOnceForStaleChunk(error)) return new Promise<never>(() => undefined);
+      throw error;
+    }
+  });
 }
 
 function ScreenFallback() {

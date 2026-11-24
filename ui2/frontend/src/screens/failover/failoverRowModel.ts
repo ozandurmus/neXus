@@ -207,8 +207,11 @@ export function reasonLine(row: CpFailoverSummary | undefined, members: readonly
   if (row.readiness.status === "READY") {
     const blockingNos = [...new Set(checks.filter(c => c.blocking).map(c => c.checkNo))];
     const passed = blockingNos.filter(no => !checks.some(c => c.checkNo === no && (FAILING.includes(c.result) || c.result === "NOT_EVALUATED"))).length;
+    // A Ready row read "9 of 10 blocking checks passed" when one check was not evaluated, as if one had failed (PO 2026-11-24).
+    const notEvaluated = blockingNos.filter(no => checks.some(c => c.checkNo === no && c.result === "NOT_EVALUATED")
+      && !checks.some(c => c.checkNo === no && FAILING.includes(c.result))).length;
     const warn = checks.find(c => c.result === "WARN");
-    return { headline: blockingNos.length ? `${passed} of ${blockingNos.length} blocking checks passed` : "No blocking conditions observed",
+    return { headline: blockingNos.length ? `${passed} of ${blockingNos.length} blocking checks passed${notEvaluated ? ` · ${notEvaluated} not evaluated` : ""}` : "No blocking conditions observed",
       more: 0, ...(warn ? { warning: warn.title } : {}) };
   }
   if (stop) return { headline: `Pre-checks could not finish: ${stop}`, more: 0, code: row.readiness.stopCode ?? undefined };

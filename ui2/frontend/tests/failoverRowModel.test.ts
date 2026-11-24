@@ -154,6 +154,10 @@ describe("reasonLine", () => {
     const checks = [...roles, ...both(2, "Cluster IP table", ["PASS", "PASS"], "ok"), ...both(8, "Last failover less than 6 hours ago", ["WARN", "WARN"], "5 h ago", false)];
     expect(reasonLine(summary("CLS-ALPHA-01", "READY", {}, checks), members)).toEqual({ headline: "2 of 2 blocking checks passed", more: 0, warning: "Last failover less than 6 hours ago" });
   });
+  it("a READY row names a blocking check that was not evaluated instead of counting it as failed", () => {
+    const checks = [...roles, ...both(2, "Cluster IP table", ["NOT_EVALUATED", "NOT_EVALUATED"], "n/a")];
+    expect(reasonLine(summary("CLS-ALPHA-01", "READY", {}, checks), members).headline).toBe("1 of 2 blocking checks passed · 1 not evaluated");
+  });
   it("keeps the server's refusal code beside its label", () => {
     const line = reasonLine(summary("CLS-ALPHA-01", "READY", { refusalReason: "OPEN_INCIDENT" }, roles), members);
     expect(line.code).toBe("OPEN_INCIDENT");
