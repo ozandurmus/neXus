@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 
-/** Target resolution (ACI-3, PO 2026-11-14 Q8), staleness (ACI-8) and what is stored (ACI-5), with the database mocked. */
+/** Target resolution (ACI-3; Check Point, Palo Alto, Cisco ASA and FortiGate are evaluated), staleness (ACI-8) and what is stored (ACI-5), with the database mocked. */
 class CutoverAssessmentServiceTest {
     static final String SEGMENT = "00000000-0000-4000-8000-000000000001";
     static final String DEVICE = "device-synthetic-01";
@@ -54,9 +54,9 @@ class CutoverAssessmentServiceTest {
             Map.of("source", "src", "destination", "dst", "port", "port", "protocol", "proto"));
     }
 
-    @Test void enrolledAsaAndFortiGateTargetsAreNotEvaluableUntilTheirPolicyIsCollected() throws Exception {
+    @Test void enrolledTargetsOfAVendorWithoutAPolicyModelAreNotEvaluable() throws Exception {
         segment(1);
-        for (String hint : List.of("cisco_asa", "fortigate")) {
+        for (String hint : List.of("radware", "unknown_vendor")) {
             when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of(hint));
             var prepared = prepare(spec(null, "", ""));
             upload(prepared);
@@ -67,6 +67,52 @@ class CutoverAssessmentServiceTest {
                 .getMessage().startsWith("POLICY_NOT_FOR_TARGET"));
         }
         verifyNoInteractions(policies);
+    }
+
+    static PolicySnapshot asaPolicy(String deviceId) {
+        return com.securityexpert.nexus.ui2.policy.asa.AsaPolicyMapper.map(deviceId, "FW-BRAVO-02", "2026-11-14T02:00:00Z", "artefact",
+            com.securityexpert.nexus.ui2.policy.asa.AsaConfigPolicyParser.parse(AsaPolicyEvaluationTest.BASE
+                + "access-list ACL-OUT extended permit tcp any host 198.51.100.8 eq https\naccess-group ACL-OUT in interface outside\n"));
+    }
+    static PolicySnapshot fortiGatePolicy(String deviceId) {
+        return com.securityexpert.nexus.ui2.policy.fortigate.FortiGatePolicyMapper.map(deviceId, "FW-JULIET-06", "2026-11-14T02:00:00Z", "artefact",
+            com.securityexpert.nexus.ui2.policy.fortigate.FortiGateConfigPolicyParser.parse(FortiGatePolicyEvaluationTest.HEAD
+                + "config firewall policy\n" + FortiGatePolicyEvaluationTest.policy(10,
+                    FortiGatePolicyEvaluationTest.with("srcintf \"port1\"", "dstintf \"port2\"", "service \"HTTPS\"", "action deny")) + "end\n")).get(0);
+    }
+
+    @Test void anAsaOrFortiGateOverrideIsDecidedThroughTheStoredPolicyLookup() throws Exception {
+        segment(1);
+        var cases = List.of(List.of("cisco_asa", "ASA", "outside", "inside", "WOULD_ALLOW"), List.of("fortinet", "FGT", "port1", "port2", "WOULD_DROP"));
+        for (var c : cases) {
+            var snapshot = c.get(1).equals("ASA") ? asaPolicy(DEVICE) : fortiGatePolicy(DEVICE);
+            when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of(c.get(0)));
+            when(policies.find("p-" + c.get(1))).thenReturn(Optional.of(snapshot));
+            // No stored policy chosen: refused, never silently NOT_EVALUABLE.
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> prepare(spec(null, c.get(2), c.get(3)))).getMessage().startsWith("POLICY_REQUIRED"));
+            var prepared = prepare(spec("p-" + c.get(1), c.get(2), c.get(3)));
+            upload(prepared);
+            var result = prepared.run().finish(Instant.now().plusSeconds(60));
+            assertEquals(c.get(4), result.flows().get(0).get("decision"), c.get(1));
+            assertEquals(c.get(1), prepared.provenance().get("targetVendor"));
+            // Missing interfaces surface as NOT_DECIDED with the lookup's reason.
+            var missing = prepare(spec("p-" + c.get(1), "", ""));
+            upload(missing);
+            var undecided = missing.run().finish(Instant.now().plusSeconds(60)).flows().get(0);
+            assertEquals("NOT_DECIDED", undecided.get("decision")); assertEquals("zone or target required", undecided.get("decisionReason"));
+        }
+    }
+
+    @Test void anAsaOrFortiGatePolicyThatDoesNotNameTheTargetIsRefused() {
+        segment(1);
+        for (var c : List.of(List.of("cisco_asa", "ASA"), List.of("fortinet", "FGT"))) {
+            when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of(c.get(0)));
+            when(policies.find("p-other")).thenReturn(Optional.of(c.get(1).equals("ASA") ? asaPolicy("device-synthetic-09") : fortiGatePolicy("device-synthetic-09")));
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> prepare(spec("p-other", "a", "b"))).getMessage().startsWith("POLICY_NOT_FOR_TARGET"));
+            // A policy of another vendor never stands in for it either, even when it names the device.
+            when(policies.find("p-pan")).thenReturn(Optional.of(policy("p-pan", "2026-11-14T02:00:00Z", DEVICE)));
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> prepare(spec("p-pan", "a", "b"))).getMessage().startsWith("POLICY_NOT_FOR_TARGET"));
+        }
     }
 
     @Test void evaluableTargetsNeedTheirOwnStoredPolicy() {
@@ -153,7 +199,7 @@ class CutoverAssessmentServiceTest {
         assertEquals("PATH", stored.getValue().targetSource()); assertNull(stored.getValue().targetDeviceId());
         assertEquals("topology-synthetic-01", stored.getValue().topologySnapshotId());
         // An override is labelled as such on every result.
-        when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of("cisco_asa"));
+        when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of("radware"));
         var overridden = prepare(spec(null, "", ""));
         upload(overridden);
         var labelled = overridden.run().finish(Instant.now().plusSeconds(60));

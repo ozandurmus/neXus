@@ -104,7 +104,7 @@ class CutoverAssessmentTest {
         assertEquals("NOT_DECIDED", result.readiness()); assertTrue(codes(result).contains("TARGET_NOT_EVALUABLE"));
         assertFalse(codes(result).contains("INSTALL_STATE_NOT_VERIFIED")); assertTrue(result.missingRules().isEmpty());
         var other = pan(rule("r1", "any", "any", "allow", true));
-        var foreign = new PolicySnapshot(new Metadata("p9", "s9", "MGR-BRAVO-01", "ASA", "c1", "DOM-TANGO-01", "POL-ALPHA-02",
+        var foreign = new PolicySnapshot(new Metadata("p9", "s9", "MGR-BRAVO-01", "RAD", "c1", "DOM-TANGO-01", "POL-ALPHA-02",
             other.metadata().collectedAt(), "a1", List.of()), other.sections(), other.objects());
         assertFalse(CutoverAssessment.stored(foreign, "", "").evaluable());
         assertEquals("VENDOR_POLICY_NOT_EVALUABLE", CutoverAssessment.stored(foreign, "", "").decide("192.0.2.8", "198.51.100.8", "tcp", 443, "", "").reason());
@@ -191,5 +191,60 @@ class CutoverAssessmentTest {
         assertEquals(3, nested.segment().size());
         var intervals = new CutoverAssessment.Intervals(nested.segment());
         assertTrue(intervals.contains(PolicyRuleQuery.interval("203.0.113.0")[0])); assertFalse(intervals.contains(PolicyRuleQuery.interval("203.0.113.1")[0]));
+    }
+    // ---- Cisco ASA and FortiGate stored policies, decided through the same lookup (delivery step 9) -----------------
+
+    static CutoverAssessment.Target localTarget(PolicySnapshot snapshot, String device, String segmentZone, String peerZone) {
+        return new CutoverAssessment.Target(CutoverAssessment.stored(snapshot, device, ""), segmentZone, peerZone, false, false);
+    }
+    static final String LOCAL_LOG = HEADER + "192.0.2.8,198.51.100.20,443,tcp\n192.0.2.8,198.51.100.20,22,tcp\n";
+
+    @Test void aStoredAsaPolicyDecidesEveryFlowThroughTheLookup() throws Exception {
+        var asa = AsaPolicyEvaluationTest.asa("""
+                access-list ACL-OUT extended deny tcp any host 198.51.100.20 eq 22
+                access-list ACL-OUT extended permit tcp any host 198.51.100.20 eq https
+                access-group ACL-OUT in interface outside
+                """);
+        assertTrue(CutoverAssessment.stored(asa, "dev-asa-1", "").evaluable());
+        var result = assess(localTarget(asa, "dev-asa-1", "outside", "inside"), LOCAL_LOG);
+        var allowed = flow(result, "192.0.2.8", "198.51.100.20", 443);
+        assertEquals("WOULD_ALLOW", allowed.get("decision")); assertEquals("first matching rule", allowed.get("decisionReason"));
+        assertEquals("WOULD_DROP", flow(result, "192.0.2.8", "198.51.100.20", 22).get("decision"));
+        assertTrue(codes(result).contains("INSTALL_STATE_NOT_VERIFIED")); assertFalse(codes(result).contains("TARGET_NOT_EVALUABLE"));
+        assertFalse(codes(result).contains("ZONE_PAIR_MISSING"));
+        // An interface the policy does not know is never an allow.
+        var unknown = assess(localTarget(asa, "dev-asa-1", "nowhere", "inside"), LOCAL_LOG);
+        for (var f : unknown.flows()) assertNotEquals("WOULD_ALLOW", f.get("decision"));
+    }
+
+    @Test void aStoredFortiGatePolicyDecidesEveryFlowThroughTheLookup() throws Exception {
+        var fgt = FortiGatePolicyEvaluationTest.fgt(
+            FortiGatePolicyEvaluationTest.policy(10, FortiGatePolicyEvaluationTest.with("srcintf \"port1\"", "dstintf \"port2\"", "service \"HTTPS\"", "action accept"))
+            + FortiGatePolicyEvaluationTest.policy(20, FortiGatePolicyEvaluationTest.with("srcintf \"port1\"", "dstintf \"port2\"", "service \"SSH\"", "action deny")));
+        assertTrue(CutoverAssessment.stored(fgt, "dev-fgt-1", "").evaluable());
+        var result = assess(localTarget(fgt, "dev-fgt-1", "port1", "port2"), LOCAL_LOG);
+        assertEquals("WOULD_ALLOW", flow(result, "192.0.2.8", "198.51.100.20", 443).get("decision"));
+        assertEquals("WOULD_DROP", flow(result, "192.0.2.8", "198.51.100.20", 22).get("decision"));
+        assertTrue(codes(result).contains("INSTALL_STATE_NOT_VERIFIED")); assertFalse(codes(result).contains("TARGET_NOT_EVALUABLE"));
+    }
+
+    @Test void aMissingInterfaceOnAnAsaOrFortiGateTargetIsNeverAnAllow() throws Exception {
+        var asa = AsaPolicyEvaluationTest.asa("access-list ACL-OUT extended permit ip any any\naccess-group ACL-OUT in interface outside\n");
+        var fgt = FortiGatePolicyEvaluationTest.fgt(FortiGatePolicyEvaluationTest.policy(10,
+            FortiGatePolicyEvaluationTest.with("srcintf \"port1\"", "dstintf \"port2\"", "service \"ALL\"", "action accept")));
+        for (var target : List.of(List.of(asa, "dev-asa-1", "outside", "inside"), List.of(fgt, "dev-fgt-1", "port1", "port2"))) {
+            var snapshot = (PolicySnapshot) target.get(0); var device = (String) target.get(1);
+            // The lookup itself never decides without both interfaces (its own reason is kept) ...
+            var direct = CutoverAssessment.stored(snapshot, device, "").decide("192.0.2.8", "198.51.100.20", "tcp", 443, "", "");
+            assertEquals("NOT_DECIDED", direct.decision()); assertFalse(direct.reason().isEmpty());
+            // ... and so does the assessment, for either interface empty, with the zone-pair coverage code.
+            for (var zones : List.of(List.of("", ""), List.of((String) target.get(2), ""), List.of("", (String) target.get(3)))) {
+                var result = assess(localTarget(snapshot, device, zones.get(0), zones.get(1)), LOCAL_LOG);
+                for (var f : result.flows()) {
+                    assertEquals("NOT_DECIDED", f.get("decision"), snapshot.metadata().vendor() + zones); assertEquals("zone or target required", f.get("decisionReason"));
+                }
+                assertTrue(codes(result).contains("ZONE_PAIR_MISSING")); assertEquals("NOT_DECIDED", result.readiness());
+            }
+        }
     }
 }
