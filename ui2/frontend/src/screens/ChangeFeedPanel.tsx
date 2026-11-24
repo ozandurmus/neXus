@@ -15,6 +15,7 @@ import { DISPLAY_TZ_LABEL, displayInputToIso, formatStamp, isoToDisplayInput } f
 import { jobTypeLabel, vendorLabel } from "../shell/presenters";
 import { m3, MONO } from "../theme/m3Theme";
 import { RADIUS, ROLE_COLORS, TYPE, type StateRole } from "../theme/tokens";
+import { ChangeDiff } from "./ChangeDiff";
 
 /**
  * Operations > Change feed (mockup "Cihaz logları için dört ekran" 2026-10-17, screen 3; PO 2026-10-20): one vertical
@@ -38,6 +39,9 @@ const VENDORS = [["", "All vendors"], ["check_point", "Check Point"], ["palo_alt
 export const SLOW_AFTER_MS = 5_000;
 /** Component-level bounded wait so the panel never stays in "Loading changes…" forever. */
 export const LOAD_TIMEOUT_MS = 20_000;
+
+/** The one source whose diff lines are `field: <JSON>` by contract (ChangeFeedService.policyHistory); the others are free text. */
+const READABLE_DIFF_SOURCE = "policy_rule_history";
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = {
   policy_rule_history: "Policy rule history",
@@ -286,25 +290,7 @@ function TimelineItem({ event }: { readonly event: ChangeFeedEvent }) {
           {!event.links.job_id && event.links.job_type && <StatusPill tone="brand" word="Jobs of this type" dense href={`?screen=operations&tab=jobs&job_type=${encodeURIComponent(event.links.job_type)}`} />}
         </PillRow>
         {event.detail && <Typography variant="caption" sx={{ color: m3.onSurfaceVar, overflowWrap: "anywhere" }}>{event.detail}</Typography>}
-        {event.diff.length > 0 && <Diff lines={event.diff} />}
-      </Box>
-    </Box>
-  );
-}
-
-/** The compact diff block: collapsed by default, mono, removed lines in the error ink and added lines in the success ink. */
-function Diff({ lines }: { readonly lines: ChangeFeedEvent["diff"] }) {
-  const added = lines.filter((l) => l.op === "+").length, removed = lines.filter((l) => l.op === "-").length;
-  return (
-    <Box component="details" sx={{ "& summary": { cursor: "pointer", fontSize: TYPE.label.fontSize, color: m3.onSurfaceVar } }}>
-      <Box component="summary">{`Diff · ${added} added · ${removed} removed`}</Box>
-      <Box component="pre" sx={{ m: 0, mt: 0.5, p: 1, fontFamily: MONO, fontSize: TYPE.mono.fontSize, lineHeight: TYPE.mono.lineHeight,
-                                 bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: `${RADIUS.pill}px`, overflowX: "auto", whiteSpace: "pre" }}>
-        {lines.map((line, index) => (
-          <Box key={index} component="span" data-op={line.op} sx={{ display: "block", color: line.op === "+" ? m3.onSuccessContainer : line.op === "-" ? m3.onErrorContainer : m3.onSurfaceVar }}>
-            {`${line.op} ${line.text}`}
-          </Box>
-        ))}
+        {event.diff.length > 0 && <ChangeDiff lines={event.diff} readable={event.source === READABLE_DIFF_SOURCE} />}
       </Box>
     </Box>
   );
