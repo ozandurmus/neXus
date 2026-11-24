@@ -935,17 +935,6 @@ export function setDeviceSecret(deviceId: string, purpose: "export_passphrase" |
   return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/secrets/${purpose}`, "POST", { credential_reference_id: credentialReferenceId }));
 }
 
-export type JobState =
-  | "REQUESTED"
-  | "CLAIMED"
-  | "EXECUTING"
-  | "COMPLETED"
-  | "FAILED"
-  | "REJECTED"
-  | "CANCELLED"
-  | "OUTCOME_UNKNOWN"
-  | "RECONCILED";
-
 export interface JobView {
   readonly job_id: string;
   readonly state: string;
