@@ -167,11 +167,14 @@ def test_component_selections_are_explicit_and_separate():
     assert "npm --prefix ui2/frontend test -- tests/App.test.tsx" in targeted_block
 
 
-def test_full_regression_runs_on_manual_dispatch_only():
-    """PO 2026-11-24: the delivery Mac's pretest runs the suite before the merge; GitHub runs the full suite only on dispatch."""
-    full_block = _job_block(_read_workflow(), "full-regression")
+def test_full_regression_runs_nightly_and_on_manual_dispatch_only():
+    """PO 2026-11-24: the delivery Mac's pretest runs the suite before the merge; GitHub runs the full suite nightly
+    and on dispatch, never per PR or push."""
+    text = _read_workflow()
+    full_block = _job_block(text, "full-regression")
     assert "needs: regression-scope" in full_block
-    assert "if: always() && github.event_name == 'workflow_dispatch'" in full_block
+    assert "if: always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')" in full_block
+    assert "cron: '30 0 * * *'" in text
     assert "github.event_name == 'push'" not in full_block
     assert "classification == 'full'" not in full_block
     full_suite_lines = [line.strip() for line in full_block.splitlines() if line.strip() == FULL_SUITE_LINE]
