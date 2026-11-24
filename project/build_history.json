@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0412",
+      "status": "automated_validated",
+      "title": "Policy Insights frozen (PO 2026-11-24), four unused static helpers removed",
+      "summary": "The Policy Insights rulebase reorganisation advisor design was frozen with all nine PO recommendations accepted; Check Point first, phase P1 uses existing engines with no logs (3bb72dce). Four unused public static helpers were removed from platform-core and service (929166c7).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "ARCHITECTURE",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0411",
       "status": "automated_validated",
       "title": "Behaviour-neutral splits: Check Point CLISH parser, replay-viewer check reuse, Packet Analysis client module",
