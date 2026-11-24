@@ -56,8 +56,30 @@ def container(config, name, tool, command, mode):
                               dict(name="reports", mountPath="/var/lib/nexus-security")])
 
 
-def job(config, mode="daily", image=None, commit=None, gate_name=None):
+PREGATE_TOOLS = re.compile(r"pregate-tools/[a-f0-9]{64}")
+
+
+# Source stages whose result is fully determined by the source TREE (and the gate policy); see source_reused below.
+TREE_STAGES = ("semgrep", "gitleaks", "trivy")
+
+
+def job(config, mode="daily", image=None, commit=None, gate_name=None, pregate_tools=None, await_timeout=None,
+        deadline=3600, source_reused=False):
+    """`pregate_tools` (pre-merge gate, PO 2026-11-23): the PVC sub-path of the DEPLOYED scanner scripts and offline
+    rules staged by security_host.snapshot(publish=False), content-addressed. The candidate commit is scanned, but never
+    by its own tools/security.
+
+    `source_reused` (deploy gate only): a pre-merge PASS of the same tree and policy covers the tree-determined stages
+    (TREE_STAGES), so this Job runs only the Git history scan and the image scans of every digest the deploy rolls out."""
     settings(config)
+    if pregate_tools is not None and (not gate_name or not PREGATE_TOOLS.fullmatch(pregate_tools)):
+        raise ValueError("invalid pre-merge gate tools")
+    if source_reused and (mode != "gate" or not gate_name or pregate_tools is not None):
+        raise ValueError("source reuse is for the split deploy gate only")
+    if type(deadline) is not int or not 600 <= deadline <= 4 * 3600:
+        raise ValueError("invalid gate deadline")
+    if await_timeout is not None and (type(await_timeout) is not int or not 60 <= await_timeout < deadline):
+        raise ValueError("invalid image wait")
     prepare = container(config, "prepare", "semgrep", ["python3", "/tools/security/security_run.py", "prepare"], mode)
     if mode == "gate":
         images = [image] if isinstance(image, str) else list(image or ())
@@ -71,6 +93,9 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
             if not re.fullmatch(r"security-gate-[a-f0-9]{12}", gate_name):
                 raise ValueError("invalid gate name")
             prepare["env"].append(dict(name="WAIT_FOR_IMAGE", value="1"))
+            if pregate_tools:
+                # The candidate snapshot is staged, not published: prepare reads it by name, never via `current`.
+                prepare["env"].append(dict(name="SOURCE_COMMIT", value=commit))
         else:
             # Space-separated: every image the build produced is scanned in this one gate.
             prepare["env"].append(dict(name="GATE_IMAGE", value=" ".join(images)))
@@ -82,7 +107,11 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
                                   dict(name="machine", mountPath="/run/machine", readOnly=True)]
         stages.append(zap)
     else:
+        if source_reused:
+            prepare["env"].append(dict(name="TREE_SCANS_REUSED", value="1"))
         for name, tool in (("semgrep", "semgrep"), ("gitleaks", "gitleaks"), ("history", "gitleaks"), ("trivy", "trivy")):
+            if source_reused and name in TREE_STAGES:
+                continue
             scan = "trivy-source" if gate_name and name == "trivy" else name
             stage = container(config, name, tool, ["sh", "/tools/security/security_scan.sh", scan], mode)
             # Reports are normalized by the summary, not retained raw by scanner stages.
@@ -91,6 +120,8 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
     if gate_name:
         waiting = container(config, "await-image", "semgrep", ["python3", "/tools/security/security_run.py", "await-image"], mode)
         waiting["volumeMounts"].append(dict(name="gate-image", mountPath="/gate-image", readOnly=True))
+        if await_timeout is not None:
+            waiting["env"].append(dict(name="AWAIT_IMAGE_TIMEOUT_S", value=str(await_timeout)))
         stages.append(waiting)
         image_scan = container(config, "trivy-image", "trivy", ["sh", "/tools/security/security_scan.sh", "trivy-image"], mode)
         image_scan["volumeMounts"] = [m for m in image_scan["volumeMounts"] if m["name"] != "reports"]
@@ -116,18 +147,25 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
     if config.get("trivy_cache_claim"):
         # Vulnerability DBs and analysed-layer cache (no findings, no source): survives between Jobs.
         pod["volumes"].append(dict(name="trivy-cache", persistentVolumeClaim={"claimName": config["trivy_cache_claim"]}))
-    if gate_name:
-        # Use the deployed source snapshot's scripts, not a possibly older installed ConfigMap.
+    if mode == "gate":
+        # Every gate Job -- split or not, the deploy's fallback full rescan included -- runs the scripts of the source
+        # snapshot it judges (or, pre-merge, the staged deployed copy), never the installed ConfigMap: run_build.sh does
+        # not refresh ConfigMap/security-scripts, so it may lag the release by any number of changes.
         pod["volumes"][0] = dict(name="scripts", persistentVolumeClaim={"claimName": "security-source", "readOnly": True})
         for c in pod["initContainers"] + pod["containers"]:
             for mount in c["volumeMounts"]:
                 if mount["name"] == "scripts":
-                    mount["subPath"] = commit + "/tools/security"
+                    mount["subPath"] = pregate_tools or (commit + "/tools/security")
+                elif pregate_tools and mount["name"] == "source" and mount.get("subPath") == "rules":
+                    # The rules staged (and hashed into the verdict's policy) with the scripts, never the shared copy
+                    # a concurrent deploy snapshot may replace while this Job runs.
+                    mount["subPath"] = pregate_tools + "/rules"
+    if gate_name:
         pod["volumes"].append(dict(name="gate-image", configMap={"name": gate_name}))
     if mode == "dast":
         pod["volumes"].append(dict(name="machine", secret={"secretName": "security-machine-token", "defaultMode": 288}))
     return dict(apiVersion="batch/v1", kind="Job", metadata={"name": "security-" + mode, "namespace": NS},
-                spec={"backoffLimit": 0, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 86400,
+                spec={"backoffLimit": 0, "activeDeadlineSeconds": deadline, "ttlSecondsAfterFinished": 86400,
                       "template": {"metadata": {"labels": LABEL}, "spec": pod}})
 
 
