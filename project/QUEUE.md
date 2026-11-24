@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0405 · Track: PCP.x · Generated: 2026-11-23T20:45:18Z
+Build: NXS-LOCAL-0406 · Track: PCP.x · Generated: 2026-11-24T00:18:40Z
 
 ## Now
-- NXS-LOCAL-0405 — ASA failover contract PO answers, Devices deep link, ship preview e2e failure titles and build-history archive (automated_validated)
+- NXS-LOCAL-0406 — HA policy divergence reads, zone matrix durable runs (V267), aiview raw-versus-masked sweep and HA screen redesign (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -17,6 +17,7 @@ Build: NXS-LOCAL-0405 · Track: PCP.x · Generated: 2026-11-23T20:45:18Z
 - P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned recertification_council
 - P1/planned verify_first_scheduled_mds_export_and_asa_saved_state
+- P1/planned zone_matrix_step_4b2
 - P2/in_progress aiview_masked_readonly_admin
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress static_route_add_delete
@@ -32,6 +33,7 @@ Build: NXS-LOCAL-0405 · Track: PCP.x · Generated: 2026-11-23T20:45:18Z
 - P2/planned cve_acceptances_review_2026_11_28
 - P2/planned cyberark_device_credentials
 - P2/planned deploy1_evidence_egress_policy
+- P2/planned ha_policy_pair_merge_and_count
 - P2/planned https_configuration_collect
 - P2/planned module_per_pod_split
 - P2/planned nspm_wave1_acceptance
@@ -147,8 +149,8 @@ Build: NXS-LOCAL-0405 · Track: PCP.x · Generated: 2026-11-23T20:45:18Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0406 (automated_validated)
 - NXS-LOCAL-0405 (automated_validated)
 - NXS-LOCAL-0404 (automated_validated)
 - NXS-LOCAL-0403 (automated_validated)
 - NXS-LOCAL-0402 (automated_validated)
-- NXS-LOCAL-0401 (automated_validated)

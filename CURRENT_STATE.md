@@ -6,7 +6,7 @@ source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V266** (live not re-checked since V242).
+UI2 is the maintained Java/React product; repository schema is **V267** (live not re-checked since V242).
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -20,9 +20,9 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0405` — **AUTOMATED_VALIDATED** (2026-11-23): ASA failover contract PO answers (still DRAFT;
-after `0404` ASA ACL_NOT_BOUND unknown, `0403` Script Execution slice 3 V266);
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0405`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0406` — **AUTOMATED_VALIDATED** (2026-11-24): HA policy divergence read, zone matrix durable runs (V267),
+aiview sweep, HA screen redesign; after `0405` ASA failover contract PO answers (DRAFT), `0404` ASA ACL_NOT_BOUND unknown;
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0406`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
