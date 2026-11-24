@@ -15,7 +15,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao;
 import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess;
-import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -37,7 +37,7 @@ public final class JobTranscriptController {
 
     @GetMapping("/jobs/{jobId}/transcript")
     public ResponseEntity<?> transcript(@PathVariable String jobId, HttpServletRequest request) {
-        if (Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE))) {
+        if (PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).cacheControl(CacheControl.noStore()).build();
         }
         Loaded loaded = load(jobId);

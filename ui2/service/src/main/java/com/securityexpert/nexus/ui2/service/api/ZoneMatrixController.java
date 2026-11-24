@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.api;
 
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
@@ -244,6 +245,6 @@ public final class ZoneMatrixController {
     private static String actor(HttpServletRequest request) { return (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE); }
 
     private static boolean masked(HttpServletRequest request) {
-        return Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
+        return PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
     }
 }
