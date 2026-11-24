@@ -560,15 +560,6 @@
       "note": ""
     },
     {
-      "id": "add_device_discovery_failure_class_visible",
-      "category": "UI",
-      "title": "Add device dialog: show the safe discovery failure class (closed PR 384)",
-      "status": "planned",
-      "priority": "P3",
-      "target": "PR 384 closed 2026-11-23; worker already writes failure_reason_class:<CLASS>; dialog shows only SSH trust copy",
-      "note": ""
-    },
-    {
       "id": "backup_module_cutover_authorization",
       "category": "deploy",
       "title": "Backup module cutover to ui2-backup: prepared, not performed; needs a PO authorization reference",
@@ -611,6 +602,15 @@
       "status": "planned",
       "priority": "P1",
       "target": "After step 4b-1 (1588f36f, V267)",
+      "note": ""
+    },
+    {
+      "id": "fortigate_a0_fg_18_20_defects",
+      "category": "policy",
+      "title": "FortiGate lookup contradicts A0-FG-18 and A0-FG-20 (disabled DEFECT tests); A0-FG-11 and A0-FG-19 not modelled",
+      "status": "planned",
+      "priority": "P2",
+      "target": "FortiGateA0ConformanceTest (disabled tests, before 443fbdab)",
       "note": ""
     }
   ]

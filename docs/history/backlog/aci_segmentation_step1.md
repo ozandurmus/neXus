@@ -9,3 +9,5 @@ status: in_progress · target: PO started 2026-11-14
 2026-11-15 10:00 backlog refresh: Step 1 backend (V217) is on main/in ship order; In the ship queue (batches b4..b9, not yet on main). 'feat(cutover): Cutover impact screen, step 1' adds the screen. Open: bank old-path log export.
 
 2026-11-23: Q7 flow retention enforced (PO decision record 2026-11-14 item 5): CutoverFlowRetention removes cutover_assessment_flow rows of assessments older than 90 days hourly in bounded passes (50 assessments, 50,000 rows), verdict and counts kept; the flows read answers flowsExpired and the assessment page says why the table is empty. ui2.cutover.flow-retention.enabled (default true). Watch-record retention waits for watch records. Real-PostgreSQL test pending a database-capable runner.
+
+ASA and FortiGate old-path policies and operator-override targets evaluated through PolicyLookup; missing zone or interface gives NOT_DECIDED (3ea02652).

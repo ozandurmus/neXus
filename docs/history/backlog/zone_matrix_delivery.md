@@ -11,3 +11,5 @@ status: in_progress · target: Council 2026-11-13; bank inputs pending
 2026-11-16 backlog refresh (origin/main db9b2ecd, live through batch 14, schema V242): on main and live: step 1 (V216), step 2 cell edits, template import, loosening diff and Matrix tab (V220), step 3 evaluation engine, on-demand Evaluate tab and witness audit kind (V225 then renumbered V228). Remaining: bank inputs (regulation, retention, staleness, compliance_admin team), real-environment counts-only measurement of step 3 on the largest stored policies, steps 4 and later.
 
 Step 4b-1 (V267 durable runs and findings, own pool, startup recovery) shipped 1588f36f; step 4b-2 (lifecycle, triggers, routes, tabs) open.
+
+Step 4a (finding lifecycle and per-policy staleness as pure functions, 24 h interim STALE threshold, no storage) on main in e6f0167e; PO answers in PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS (529776a9).

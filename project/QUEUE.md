@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0407 · Track: PCP.x · Generated: 2026-11-24T01:18:15Z
+Build: NXS-LOCAL-0408 · Track: PCP.x · Generated: 2026-11-24T07:58:31Z
 
 ## Now
-- NXS-LOCAL-0407 — CP readiness lost-update warning and Script Execution real-environment checklist (automated_validated)
+- NXS-LOCAL-0408 — Zone matrix lifecycle functions, policy hygiene UNKNOWN reasons, HA re-check flow, ASA/FortiGate cutover lookup, Add device failure copy and parser pin tests (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -33,6 +33,7 @@ Build: NXS-LOCAL-0407 · Track: PCP.x · Generated: 2026-11-24T01:18:15Z
 - P2/planned cve_acceptances_review_2026_11_28
 - P2/planned cyberark_device_credentials
 - P2/planned deploy1_evidence_egress_policy
+- P2/planned fortigate_a0_fg_18_20_defects
 - P2/planned ha_policy_pair_merge_and_count
 - P2/planned https_configuration_collect
 - P2/planned module_per_pod_split
@@ -48,7 +49,6 @@ Build: NXS-LOCAL-0407 · Track: PCP.x · Generated: 2026-11-24T01:18:15Z
 - P2/planned ubi_base_glibc_fix_pending
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
-- P3/planned add_device_discovery_failure_class_visible
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
 - P3/planned backup_claim_time_authorization_recheck
 - P3/planned backup_module_cutover_authorization
@@ -149,8 +149,8 @@ Build: NXS-LOCAL-0407 · Track: PCP.x · Generated: 2026-11-24T01:18:15Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0408 (automated_validated)
 - NXS-LOCAL-0407 (automated_validated)
 - NXS-LOCAL-0406 (automated_validated)
 - NXS-LOCAL-0405 (automated_validated)
 - NXS-LOCAL-0404 (automated_validated)
-- NXS-LOCAL-0403 (automated_validated)

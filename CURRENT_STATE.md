@@ -1,6 +1,6 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `49bc09b7`; ships through 2026-11-23 are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-24 against `origin/main` at `b870f47c`; ships through 2026-11-24 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
@@ -20,17 +20,15 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0407` — **AUTOMATED_VALIDATED** (2026-11-24): CP sync lost-update warning, Script Execution checklist;
-after `0406` HA policy divergence read, zone matrix runs (V267), HA screen redesign, `0405` ASA failover answers;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0407`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0408` — **AUTOMATED_VALIDATED** (2026-11-24): zone matrix step 4a lifecycle functions (no storage), hygiene UNKNOWN reasons, HA Re-check flow, Add device failure copy;
+after `0407` CP sync warning, `0406` HA policy divergence, zone matrix runs (V267);
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0408`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
-Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.json`. Applied by hand 2026-11-16: ingress NetworkPolicy, backup script S1.
-
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
 
-Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), the HA & failover screen redesign, a CP sync warning. Backup cutover prepared, not performed. The Estate view is read-only and paused. Not real-environment validated.
+Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), the HA & failover screen redesign, a CP sync warning, ASA/FortiGate cutover lookup, platform backup keeps 7 archives. Backup cutover prepared, not performed. The Estate view is read-only and paused. Not real-environment validated.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
 
@@ -97,11 +95,8 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
 - Real-env validation of the worker manifest sync
   (`manifest_drift_service_worker_configuration_policy`) and the Check Point aiview readiness script client error
   (`cp_aiview_readiness_script_client_error`) are open follow-ups.
-- No full Java integration result is claimed here; this checkpoint ran no
-  Gradle suite.
 - CVE exceptions remain time-boxed in `security/baseline.yaml`; the remaining
   UBI base entries review **2026-11-14**, the rest **2026-12-31**. glibc waits
   for a Red Hat fix (`ubi_base_glibc_fix_pending`). Acceptance is not remediation.
 - Full pod migration, retention-policy verification and capacity monitoring
   remain engineering-owner follow-ups.
-  This reconciliation performed no deployment or live validation.
