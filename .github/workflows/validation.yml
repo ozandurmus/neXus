@@ -34,6 +34,10 @@ on:
     branches:
       - main
   workflow_dispatch:
+  # Nightly full regression on main (PO 2026-11-24 "deneyelim"): 00:30 UTC = 03:30 Europe/Istanbul. Only the
+  # full-regression job runs on this event; it never gates a ship and puts no load on the delivery Mac.
+  schedule:
+    - cron: '30 0 * * *'
 
 permissions:
   contents: read
@@ -320,7 +324,7 @@ jobs:
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
         continue-on-error: true
 
-  # FULL INTEGRATION REGRESSION — manual dispatch only (PO 2026-11-24: the ship's
+  # FULL INTEGRATION REGRESSION — nightly on main and on manual dispatch (PO 2026-11-24: the ship's
   # pretest on the delivery Mac runs the full suite for a 'full' change and the
   # scoped suite (module, dependents, architecture tests) otherwise; running the
   # full suite again on GitHub for every PR and push only delayed ships).
@@ -328,9 +332,9 @@ jobs:
   # `always()` keeps workflow_dispatch running when the PR-only scope job skips.
   full-regression:
     needs: regression-scope
-    if: always() && github.event_name == 'workflow_dispatch'
+    if: always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

@@ -630,6 +630,15 @@
       "priority": "P2",
       "target": "FortiGateA0ConformanceTest (disabled tests, before 443fbdab)",
       "note": ""
+    },
+    {
+      "id": "system_log_template_census_run",
+      "category": "engineering",
+      "title": "Run the system-log template census (P0 of the detection engine) and review its report before any detector design",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/LOG_TEMPLATE_CENSUS_TOOL_2026_11_24.md",
+      "note": ""
     }
   ]
 }

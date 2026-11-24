@@ -289,11 +289,6 @@ class ScriptRunBrokerTest {
                 "c00k" + "1e" + "a".repeat(60), "csrf" + "b".repeat(44), List.of());
     }
 
-    static String escapedForMessage(String value) {
-        String escaped = value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
-        return escaped.length() > 400 ? escaped.substring(0, 400) + "...(+" + (escaped.length() - 400) + " chars)" : escaped;
-    }
-
     /**
      * Failure message for a stdout comparison that never prints the raw body: line count, UTF-8 byte length, a Y/N flag per
      * expected line and the number of unexpected lines. Capped at 200 bytes so it survives the CI log line limit.
@@ -327,13 +322,6 @@ class ScriptRunBrokerTest {
                 + " expected_present=" + flags
                 + " unexpected_lines=" + unexpected;
         return message.length() > 200 ? message.substring(0, 200) : message;
-    }
-
-    @Test
-    void escapedForMessageShowsControlCharactersAndTruncates() {
-        assertEquals("a\\nb\\rc\\td", escapedForMessage("a\nb\rc\td"));
-        String longValue = "x".repeat(450);
-        assertEquals("x".repeat(400) + "...(+50 chars)", escapedForMessage(longValue));
     }
 
     @Test

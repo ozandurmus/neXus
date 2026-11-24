@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0413 · Track: PCP.x · Generated: 2026-11-24T17:34:53Z
+Build: NXS-LOCAL-0414 · Track: PCP.x · Generated: 2026-11-24T19:29:18Z
 
 ## Now
-- NXS-LOCAL-0413 — FortiGate policy-lookup validation read DRAFT proposal, Packet Analysis format tests (automated_validated)
+- NXS-LOCAL-0414 — System-log template census tool (detection engine P0), deterministic PolicyHygieneQueryTest, CI comment (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -46,6 +46,7 @@ Build: NXS-LOCAL-0413 · Track: PCP.x · Generated: 2026-11-24T17:34:53Z
 - P2/planned product_rename_identity
 - P2/planned reports_r2
 - P2/planned support_bundle_collection_s3_s8
+- P2/planned system_log_template_census_run
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
 - P2/planned zone_matrix_steps_3_plus
@@ -151,8 +152,8 @@ Build: NXS-LOCAL-0413 · Track: PCP.x · Generated: 2026-11-24T17:34:53Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0414 (automated_validated)
 - NXS-LOCAL-0413 (automated_validated)
 - NXS-LOCAL-0412 (automated_validated)
 - NXS-LOCAL-0411 (automated_validated)
 - NXS-LOCAL-0410 (automated_validated)
-- NXS-LOCAL-0409 (automated_validated)

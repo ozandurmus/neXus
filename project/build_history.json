@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0414",
+      "status": "automated_validated",
+      "title": "System-log template census tool (detection engine P0), deterministic PolicyHygieneQueryTest, CI comment",
+      "summary": "A one-off read-only census tool measures message templates, prevalence and rare-and-severe lines over the stored system-log pool behind the aiview mask; it has not been run yet (c0c62f65). PolicyHygieneQueryTest single-flight and non-blocking assertions now use latch barriers instead of wall-clock timing (107dd74d); the CI comment states what the Mac pretest runs (e60ee831).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0413",
       "status": "automated_validated",
       "title": "FortiGate policy-lookup validation read DRAFT proposal, Packet Analysis format tests",
