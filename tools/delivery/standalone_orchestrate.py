@@ -111,8 +111,17 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# A concurrent fetch in another worktree of the same repository moves origin/main between this fetch's read and its
+# update, and git answers "cannot lock ref ... is at X but expected Y" (2026-11-24: a merged ship never deployed).
+_REF_RACE = re.compile(r"cannot lock ref|unable to update local ref")
+
+
 def _git(*args: str, cwd: Path = REPO_ROOT, check: bool = True) -> str:
-    r = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=120)
+    for attempt in range(3):
+        r = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=120)
+        if r.returncode == 0 or not args or args[0] != "fetch" or not _REF_RACE.search(r.stderr):
+            break
+        time.sleep(3 * (attempt + 1))
     if check and r.returncode != 0:
         raise SystemExit(f"git {' '.join(args)} failed: {r.stderr.strip()}")
     return r.stdout.strip()
