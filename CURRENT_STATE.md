@@ -1,6 +1,6 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-24 against `origin/main` at `b870f47c`; ships through 2026-11-24 are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-24 against `origin/main` at `396f2ccc`; ships through 2026-11-24 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
@@ -20,10 +20,11 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0409` — **AUTOMATED_VALIDATED** (2026-11-24): zone matrix ZM-1..ZM-42 traceability (24 PROVEN, 8 PARTIAL, 10 later steps) with tests, two behaviour-neutral file splits;
-before it `0408` zone matrix step 4a lifecycle functions (no storage), hygiene UNKNOWN reasons, HA Re-check flow, Add device failure copy;
+`NXS-LOCAL-0410` — **AUTOMATED_VALIDATED** (2026-11-24): ACI step 1 acceptance tests, deploy speed-up tests, PAN-OS pre-12 measurement harness (self-tested, not run), parser reuse;
+before it `0409` zone matrix ZM-1..ZM-42 traceability, two file splits;
+before it `0408` zone matrix step 4a lifecycle functions, hygiene UNKNOWN reasons, HA Re-check flow;
 after `0407` CP sync warning, `0406` HA policy divergence, zone matrix runs (V267);
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0409`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0410`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 

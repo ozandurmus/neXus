@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0410",
+      "status": "automated_validated",
+      "title": "ACI step 1 acceptance tests, ship deploy speed-up tests, PAN-OS pre-12 zone set measurement harness, static route parser reuse",
+      "summary": "Labelled ACI-1/4/5/6/7/8/16 acceptance tests across service, CLI and frontend (c6d67f96); test_faster_ship.py covers signals, early failure, start failure and side-off path (bac6b4c3). A counts-only measurement harness for PAN-OS below 12 stored zone sets was added and self-tested, not run against any environment (396f2ccc); PaloAltoR0Parsers reuses StaticRouteR0Parsers helpers (e905eaff).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0409",
       "status": "automated_validated",
       "title": "Zone matrix acceptance-criteria traceability and tests, ExpertWorkbook summary split, Collect now menu split",
