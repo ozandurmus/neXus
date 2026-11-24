@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0406",
+      "status": "automated_validated",
+      "title": "HA policy divergence reads, zone matrix durable runs (V267), aiview raw-versus-masked sweep and HA screen redesign",
+      "summary": "ASA/FortiGate HA pair policy compare (HA_POLICY_DIVERGENT read route), zone matrix step 4b-1 durable runs and findings (V267) and the trace FABRIC_REDIRECT_NOT_MODELLED caveat shipped in 1588f36f; the aiview sweep fixed a raw cluster name in the static-route preview. The HA and failover screen redesign landed (2d8fd52e).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0405",
       "status": "automated_validated",
       "title": "ASA failover contract PO answers, Devices deep link, ship preview e2e failure titles and build-history archive",

@@ -594,6 +594,24 @@
       "priority": "P2",
       "target": "AsaA0ConformanceTest (disabled DEFECT test, 65430d84)",
       "note": ""
+    },
+    {
+      "id": "ha_policy_pair_merge_and_count",
+      "category": "policy",
+      "title": "HA policy pairs: merge and count a pair once (follow-up to HA_POLICY_DIVERGENT)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "After 1588f36f (read route GET /api/v2/policy/ha-pairs)",
+      "note": ""
+    },
+    {
+      "id": "zone_matrix_step_4b2",
+      "category": "policy",
+      "title": "Zone matrix step 4b-2: run lifecycle, triggers, routes and tabs",
+      "status": "planned",
+      "priority": "P1",
+      "target": "After step 4b-1 (1588f36f, V267)",
+      "note": ""
     }
   ]
 }
