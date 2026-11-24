@@ -20,16 +20,27 @@ SOURCE = Path("/source")
 def prepare():
     os.umask(0o077)
     mode = os.environ["SCAN_MODE"]
-    source = SOURCE / (SOURCE / "current").read_text().strip()
+    waiting = mode == "gate" and os.environ.get("WAIT_FOR_IMAGE") == "1"
+    # Pre-merge gate (PO 2026-11-23): the candidate snapshot is staged but never published as `current`; it is named
+    # explicitly, must equal EXPECTED_COMMIT, and only the image the request names is scanned (no deployed inventory).
+    staged = os.environ.get("SOURCE_COMMIT")
+    if staged is not None and (not waiting or not os.environ.get("EXPECTED_COMMIT")):
+        raise ValueError("pre-merge source requires the split gate")
+    # Deploy gate whose tree-determined scans a pre-merge PASS of the same tree covers (security_host.start_deploy_gate
+    # decides, security_host.gate re-checks): only the Git history and the images are scanned here.
+    reused = os.environ.get("TREE_SCANS_REUSED") == "1"
+    if reused and (not waiting or staged is not None or not os.environ.get("EXPECTED_COMMIT")):
+        raise ValueError("source reuse requires the split deploy gate")
+    source = SOURCE / (staged if staged is not None else (SOURCE / "current").read_text().strip())
     if not re.fullmatch(r"[a-f0-9]{40}", source.name) or not (source / ".git").is_dir():
         raise ValueError("invalid source snapshot")
     if os.environ.get("EXPECTED_COMMIT") and source.name != os.environ["EXPECTED_COMMIT"]:
         raise ValueError("source/build mismatch")
-    inventory = json.loads((SOURCE / "images.json").read_text())
-    age = datetime.now(timezone.utc) - datetime.fromisoformat(inventory["generated_at"])
-    if age.total_seconds() < 0 or age > timedelta(hours=2):
-        raise ValueError("stale deployment inventory")
-    waiting = mode == "gate" and os.environ.get("WAIT_FOR_IMAGE") == "1"
+    if staged is None:
+        inventory = json.loads((SOURCE / "images.json").read_text())
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(inventory["generated_at"])
+        if age.total_seconds() < 0 or age > timedelta(hours=2):
+            raise ValueError("stale deployment inventory")
     images = [] if waiting else os.environ["GATE_IMAGE"].split() if mode == "gate" else inventory["images"]
     if (not images and not waiting) or not all(re.fullmatch(r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", i) for i in images):
         raise ValueError("images must be local and digest pinned")
@@ -37,23 +48,31 @@ def prepare():
     (WORK / "source-start").write_text(str(int(time.time())))
     (WORK / "source-commit").write_text(source.name)
     (WORK / "images").write_text("\n".join(sorted(set(images))) + "\n")
-    manifest = ([dict(tool="zap", file="zap.json")] if mode == "dast" else [
+    source_reports = [dict(tool="gitleaks", file="gitleaks-history.json")] if reused else [
         dict(tool="semgrep", file="semgrep.json"),
         dict(tool="gitleaks", file="gitleaks-tree.json"),
         dict(tool="gitleaks", file="gitleaks-history.json"),
         dict(tool="trivy", file="trivy-fs.json"),
         dict(tool="trivy", file="trivy-config.json"),
-    ] + [dict(tool="trivy", file=f"trivy-image-{i}.json", target=image.split("@", 1)[0])
-         for i, image in enumerate(sorted(set(images)))])
+    ]
+    manifest = ([dict(tool="zap", file="zap.json")] if mode == "dast" else source_reports + [
+        dict(tool="trivy", file=f"trivy-image-{i}.json", target=image.split("@", 1)[0])
+        for i, image in enumerate(sorted(set(images)))])
     (WORK / "manifest.json").write_text(json.dumps(manifest))
     day = datetime.now(timezone.utc).astimezone().date().isoformat()
-    output = ROOT / day / (mode + "-" + uuid.uuid4().hex)
+    # A reduced run is never trend evidence for a full gate (finish() looks for "<mode>-*" of the previous day).
+    output = ROOT / day / (("gatereduced" if reused else mode) + "-" + uuid.uuid4().hex)
     output.mkdir(parents=True)
     (WORK / "output").write_text(str(output))
 
 
-def await_image(timeout=3000, sleep=time.sleep, monotonic=time.monotonic, image_file=Path("/gate-image/request")):
+def await_image(timeout=None, sleep=time.sleep, monotonic=time.monotonic, image_file=Path("/gate-image/request")):
     """Keep one isolated work directory and one unchanged final gate decision."""
+    if timeout is None:
+        # The pre-merge gate waits as long as a preview may run (security_manifests.job(await_timeout=...)).
+        timeout = int(os.environ.get("AWAIT_IMAGE_TIMEOUT_S", "3000"))
+        if not 60 <= timeout <= 4 * 3600:
+            raise ValueError("invalid image wait")
     print("TIMING security_source", max(0, int(time.time()) - int((WORK / "source-start").read_text())))
     deadline = monotonic() + timeout
     while monotonic() < deadline:
@@ -86,7 +105,8 @@ def finish():
     previous = ROOT / (date.fromisoformat(output.parent.name) - timedelta(days=1)).isoformat()
     # Only complete runs of the same scope are trend evidence; gate never pollutes daily history.
     candidates = []
-    for path in previous.glob(mode + "-*/findings.json"):
+    # A reduced deploy gate has no source findings to compare: no trend, so nothing is miscounted as "fixed".
+    for path in ([] if output.name.startswith("gatereduced-") else previous.glob(mode + "-*/findings.json")):
         try:
             if json.loads((path.parent / "summary.json").read_text())["scan_errors"] == 0:
                 candidates.append(path)

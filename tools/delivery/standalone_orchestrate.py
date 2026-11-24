@@ -135,15 +135,19 @@ _TRANSIENT_MERGE_ANSWER = re.compile(
 MERGE_RETRY_WAITS_S = (20, 40, 80)
 
 
-def _merge_once(url: str) -> "subprocess.CompletedProcess[str]":
+def _merge_once(url: str, head: str | None = None) -> "subprocess.CompletedProcess[str]":
     """`gh pr merge --rebase`; when GitHub refuses with "can't be rebased", retry once with `--squash` and say so.
 
     2026-11-15: GitHub refused a rebase merge of a clean 84-commit branch with no cause found; the squash lands the
-    same net change as one commit."""
-    merge = subprocess.run(["gh", "pr", "merge", url, "--rebase"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    same net change as one commit. `head` (2026-11-23): GitHub merges only if the pull request's head is still exactly
+    that commit (`--match-head-commit`), the one the preview and the pre-merge security gate checked."""
+    pin = ["--match-head-commit", head] if head else []
+    merge = subprocess.run(["gh", "pr", "merge", url, *pin, "--rebase"], cwd=str(REPO_ROOT), capture_output=True,
+                           text=True)
     if merge.returncode != 0 and ("can't be rebased" in merge.stderr or "cannot be rebased" in merge.stderr):
         print("rebase merge refused by GitHub (can't be rebased); retrying once with --squash", flush=True)
-        merge = subprocess.run(["gh", "pr", "merge", url, "--squash"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+        merge = subprocess.run(["gh", "pr", "merge", url, *pin, "--squash"], cwd=str(REPO_ROOT), capture_output=True,
+                               text=True)
     return merge
 
 
@@ -159,13 +163,13 @@ def _pull_request_merged(url: str) -> bool:
         return False
 
 
-def _merge_pull_request(url: str) -> "subprocess.CompletedProcess[str]":
+def _merge_pull_request(url: str, head: str | None = None) -> "subprocess.CompletedProcess[str]":
     """Merge the pull request, surviving a GitHub hiccup.
 
     On a 5xx / "Bad Gateway" / "Merge already in progress" answer the merge may nevertheless have happened or still be
     running: re-read the state first; MERGED means carry on, otherwise retry after 20 s, 40 s and 80 s (three retries at
     most). Any other error returns at once, never retried."""
-    merge = _merge_once(url)
+    merge = _merge_once(url, head)
     retries = 0
     while merge.returncode != 0 and _TRANSIENT_MERGE_ANSWER.search((merge.stderr or "") + (merge.stdout or "")):
         if _pull_request_merged(url):
@@ -178,7 +182,7 @@ def _merge_pull_request(url: str) -> "subprocess.CompletedProcess[str]":
         print(f"merge answered with a transient GitHub error; pull request not merged yet, retry {retries}/"
               f"{len(MERGE_RETRY_WAITS_S)} in {wait} s", flush=True)
         time.sleep(wait)
-        merge = _merge_once(url)
+        merge = _merge_once(url, head)
     return merge
 
 
@@ -944,6 +948,307 @@ def _await_pretest(path: str, timeout: float = PRETEST_TIMEOUT_S, poll: float = 
         sleep(poll)
 
 
+# --- Security gate beside the preview (PO decision 2026-11-23) -----------------------------------------------------
+# The deploy gate's own Job (same blocking rules and accepted-CVE handling, run with the HOST's installed scanner
+# scripts) scans the batch commit while the preview runs; the merge waits for its verdict
+# (tools/security/security_verdict.py) and is bound to the scanned commit (`gh pr merge --match-head-commit`). The deploy
+# reuses the PASS only on an exact match of commit, tree, policy, gate day and every rolled-out digest; otherwise it
+# scans again and logs why.
+PREVIEW_TIMEOUT_S = 7200
+SECURITY_VERDICT_TIMEOUT_S = int(os.environ.get("NEXUS_SECURITY_VERDICT_TIMEOUT_S", str(60 * 60)))
+SECURITY_VERDICT_POLL_S = 10.0
+# The pregate runs beside the whole preview and then scans the image: its own budget covers both.
+SECURITY_PREGATE_TOTAL_S = PREVIEW_TIMEOUT_S + SECURITY_VERDICT_TIMEOUT_S + 600
+SECURITY_PREGATE_WRAPPER = REPO_ROOT / "tools" / "security" / "hosta_security_pregate.sh"
+_PREGATE_LINE = re.compile(r"PASS [0-9a-f]{40} [0-9a-f]{40}|FAIL|NOT_CONFIGURED|UNAVAILABLE")
+
+
+def _security_pregate_line(stdout: str, returncode: int) -> str:
+    """The one verdict line of hosta_security_pregate.sh; no line, two lines or a failed wrapper -> FAIL."""
+    lines = [l.strip() for l in stdout.splitlines() if _PREGATE_LINE.fullmatch(l.strip())]
+    if returncode != 0 or len(lines) != 1:
+        return "FAIL (no verdict from the pre-merge security gate)"
+    return lines[0]
+
+
+def _security_pregate_marker() -> Path:
+    return STATE_DIR / "security-pregate-enabled"
+
+
+def _security_pregate_required() -> bool:
+    """True once the pre-gate is configured: NOT_CONFIGURED / UNAVAILABLE then stop the merge like a FAIL.
+
+    Configured = NEXUS_SECURITY_PREGATE_REQUIRED=1, or this runner has seen a pre-merge PASS before (sticky marker). An
+    unreadable marker counts as configured (fail-closed)."""
+    if os.environ.get("NEXUS_SECURITY_PREGATE_REQUIRED") == "1":
+        return True
+    try:
+        _security_pregate_marker().stat()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+
+
+class _SecurityPregate:
+    """One running pre-merge gate: a background thread owning the wrapper process (its own process group).
+
+    `cancel()` stops bash, the bundle stream and ssh (the host side then deletes its Job). `close()` -- called on every
+    way out of the ship's pre-merge phase (a failed preview or pretest, a missing verdict, SIGINT/SIGTERM/SIGHUP, a pass) --
+    cancels, then JOINS the thread: a cancel that lands before the thread has attached its process is carried out by the
+    thread itself as soon as it attaches, and once `close()` returns the thread can no longer write a verdict file."""
+
+    CLOSE_TIMEOUT_S = 60.0
+
+    def __init__(self, verdict_path: Path):
+        import threading
+        self.verdict_path = verdict_path
+        self.proc = None
+        self.cancelled = False
+        self.finished = False
+        self.closed = False
+        self._lock = threading.Lock()
+        self.thread = None
+
+    def attach(self, proc) -> bool:
+        with self._lock:
+            self.proc = proc
+            return not self.cancelled
+
+    def mark_finished(self) -> None:
+        with self._lock:
+            self.finished = True
+
+    @staticmethod
+    def _group_alive(pgid: int) -> bool:
+        try:
+            os.killpg(pgid, 0)
+            return True
+        except (ProcessLookupError, PermissionError, OSError):
+            return False
+
+    def cancel(self, grace: float = 10.0) -> None:
+        with self._lock:
+            self.cancelled = True
+            proc = self.proc
+            finished = self.finished
+        if proc is None or (finished and proc.poll() is not None):
+            return
+        if proc.poll() is not None and not self._group_alive(proc.pid):
+            return
+        for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, 5.0)):
+            try:
+                os.killpg(proc.pid, sig)
+            except (ProcessLookupError, PermissionError, OSError):
+                return
+            deadline = time.monotonic() + wait
+            if proc.poll() is None:
+                try:
+                    proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+                except subprocess.TimeoutExpired:
+                    continue
+            while self._group_alive(proc.pid):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(0.05, remaining))
+            if not self._group_alive(proc.pid):
+                break
+        print("SECURITY PREGATE: cancelled", flush=True)
+
+    def join(self, timeout=None) -> None:
+        if self.thread is not None:
+            self.thread.join(timeout)
+
+    def close(self, timeout: float | None = None) -> None:
+        self.cancel()
+        self.join(self.CLOSE_TIMEOUT_S if timeout is None else timeout)
+        with self._lock:
+            self.closed = True
+        if self.thread is not None and self.thread.is_alive():
+            # Still running after the timeout: kill whatever it attached meanwhile; it can no longer write a verdict.
+            self.cancel(grace=5.0)
+            print("SECURITY PREGATE: runner thread did not stop in time", flush=True)
+
+    def write_verdict(self, line: str) -> bool:
+        """Write the verdict line unless the ship has already closed this run (the file may be deleted by then)."""
+        with self._lock:
+            if self.closed:
+                return False
+            _write_verdict_line(self.verdict_path, line)
+            return True
+
+
+def _write_verdict_line(verdict_path: Path, line: str) -> None:
+    fd, staged = tempfile.mkstemp(dir=str(verdict_path.parent), prefix=verdict_path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(line + "\n")
+        os.replace(staged, verdict_path)
+    except BaseException:
+        Path(staged).unlink(missing_ok=True)
+        raise
+
+
+def _prune_security_verdicts(directory: Path, keep_s: float = 2 * 86400) -> None:
+    cutoff = time.time() - keep_s
+    for path in directory.glob("security-verdict-*"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+        except OSError:
+            continue
+
+
+def _security_verdict_path(commit: str) -> Path:
+    """A fresh file per run: an orphan of an earlier run can never write this run's verdict."""
+    import uuid
+    return STATE_DIR / ("security-verdict-" + commit + "-" + uuid.uuid4().hex[:12] + ".txt")
+
+
+def _start_security_pregate(repo: Path, commit: str, tree: str, verdict_path: Path, popen=subprocess.Popen,
+                            total_timeout: float | None = None) -> _SecurityPregate:
+    """Start the pre-merge gate in a background thread; its verdict line lands in `verdict_path` when it ends.
+
+    Every failure inside the thread -- the wrapper cannot start, times out, prints garbage, a decoding error -- still
+    writes a FAIL line, so the merge never waits for a verdict that cannot come."""
+    import threading
+    verdict_path.parent.mkdir(parents=True, exist_ok=True)
+    _prune_security_verdicts(verdict_path.parent)
+    verdict_path.unlink(missing_ok=True)
+    handle = _SecurityPregate(verdict_path)
+    budget = SECURITY_PREGATE_TOTAL_S if total_timeout is None else total_timeout
+
+    def work() -> None:
+        started = time.monotonic()
+        line = "FAIL (pre-merge security gate could not run)"
+        try:
+            proc = popen(["bash", str(SECURITY_PREGATE_WRAPPER), "--repo", str(repo), "--commit", commit, "--tree", tree],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                         encoding="utf-8", errors="replace", start_new_session=True)
+            if not handle.attach(proc):
+                handle.cancel()
+                line = "FAIL (pre-merge security gate cancelled)"
+            else:
+                try:
+                    stdout, _ = proc.communicate(timeout=budget)
+                except subprocess.TimeoutExpired:
+                    handle.cancel()
+                    stdout, line = "", "FAIL (pre-merge security gate timed out)"
+                else:
+                    handle.mark_finished()
+                    if handle.cancelled:
+                        line = "FAIL (pre-merge security gate cancelled)"
+                    else:
+                        line = _security_pregate_line(stdout or "", proc.returncode)
+                for summary in (stdout or "").splitlines():
+                    if summary.startswith('{"passed":'):
+                        print("SECURITY PREGATE SUMMARY: " + summary[:600], flush=True)
+        except Exception as error:  # noqa: BLE001 -- any failure is a FAIL verdict, never a silent thread death
+            line = "FAIL (pre-merge security gate error: " + type(error).__name__ + ")"
+        finally:
+            try:
+                handle.write_verdict(line)
+            except Exception as error:  # noqa: BLE001 -- the waiter then fails closed on its timeout
+                print("SECURITY PREGATE: verdict not written (" + type(error).__name__ + ")", flush=True)
+            print(f"TIMING security_pregate {time.monotonic() - started:.0f}", flush=True)
+
+    handle.thread = threading.Thread(target=work, name="security-pregate", daemon=True)
+    handle.thread.start()
+    return handle
+
+
+def _await_security_verdict(verdict_path: Path, commit: str, tree: str, timeout: float = SECURITY_VERDICT_TIMEOUT_S,
+                            poll: float = SECURITY_VERDICT_POLL_S, sleep=time.sleep, monotonic=time.monotonic) -> str:
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "security"))
+    from security_verdict import await_ship_verdict
+    started = monotonic()
+    required = _security_pregate_required()
+    try:
+        verdict = await_ship_verdict(verdict_path, commit, tree, timeout, poll, sleep, monotonic, required=required)
+    finally:
+        print(f"TIMING security_verdict_wait {monotonic() - started:.0f}", flush=True)
+    if verdict == "PASS":
+        try:
+            marker = _security_pregate_marker()
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+        except OSError:
+            pass
+    print(json.dumps({"security_pregate": verdict, "required": required}), flush=True)
+    return verdict
+
+
+class _ShipTerminated(SystemExit):
+    """Signal-induced ship termination: unwinds straight through pre-gate cleanup without running PR-close handlers."""
+
+
+def _raise_on_terminate(signum, frame):
+    raise _ShipTerminated("ship terminated by signal " + str(signum))
+
+
+# The signals that end a ship and must unwind it through the pre-gate cleanup: a terminal hang-up (SIGHUP) is a
+# termination like SIGTERM. The pre-gate runs in its own session (start_new_session), so a signal to the ship's process
+# group never reaches it; only the ship's cleanup stops it, its ssh session, the repo ref and the HOST-A Job.
+TERMINATING_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+
+
+def _install_terminate_handlers() -> dict:
+    """Make every terminating signal raise SystemExit so `finally` blocks run; returns the previous dispositions for
+    `_close_security_pregate` to restore. Outside the main thread the caller owns signal handling: nothing is changed."""
+    previous = {}
+    for signum in TERMINATING_SIGNALS:
+        try:
+            previous[signum] = signal.signal(signum, _raise_on_terminate)
+        except ValueError:  # not the main thread
+            break
+    return previous
+
+
+def _close_security_pregate(pregate, pregate_path: Path, previous_ship) -> None:
+    """Stop the pre-merge gate and delete its verdict file with SIGTERM/SIGHUP/SIGINT held, then restore the ship's
+    earlier dispositions (`previous_ship`: signal -> handler, from `_install_terminate_handlers`; a bare handler is the
+    SIGTERM one); a signal that arrived meanwhile is acted on only after the cleanup has finished.
+
+    A deferring handler, not a blocked signal mask: the mask is per thread and the runner thread would still take the
+    signal and run the raising handler in the main thread, in the middle of this cleanup."""
+    if previous_ship is None:
+        previous_ship = {}
+    elif not isinstance(previous_ship, dict):
+        previous_ship = {signal.SIGTERM: previous_ship}
+    held = []
+    previous = {}
+    for signum in (*TERMINATING_SIGNALS, signal.SIGINT):
+        try:
+            previous[signum] = signal.signal(signum, lambda n, frame: held.append(n))
+        except ValueError:  # not the main thread: the caller owns signal handling
+            pass
+    try:
+        if pregate is not None:
+            pregate.close()
+        pregate_path.unlink(missing_ok=True)
+    finally:
+        for signum, handler in previous.items():
+            restored = previous_ship.get(signum)
+            signal.signal(signum, restored if restored is not None else handler)
+        if held:
+            raise _ShipTerminated("ship terminated by signal " + str(held[0]))
+
+
+PR_CLOSE_TIMEOUT_S = 60
+
+
+def _close_failed_pr(url: str, branch: str, comment: str) -> None:
+    """Best-effort, bounded cleanup of an early PR when a pre-merge gate fails."""
+    for argv in (["gh", "pr", "close", url, "--comment", comment],
+                 ["git", "push", "-q", "origin", "--delete", branch]):
+        try:
+            subprocess.run(argv, cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=PR_CLOSE_TIMEOUT_S)
+        except (subprocess.SubprocessError, OSError):
+            pass
+
+
 def _pr_body(branch: str, commits: str, notes: str) -> str:
     return ("## What changed\n" + commits + "\n\n## Checks before merge\n"
             "- Java: `:service:test :worker:test :architecture-tests:test` (reviewer, locally)\n"
@@ -967,7 +1272,7 @@ def _preview_e2e(repo: Path, commit: str) -> None:
         tree = _git("rev-parse", commit + "^{tree}", cwd=repo, check=False)
         if "--tree" in wrapper and re.fullmatch(r"[0-9a-f]{40}", tree or ""):
             argv += ["--tree", tree]
-        result = subprocess.run(argv, input=wrapper, capture_output=True, text=True, timeout=7200)
+        result = subprocess.run(argv, input=wrapper, capture_output=True, text=True, timeout=PREVIEW_TIMEOUT_S)
         # The wrapper returns timings, masked API diagnostics and a derived verdict.
         failed_tests = []
         for line in result.stdout.splitlines():
@@ -1163,9 +1468,12 @@ def _ship(args: argparse.Namespace) -> int:
             print(json.dumps({"ship_path": "full", "why": verdict["why"]}), flush=True)
     run_preview = skip_preview is None and not fast_path
     candidate_repo = wt if args.task else REPO_ROOT
+    # The one commit this ship checks and merges (2026-11-23): the preview, the pre-merge security gate, the push and
+    # `gh pr merge --match-head-commit` all use it, so a branch that moves meanwhile can never merge unchecked.
+    ship_commit = _git("rev-parse", branch)
 
     def open_pull_request() -> str:
-        _git("push", "-q", "--force-with-lease", "origin", branch + ":" + branch)
+        _git("push", "-q", "--force-with-lease", "origin", ship_commit + ":refs/heads/" + branch)
         commits = _git("log", "--format=- %s", "origin/main.." + branch)
         title = args.title or _git("log", "-1", "--format=%s", branch)
         body = _pr_body(branch, commits, args.notes or "")
@@ -1198,40 +1506,63 @@ def _ship(args: argparse.Namespace) -> int:
     # 564 s preview although GitHub only needs the pushed branch); `--no-early-pr` restores push-after-preview.
     early_pr = (not bool(getattr(args, "no_early_pr", False)) or bool(getattr(args, "early_pr", False))
                 or frontend_path) and run_preview
-    url = open_pull_request() if early_pr else ""
-    if run_preview:
-        try:
-            # Structural/template/worker changes need the same gate as frontend changes.
-            _preview_e2e(candidate_repo, _git("rev-parse", branch))
-        except SystemExit:
-            if early_pr:
-                subprocess.run(["gh", "pr", "close", url, "--comment",
-                                "Closed by the ship: the isolated preview e2e did not pass."],
-                               cwd=str(REPO_ROOT), capture_output=True, text=True)
-                subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT),
-                               capture_output=True)
-            raise
-    if not url:
-        url = open_pull_request()
-    pretest_file = getattr(args, "await_pretest", None)
-    if pretest_file:
-        try:
-            _await_pretest(pretest_file)
-        except SystemExit:
-            subprocess.run(["gh", "pr", "close", url, "--comment",
-                            "Closed by the ship: the unit tests that ran beside the preview did not pass."],
-                           cwd=str(REPO_ROOT), capture_output=True, text=True)
-            subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT),
-                           capture_output=True)
-            raise
+    pregate_tree = _git("rev-parse", ship_commit + "^{tree}")
+    pregate_path = _security_verdict_path(ship_commit)
+    # The pregate needs the preview's image; without a preview (or with the emergency skip) the deploy gate runs alone.
+    run_pregate = run_preview and skip_security is None
+    pregate = None
+    url = ""
+    previous_ship = _install_terminate_handlers()
+    try:
+        url = open_pull_request() if early_pr else ""
+        if run_pregate:
+            pregate = _start_security_pregate(candidate_repo, ship_commit, pregate_tree, pregate_path)
+        if run_preview:
+            try:
+                # Structural/template/worker changes need the same gate as frontend changes.
+                _preview_e2e(candidate_repo, ship_commit)
+            except _ShipTerminated:
+                raise
+            except SystemExit:
+                if early_pr:
+                    _close_failed_pr(url, branch, "Closed by the ship: the isolated preview e2e did not pass.")
+                raise
+        if not url:
+            url = open_pull_request()
+        pretest_file = getattr(args, "await_pretest", None)
+        if pretest_file:
+            try:
+                _await_pretest(pretest_file)
+            except _ShipTerminated:
+                raise
+            except SystemExit:
+                _close_failed_pr(url, branch,
+                                 "Closed by the ship: the unit tests that ran beside the preview did not pass.")
+                raise
+        if run_pregate:
+            try:
+                _await_security_verdict(pregate_path, ship_commit, pregate_tree)
+            except _ShipTerminated:
+                raise
+            except SystemExit:
+                _close_failed_pr(url, branch,
+                                 "Closed by the ship: the security gate that ran beside the preview did not pass.")
+                raise
+    finally:
+        # Every way out (a failed preview or pretest, no verdict, SIGINT/SIGTERM/SIGHUP, a pass) stops the remote gate,
+        # waits for its runner thread, and only then deletes the verdict file the thread can no longer recreate.
+        _close_security_pregate(pregate, pregate_path, previous_ship)
     # Pipelined ships: wait here (not before the preview) for the ship ahead to finish its deploy.
     if _PREVIEW_LOCK_HANDLE is not None:
         _acquire_deploy_lock(_PREVIEW_LOCK_HANDLE, _SHIP_NAME)
+    # The branch must still be the commit that was previewed and scanned; GitHub enforces the same for the PR head.
+    if _git("rev-parse", branch) != ship_commit:
+        raise SystemExit("branch moved after the preview and security gate checked " + ship_commit[:12] + "; not merged")
     # Merge only after GitHub's own checks have passed (2026-11-03: the merge used to run 4 s after PR creation).
     if skip_checks is None:
         _wait_for_checks(url)
     # No --delete-branch: gh would delete the local branch a lane worktree still has checked out.
-    merge = _merge_pull_request(url)
+    merge = _merge_pull_request(url, head=ship_commit)
     if merge.returncode != 0:
         raise SystemExit("pull request not merged (" + url + "): " + _explain_merge_failure(merge.stderr))
     subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT), capture_output=True)

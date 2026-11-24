@@ -56,3 +56,42 @@ def real_repository_privacy_lock():
             yield
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+class _NoPregate:
+    """Stand-in for standalone_orchestrate._SecurityPregate in ship-flow tests."""
+
+    def cancel(self, *args, **kwargs):
+        return None
+
+    def join(self, *args, **kwargs):
+        return None
+
+    def close(self, *args, **kwargs):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _no_real_security_pregate(request, monkeypatch):
+    """Ship-flow tests double every host call; the pre-merge security gate (PO 2026-11-23) is doubled here as a PASS for
+    the shipped commit so no test reaches a host. tools/tests/test_security_pregate.py tests the real functions.
+
+    Both import names are loaded and patched BEFORE the test body runs, so a test that imports the module lazily
+    (inside the test function) or package-qualified (tools.delivery.standalone_orchestrate) gets the doubled module
+    from sys.modules too, never one that could start the real wrapper."""
+    if request.module.__name__.endswith("test_security_pregate"):
+        return
+    import importlib
+    delivery = str(PROJECT_ROOT / "tools" / "delivery")
+    if delivery not in sys.path:
+        sys.path.insert(0, delivery)
+    for name in ("standalone_orchestrate", "tools.delivery.standalone_orchestrate"):
+        try:
+            module = sys.modules.get(name) or importlib.import_module(name)
+        except Exception:  # noqa: BLE001 -- a module that cannot import cannot start a pregate either
+            continue
+        if not hasattr(module, "_start_security_pregate"):
+            continue
+        monkeypatch.setattr(module, "_start_security_pregate", lambda *a, **k: _NoPregate())
+        monkeypatch.setattr(module, "_await_security_verdict", lambda *a, **k: "PASS")
+        monkeypatch.setattr(module, "SECURITY_PREGATE_WRAPPER", PROJECT_ROOT / "tools" / "tests" / "no-real-pregate")

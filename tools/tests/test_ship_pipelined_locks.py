@@ -58,4 +58,4 @@ def test_cmd_ship_releases_both_locks_and_waits_for_the_deploy_lock_only_before_
 def test_the_merge_point_takes_the_deploy_lock_before_the_checks():
     text = (ROOT / "tools" / "delivery" / "standalone_orchestrate.py").read_text()
     lock = text.index("_acquire_deploy_lock(_PREVIEW_LOCK_HANDLE, _SHIP_NAME)")
-    assert lock < text.index("_wait_for_checks(url)\n    # No --delete-branch") < text.index("merge = _merge_pull_request(url)")
+    assert lock < text.index("_wait_for_checks(url)\n    # No --delete-branch") < text.index("merge = _merge_pull_request(url, head=ship_commit)")
