@@ -92,6 +92,14 @@ public interface ScriptRepository {
     }
 
     /**
+     * The most recent FINISHED run of a script (a run with a recorded outcome and finish time), or empty when the
+     * script has never finished a run. A queued or executing run is never returned. One bounded read, no history scan.
+     */
+    default Optional<ScriptRunRecord> findLastFinishedRun(String scriptId) {
+        return Optional.empty();
+    }
+
+    /**
      * The lease view the service checks before it releases anything to the broker
      * ({@code SCRIPT_EXECUTION_CONTRACT.md} Amendment 2026-11-18 (b) item 4).
      */

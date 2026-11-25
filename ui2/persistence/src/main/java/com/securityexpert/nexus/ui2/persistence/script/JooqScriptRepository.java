@@ -374,6 +374,20 @@ public final class JooqScriptRepository implements ScriptRepository {
     }
 
     @Override
+    public Optional<ScriptRunRecord> findLastFinishedRun(String scriptId) {
+        if (scriptId == null || scriptId.isBlank()) {
+            return Optional.empty();
+        }
+        return transactionBoundary.inTransaction(dsl -> dsl
+                .fetch("select " + RUN_COLUMNS + RUN_FROM + " where script_id = {0} "
+                        + "and outcome is not null and finished_at is not null "
+                        + "order by finished_at desc, job_id desc limit 1", scriptId.strip())
+                .stream()
+                .map(JooqScriptRepository::toRunRecord)
+                .findFirst());
+    }
+
+    @Override
     public Optional<RunLease> findRunLease(String jobId) {
         if (jobId == null || jobId.isBlank()) {
             return Optional.empty();

@@ -4082,6 +4082,10 @@ export interface ScriptSummary {
   readonly created_at: string;
   readonly updated_at: string;
   readonly warnings: readonly string[];
+  /** Outcome token of the latest FINISHED run (SUCCESS, FAILURE, TIMED_OUT, ...); null when the script never finished a run. */
+  readonly last_run_outcome?: string | null;
+  /** Finish time (ISO-8601) of that run; null together with `last_run_outcome`. */
+  readonly last_run_at?: string | null;
   readonly versions?: readonly ScriptVersionSummary[];
   readonly can_write?: boolean;
   readonly can_run?: boolean;

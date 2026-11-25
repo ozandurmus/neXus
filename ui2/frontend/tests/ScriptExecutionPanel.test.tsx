@@ -445,6 +445,75 @@ describe("ScriptExecutionPanel list, empty, error, restricted, and runner availa
   });
 });
 
+describe("ScriptExecutionPanel list Last run column", () => {
+  it("shows the last finished run outcome with its age, positive look only for SUCCESS, and never run / unknown tokens neutrally", async () => {
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    const rows: ScriptSummary[] = [
+      { ...CLEAN_SCRIPT, script_id: "scr-ok", name: "row-success", last_run_outcome: "SUCCESS", last_run_at: ago(5) },
+      { ...CLEAN_SCRIPT, script_id: "scr-bad", name: "row-failure", last_run_outcome: "FAILURE", last_run_at: ago(120) },
+      { ...CLEAN_SCRIPT, script_id: "scr-to", name: "row-timeout", last_run_outcome: "TIMED_OUT", last_run_at: ago(60 * 24 * 3) },
+      { ...CLEAN_SCRIPT, script_id: "scr-never", name: "row-never", last_run_outcome: null, last_run_at: null },
+      { ...CLEAN_SCRIPT, script_id: "scr-odd", name: "row-odd", last_run_outcome: "SOMETHING_NEW", last_run_at: ago(10) },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/v2/scripts") {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                scripts: rows,
+                can_write: true,
+                can_run: true,
+                can_read_output: true,
+                runner_available: true,
+                run_as_options: RUN_AS_OPTIONS,
+                schedule_zone: "Europe/Istanbul",
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        if (url === "/credentials") {
+          return Promise.resolve(new Response(JSON.stringify({ credentials: SAMPLE_CREDENTIALS }), { status: 200 }));
+        }
+        return Promise.resolve(new Response("{}", { status: 200 }));
+      }),
+    );
+
+    renderWithSession(SECURITY_ADMIN_SESSION);
+    const table = await screen.findByRole("table", { name: "Scripts table" });
+    expect(within(table).getByRole("columnheader", { name: "Last run" })).toBeInTheDocument();
+
+    const cell = (id: string) => within(table).getByTestId(`last-run-${id}`);
+    const pillRole = (id: string) => cell(id).querySelector("[data-pill]")!.getAttribute("data-pill");
+
+    expect(cell("scr-ok")).toHaveTextContent("SUCCESS");
+    expect(cell("scr-ok")).toHaveTextContent("5 min ago");
+    expect(pillRole("scr-ok")).toBe("ok");
+
+    expect(cell("scr-bad")).toHaveTextContent("FAILURE");
+    expect(cell("scr-bad")).toHaveTextContent("2 h ago");
+    expect(pillRole("scr-bad")).toBe("bad");
+
+    expect(cell("scr-to")).toHaveTextContent("TIMED_OUT");
+    expect(cell("scr-to")).toHaveTextContent("3 d ago");
+    expect(pillRole("scr-to")).toBe("bad");
+
+    expect(cell("scr-never")).toHaveTextContent("never run");
+    expect(cell("scr-never")).not.toHaveTextContent("ago");
+    expect(pillRole("scr-never")).toBe("neutral");
+
+    expect(cell("scr-odd")).toHaveTextContent("SOMETHING_NEW");
+    expect(cell("scr-odd")).toHaveTextContent("10 min ago");
+    expect(pillRole("scr-odd")).toBe("neutral");
+
+    const okPills = Array.from(table.querySelectorAll('[data-fact^="last-run"][data-pill="ok"]'));
+    expect(okPills).toHaveLength(1);
+  });
+});
+
 describe("Create script, .ps1 and .bat/.cmd refusals, run_as select, new version upload, and post-save warnings", () => {
   it("removes .ps1 from accepted kinds, shows the technical refusal reason for .ps1, and fixes .bat/.cmd so it never suggests .ps1", async () => {
     vi.stubGlobal(

@@ -102,6 +102,19 @@ def test_integration_goes_to_hosta_when_the_lanes_manifest_uses_the_hosta_runner
     assert "--integration hosta" in harness_calls(ops)[0] and "--allow-paths" not in harness_calls(ops)[0]
 
 
+def test_the_whole_test_load_goes_to_hosta_when_the_lanes_manifest_knows_the_carrier(ops):
+    done_lane(ops, checks_yaml='hosta_carrier_cmd: ["{python}", "tools/delivery/hosta_test_run.py"]\n'
+                               "steps:\n  - id: integration\n    cmd: python3 tools/delivery/hosta_test_run.py\n")
+    gate(ops)
+    assert "--carrier hosta" in harness_calls(ops)[0] and "--integration hosta" in harness_calls(ops)[0]
+
+
+def test_an_older_base_without_the_carrier_keeps_the_mac_run(ops):
+    done_lane(ops)
+    gate(ops)
+    assert "--carrier" not in harness_calls(ops)[0]
+
+
 @pytest.mark.parametrize("code,tag", [(12, "CONFLICT"), (7, "ERROR")])
 def test_conflict_and_unexpected_exits_are_queued_so_the_ship_path_still_gates_them(ops, code, tag):
     done_lane(ops)
