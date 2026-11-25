@@ -174,7 +174,7 @@ class AiviewMaskingLeakAuditTest {
             Map.entry("host_key_fingerprint", "SupportBundleUploadController omits it for the replay viewer (with remote_user, reason, case_ref)"),
             Map.entry("hop_label", "PacketDeviceEventsService self-masks"),
             Map.entry("imported_by", "LifecycleProjection redacts when masked"),
-            Map.entry("label", "Overview/Report/PacketDeviceEvents label pseudonyms; schedule labels are product text"),
+            Map.entry("label", "Overview/Report/PacketDeviceEvents label pseudonyms; schedule labels and the zone-matrix summary threshold label are product text"),
             Map.entry("login_security", "settings flag name"),
             Map.entry("owner", "SystemStatusService workload name (platform, not estate)"),
             Map.entry("owner_kind", "closed vocabulary"),

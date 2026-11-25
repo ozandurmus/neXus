@@ -149,6 +149,7 @@
   "/api/v2/topology/overrides",
   "/api/v2/zone-matrix/draft",
   "/api/v2/zone-matrix/policies",
+  "/api/v2/zone-matrix/summary",
   "/api/v2/zone-matrix/template",
   "/api/v2/zone-matrix/versions",
   "/api/v2/zone-matrix/versions/synthetic-ref",

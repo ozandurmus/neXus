@@ -1243,6 +1243,49 @@ public final class ZoneMatrixService {
         return out;
     }
 
+    /**
+     * Name projection for the stored summary (step 4b-2b, {@link ZoneMatrixSummaryView}): the same masking as
+     * {@link #projectEvaluation} -- policy, source, container and rule names through {@code PolicyPrivacy} when the
+     * caller is masked or lacks {@code policy_read}; zone names as {@code ZONE-<n>} per version for the masked persona.
+     * A version or zone that cannot be read gives {@code "UNKNOWN"}. Reads version content only; no audit row (no
+     * blocks are shown).
+     */
+    public ZoneMatrixSummaryView.Labels summaryLabels(View view, boolean hasPolicyRead) {
+        Objects.requireNonNull(view, "view");
+        if (view == View.BLOCKS) throw new IllegalArgumentException("the stored summary never shows blocks");
+        boolean maskPolicy = view == View.MASKED || !hasPolicyRead;
+        Map<String, Optional<ZoneMatrixContent>> contents = new HashMap<>();
+        Map<String, ZoneNames> zoneNames = new HashMap<>();
+        return new ZoneMatrixSummaryView.Labels() {
+            @Override public boolean masked() { return view == View.MASKED; }
+            @Override public boolean policyNamesMasked() { return maskPolicy; }
+            @Override public String policyName(String raw) { return maskPolicy ? maskPolicyLabel("policy", raw) : raw; }
+            @Override public String sourceName(String raw, String sourceId) {
+                return maskPolicy ? maskSourceName(raw, sourceId) : raw;
+            }
+            @Override public String containerName(String raw) { return maskPolicy ? maskDomainName(raw) : raw; }
+            @Override public String ruleName(String raw, Integer ruleNumber) {
+                return maskPolicy ? maskRuleName(raw, ruleNumber == null ? 0 : ruleNumber) : raw;
+            }
+            @Override public String zoneName(String versionId, String zoneId) {
+                if (versionId == null || zoneId == null) return "UNKNOWN";
+                Optional<ZoneMatrixContent> content = contents.computeIfAbsent(versionId, id -> {
+                    try {
+                        return repository.find(id).map(v -> ZoneMatrixContent.parse(v.content(), mapper));
+                    } catch (RuntimeException e) {
+                        return Optional.empty();
+                    }
+                });
+                if (content.isEmpty()) return "UNKNOWN";
+                var zone = content.get().zone(zoneId);
+                if (zone.isEmpty()) return "UNKNOWN";
+                if (view != View.MASKED) return zone.get().name();
+                return zoneNames.computeIfAbsent(versionId, id -> new ZoneNames(view,
+                        content.get().zones().stream().map(ZoneMatrixContent.Zone::id).toList())).of(zoneId, null);
+            }
+        };
+    }
+
     private String maskRuleName(String rawName, int ruleNumber) {
         if (rawName == null || rawName.isEmpty()) return rawName;
         if ("UNKNOWN".equals(rawName)) return "UNKNOWN";
