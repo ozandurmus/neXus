@@ -13,6 +13,9 @@ import { MatrixTab } from "./MatrixTab";
 import { ZonesTab } from "./ZonesTab";
 import { VersionsTab } from "./VersionsTab";
 import { EvaluateTab } from "./EvaluateTab";
+import { ViolationsTab } from "./ViolationsTab";
+import { CoverageTab } from "./CoverageTab";
+import { useZoneSummary } from "./zoneMatrixSummaryUi";
 import {
   getZoneDraft, getZoneVersion, listZoneVersions, zoneErrorLines,
   type ZoneDraftResponse, type ZoneVersionDetail, type ZoneVersionSummary,
@@ -103,8 +106,8 @@ function DraftBanner({ data }: { readonly data: ZoneMatrixData }) {
 }
 
 /**
- * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery steps 1, 2 and 3: the Matrix, Zones, Versions and
- * Evaluate tabs (the zone matrix grid, explicit cells, version default, named service sets, template import,
+ * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery steps 1 to 4: the Matrix, Violations, Zones, Versions,
+ * Evaluate and Coverage tabs (the zone matrix grid, explicit cells, version default, named service sets, template import,
  * compliance reference confirmation, zones, draft diff with loosening changes, four-eyes publish flow, audited address
  * lookup, and on-demand deterministic evaluation of stored Check Point and Palo Alto policies against published
  * versions).
@@ -129,6 +132,8 @@ export function ZoneMatrixScreen() {
   );
   const reload = (hideBlocks = false) => { if (hideBlocks) setWantBlocks(false); refresh(); };
   const showBlocks = (next: boolean) => { setNotice(null); setWantBlocks(next); refresh(); };
+  // The stored summary is read when the Violations or Coverage tab is first opened, not with the screen.
+  const summary = useZoneSummary();
   const common = data === null ? null : { data, refresh: reload, notify: setNotice, reading };
   return (
     <ScreenRoot screenType="tool">
@@ -147,9 +152,11 @@ export function ZoneMatrixScreen() {
           <DraftBanner data={data} />
           <M3Tabs ariaLabel="Zone matrix views" tabs={[
             { label: "Matrix", panel: <MatrixTab {...common} /> },
+            { label: "Violations", panel: <ViolationsTab summary={summary} /> },
             { label: "Zones", panel: <ZonesTab {...common} onShowBlocks={showBlocks} /> },
             { label: "Versions", panel: <VersionsTab {...common} /> },
             { label: "Evaluate", panel: <EvaluateTab {...common} /> },
+            { label: "Coverage", panel: <CoverageTab summary={summary} /> },
           ]} />
         </>}
     </ScreenRoot>

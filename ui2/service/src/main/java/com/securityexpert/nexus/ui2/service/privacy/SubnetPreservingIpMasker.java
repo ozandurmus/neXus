@@ -4,8 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
@@ -17,8 +15,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class SubnetPreservingIpMasker {
 
-    private static final Pattern IPV4_PATTERN = Pattern.compile("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(?:/(\\d{1,2}))?$");
-    private static final Pattern EMBEDDED_IPV4_PATTERN = Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:/\\d{1,2})?)\\b");
+    // No java.util.regex on caller-supplied text here (CodeQL java/polynomial-redos, alert 46): the full-string parse
+    // and the free-text scan below are hand-written single-pass scanners. They reproduce exactly what the former
+    // patterns matched -- ^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:/(\d{1,2}))?$ with matches(), and
+    // \b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:/\d{1,2})?)\b with find() -- which
+    // SubnetPreservingIpMaskerScannerTest proves differentially against those patterns.
+
+    /** A parsed {@code a.b.c.d[/len]}: octets as written (not range-checked), {@code cidr} the length text or null. */
+    record ParsedIpv4(int o1, int o2, int o3, int o4, String cidr) {}
 
     public record SubnetInfo(long netLong, long mask, int prefixLen, String netAddressStr) {}
 
@@ -43,15 +47,15 @@ public class SubnetPreservingIpMasker {
         if (cidrOrIp == null || cidrOrIp.isBlank()) {
             return;
         }
-        Matcher matcher = IPV4_PATTERN.matcher(cidrOrIp.trim());
-        if (!matcher.matches() || matcher.group(5) == null) {
+        ParsedIpv4 parsed = parseIpv4(cidrOrIp.trim());
+        if (parsed == null || parsed.cidr() == null) {
             return;
         }
-        int o1 = Integer.parseInt(matcher.group(1));
-        int o2 = Integer.parseInt(matcher.group(2));
-        int o3 = Integer.parseInt(matcher.group(3));
-        int o4 = Integer.parseInt(matcher.group(4));
-        int prefixLen = Integer.parseInt(matcher.group(5));
+        int o1 = parsed.o1();
+        int o2 = parsed.o2();
+        int o3 = parsed.o3();
+        int o4 = parsed.o4();
+        int prefixLen = Integer.parseInt(parsed.cidr());
         if (prefixLen <= 0 || prefixLen > 32 || o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) {
             return;
         }
@@ -137,32 +141,185 @@ public class SubnetPreservingIpMasker {
         if (text == null || text.isBlank()) {
             return text;
         }
-        Matcher matcher = EMBEDDED_IPV4_PATTERN.matcher(text);
-        StringBuilder sb = new StringBuilder();
-        while (matcher.find()) {
-            String ipMatch = matcher.group(1);
-            matcher.appendReplacement(sb, Matcher.quoteReplacement(mask(ipMatch)));
+        StringBuilder sb = new StringBuilder(text.length());
+        int copied = 0;
+        int from = 0;
+        int[] span;
+        while ((span = findEmbeddedIpv4(text, from)) != null) {
+            sb.append(text, copied, span[0]).append(mask(text.substring(span[0], span[1])));
+            copied = span[1];
+            from = span[1];
         }
-        matcher.appendTail(sb);
+        sb.append(text, copied, text.length());
         return sb.toString();
     }
 
+    /**
+     * Parses the whole of {@code s} as exactly four dot-separated groups of one to three ASCII digits, optionally followed
+     * by {@code /} and one or two ASCII digits, and nothing else. Null when {@code s} is not of that shape. Octets above
+     * 255 and lengths above 32 are returned as written; callers range-check them.
+     */
+    static ParsedIpv4 parseIpv4(String s) {
+        int n = s.length();
+        int[] octets = new int[4];
+        int i = 0;
+        for (int k = 0; k < 4; k++) {
+            if (k > 0) {
+                if (i >= n || s.charAt(i) != '.') {
+                    return null;
+                }
+                i++;
+            }
+            int start = i;
+            int value = 0;
+            while (i < n && i - start < 3 && isAsciiDigit(s.charAt(i))) {
+                value = value * 10 + (s.charAt(i) - '0');
+                i++;
+            }
+            if (i == start) {
+                return null;
+            }
+            octets[k] = value;
+        }
+        String cidr = null;
+        if (i < n) {
+            if (s.charAt(i) != '/') {
+                return null;
+            }
+            int start = ++i;
+            while (i < n && i - start < 2 && isAsciiDigit(s.charAt(i))) {
+                i++;
+            }
+            if (i == start) {
+                return null;
+            }
+            cidr = s.substring(start, i);
+        }
+        return i == n ? new ParsedIpv4(octets[0], octets[1], octets[2], octets[3], cidr) : null;
+    }
+
+    /**
+     * The next embedded {@code a.b.c.d[/len]} in {@code text} at or after {@code from}, as {@code {start, end}}, or null.
+     * A token starts at an ASCII digit with a word boundary before it, has four groups of one to three ASCII digits, and
+     * ends at a word boundary; the {@code /len} part (one or two digits) is kept only when a boundary follows it. Word
+     * boundaries are those of {@link java.util.regex.Pattern}'s {@code \b} on this JDK (see {@link #isWordBoundary}).
+     * Each candidate start reads a bounded number of characters ahead (four digits per group at most, three dots, '/' and
+     * three digits), and the only backward walk crosses the run of non-spacing marks directly before that candidate, so
+     * the scan is linear in the text length.
+     */
+    static int[] findEmbeddedIpv4(CharSequence text, int from) {
+        int n = text.length();
+        for (int start = from; start < n; start++) {
+            if (!isAsciiDigit(text.charAt(start)) || !isWordBoundary(text, start)) {
+                continue;
+            }
+            int end = matchEmbeddedAt(text, start);
+            if (end >= 0) {
+                return new int[]{start, end};
+            }
+        }
+        return null;
+    }
+
+    /** End of the token starting at {@code start} (an ASCII digit with a boundary before it), or -1. */
+    private static int matchEmbeddedAt(CharSequence text, int start) {
+        int n = text.length();
+        int i = start;
+        for (int k = 0; k < 4; k++) {
+            if (k > 0) {
+                if (i >= n || text.charAt(i) != '.') {
+                    return -1;
+                }
+                i++;
+            }
+            int groupStart = i;
+            while (i < n && isAsciiDigit(text.charAt(i))) {
+                i++;
+                if (i - groupStart > 3) {
+                    // A fourth digit: no shorter take of this group can be followed by '.' or by a boundary.
+                    return -1;
+                }
+            }
+            if (i == groupStart) {
+                return -1;
+            }
+        }
+        // i is just past the last octet's whole digit run, so text[i] (if any) is not an ASCII digit.
+        if (i < n && text.charAt(i) == '/') {
+            int cidrStart = i + 1;
+            int j = cidrStart;
+            while (j < n && isAsciiDigit(text.charAt(j)) && j - cidrStart < 3) {
+                j++;
+            }
+            int len = j - cidrStart;
+            if (len >= 1 && len <= 2 && isWordBoundary(text, j)) {
+                return j;
+            }
+            // Without the length the token ends before '/', which is never a word character: always a boundary.
+        }
+        return isWordBoundary(text, i) ? i : -1;
+    }
+
+    /**
+     * Whether {@code index} is a word boundary as {@code \b} decides it without UNICODE_CHARACTER_CLASS on Java 19+
+     * (JDK-8264160): a word character is {@code [A-Za-z0-9_]}, or a non-spacing mark preceded, through further
+     * non-spacing marks, by a letter or digit. The code point is read at the index and before it, as the JDK does.
+     */
+    private static boolean isWordBoundary(CharSequence text, int index) {
+        int n = text.length();
+        boolean left = false;
+        if (index > 0) {
+            int ch = Character.codePointBefore(text, index);
+            left = isAsciiWordChar(ch)
+                    || (Character.getType(ch) == Character.NON_SPACING_MARK && hasBaseCharacter(text, index - 1));
+        }
+        boolean right = false;
+        if (index < n) {
+            int ch = Character.codePointAt(text, index);
+            right = isAsciiWordChar(ch)
+                    || (Character.getType(ch) == Character.NON_SPACING_MARK && hasBaseCharacter(text, index));
+        }
+        return left != right;
+    }
+
+    /** The JDK's base-character walk for a non-spacing mark: back over marks to a letter or digit. */
+    private static boolean hasBaseCharacter(CharSequence text, int index) {
+        for (int x = index; x >= 0; x--) {
+            int ch = Character.codePointAt(text, x);
+            if (Character.isLetterOrDigit(ch)) {
+                return true;
+            }
+            if (Character.getType(ch) != Character.NON_SPACING_MARK) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isAsciiDigit(int ch) {
+        return ch >= '0' && ch <= '9';
+    }
+
+    private static boolean isAsciiWordChar(int ch) {
+        return isAsciiDigit(ch) || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_';
+    }
+
     private String computeMaskedIp(String trimmed, boolean register) {
-        Matcher matcher = IPV4_PATTERN.matcher(trimmed);
-        if (!matcher.matches()) {
+        ParsedIpv4 parsed = parseIpv4(trimmed);
+        if (parsed == null) {
             return "[REDACTED_IP]";
         }
 
-        int o1 = Integer.parseInt(matcher.group(1));
-        int o2 = Integer.parseInt(matcher.group(2));
-        int o3 = Integer.parseInt(matcher.group(3));
-        int o4 = Integer.parseInt(matcher.group(4));
+        int o1 = parsed.o1();
+        int o2 = parsed.o2();
+        int o3 = parsed.o3();
+        int o4 = parsed.o4();
 
         if (o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) {
             return "[REDACTED_IP]";
         }
 
-        String cidrGroup = matcher.group(5);
+        String cidrGroup = parsed.cidr();
         int prefixLen;
         if (cidrGroup != null) {
             prefixLen = Integer.parseInt(cidrGroup);

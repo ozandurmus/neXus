@@ -32,8 +32,8 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   // Trace is two modes of one screen; Changes is two views of one question (C3).
   { screen: "trace", tabList: "Trace modes", labels: ["Topology path", "Policy rule lookup"] },
   { screen: "changes", tabList: "Changes views", labels: ["Timeline", "Policy rule revisions"] },
-  // Zone matrix delivery step 3 (ZONE_MATRIX_CONTRACT.md 7.1, 10.1): Matrix, Zones, Versions and Evaluate.
-  { screen: "zone_matrix", tabList: "Zone matrix views", labels: ["Matrix", "Zones", "Versions", "Evaluate"] },
+  // Zone matrix delivery steps 3 and 4 (ZONE_MATRIX_CONTRACT.md 7.1, 10.1): Matrix, Violations, Zones, Versions, Evaluate and Coverage.
+  { screen: "zone_matrix", tabList: "Zone matrix views", labels: ["Matrix", "Violations", "Zones", "Versions", "Evaluate", "Coverage"] },
   // Cluster members is a cluster-page tab only (roadmap 2.2); a member page links to its cluster from the header. The
   // device's Identity tab is gone (PO 2026-11-06): the Platform identity grid is a collapsible panel in the device header.
   { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Configuration", "Backup", "Logs"] },

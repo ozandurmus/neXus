@@ -7,3 +7,4 @@ Heap ceiling of contract 5.1 not enforced, needs the in-pod measurement; V267 ne
 2026-11-25: Overview attention row (contract step 5) from the stored summary; severity mapping is an engineering default awaiting the PO
 
 2026-11-25: Stored summary carries per-cell open-violation counts (`cell_counts` in `GET /api/v2/zone-matrix/summary`, contract 7.1 Matrix, 7.2); a rule in both headline sets counts only as a headline rule, and the Matrix and Violations tabs can read the key now
+2026-11-25: Violations and Coverage tabs on GET /api/v2/zone-matrix/summary (frontend); evidence-report wiring remains.
