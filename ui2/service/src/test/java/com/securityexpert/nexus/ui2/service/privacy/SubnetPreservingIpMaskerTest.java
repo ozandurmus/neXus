@@ -154,4 +154,40 @@ class SubnetPreservingIpMaskerTest {
         assertThat(vipParts[3]).isEqualTo("11");
         assertThat(m1Parts[3]).isEqualTo("12");
     }
+
+    /**
+     * Sweep round 4 of aiview_masking_leak_audit: a Packet Analysis Wireshark filter and a flow tuple carried IPv6
+     * literals through the free-text projection (only IPv4 was rewritten). An IPv6 literal has no relationship-preserving
+     * masker, so free text fails closed like an IPv6 address value does.
+     */
+    @Test
+    void freeTextRedactsIpv6LiteralsGluedToLabelsOrCarryingAnIpv4Tail() {
+        assertThat(masker.maskText("peer:2001:db8::1")).isEqualTo("peer:[REDACTED_IP]");
+        assertThat(masker.maskText("ip:2001:db8::1 addr:2001:db8:810d::a2df src:2001:db8::5 via:2001:db8::7"))
+                .isEqualTo("ip:[REDACTED_IP] addr:[REDACTED_IP] src:[REDACTED_IP] via:[REDACTED_IP]");
+        assertThat(masker.maskText("2001:db8::5s")).isEqualTo("[REDACTED_IP]s");
+        assertThat(masker.maskText("2001:db8::192.0.2.33")).isEqualTo("[REDACTED_IP]");
+        assertThat(masker.maskText("2001:db8::1.5")).doesNotContain("2001").doesNotContain("db8");
+        assertThat(masker.maskText("peer:fe80::192.0.2.33,")).isEqualTo("peer:[REDACTED_IP],");
+        assertThat(masker.maskText("mac:aa:bb:cc:dd:ee:ff at:12:30:45 std::vector"))
+                .isEqualTo("mac:aa:bb:cc:dd:ee:ff at:12:30:45 std::vector");
+    }
+
+    @Test
+    void freeTextRedactsIpv6LiteralsAndLeavesLookAlikesAlone() {
+        assertThat(masker.maskText("(ipv6.src == 2001:db8:810d::a2df && ipv6.dst == 2001:db8:810d::1024 && tcp)"))
+                .isEqualTo("(ipv6.src == [REDACTED_IP] && ipv6.dst == [REDACTED_IP] && tcp)");
+        assertThat(masker.maskText("[\"TCP\",\"2001:db8:810d::1024\",80,\"2001:db8:810d::a2df\",41000]"))
+                .isEqualTo("[\"TCP\",\"[REDACTED_IP]\",80,\"[REDACTED_IP]\",41000]");
+        assertThat(masker.maskText("peer 2001:0db8:00a1:0000:0000:0000:0000:0007, then 2001:DB8::7.")).isEqualTo(
+                "peer [REDACTED_IP], then [REDACTED_IP].");
+        assertThat(masker.maskText("[2001:db8::5]:443 and 2001:db8::5/64")).isEqualTo("[[REDACTED_IP]]:443 and [REDACTED_IP]/64");
+        // not literals: a MAC address, clock times, a scope operator, the unspecified and loopback addresses
+        for (String text : new String[]{"mac aa:bb:cc:dd:ee:ff", "at 12:30:45 today", "std::string and Foo::bar", "bind :: and ::1",
+                "ratio 3:1", "key=value:other"}) {
+            assertThat(masker.maskText(text)).isEqualTo(text);
+        }
+        // IPv4 keeps its relationship-preserving pseudonym next to an IPv6 literal
+        assertThat(masker.maskText("v4 192.0.2.9 v6 2001:db8::9")).matches("v4 (?:24\\d|25[0-5])\\.\\d+\\.\\d+\\.\\d+ v6 \\[REDACTED_IP]");
+    }
 }
