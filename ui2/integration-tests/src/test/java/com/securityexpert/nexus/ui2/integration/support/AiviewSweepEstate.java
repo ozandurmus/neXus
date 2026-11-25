@@ -148,20 +148,21 @@ public final class AiviewSweepEstate {
     public record Estate(Device cpMemberA, Device cpMemberB, Device panFirewall, Device management, String cluster,
             String ipv6Management, String principal, String ruleName, String sectionName, String objectName,
             String objectAddress, String policyName, String policyId, String domainId, String objectId, String ruleId,
-            P1 p1, Map<String, ValueClass> raw) {
+            P1 p1, Topo topo, Map<String, ValueClass> raw) {
 
         public static Estate generate() {
             String cluster = "CLX-ROMEO-" + tag().toUpperCase(Locale.ROOT);
-            int base = 100 + RANDOM.nextInt(90);
+            // aligned to a /29 so the transit and the two leaf subnets of Topo are whole /29 blocks (104 .. 176)
+            int base = 104 + 8 * RANDOM.nextInt(10);
             Device a = new Device(Ui2Rows.opaqueId("dev"), "check_point", "gateway",
                     "FW-TANGO-" + tag().toUpperCase(Locale.ROOT), "CP" + hex(5).toUpperCase(Locale.ROOT),
-                    "192.0.2." + base, "198.51.100." + base, cluster);
+                    "192.0.2." + base, "198.51.100." + (base + 1), cluster);
             Device b = new Device(Ui2Rows.opaqueId("dev"), "check_point", "gateway",
                     "ist" + tag() + "-fw-02", "CP" + hex(5).toUpperCase(Locale.ROOT),
-                    "192.0.2." + (base + 1), "198.51.100." + (base + 1), cluster);
+                    "192.0.2." + (base + 1), "198.51.100." + (base + 2), cluster);
             Device pan = new Device(Ui2Rows.opaqueId("dev"), "palo_alto", "gateway",
                     "dc" + tag() + "-edge-gw01", "0" + digits(11),
-                    "192.0.2." + (base + 2), "198.51.100." + (base + 2), null);
+                    "192.0.2." + (base + 2), "198.51.100." + (base + 3), null);
             Device mgmt = new Device(Ui2Rows.opaqueId("dev"), "check_point", "management_server",
                     "core" + tag() + "-smc-a", "CP" + hex(5).toUpperCase(Locale.ROOT),
                     "192.0.2." + (base + 3), null, null);
@@ -171,7 +172,8 @@ public final class AiviewSweepEstate {
             String ruleName = "allow-" + tag() + "-payroll";
             String sectionName = "sec-" + tag() + "-dmz";
             String objectName = "h-" + tag() + "-dbsrv";
-            String objectAddress = "198.51.100." + (base + 5);
+            // a host of the source leaf subnet of Topo (not an interface address of the firewall)
+            String objectAddress = "198.51.100." + (base + 17);
             String policyName = "pkg-" + tag() + "-branch";
             Map<String, ValueClass> raw = new LinkedHashMap<>();
             for (Device d : List.of(a, b, pan, mgmt)) {
@@ -192,13 +194,48 @@ public final class AiviewSweepEstate {
             raw.put("203.0.113.0", ValueClass.ADDRESS);
             raw.put("203.0.113.10", ValueClass.ADDRESS);
             P1 p1 = P1.generate(principal, pan.hostname(), base, raw);
+            Topo topo = Topo.generate(base, p1, raw);
             return new Estate(a, b, pan, mgmt, cluster, v6, principal, ruleName, sectionName, objectName, objectAddress,
                     policyName, "policy-" + UUID.randomUUID(), "domain-" + UUID.randomUUID(),
-                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, Map.copyOf(raw));
+                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, topo, Map.copyOf(raw));
         }
 
         public List<Device> devices() {
             return List.of(cpMemberA, cpMemberB, panFirewall, management);
+        }
+    }
+
+    /**
+     * The connected topology of the estate (path analysis): the Check Point cluster and the Palo Alto firewall share a
+     * {@code /29} transit subnet (documentation range, so a route must corroborate the join), the cluster has a source
+     * leaf subnet and the firewall a destination leaf subnet plus an interface on the seeded cutover segment. Interface
+     * and zone names are raw and tagged, so a leaked topology label is counted. Prefix lengths are written only into the
+     * seeded address rows; {@link Device#interfaceAddress()} stays the bare host the other rows use.
+     */
+    public record Topo(String transitNet, String transitVip, String srcLeafNet, String srcLeafVip, String dstLeafNet,
+            String dstLeafMember, String dstHost, String cutoverMember, String cpTransitIf, String cpLeafIf,
+            String panTransitIf, String panLeafIf, String panCutoverIf, String zoneInt, String zoneDmz) {
+
+        static Topo generate(int base, P1 p1, Map<String, ValueClass> raw) {
+            String t = tag();
+            int segment = Integer.parseInt(p1.segmentV4().substring(p1.segmentV4().lastIndexOf('.') + 1));
+            Topo topo = new Topo("198.51.100." + base, "198.51.100." + (base + 4),
+                    "198.51.100." + (base + 16), "198.51.100." + (base + 18),
+                    "198.51.100." + (base + 24), "198.51.100." + (base + 26), "198.51.100." + (base + 25),
+                    "203.0.113." + (segment + 1),
+                    "ifc-" + t + "-transit", "ifc-" + t + "-srcleaf", "ifp-" + t + "-transit", "ifp-" + t + "-dstleaf",
+                    "ifp-" + t + "-cutover", "zone-int-" + t, "zone-dmz-" + t);
+            for (String address : List.of(topo.transitNet(), topo.transitVip(), topo.srcLeafNet(), topo.srcLeafVip(),
+                    topo.dstLeafNet(), topo.dstLeafMember(), topo.dstHost(), topo.cutoverMember())) {
+                raw.put(address, ValueClass.ADDRESS);
+            }
+            for (String name : List.of(topo.cpTransitIf(), topo.cpLeafIf(), topo.panTransitIf(), topo.panLeafIf(),
+                    topo.panCutoverIf())) {
+                raw.put(name, ValueClass.OBJECT_NAME);
+            }
+            raw.put(topo.zoneInt(), ValueClass.ZONE_OR_SEGMENT_NAME);
+            raw.put(topo.zoneDmz(), ValueClass.ZONE_OR_SEGMENT_NAME);
+            return topo;
         }
     }
 
@@ -252,17 +289,44 @@ public final class AiviewSweepEstate {
                             e.management().managementAddress(), d.cluster(), d.cluster() == null ? null : clusterCandidate);
                 }
 
-                // One inventory run per gateway: interface addresses, zone names.
+                // One inventory run per gateway: connected interfaces (addresses with their prefix lengths), raw interface and
+                // zone names, routes and, for the cluster, the HA facts. The topology the application builds from these rows
+                // has one shared transit segment, two leaf segments and the cutover segment (see Topo).
+                Topo t = e.topo();
                 for (Device d : List.of(e.cpMemberA(), e.cpMemberB(), e.panFirewall())) {
                     String job = job(c, d.id(), "inventory_collect", "COMPLETED", null, "device", null);
                     String run = Ui2Rows.opaqueId("inv");
                     exec(c, "insert into device_inventory_run(run_id, device_id, job_id, collected_at, context_count) "
                             + "values (?, ?, ?, now(), 1)", run, d.id(), job);
-                    String itf = Ui2Rows.opaqueId("itf");
-                    exec(c, "insert into device_interface(interface_id, run_id, context, name, kind, state, zone) "
-                            + "values (?, ?, 'physical', 'eth1', 'physical', 'up', 'internal')", itf, run);
-                    exec(c, "insert into device_interface_address(address_id, interface_id, address, family, role) "
-                            + "values (?, ?, ?, 'ipv4', 'member')", Ui2Rows.opaqueId("addr"), itf, d.interfaceAddress());
+                    boolean pan = d == e.panFirewall();
+                    String transitIf = pan ? t.panTransitIf() : t.cpTransitIf();
+                    String leafIf = pan ? t.panLeafIf() : t.cpLeafIf();
+                    String leafZone = pan ? t.zoneDmz() : t.zoneInt();
+                    String transitSubnet = t.transitNet() + "/29";
+                    String leafNet = (pan ? t.dstLeafNet() : t.srcLeafNet()) + "/29";
+                    interfaceRow(c, run, transitIf, t.zoneDmz(), d.interfaceAddress() + "/29", "member");
+                    if (!pan) {
+                        // a Check Point cluster attaches through its virtual addresses; the member address is evidence only
+                        exec(c, "insert into device_interface_address(address_id, interface_id, address, family, role) "
+                                + "select ?, interface_id, ?, 'ipv4', 'cluster_virtual' from device_interface "
+                                + "where run_id = ? and name = ?", Ui2Rows.opaqueId("addr"), t.transitVip() + "/29", run, transitIf);
+                        interfaceRow(c, run, leafIf, leafZone, t.srcLeafVip() + "/29", "cluster_virtual");
+                    } else {
+                        interfaceRow(c, run, leafIf, leafZone, t.dstLeafMember() + "/29", "member");
+                        interfaceRow(c, run, t.panCutoverIf(), t.zoneInt(), t.cutoverMember() + "/29", "member");
+                    }
+                    route(c, run, transitSubnet, null, transitIf, "connected", "CONNECTED");
+                    route(c, run, leafNet, null, leafIf, "connected", "CONNECTED");
+                    if (pan) {
+                        route(c, run, e.p1().segmentV4() + "/29", null, t.panCutoverIf(), "connected", "CONNECTED");
+                        route(c, run, t.srcLeafNet() + "/29", t.transitVip(), transitIf, "static", "IP");
+                    } else {
+                        route(c, run, t.dstLeafNet() + "/29", e.panFirewall().interfaceAddress(), transitIf, "static", "IP");
+                        route(c, run, e.p1().segmentV4() + "/29", e.panFirewall().interfaceAddress(), transitIf, "static", "IP");
+                        exec(c, "insert into device_inventory_ha(ha_id, run_id, context, role, cluster_mode, source) "
+                                + "values (?, ?, 'physical', ?, null, 'cp_cphaprob_stat')", Ui2Rows.opaqueId("ha"), run,
+                                d == e.cpMemberA() ? "ACTIVE" : "STANDBY");
+                    }
                 }
 
                 // A failed job whose free-text reason names a device, its address and the administrator.
@@ -319,7 +383,7 @@ public final class AiviewSweepEstate {
                 var object = new PolicySnapshot.PolicyObject(e.objectId(), e.objectName(), "host", List.of(),
                         List.of(e.objectAddress()), "RESOLVED");
                 var rule = new PolicySnapshot.Rule(e.ruleId(), UUID.randomUUID().toString(), 1, e.ruleName(), true,
-                        new PolicySnapshot.Cell(List.of(e.objectId()), false), new PolicySnapshot.Cell(List.of(e.objectId()), false),
+                        new PolicySnapshot.Cell(List.of(e.objectId()), false), new PolicySnapshot.Cell(List.of(), false),
                         new PolicySnapshot.Cell(List.of(), false), new PolicySnapshot.Cell(List.of(), false), "Accept", "Log",
                         "requested by " + e.principal() + " for " + e.panFirewall().hostname(),
                         Map.of("last-modifier", List.of(e.principal())));
@@ -468,6 +532,13 @@ public final class AiviewSweepEstate {
                     + "values (?, ?, 1, ?::jsonb, ?::jsonb, ?, ?)",
                     segment, p.segmentName(), JSON.writeValueAsString(List.of(p.segmentV4() + "/29", p.segmentV6() + "/48")),
                     JSON.writeValueAsString(List.of(p.peerV4() + "/29")), e.principal(), e.principal());
+            // An IPv4-only segment over the same block: the path query's caveat reads a segment only when every block of it
+            // is IPv4 (a dual-stack segment such as the one above is reported unreadable), so this one is what a query
+            // endpoint inside the block matches. Its name contains the first one's, so the counter finds it either way.
+            exec(c, "insert into cutover_segment(segment_id, name, revision, blocks, peer_blocks, created_by, updated_by) "
+                    + "values (?, ?, 1, ?::jsonb, ?::jsonb, ?, ?)",
+                    UUID.randomUUID().toString(), p.segmentName() + "-v4", JSON.writeValueAsString(List.of(p.segmentV4() + "/29")),
+                    JSON.writeValueAsString(List.of(p.peerV4() + "/29")), e.principal(), e.principal());
             exec(c, "insert into cutover_assessment(assessment_id, segment_id, segment_revision, actor, target_source, "
                     + "target_device_id, target_policy_id, target_collected_at, engine_version, status, readiness, summary) "
                     + "values (?, ?, 1, ?, 'OPERATOR_OVERRIDE', ?, ?, '2026-11-20T10:00:00Z', 'synthetic-engine', 'COMPLETE', "
@@ -548,6 +619,24 @@ public final class AiviewSweepEstate {
                     + "last_state) values (?, 'cisco_asa', ?, ?, 'synthetic_seed', 'MATCH')",
                     p.asaCluster(), serials.get(0), serials.get(1));
         });
+    }
+
+    /** One physical interface of an inventory run with one prefixed address. */
+    private static void interfaceRow(Connection c, String run, String name, String zone, String address, String role)
+            throws SQLException {
+        String itf = Ui2Rows.opaqueId("itf");
+        exec(c, "insert into device_interface(interface_id, run_id, context, name, kind, state, zone) "
+                + "values (?, ?, 'physical', ?, 'physical', 'up', ?)", itf, run, name, zone);
+        exec(c, "insert into device_interface_address(address_id, interface_id, address, family, role) "
+                + "values (?, ?, ?, 'ipv4', ?)", Ui2Rows.opaqueId("addr"), itf, address, role);
+    }
+
+    /** One route of the physical context (no routing table: the routing instance is the context's only one). */
+    private static void route(Connection c, String run, String destination, String nextHop, String interfaceName,
+            String protocol, String nextHopKind) throws SQLException {
+        exec(c, "insert into device_route(route_id, run_id, context, destination, next_hop, interface, protocol, route_table, "
+                + "is_active, is_ecmp, metric, next_hop_kind) values (?, ?, 'physical', ?, ?, ?, ?, null, true, false, 1, ?)",
+                Ui2Rows.opaqueId("rt"), run, destination, nextHop, interfaceName, protocol, nextHopKind);
     }
 
     private static String job(Connection c, String deviceId, String type, String state, String reason, String targetKind,
