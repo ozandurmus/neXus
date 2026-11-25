@@ -14,13 +14,20 @@
 -- stable identifiers, Panorama device serial, ASA/FortiGate unit serials), CLUSTER (cluster references, HA pair
 -- claim, discovery cluster reference), USER (policy-change authors, credential user names), NAME_WORD (each word of
 -- 4+ characters of a USER or CLUSTER value; low confidence, reported separately).
+-- P1 planes (when their tables exist): ACI cutover segment names (HOST), segment and peer blocks and assessment flow
+-- addresses (ADDR), segment / assessment / zone-matrix actors (USER), Zone Matrix zone names (HOST) and zone blocks
+-- (ADDR) from the canonical version content, static-route preview destinations, next hops and representative hosts
+-- (ADDR), requesters (USER) and units (CLUSTER).  A block "a/n" also yields its address part "a" (ADDR, trailing
+-- separators removed the way the probe tokenizes) so a block printed as text is found by its network address.
 \set ON_ERROR_STOP on
 BEGIN READ ONLY;
 
 -- Source columns that exist in this schema (column names only; a missing one is skipped and shows as absent in the meta lines).
-SELECT string_agg(format('SELECT %L::text AS cat, %I::text AS v FROM public.%I', s.cat, s.col, s.tbl), ' UNION ALL ') AS src,
-       string_agg(format('SELECT %L AS cat, %L AS col, (SELECT count(*) FROM public.%I WHERE %I IS NOT NULL) AS n', s.cat, s.tbl || '.' || s.col, s.tbl, s.col), ' UNION ALL ') AS meta
-FROM (VALUES
+-- Plain columns are read as text.  JSON sources (shape = elements / zone_names / zone_blocks / flow_addresses) read
+-- text out of a JSONB column or a TEXT column holding JSON; a value that is not valid JSON, or not of the expected
+-- shape, contributes nothing (never an error).  Every table and column name is checked against
+-- information_schema.columns before any dynamic SQL is built, so an older schema runs cleanly.
+WITH plain(cat, tbl, col) AS (VALUES
     ('HOST',    'devices',                  'observed_hostname'),
     ('HOST',    'discovery_candidate',      'display_name'),
     ('HOST',    'cp_domain_server_placement', 'server_name'),
@@ -48,8 +55,65 @@ FROM (VALUES
     ('CLUSTER', 'devices',                  'ha_pair_claim'),
     ('CLUSTER', 'discovery_candidate',      'cluster_reference'),
     ('USER',    'policy_rule_history',      'changed_by'),
-    ('USER',    'credentials',              'username')
-) AS s(cat, tbl, col)
+    ('USER',    'credentials',              'username'),
+    -- ACI cutover (V217): segment name and the people who wrote it.
+    ('HOST',    'cutover_segment',          'name'),
+    ('USER',    'cutover_segment',          'created_by'),
+    ('USER',    'cutover_segment',          'updated_by'),
+    ('USER',    'cutover_assessment',       'actor'),
+    -- Zone Matrix (V216): authors and publishers of zone-model versions and revisions.
+    ('USER',    'zone_matrix_version',      'created_by'),
+    ('USER',    'zone_matrix_version',      'updated_by'),
+    ('USER',    'zone_matrix_version',      'published_by'),
+    ('USER',    'zone_matrix_revision',     'actor'),
+    -- Static route preview (V252): typed destination, next hop, representative host, requester and unit.
+    ('ADDR',    'static_route_preview',     'destination_cidr'),
+    ('ADDR',    'static_route_preview',     'nexthop_ip'),
+    ('ADDR',    'static_route_preview',     'representative_host'),
+    ('USER',    'static_route_preview',     'requested_by'),
+    ('CLUSTER', 'static_route_preview',     'unit_id')
+),
+json(cat, tbl, col, shape) AS (VALUES
+    ('ADDR',    'cutover_segment',          'blocks',      'elements'),
+    ('ADDR',    'cutover_segment',          'peer_blocks', 'elements'),
+    ('ADDR',    'cutover_assessment_flow',  'flow',        'flow_addresses'),
+    ('HOST',    'zone_matrix_version',      'content',     'zone_names'),
+    ('ADDR',    'zone_matrix_version',      'content',     'zone_blocks')
+),
+-- One SELECT per source: plain columns as text; JSON sources parse each row's value (NULL when it is not valid JSON,
+-- pg_input_is_valid is PostgreSQL 16) and read the named elements out of it.
+s AS (
+    SELECT p.cat, p.tbl, p.col, p.tbl || '.' || p.col AS label,
+           format('SELECT %L::text AS cat, t.%I::text AS v FROM public.%I t', p.cat, p.col, p.tbl) AS q
+    FROM plain p
+    UNION ALL
+    SELECT j.cat, j.tbl, j.col, j.tbl || '.' || j.col || CASE j.shape
+               WHEN 'elements' THEN '[]' WHEN 'zone_names' THEN '.zones[].name'
+               WHEN 'zone_blocks' THEN '.zones[].blocks[]' ELSE '{addresses}' END,
+           format('SELECT %L::text AS cat, x.v FROM public.%I t, LATERAL (SELECT CASE WHEN pg_input_is_valid(t.%I::text, ''jsonb'') '
+                  || 'THEN t.%I::text::jsonb END AS j) d, LATERAL (%s) x(v)',
+                  j.cat, j.tbl, j.col, j.col, CASE j.shape
+                      WHEN 'elements' THEN
+                          'SELECT e FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(d.j) = ''array'' THEN d.j ELSE ''[]''::jsonb END) e'
+                      WHEN 'zone_names' THEN
+                          'SELECT z->>''name'' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(d.j->''zones'') = ''array'' '
+                          || 'THEN d.j->''zones'' ELSE ''[]''::jsonb END) z'
+                      WHEN 'zone_blocks' THEN
+                          'SELECT b FROM jsonb_array_elements(CASE WHEN jsonb_typeof(d.j->''zones'') = ''array'' '
+                          || 'THEN d.j->''zones'' ELSE ''[]''::jsonb END) z, '
+                          || 'jsonb_array_elements_text(CASE WHEN jsonb_typeof(z->''blocks'') = ''array'' '
+                          || 'THEN z->''blocks'' ELSE ''[]''::jsonb END) b'
+                      ELSE
+                          'SELECT d.j->>k FROM unnest(ARRAY[''flowSource'', ''flowDestination'', ''sourceRange'']) k '
+                          || 'UNION ALL SELECT e FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(d.j->''flowSources'') = ''array'' '
+                          || 'THEN d.j->''flowSources'' ELSE ''[]''::jsonb END) e'
+                  END)
+    FROM json j
+)
+SELECT string_agg(s.q, ' UNION ALL ') AS src,
+       string_agg(format('SELECT %L AS cat, %L AS col, (SELECT count(*) FROM public.%I WHERE %I IS NOT NULL) AS n',
+                         s.cat, s.label, s.tbl, s.col), ' UNION ALL ') AS meta
+FROM s
 JOIN information_schema.columns c
   ON c.table_schema = 'public' AND c.table_name = s.tbl AND c.column_name = s.col
 \gset
@@ -65,6 +129,10 @@ base AS (
 ),
 cand AS (
     SELECT cat, n FROM base
+    UNION ALL
+    -- the address part of a block (198.51.100.0/24 -> 198.51.100.0, 2001:db8:a::/48 -> 2001:db8:a)
+    SELECT 'ADDR', regexp_replace(split_part(n, '/', 1), '[._:@-]+$', '') FROM base
+    WHERE cat = 'ADDR' AND n ~ '^[0-9a-f.:]+/[0-9]{1,3}$'
     UNION ALL
     SELECT 'IPV4', m[1] FROM base, LATERAL regexp_matches(n, '((?:[0-9]{1,3}\.){3}[0-9]{1,3})', 'g') AS m
     UNION ALL

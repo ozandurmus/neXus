@@ -3150,6 +3150,99 @@ export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslo
 export const getSystemLogSpikeData = (deviceId: string) => call<SystemLogSpikeData>(`${syslogBase(deviceId)}/spike-data`, "GET");
 
 // ---------------------------------------------------------------------------------------------------------------
+// Log detection engine, phase P1 (`/api/v2/log-findings`, docs/design/LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md section 9).
+// Findings carry counts, device-local times, closed-vocabulary labels and pointers; never a log line.
+export type LogFindingSeverity = "CRITICAL" | "ATTENTION" | "INFO" | "UNKNOWN";
+
+export interface LogFinding {
+  readonly finding_id: string;
+  readonly device_id: string;
+  readonly source_key: string;
+  readonly layer: string;
+  readonly rule_id: string;
+  readonly kind: string;
+  readonly marker_id: string;
+  readonly key_token: string;
+  readonly window_day: string;
+  readonly window_start: string;
+  readonly window_end: string;
+  readonly time_basis: string;
+  readonly severity: LogFindingSeverity;
+  readonly severity_rule: string;
+  readonly score: { readonly s: number; readonly r: number | null; readonly c: number | null; readonly score: number | null; readonly note: string };
+  readonly provenance: string;
+  readonly counts: {
+    readonly lines: number; readonly peak_bucket_lines: number; readonly history_days: number; readonly baseline_days: number;
+    readonly presence_days: number; readonly cohort_devices: number; readonly prevalence_devices: number; readonly counts: string;
+  };
+  readonly chronic: boolean;
+  readonly fleet_background: boolean;
+  readonly labels: readonly string[];
+  readonly incident_group: string;
+  readonly coverage_state: string;
+  readonly evidence_pointers: readonly { readonly chunk_id: string; readonly offset: number; readonly length: number }[];
+  readonly versions: { readonly masking_rule_set: string; readonly marker_list: string; readonly config: string; readonly catalog: string | null };
+  readonly review_state: "OPEN" | "ACKNOWLEDGED" | "SUPPRESSED" | "CLOSED";
+  readonly review_at: string | null;
+  readonly first_raised_at: string | null;
+  readonly updated_at: string | null;
+}
+
+export interface LogFindingEnvelope {
+  readonly enabled: boolean;
+  readonly shadow: boolean;
+  readonly shadow_until: string | null;
+  readonly phase: string;
+  readonly layers: readonly string[];
+  readonly time_basis: string;
+}
+
+export interface LogFindingsAnswer extends LogFindingEnvelope {
+  readonly device_id: string | null;
+  readonly days: number;
+  readonly truncated: boolean;
+  readonly findings: readonly LogFinding[];
+}
+
+export interface LogCoverageSummary {
+  readonly windows_total: number;
+  readonly windows_evaluated: number;
+  readonly by_state: Readonly<Record<string, number>>;
+  readonly counts: string;
+}
+
+export interface LogCoverageAnswer extends LogFindingEnvelope {
+  readonly device_id: string;
+  readonly window_days: number;
+  readonly summary: LogCoverageSummary;
+  readonly sources: readonly (LogCoverageSummary & { readonly source_key: string })[];
+  readonly windows: readonly { readonly source_key: string; readonly job_id: string; readonly window_day: string; readonly state: string; readonly reason: string; readonly history_days: number }[];
+}
+
+export interface LogFindingChipData {
+  readonly device_id: string;
+  readonly state: "FINDINGS" | "NO_FINDINGS" | "UNKNOWN";
+  readonly severity: LogFindingSeverity | null;
+  readonly count: number;
+  readonly text: string;
+  readonly coverage: LogCoverageSummary;
+}
+
+export const getLogFindings = (deviceId: string, days = 7) =>
+  call<LogFindingsAnswer>(`/api/v2/log-findings?device_id=${encodeURIComponent(deviceId)}&days=${days}`, "GET");
+
+export const getLogCoverage = (deviceId: string) =>
+  call<LogCoverageAnswer>(`/api/v2/log-findings/coverage?device_id=${encodeURIComponent(deviceId)}`, "GET");
+
+export const getLogFindingChips = () =>
+  call<LogFindingEnvelope & { readonly window_days: number; readonly counts: string; readonly chips: readonly LogFindingChipData[]; readonly truncated: boolean; readonly truncated_note?: string }>(
+    "/api/v2/log-findings/chips", "GET");
+
+export const acknowledgeLogFinding = (findingId: string, note?: string) =>
+  call<LogFindingEnvelope & { readonly finding: LogFinding }>(
+    `/api/v2/log-findings/${encodeURIComponent(findingId)}/acknowledge`, "POST", note ? { note } : {});
+
+// ---------------------------------------------------------------------------------------------------------------
 // Operations › Device health (`GET /api/v2/system-logs/health`, `syslog-health`; docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md).
 // Counters and state words over what the system-log programme already stores; the server computes a snapshot in the
 // background and says so (`computation.state`): COMPUTING until the first snapshot, REFRESHING while a stale one is served.

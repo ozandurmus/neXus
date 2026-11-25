@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { digest, normalize, tokenVariants, Scanner, parseReference } from '../security/aiview_leak_audit/core.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { CATEGORIES, digest, normalize, tokenVariants, Scanner, parseReference } from '../security/aiview_leak_audit/core.mjs';
 import { run } from '../security/aiview_leak_audit/probe.mjs';
 
 const SALT = 'synthetic-salt';
@@ -122,4 +124,83 @@ test('failures never expose client error text and an empty reference is refused'
   bad.io.readText = path => (path.endsWith('routes.json') ? '{"routes":[]}' : '#src\tHOST\tx.y\t0\n');
   await assert.rejects(run(args, env, bad.io), /no identity hashes/);
   await assert.rejects(run(args, {}, bad.io), /token is missing/);
+});
+
+// ---- P1 planes: export_reference.sql sources and CIDR / segment-style tokens ----
+
+const SQL = readFileSync(fileURLToPath(new URL('../security/aiview_leak_audit/export_reference.sql', import.meta.url)), 'utf8');
+// Strip "--" comments (the file has no "--" inside a string literal) so assertions read the statements only.
+const SQL_CODE = SQL.split('\n').map(line => line.replace(/--.*$/, '')).join('\n');
+
+test('export_reference.sql stays read-only, guarded and hash-only', () => {
+  assert.match(SQL_CODE, /^\s*BEGIN READ ONLY;/m);
+  assert.match(SQL_CODE, /^\s*ROLLBACK;\s*$/m);
+  assert.ok(!/\bCOMMIT\b/i.test(SQL_CODE), 'never commits');
+  assert.ok(!/\b(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|GRANT|COPY)\b/i.test(SQL_CODE.replace(/'[^']*'/g, "''")),
+    'no write, DDL or COPY statement');
+  // Every source is joined to information_schema.columns before dynamic SQL is built.
+  assert.match(SQL_CODE, /JOIN information_schema\.columns c\s+ON c\.table_schema = 'public' AND c\.table_name = s\.tbl AND c\.column_name = s\.col/);
+  // Output: "#src" meta lines (counts) and category + salted sha256 lines; nothing else is selected for output.
+  const outputs = [...SQL_CODE.matchAll(/^SELECT (?:DISTINCT )?(.+?)$/gm)].map(m => m[1]).filter(s => /E'\\t'/.test(s));
+  assert.equal(outputs.length, 2);
+  assert.ok(outputs.some(s => s.startsWith("'#src'")));
+  assert.ok(outputs.some(s => /encode\(sha256\(convert_to\(:'salt' \|\| E'\\n' \|\| n, 'UTF8'\)\), 'hex'\)/.test(s)));
+});
+
+test('export_reference.sql covers the P1 tables with the right categories', () => {
+  const plain = new Set([...SQL_CODE.matchAll(/\('([A-Z_]+)',\s*'([a-z_0-9]+)',\s*'([a-z_0-9]+)'\)/g)].map(m => `${m[1]} ${m[2]}.${m[3]}`));
+  const json = new Set([...SQL_CODE.matchAll(/\('([A-Z_]+)',\s*'([a-z_0-9]+)',\s*'([a-z_0-9]+)',\s*'([a-z_]+)'\)/g)]
+    .map(m => `${m[1]} ${m[2]}.${m[3]} ${m[4]}`));
+  for (const expected of [
+    'HOST cutover_segment.name', 'USER cutover_segment.created_by', 'USER cutover_segment.updated_by',
+    'USER cutover_assessment.actor', 'USER zone_matrix_version.created_by', 'USER zone_matrix_version.published_by',
+    'USER zone_matrix_revision.actor', 'ADDR static_route_preview.destination_cidr', 'ADDR static_route_preview.nexthop_ip',
+    'ADDR static_route_preview.representative_host', 'USER static_route_preview.requested_by',
+    'CLUSTER static_route_preview.unit_id',
+    // pre-P1 sources stay
+    'HOST devices.observed_hostname', 'ADDR endpoints.address_ref', 'SERIAL ha_pair_identity.unit_serial_low',
+  ]) assert.ok(plain.has(expected), `plain source ${expected}`);
+  for (const expected of [
+    'ADDR cutover_segment.blocks elements', 'ADDR cutover_segment.peer_blocks elements',
+    'ADDR cutover_assessment_flow.flow flow_addresses', 'HOST zone_matrix_version.content zone_names',
+    'ADDR zone_matrix_version.content zone_blocks',
+  ]) assert.ok(json.has(expected), `JSON source ${expected}`);
+  for (const source of [...plain, ...json]) assert.ok(CATEGORIES.includes(source.split(' ')[0]), `category of ${source}`);
+  // JSON shapes read only named keys, and invalid JSON is skipped rather than raising.
+  assert.match(SQL_CODE, /pg_input_is_valid\(t\.%I::text, ''jsonb''\)/);
+  for (const key of ["''zones''", "''blocks''", "''name''", "''flowSource''", "''flowDestination''", "''flowSources''", "''sourceRange''"]) {
+    assert.ok(SQL_CODE.includes(key), `reads ${key}`);
+  }
+  // A block also yields its address part, trimmed the way the probe tokenizes.
+  assert.match(SQL_CODE, /regexp_replace\(split_part\(n, '\/', 1\), '\[\._:@-\]\+\$', ''\)/);
+});
+
+/** What export_reference.sql emits for one value, mirrored in JS (normalize, block address part, each IPv4). */
+function exported(cat, value) {
+  const n = normalize(value);
+  const out = [[cat, n]];
+  if (cat === 'ADDR' && /^[0-9a-f.:]+\/[0-9]{1,3}$/.test(n)) out.push(['ADDR', n.split('/')[0].replace(/[._:@-]+$/, '')]);
+  for (const m of n.matchAll(/((?:[0-9]{1,3}\.){3}[0-9]{1,3})/g)) out.push(['IPV4', m[1]]);
+  return out;
+}
+
+test('scanner finds zone / segment names and CIDR blocks as the SQL exports them, and ignores masked forms', () => {
+  const SEGMENT = 'Seg-Xa1b2c-Swift';
+  const ZONE = 'zn-x0d0e0f-cardholder';
+  const V4_BLOCK = '203.0.113.128/29';
+  const V6_BLOCK = '2001:db8:4c1d::/48';
+  const lines = ['#src\tHOST\tcutover_segment.name\t1'];
+  for (const [cat, value] of [['HOST', SEGMENT], ['HOST', ZONE], ['ADDR', V4_BLOCK], ['ADDR', V6_BLOCK]]) {
+    for (const [c, n] of exported(cat, value)) lines.push(`${c}\t${digest(SALT, n)}`);
+  }
+  const { reference } = parseReference(lines.join('\n') + '\n');
+  const scanner = new Scanner(reference, SALT);
+  const leaked = scanner.scan(JSON.stringify({ name: SEGMENT.toLowerCase(), zones: [{ name: ZONE }],
+    blocks: [V4_BLOCK, V6_BLOCK.toUpperCase()] }));
+  assert.equal(leaked.get('HOST'), 2);
+  assert.equal(leaked.get('IPV4'), 1);   // 203.0.113.128 inside the IPv4 block
+  assert.equal(leaked.get('ADDR'), 2);   // the address part of both blocks (IPv4 by the address scan, IPv6 by its token)
+  const masked = scanner.scan(JSON.stringify({ name: 'SEGMENT-1', zones: [{ name: 'ZONE-1' }],
+    blocks: ['10.77.4.128/29', 'Withheld in AIView'], actor: 'USER-1' }));
+  assert.equal(masked.size, 0);
 });

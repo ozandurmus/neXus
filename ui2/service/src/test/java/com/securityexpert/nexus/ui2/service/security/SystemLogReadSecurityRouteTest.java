@@ -70,7 +70,10 @@ class SystemLogReadSecurityRouteTest {
         assertNull(method.invoke(interceptor, "DELETE", BASE + "/chunks/chunk-1/text"));
         var mapped = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet().stream()
                 .filter(e -> ActionRegistry.SYSTEM_LOG_READ.equals(e.getValue())).map(Map.Entry::getKey).sorted().toList();
-        assertEquals(8, mapped.size(), mapped.toString());
+        // Eight system-log read routes plus the five log detection engine reads (findings, chips, coverage, budget, one
+        // finding), which share the action so the aiview action set stays what the PO decided.
+        assertEquals(8 + 5, mapped.size(), mapped.toString());
+        assertEquals(5, mapped.stream().filter(r -> r.contains("/api/v2/log-findings")).count(), mapped.toString());
         assertTrue(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.values().stream()
                 .noneMatch(ActionRegistry.SYSTEM_LOG_READ_UNMASKED::equals));
     }

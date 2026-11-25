@@ -639,6 +639,33 @@
       "priority": "P2",
       "target": "docs/design/LOG_TEMPLATE_CENSUS_TOOL_2026_11_24.md",
       "note": ""
+    },
+    {
+      "id": "zone_matrix_bridge_size_debt",
+      "category": "engineering",
+      "title": "ZoneMatrixPolicyBridge is still 1713 lines after the NAT builder split (limit 1500); further split needed",
+      "status": "planned",
+      "priority": "P3",
+      "target": "8ec46955",
+      "note": ""
+    },
+    {
+      "id": "mc_device_health_read_decision",
+      "category": "engineering",
+      "title": "Decide the Symantec Management Center managed-device health read (CLASS_0 proposal, nothing approved, V268 only named there)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/MC_DEVICE_HEALTH_READ_PROPOSAL_2026_11_24.md",
+      "note": ""
+    },
+    {
+      "id": "log_detection_engine_design_open_questions",
+      "category": "engineering",
+      "title": "System-log detection engine DRAFT design: eleven open PO questions before freeze; census run comes first",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md",
+      "note": ""
     }
   ]
 }

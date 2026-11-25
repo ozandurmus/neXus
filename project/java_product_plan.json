@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-11-24",
-  "reviewed_current_build": "NXS-LOCAL-0414",
+  "reviewed_current_build": "NXS-LOCAL-0415",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -400,7 +400,10 @@
     "preview_golden_database_rollout": "agent_operations",
     "ha_policy_pair_merge_and_count": "java_feature",
     "zone_matrix_step_4b2": "java_feature",
-    "system_log_template_census_run": "java_feature"
+    "system_log_template_census_run": "java_feature",
+    "zone_matrix_bridge_size_debt": "java_debt",
+    "mc_device_health_read_decision": "java_feature",
+    "log_detection_engine_design_open_questions": "java_feature"
   },
   "converted_lessons": [
     {

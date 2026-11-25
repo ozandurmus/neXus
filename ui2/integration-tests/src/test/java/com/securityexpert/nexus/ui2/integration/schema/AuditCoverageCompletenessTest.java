@@ -167,6 +167,16 @@ class AuditCoverageCompletenessTest {
             Map.entry("static_route_preview", "V252: derived R0 static-route preview record (zero writes, mutation_possible "
                     + "constrained to false); the request is recorded in authz_decisions and the job through the jobs "
                     + "audit trigger; no trigger so route prefixes and next-hops are never captured into audit_log"),
+            Map.entry("log_index_state", "V272: what the log-analysis job did with one stored chunk (status and counters, no line); "
+                    + "derived by the service as a system job from the stored chunks and recomputable"),
+            Map.entry("log_event_count", "V272: evidence rows of the log detection engine (marker id, closed-vocabulary key token, "
+                    + "bucket, count, at most three pointers); derived by the service as a system job and recomputable; an audit row "
+                    + "per evidence row would only copy the counts the table already holds"),
+            Map.entry("log_coverage", "V272: coverage state per device, source and collection window, derived by the service as a "
+                    + "system job from the run, gap and index rows and recomputable"),
+            Map.entry("log_finding", "V272: derived layer-A findings written by the service as a system job; recomputable from "
+                    + "the evidence rows; a review-state change is recorded by its audited log_finding_action row "
+                    + "(trg_audit_log_finding_action); no log text"),
             Map.entry("zone_matrix_run", "V267: derived evaluation run written by the service as a system job with no user "
                     + "actor (ZONE_MATRIX_CONTRACT 5.1, 8.4); RUNNING to COMPLETE or FAILED once, then final "
                     + "(tr_zone_matrix_run_guard); holds ids, hashes and counts only"),

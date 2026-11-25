@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0414 · Track: PCP.x · Generated: 2026-11-24T19:29:18Z
+Build: NXS-LOCAL-0415 · Track: PCP.x · Generated: 2026-11-24T22:18:43Z
 
 ## Now
-- NXS-LOCAL-0414 — System-log template census tool (detection engine P0), deterministic PolicyHygieneQueryTest, CI comment (automated_validated)
+- NXS-LOCAL-0415 — RPT-17 Lifecycle and licensing report (V270), log detection engine DRAFT design, Management Center health read proposal, review fixes, NAT builder split (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -36,6 +36,8 @@ Build: NXS-LOCAL-0414 · Track: PCP.x · Generated: 2026-11-24T19:29:18Z
 - P2/planned fortigate_a0_fg_18_20_defects
 - P2/planned ha_policy_pair_merge_and_count
 - P2/planned https_configuration_collect
+- P2/planned log_detection_engine_design_open_questions
+- P2/planned mc_device_health_read_decision
 - P2/planned module_per_pod_split
 - P2/planned nspm_wave1_acceptance
 - P2/planned pan_change_actor_submitted_join_gap
@@ -77,6 +79,7 @@ Build: NXS-LOCAL-0414 · Track: PCP.x · Generated: 2026-11-24T19:29:18Z
 - P3/planned script_run_launcher_stdout_race
 - P3/planned trivy_cache_pvc_enable_attended
 - P3/planned waf_fortiweb_capability_scope_and_measurement
+- P3/planned zone_matrix_bridge_size_debt
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer
 - P0 hosta_rebuild_real_env_acceptance
@@ -152,8 +155,8 @@ Build: NXS-LOCAL-0414 · Track: PCP.x · Generated: 2026-11-24T19:29:18Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0415 (automated_validated)
 - NXS-LOCAL-0414 (automated_validated)
 - NXS-LOCAL-0413 (automated_validated)
 - NXS-LOCAL-0412 (automated_validated)
 - NXS-LOCAL-0411 (automated_validated)
-- NXS-LOCAL-0410 (automated_validated)

@@ -382,6 +382,13 @@ class AuditRedactionPolicyTest {
             "lifecycle_catalog_upload.entries_parsed", "lifecycle_catalog_upload.page_form",
             "lifecycle_catalog_upload.rows_skipped", "lifecycle_catalog_upload.upload_id",
             "lifecycle_catalog_upload.uploaded_at", "lifecycle_catalog_upload.vendor",
+            // log_detection_settings (V272): the P1 switch row; a boolean, a shadow-period end, a timestamp and the
+            // opaque actor fingerprint of the writer (same classification as system_log_settings.updated_by)
+            "log_detection_settings.enabled", "log_detection_settings.settings_id", "log_detection_settings.shadow_until",
+            "log_detection_settings.updated_at", "log_detection_settings.updated_by",
+            // log_finding_action (V272): acknowledgement events; note and actor are tier-2 redacted
+            "log_finding_action.action", "log_finding_action.action_id", "log_finding_action.created_at",
+            "log_finding_action.finding_id",
             // local_credentials
             "local_credentials.algorithm_id", "local_credentials.created_at",
             "local_credentials.created_by_actor_fingerprint", "local_credentials.enabled",
@@ -866,6 +873,7 @@ class AuditRedactionPolicyTest {
             "system_log_file.remote_name_hmac", 2, "system_log_file.artefact_ref", 2,
             "system_log_file.wrapped_data_key", 1, "device_crash_entry.name_hmac", 2,
             "device_crash_entry.process", 2, "device_crash_alert.process", 2, "system_log_run.detail", 2,
+            "log_finding_action.note", 2, "log_finding_action.actor", 2,
             // V161: keyed content identities are redacted like the anchors.
             "system_log_chunk.plaintext_hmac", 2, "system_log_file.content_hmac", 2,
             // V184: a device virtual-router name.

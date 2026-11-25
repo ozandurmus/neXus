@@ -232,6 +232,51 @@ class NexusSessionCliTest {
     }
 
     @Test
+    void logDetectionCommandsCallTheFindingRoutes(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.List<String> bodies = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] out = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            String id = "0123456789abcdef0123456789abcdef";
+            assertEquals(0, cli.run(new String[] {"log-findings"}));
+            assertEquals(0, cli.run(new String[] {"log-findings", "dev-1", "severity=ATTENTION", "days=3"}));
+            assertEquals(0, cli.run(new String[] {"log-finding", id}));
+            assertEquals(0, cli.run(new String[] {"log-finding-ack", id, "known", "DIMM"}));
+            assertEquals(0, cli.run(new String[] {"log-coverage", "dev-1"}));
+            assertEquals(0, cli.run(new String[] {"log-chips"}));
+            assertEquals(0, cli.run(new String[] {"log-budget"}));
+            assertEquals(0, cli.run(new String[] {"log-detection"}));
+            assertEquals(0, cli.run(new String[] {"log-detection-set", "enabled=true", "shadow_days=14"}));
+            assertEquals(java.util.List.of(
+                    "GET /api/v2/log-findings", "GET /api/v2/log-findings?device_id=dev-1&severity=ATTENTION&days=3",
+                    "GET /api/v2/log-findings/" + id, "POST /api/v2/log-findings/" + id + "/acknowledge",
+                    "GET /api/v2/log-findings/coverage?device_id=dev-1", "GET /api/v2/log-findings/chips",
+                    "GET /api/v2/log-findings/budget", "GET /api/v2/config/log-detection", "PUT /api/v2/config/log-detection"), calls);
+            assertEquals("{\"note\":\"known DIMM\"}", bodies.get(3));
+            assertEquals("{\"enabled\":true,\"shadow_days\":14}", bodies.get(bodies.size() - 1));
+            calls.clear();
+            assertEquals(2, cli.run(new String[] {"log-finding", "../x"}));
+            assertEquals(2, cli.run(new String[] {"log-coverage"}));
+            assertEquals(2, cli.run(new String[] {"log-findings", "dev-1", "dev-2"}));
+            assertEquals(2, cli.run(new String[] {"log-detection-set"}));
+            assertTrue(calls.isEmpty(), calls.toString());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void systemLogReadCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
         java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
         java.util.List<String> bodies = new java.util.concurrent.CopyOnWriteArrayList<>();
