@@ -135,12 +135,15 @@ public class SubnetPreservingIpMasker {
 
     /**
      * Finds any IPv4 addresses in free-form text (e.g. logs, terminal reasons)
-     * and replaces them with their relationship-preserving masked counterpart.
+     * and replaces them with their relationship-preserving masked counterpart. An IPv6 literal has no
+     * relationship-preserving masker yet and fails closed to {@code [REDACTED_IP]} (the same answer {@link #mask} gives
+     * an IPv6 value), so a Wireshark filter or a flow tuple that names one does not carry it past the projection.
      */
     public String maskText(String text) {
         if (text == null || text.isBlank()) {
             return text;
         }
+        text = redactIpv6Literals(text);
         StringBuilder sb = new StringBuilder(text.length());
         int copied = 0;
         int from = 0;
@@ -152,6 +155,206 @@ public class SubnetPreservingIpMasker {
         }
         sb.append(text, copied, text.length());
         return sb.toString();
+    }
+
+    private static final String IPV6_REDACTED = "[REDACTED_IP]";
+
+    private static String redactIpv6Literals(String text) {
+        if (text.indexOf(':') < 0) {
+            return text;
+        }
+        StringBuilder sb = null;
+        int copied = 0;
+        int from = 0;
+        int[] span;
+        while ((span = findIpv6Leak(text, from)) != null) {
+            from = span[1];
+            if (isIpv6Literal(withoutIpv4Tail(text.substring(span[0], span[1])))) {
+                if (sb == null) {
+                    sb = new StringBuilder(text.length());
+                }
+                sb.append(text, copied, span[0]).append(IPV6_REDACTED);
+                copied = span[1];
+            }
+        }
+        if (sb == null) {
+            return text;
+        }
+        return sb.append(text, copied, text.length()).toString();
+    }
+
+    /**
+     * The next candidate IPv6 literal in {@code text} at or after {@code from}, as {@code {start, end}}, or null: a maximal
+     * run of hex digits and colons that holds a hex digit directly followed by a colon, is not glued before to
+     * {@code [0-9A-Za-z_:.]}, and is not followed by {@code [0-9A-Za-z_]} or by a dot and a digit. ({@link #isIpv6Literal}
+     * then decides whether the candidate really is one: a MAC address, a time or a C++ scope is not.) One pass over the text,
+     * no backtracking: every character is read a constant number of times. SubnetPreservingIpMaskerScannerTest proves it
+     * differentially against the pattern this replaced,
+     * {@code (?<![0-9A-Za-z_:.])[0-9A-Fa-f:]*[0-9A-Fa-f]:[0-9A-Fa-f:]*(?![0-9A-Za-z_:]|\.\d)}.
+     */
+    static int[] findIpv6Candidate(CharSequence text, int from) {
+        int n = text.length();
+        int i = from;
+        while (i < n) {
+            // A run can only start where the character before it is not a hex digit or colon (else it would be a longer
+            // run) and not one of the lookbehind characters; skip anything that is not in the run alphabet.
+            if (!isHexOrColon(text.charAt(i))) {
+                i++;
+                continue;
+            }
+            int start = i;
+            boolean hexThenColon = false;
+            while (i < n && isHexOrColon(text.charAt(i))) {
+                if (text.charAt(i) == ':' && i > start && isHex(text.charAt(i - 1))) {
+                    hexThenColon = true;
+                }
+                i++;
+            }
+            if (start > 0 && isIpv6LookbehindChar(text.charAt(start - 1))) {
+                continue;
+            }
+            if (!hexThenColon) {
+                continue;
+            }
+            if (i < n) {
+                char next = text.charAt(i);
+                if (isAsciiWordChar(next)) {
+                    continue;
+                }
+                if (next == '.' && i + 1 < n && isAsciiDigit(text.charAt(i + 1))) {
+                    continue;
+                }
+            }
+            return new int[]{start, i};
+        }
+        return null;
+    }
+
+    /**
+     * The next span in {@code text} at or after {@code from} that may be an IPv6 literal, as {@code {start, end}}, or
+     * null. Unlike {@link #findIpv6Candidate} (the strict scanner proven against the former pattern) this one is built
+     * to fail closed: a literal glued to a label ({@code peer:2001:db8::1}, {@code src:2001:db8::1}) or to a trailing
+     * letter, and one that ends in a dotted IPv4 ({@code 2001:db8::192.0.2.33}), are found too. A run that follows a word
+     * character gives up the glued label up to its first colon; a run that follows a dot is never a literal (it is the
+     * tail of an IPv4 or a version). The caller still checks the shape with {@link #isIpv6Literal}. One pass, no
+     * backtracking.
+     */
+    static int[] findIpv6Leak(CharSequence text, int from) {
+        int n = text.length();
+        int i = from;
+        while (i < n) {
+            if (!isHexOrColon(text.charAt(i))) {
+                i++;
+                continue;
+            }
+            int runStart = i;
+            while (i < n && isHexOrColon(text.charAt(i))) {
+                i++;
+            }
+            int start = runStart;
+            if (start > 0) {
+                char prev = text.charAt(start - 1);
+                if (prev == '.') {
+                    continue;
+                }
+                if (isAsciiWordChar(prev)) {
+                    int c = start;
+                    while (c < i && text.charAt(c) != ':') {
+                        c++;
+                    }
+                    start = c + 1;
+                    if (start >= i || text.charAt(start) == ':') {
+                        continue; // no colon, or a "label::" scope operator
+                    }
+                }
+            }
+            boolean hexThenColon = false;
+            for (int k = start + 1; k < i; k++) {
+                if (text.charAt(k) == ':' && isHex(text.charAt(k - 1))) {
+                    hexThenColon = true;
+                    break;
+                }
+            }
+            if (!hexThenColon) {
+                continue;
+            }
+            int end = i;
+            if (end < n && text.charAt(end) == '.' && end + 1 < n && isAsciiDigit(text.charAt(end + 1))) {
+                int lastColon = end - 1;
+                while (text.charAt(lastColon) != ':') {
+                    lastColon--;
+                }
+                int j = end;
+                while (j < n && (isAsciiDigit(text.charAt(j)) || text.charAt(j) == '.')) {
+                    j++;
+                }
+                ParsedIpv4 tail = parseIpv4(text.subSequence(lastColon + 1, j).toString());
+                if (tail != null && tail.cidr() == null && tail.o1() <= 255 && tail.o2() <= 255 && tail.o3() <= 255
+                        && tail.o4() <= 255) {
+                    end = j;
+                }
+            }
+            return new int[]{start, end};
+        }
+        return null;
+    }
+
+    /** The candidate with a trailing dotted IPv4 replaced by the two groups it stands for, so the shape check can read it. */
+    private static String withoutIpv4Tail(String candidate) {
+        if (candidate.indexOf('.') < 0) {
+            return candidate;
+        }
+        int lastColon = candidate.lastIndexOf(':');
+        ParsedIpv4 tail = parseIpv4(candidate.substring(lastColon + 1));
+        if (tail == null || tail.cidr() != null || tail.o1() > 255 || tail.o2() > 255 || tail.o3() > 255 || tail.o4() > 255) {
+            return candidate;
+        }
+        return candidate.substring(0, lastColon + 1) + "0:0";
+    }
+
+    private static boolean isHex(int ch) {
+        return isAsciiDigit(ch) || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+    }
+
+    private static boolean isHexOrColon(int ch) {
+        return ch == ':' || isHex(ch);
+    }
+
+    private static boolean isIpv6LookbehindChar(int ch) {
+        return isAsciiWordChar(ch) || ch == ':' || ch == '.';
+    }
+
+    /**
+     * Whether the text is an IPv6 literal by its shape alone: eight groups of one to four hex digits, or fewer around one
+     * {@code ::}. The unspecified address and the loopback address describe protocol scope, not an estate identity, and
+     * stay as they are (as 0.0.0.0 and 127.x do).
+     */
+    static boolean isIpv6Literal(String candidate) {
+        if (candidate.equals("::") || candidate.equals("::1")) {
+            return false;
+        }
+        int gap = candidate.indexOf("::");
+        if (gap >= 0 && candidate.indexOf("::", gap + 1) >= 0) {
+            return false;
+        }
+        String[] groups = candidate.split(":", -1);
+        int present = 0;
+        for (String group : groups) {
+            if (group.isEmpty()) {
+                continue; // the gap, or a leading/trailing colon of a gap
+            }
+            if (group.length() > 4) {
+                return false;
+            }
+            present++;
+        }
+        if (gap >= 0) {
+            // "::" stands for at least one all-zero group; a stray single leading or trailing colon is not a literal
+            boolean edgeColonOk = (!candidate.startsWith(":") || candidate.startsWith("::"))
+                    && (!candidate.endsWith(":") || candidate.endsWith("::"));
+            return edgeColonOk && present <= 7;
+        }
+        return groups.length == 8 && present == 8;
     }
 
     /**

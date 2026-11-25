@@ -22,6 +22,9 @@ class SubnetPreservingIpMaskerScannerTest {
     private static final Pattern OLD_EMBEDDED_IPV4_PATTERN =
             Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:/\\d{1,2})?)\\b");
 
+    private static final Pattern OLD_IPV6_CANDIDATE = Pattern.compile(
+            "(?<![0-9A-Za-z_:.])[0-9A-Fa-f:]*[0-9A-Fa-f]:[0-9A-Fa-f:]*(?![0-9A-Za-z_:]|\\.\\d)");
+
     private static final byte[] KEY = "01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8);
 
     private static final String NSM = "́";                 // combining acute accent (BMP non-spacing mark)
@@ -44,7 +47,15 @@ class SubnetPreservingIpMaskerScannerTest {
                 "a" + SUPPLEMENTARY_NSM + "1.2.3.4", "1.2.3.4" + SUPPLEMENTARY_NSM, "1.2.3.4/2" + SUPPLEMENTARY_NSM,
                 "\uD8001.2.3.4", "1.2.3.4\uDC00", "fe80::1", "::ffff:192.0.2.1", "2001:db8::192.0.2.33",
                 "::ffff:1.2.3.4/96", "1.2.3.4\n", "\t1.2.3.4\t", "1.2.3.4\u0085", "1.2.3.4 ",
-                "1.2.3.4 \n 5.6.7.8/30"));
+                "1.2.3.4 \n 5.6.7.8/30",
+                "2001:db8::1", "x2001:db8::1", "2001:db8::1x", "2001:db8::1.", "2001:db8::1.5", ".2001:db8::1",
+                "::1", "::", "a:", ":a", "a:b", "g:a:b", "ab:cd:ef:01:23:45", "[2001:db8::5]:443", "fe80::1%eth0",
+                "mac aa:bb:cc:dd:ee:ff", "12:30:45", "::ffff:192.0.2.1", "2001:db8::192.0.2.33", "1:2:3:4:5:6:7:8",
+                "1:2:3:4:5:6:7:8:9", "1::2::3", ":::", "dead:beef::" + NSM, NSM + "dead:beef::1"));
+        inputs.add(":".repeat(10_000));
+        inputs.add("a:".repeat(5_000));
+        inputs.add("a".repeat(10_000) + "g");
+        inputs.add("1:".repeat(5_000) + "z");
         inputs.add(".".repeat(10_000));
         inputs.add("1".repeat(10_000));
         inputs.add("1.".repeat(5_000));
@@ -66,6 +77,7 @@ class SubnetPreservingIpMaskerScannerTest {
     @Test
     void embeddedScanMatchesTheFormerPatternOnTrickyInputs() {
         for (String input : trickyInputs()) {
+            assertSameIpv6Candidates(input);
             assertSameEmbeddedTokens(input);
             assertSameMaskText(input);
         }
@@ -75,10 +87,14 @@ class SubnetPreservingIpMaskerScannerTest {
     void bothScannersMatchTheFormerPatternsOnRandomStrings() {
         String[] alphabet = {"0", "1", "2", "5", "9", ".", ".", ".", "/", "a", "Z", "_", " ", "-", ":", ",", "é",
                 "١", NSM, SUPPLEMENTARY_NSM, "\n", "日"};
+        String[] ipv6Alphabet = {"0", "1", "a", "F", "f", "d", "b", "g", "G", "_", ":", ":", ":", ".", ".", "5", " ", "[", "]",
+                "/", "z", NSM};
         String[] ipish = {"0", "1", "2", "3", "5", "9", ".", "/"};
         Random random = new Random(20261125L);
         for (int n = 0; n < 10_000; n++) {
             String text = randomString(random, alphabet, 60);
+            assertSameIpv6Candidates(text);
+            assertSameIpv6Candidates(randomString(random, ipv6Alphabet, 40));
             assertSameEmbeddedTokens(text);
             assertSameParse(text);
             String dense = randomString(random, ipish, 24);
@@ -93,7 +109,11 @@ class SubnetPreservingIpMaskerScannerTest {
         for (int n = 0; n < 2_000; n++) {
             String text = randomString(random, alphabet, 80) + " " + randomAddressShape(random) + " "
                     + randomString(random, alphabet, 20);
-            assertThat(scanner.maskText(text)).as("maskText(%s)", text).isEqualTo(oldMaskText(oracle, text));
+            // the IPv6 half of maskText now fails closed past the former pattern's blind spots (see
+            // SubnetPreservingIpMaskerTest); the IPv4 half stays differential on colon-free text
+            String colonFree = text.replace(':', '_');
+            assertThat(scanner.maskText(colonFree)).as("maskText(%s)", colonFree)
+                    .isEqualTo(oldMaskText(oracle, colonFree));
             String shaped = randomAddressShape(random);
             assertThat(scanner.mask(shaped)).as("mask(%s)", shaped).isEqualTo(oracle.mask(shaped));
         }
@@ -107,7 +127,8 @@ class SubnetPreservingIpMaskerScannerTest {
             mixed.append(random.nextInt(3) == 0 ? '.' : (char) ('0' + random.nextInt(10)));
         }
         String[] inputs = {".".repeat(200_000), "1.".repeat(100_000), "1".repeat(200_000), "1.1.1".repeat(40_000),
-                "11.".repeat(66_667), mixed.toString()};
+                "11.".repeat(66_667), mixed.toString(), ":".repeat(200_000), "a:".repeat(100_000),
+                "1:".repeat(100_000) + "z", "a".repeat(200_000) + "g", "1::".repeat(70_000)};
         SubnetPreservingIpMasker masker = new SubnetPreservingIpMasker(KEY);
         for (String input : inputs) {
             long started = System.nanoTime();
@@ -133,6 +154,22 @@ class SubnetPreservingIpMaskerScannerTest {
                 Integer.parseInt(matcher.group(3)), Integer.parseInt(matcher.group(4)), matcher.group(5)));
     }
 
+    private static void assertSameIpv6Candidates(String text) {
+        List<String> expected = new ArrayList<>();
+        Matcher matcher = OLD_IPV6_CANDIDATE.matcher(text);
+        while (matcher.find()) {
+            expected.add(matcher.start() + ":" + matcher.end());
+        }
+        List<String> actual = new ArrayList<>();
+        int from = 0;
+        int[] span;
+        while ((span = SubnetPreservingIpMasker.findIpv6Candidate(text, from)) != null) {
+            actual.add(span[0] + ":" + span[1]);
+            from = span[1];
+        }
+        assertThat(actual).as("ipv6 candidates of %s", abbreviate(text)).isEqualTo(expected);
+    }
+
     private static void assertSameEmbeddedTokens(String text) {
         List<String> expected = new ArrayList<>();
         Matcher matcher = OLD_EMBEDDED_IPV4_PATTERN.matcher(text);
@@ -152,7 +189,10 @@ class SubnetPreservingIpMaskerScannerTest {
     private static void assertSameMaskText(String text) {
         SubnetPreservingIpMasker scanner = new SubnetPreservingIpMasker(KEY);
         SubnetPreservingIpMasker oracle = new SubnetPreservingIpMasker(KEY);
-        assertThat(scanner.maskText(text)).as("maskText(%s)", abbreviate(text)).isEqualTo(oldMaskText(oracle, text));
+        // colon-free text only: the IPv6 half now fails closed beyond the former pattern (SubnetPreservingIpMaskerTest)
+        String colonFree = text.replace(':', '_');
+        assertThat(scanner.maskText(colonFree)).as("maskText(%s)", abbreviate(colonFree))
+                .isEqualTo(oldMaskText(oracle, colonFree));
     }
 
     /** The former maskText body, driven by the former pattern, on a masker with the same key. */
@@ -160,6 +200,15 @@ class SubnetPreservingIpMaskerScannerTest {
         if (text == null || text.isBlank()) {
             return text;
         }
+        Matcher v6 = OLD_IPV6_CANDIDATE.matcher(text);
+        StringBuilder redacted = new StringBuilder();
+        while (v6.find()) {
+            String candidate = v6.group();
+            v6.appendReplacement(redacted, Matcher.quoteReplacement(
+                    SubnetPreservingIpMasker.isIpv6Literal(candidate) ? "[REDACTED_IP]" : candidate));
+        }
+        v6.appendTail(redacted);
+        text = redacted.toString();
         Matcher matcher = OLD_EMBEDDED_IPV4_PATTERN.matcher(text);
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
