@@ -852,6 +852,54 @@ public final class PolicyQueryService {
         body.put("blockers", blockersWithSplit(snapshot, blocked, blockerNumbers));
         return new PolicyResponse(body);
     }
+    /**
+     * Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the package overview (section 3.2 counts, grade and
+     * type totals) and one page of the insight list, Check Point only. Another vendor answers {@code supported=false}, never
+     * an empty list that reads as "nothing found". Built from the same cached hygiene analysis and the domain index the
+     * Hygiene and Objects tabs read; nothing is stored and no device is contacted.
+     */
+    public PolicyResponse insights(PolicySnapshot snapshot, int page, String type, String grade, int days) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("vendor", snapshot.metadata().vendor());
+        if (!"CP".equals(snapshot.metadata().vendor())) { body.put("supported", false); return new PolicyResponse(body); }
+        var report = insightReport(snapshot, days);
+        var rows = report.insights().stream().filter(i -> type.isEmpty() || i.type().equals(type)).filter(i -> grade.isEmpty() || i.grade().equals(grade)).toList();
+        body.put("supported", true); body.put("days", days); body.put("page", page); body.put("pageSize", 200); body.put("total", rows.size());
+        body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
+        body.put("counts", map(report.counts())); body.put("byType", report.byType()); body.put("byGrade", report.byGrade());
+        body.put("insights", rows.stream().skip((long) page * 200).limit(200).map(this::insightRow).toList());
+        return new PolicyResponse(body);
+    }
+    /** One insight with the rules and objects behind it, for the detail view; empty when the id is not one of this package's insights. */
+    public Optional<PolicyResponse> insightDetail(PolicySnapshot snapshot, String insightId, int days) {
+        if (!"CP".equals(snapshot.metadata().vendor())) return Optional.empty();
+        var report = insightReport(snapshot, days);
+        var found = report.insights().stream().filter(i -> i.id().equals(insightId)).findFirst();
+        if (found.isEmpty()) return Optional.empty();
+        var insight = found.get();
+        var analysis = analysis(snapshot, days);
+        Map<String, Rule> byId = new HashMap<>();
+        for (var section : snapshot.sections()) for (var rule : section.rules()) byId.put(rule.id(), rule);
+        var rules = insight.rules().stream().map(r -> byId.get(r.ruleId())).filter(Objects::nonNull).map(r -> ruleView(r, snapshot, analysis)).toList();
+        var index = inventoryIndex(snapshot);
+        var wanted = new HashSet<>(insight.objectIds());
+        var objects = index == null ? List.<Map<String, Object>>of() : index.objects.stream().filter(o -> wanted.contains(String.valueOf(o.get("uid")))).toList();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("insight", insightRow(insight)); body.put("rules", rules); body.put("objects", objects);
+        body.put("days", days); body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
+        return Optional.of(new PolicyResponse(body));
+    }
+    private PolicyInsights.Report insightReport(PolicySnapshot snapshot, int days) {
+        return PolicyInsights.analyze(snapshot, analysis(snapshot, days), inventoryIndex(snapshot), Map.of(), days);
+    }
+    private Map<String, Object> insightRow(PolicyInsights.Insight i) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("insightId", i.id()); row.put("insightType", i.type()); row.put("evidenceGrade", i.grade()); row.put("insightScope", i.scope());
+        row.put("rules", i.rules().stream().map(this::map).toList()); row.put("objectIds", i.objectIds());
+        row.put("raiseTo", Map.of("evidenceGrade", i.raiseGrade(), "insightNeeds", i.needs())); row.put("insightCaveats", i.caveats());
+        row.put("evidence", i.evidence()); row.put("counter", i.counter());
+        return row;
+    }
     /** How many rules each earlier rule keeps from being proven ("earlier rule has unsupported constraints"): the distinct count and the five biggest, ids, rule numbers and counts only. */
     static final int TOP_BLOCKERS = 5;
     private static Map<String, Object> blockers(Map<String, int[]> blocked, Map<String, Integer> numbers) {

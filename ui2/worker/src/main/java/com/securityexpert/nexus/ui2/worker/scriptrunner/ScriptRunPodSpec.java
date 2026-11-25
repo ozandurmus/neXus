@@ -189,7 +189,7 @@ public final class ScriptRunPodSpec {
                     continue;
                 }
                 for (String token : raw.split(",")) {
-                    String candidate = token.strip().toLowerCase(Locale.ROOT);
+                    String candidate = stripZoneIndex(token.strip().toLowerCase(Locale.ROOT));
                     if (!candidate.isEmpty() && candidate.equals(hostAddr)) {
                         return true;
                     }
@@ -348,7 +348,17 @@ public final class ScriptRunPodSpec {
 
     private static String stripZoneIndex(String hostAddr) {
         int pct = hostAddr.indexOf('%');
-        return pct > 0 ? hostAddr.substring(0, pct) : hostAddr;
+        String stripped = pct > 0 ? hostAddr.substring(0, pct) : hostAddr;
+        if (stripped.startsWith("[") && stripped.endsWith("]")) {
+            stripped = stripped.substring(1, stripped.length() - 1);
+        }
+        if (stripped.contains(":") || stripped.matches("[0-9.]+")) {
+            try {
+                return normalizeInetAddress(InetAddress.getByName(stripped)).getHostAddress().toLowerCase(Locale.ROOT);
+            } catch (java.io.IOException | RuntimeException ignored) {
+            }
+        }
+        return stripped;
     }
 
     public static String jobName(String jobId) {

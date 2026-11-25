@@ -32,6 +32,7 @@ export function usageRequest(preset: UsagePreset, days: number, query: string): 
 
 import { PolicyChangesTab } from "./PolicyChangesTab";
 import { PolicyHygieneTab } from "./PolicyHygieneTab";
+import { PolicyInsightsTab } from "./PolicyInsightsTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
 import { PolicyContainerPrompt } from "./PolicyContainerPrompt";
 import { PolicyHygieneFleet } from "./PolicyHygieneFleet";
@@ -229,7 +230,7 @@ export function summarizeContainers(policies: readonly PolicyMetadata[]): Contai
 const GATEWAYS_SHOWN = 3;
 const vendorLabel = (vendor: string) => vendor === "PAN" ? "Panorama" : vendor === "CP" ? "MDS" : "Management server";
 
-type PolicyTab = "Rules & Containers" | "Objects" | "Hygiene" | "Changes";
+type PolicyTab = "Rules & Containers" | "Objects" | "Hygiene" | "Insights" | "Changes";
 /**
  * The four tabs in their three kinds (UI review 2026-11-05, C2; Argon R-16): browse the stored policy (the rules, with the
  * containers and their installation, and the objects, searchable across containers), judge it (hygiene, with a fleet
@@ -240,10 +241,10 @@ type PolicyTab = "Rules & Containers" | "Objects" | "Hygiene" | "Changes";
  */
 export const POLICY_TAB_GROUPS: ReadonlyArray<{ readonly group: string; readonly tabs: readonly PolicyTab[] }> = [
   { group: "Browse", tabs: ["Rules & Containers", "Objects"] },
-  { group: "Judge", tabs: ["Hygiene"] },
+  { group: "Judge", tabs: ["Hygiene", "Insights"] },
   { group: "Trace", tabs: ["Changes"] },
 ];
-const POLICY_TAB_SLUG: Readonly<Record<PolicyTab, string>> = { "Rules & Containers": "rules", Objects: "objects", Hygiene: "hygiene", Changes: "changes" };
+const POLICY_TAB_SLUG: Readonly<Record<PolicyTab, string>> = { "Rules & Containers": "rules", Objects: "objects", Hygiene: "hygiene", Insights: "insights", Changes: "changes" };
 export function policyTabFromSlug(slug: string | null): PolicyTab {
   return (Object.entries(POLICY_TAB_SLUG).find(([, value]) => value === slug)?.[0] as PolicyTab | undefined) ?? "Rules & Containers";
 }
@@ -817,6 +818,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               open={(containerId, sourceId) => { const row = policyRows.find(r => r.containerId === containerId && r.sourceId === sourceId); if (row) openContainer(row); }} />}
             <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer} rows={policyRows} />
           </>)}
+        {tab === "Insights" && (selected || loadingTree || error
+          ? <PolicyInsightsTab key={`${selected}:${revision}`} policy={selected} openRule={(id, days) => void openRuleId(id, days)} />
+          : <PolicyContainerPrompt tab="Insights" now={now} open={openContainer} rows={policyRows} />)}
         <Box role="tabpanel" aria-label="Rules & Containers" hidden={tab !== "Rules & Containers"} sx={{ display: tab === "Rules & Containers" ? "contents" : "none" }}>
         {/* Installation (C2): the old tab is a section of this one, opened on demand so its read is made only when asked for. */}
         {selected && objectMetadata && <Box component="section" aria-label="Installation" sx={{ mb: 1.5 }}>

@@ -112,6 +112,8 @@
   "/api/v2/policy/policies/synthetic-ref/history",
   "/api/v2/policy/policies/synthetic-ref/hygiene",
   "/api/v2/policy/policies/synthetic-ref/hygiene.csv",
+  "/api/v2/policy/policies/synthetic-ref/insight",
+  "/api/v2/policy/policies/synthetic-ref/insights",
   "/api/v2/policy/policies/synthetic-ref/offline-analyses",
   "/api/v2/policy/policies/synthetic-ref/rules",
   "/api/v2/policy/sources",

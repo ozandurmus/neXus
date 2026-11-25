@@ -13,13 +13,13 @@ import { freshnessColor, snapshotFreshness } from "./PolicyRuleViewer";
  * also served, is a column and a section of Rules & Containers since UI review 2026-11-05, C2.)
  */
 export function PolicyContainerPrompt({ tab, rows, now, open }: {
-  readonly tab: "Objects" | "Hygiene";
+  readonly tab: "Objects" | "Hygiene" | "Insights";
   /** Rows with their display names already resolved by the caller. */
   readonly rows: readonly ContainerSummary[];
   readonly now: Date;
   readonly open: (row: ContainerSummary) => void;
 }) {
-  const title = tab === "Hygiene" ? "Select a policy container to see its hygiene findings" : "Select a policy container to see its objects";
+  const title = tab === "Hygiene" ? "Select a policy container to see its hygiene findings" : tab === "Insights" ? "Select a Check Point policy container to see its insights" : "Select a policy container to see its objects";
   if (rows.length === 0) {
     return <StatePanel variant="empty" title={title}
       body="No stored policy container matches yet. Collect a management source from the tree on the left; its containers are listed here." />;
@@ -29,6 +29,7 @@ export function PolicyContainerPrompt({ tab, rows, now, open }: {
       <StatePanel variant="empty" title={title}
         body={tab === "Hygiene"
           ? "Open a container to check its rules for shadowed, conflicting, disabled, unused, expired and broad rules. Where the stored evidence is insufficient the finding is UNKNOWN."
+          : tab === "Insights" ? "Open a Check Point container to see what the stored policy proves about its rules and objects, each with an evidence grade."
           : "Open a container to search its objects and see where each is used."} />
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, my: 1 }}>{plural(rows.length, "stored container")}.</Typography>
       <Box sx={{ overflowX: "auto" }}>
