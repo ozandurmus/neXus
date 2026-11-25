@@ -2505,6 +2505,40 @@ export interface PolicyHygienePage {
   blockers?: { distinct: number; top: { ruleId: string; number: number; blocks: number }[];
     split?: { class: string; cell: string; status: string; type: string; nativeType: string; partialPrior: boolean | "UNKNOWN"; blockers: number; blockedRules: number }[] };
 }
+/** Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the closed vocabularies the service sends. */
+export type InsightType = "I1" | "I2" | "I8" | "I9" | "I10" | "I11" | "I12";
+export type InsightGrade = "PROVEN" | "SUPPORTED" | "INDICATED" | "NOT_ESTABLISHED" | "NOT_EVALUABLE";
+export type InsightNeeds = "NONE" | "TRAFFIC_LOGS" | "COUNTER_SAMPLES" | "NEW_COLLECTION" | "VENDOR_REPORT" | "NOT_RESOLVABLE";
+export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "UNKNOWN" }
+export interface PolicyInsight {
+  insightId: string; insightType: InsightType; evidenceGrade: InsightGrade; insightScope: "package" | "domain";
+  rules: InsightRuleRef[]; objectIds: string[];
+  raiseTo: { evidenceGrade: InsightGrade; insightNeeds: InsightNeeds };
+  insightCaveats: string[]; evidence: string[];
+  /** I10: the counter evidence (hits, first/last hit, source, collection time, window); I11/I12: counts. */
+  counter: Record<string, string | number | boolean | string[] | null>;
+}
+export interface PolicyInsightCounts {
+  rules: number; decided: number; upToWithLogs: number; logResolvable: number; collectionResolvable: number; notResolvable: number;
+  notDecidable: { shadowReason: string; reasonClass: "LOGS" | "COLLECTION" | "NOT_RESOLVABLE"; rules: number }[];
+  hitsCollected: number; hitsMissing: number; disabledRules: number; outsideSecurityRules: number;
+}
+export interface PolicyInsightsPage {
+  vendor: string;
+  /** False for a package that is not Check Point: phase P1 has no insights for it, which is not "nothing found". */
+  supported: boolean;
+  insights?: PolicyInsight[]; counts?: PolicyInsightCounts;
+  byType?: Record<string, number>; byGrade?: Record<string, number>;
+  total?: number; page?: number; pageSize?: number; days?: number; collectedAt?: string; complete?: boolean;
+}
+export interface PolicyInsightDetail {
+  insight: PolicyInsight; rules: PolicyRuleDetail["rule"][]; objects: { id: string; uid: string; name: string; type: string; values?: string[]; members?: string[]; ruleCount?: number; groupCount?: number }[];
+  days: number; collectedAt?: string; complete?: boolean;
+}
+export const getPolicyInsights = (id: string, page = 0, type = "", grade = "", days = 90) =>
+  call<PolicyInsightsPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}/insights?page=${page}&${new URLSearchParams({ type, grade, days: String(days) })}`, "GET");
+export const getPolicyInsight = (id: string, insightId: string, days = 90) =>
+  call<PolicyInsightDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/insight?${new URLSearchParams({ insightId, days: String(days) })}`, "GET");
 export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; section: PolicySection; objects: PolicyObject[] }
 const hygieneParams = (findingClass: string, severity: string, days: number) => new URLSearchParams({ findingClass, severity, days: String(days) });
 export const getPolicyHygiene = (id: string, page = 0, findingClass = "", severity = "", days = 90) =>

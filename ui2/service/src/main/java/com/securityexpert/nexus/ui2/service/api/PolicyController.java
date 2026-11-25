@@ -55,6 +55,24 @@ public final class PolicyController {
         return heavy.run(() -> policies.find(id).<ResponseEntity<?>>map(s -> ok(policies.hygiene(s, page, findingClass, severity, days)))
             .orElseGet(() -> error(HttpStatus.NOT_FOUND)));
     }
+    /** Policy Insights phase P1: the package overview and one page of the Check Point insight list (read-only, stored evidence only). */
+    @GetMapping("/api/v2/policy/policies/{id}/insights")
+    public ResponseEntity<?> insights(@PathVariable String id, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "") String type, @RequestParam(defaultValue = "") String grade,
+            @RequestParam(defaultValue = "90") int days) {
+        if (page < 0 || !validInsight(type, grade, days)) return error(HttpStatus.BAD_REQUEST);
+        return heavy.run(() -> policies.find(id).<ResponseEntity<?>>map(s -> ok(policies.insights(s, page, type, grade, days)))
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND)));
+    }
+    @GetMapping("/api/v2/policy/policies/{id}/insight")
+    public ResponseEntity<?> insight(@PathVariable String id, @RequestParam String insightId, @RequestParam(defaultValue = "90") int days) {
+        if (!validInsight("", "", days) || !insightId.matches("[0-9a-f-]{36}")) return error(HttpStatus.BAD_REQUEST);
+        return heavy.run(() -> policies.find(id).flatMap(s -> policies.insightDetail(s, insightId, days)).<ResponseEntity<?>>map(PolicyController::ok)
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND)));
+    }
+    private static boolean validInsight(String type, String grade, int days) {
+        return (type.isEmpty() || PolicyInsights.TYPES.contains(type)) && (grade.isEmpty() || PolicyInsights.GRADES.contains(grade)) && days >= 1 && days <= 36500;
+    }
     @GetMapping("/api/v2/policy/policies/{id}/rules")
     public ResponseEntity<?> rule(@PathVariable String id, @RequestParam String ruleId, @RequestParam(defaultValue = "90") int days) {
         if (!validHygiene("", "", days)) return error(HttpStatus.BAD_REQUEST);

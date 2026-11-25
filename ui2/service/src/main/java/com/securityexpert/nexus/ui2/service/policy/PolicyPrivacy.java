@@ -7,7 +7,7 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 /** Fail-closed policy projection: unfamiliar fields and free-form extensions never pass through AIView. */
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
-    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId", "sectionId", "coveringRuleId", "blockingRuleId", "pairRef");
+    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId", "sectionId", "coveringRuleId", "blockingRuleId", "pairRef", "insightId", "ruleIds", "objectIds");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "ASA", "FGT", "permit", "accept", "log", "asa-interfaces", "fgt-interfaces", "zone", "sdwan-zone", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
             "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
@@ -127,6 +127,14 @@ public final class PolicyPrivacy {
         if (key.equals("changedFields")) return PolicyChangesService.FIELDS.contains(text) ? text : "UNKNOWN";
         if (key.equals("shadowStatus")) return Set.of("UNKNOWN", "NOT_SHADOWED", "REDUNDANT", "CONFLICT").contains(text) ? text : "UNKNOWN";
         if (key.equals("shadowReason")) return HYGIENE_REASONS.contains(text) ? text : "unsupported rule constraint";
+        // Policy Insights (PolicyInsights): closed vocabularies; anything else reads as the weakest, least specific word.
+        if (key.equals("insightType")) return PolicyInsights.TYPES.contains(text) ? text : "UNKNOWN";
+        if (key.equals("evidenceGrade")) return PolicyInsights.GRADES.contains(text) ? text : "NOT_EVALUABLE";
+        if (key.equals("insightNeeds")) return PolicyInsights.NEEDS.contains(text) ? text : "NOT_RESOLVABLE";
+        if (key.equals("insightCaveats")) return PolicyInsights.INSTALL_STATE_NOT_VERIFIED.equals(text) ? text : "UNKNOWN";
+        if (key.equals("insightScope")) return Set.of("package", "domain").contains(text) ? text : "UNKNOWN";
+        if (key.equals("insightRole")) return Set.of("subject", "covering").contains(text) ? text : "UNKNOWN";
+        if (key.equals("reasonClass")) return PolicyInsights.REASON_CLASSES.contains(text) ? text : PolicyInsights.NOT_RESOLVABLE;
         if (key.equals("findingClass")) return PolicyHygiene.CLASSES.contains(text) ? text : "unknown";
         if (key.equals("severity")) return PolicyHygiene.SEVERITIES.contains(text) ? text : "LOW";
         if (key.equals("hitSource")) return Set.of("device", "mds").contains(text) ? text : "UNKNOWN";

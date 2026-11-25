@@ -617,9 +617,9 @@
       "id": "zone_matrix_step_4b2",
       "category": "policy",
       "title": "Zone matrix step 4b-2: run lifecycle, triggers, routes and tabs",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
-      "target": "After step 4b-1 (1588f36f, V267)",
+      "target": "85a28224: lifecycle and triggers done; routes and tabs open",
       "note": ""
     },
     {
@@ -661,10 +661,28 @@
     {
       "id": "log_detection_engine_design_open_questions",
       "category": "engineering",
-      "title": "System-log detection engine DRAFT design: eleven open PO questions before freeze; census run comes first",
+      "title": "System-log detection engine: design FROZEN by the PO, P1 shipped in shadow (842ff7cb, V272); later phases open",
       "status": "planned",
       "priority": "P2",
       "target": "docs/design/LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md",
+      "note": ""
+    },
+    {
+      "id": "log_detection_p1_shadow_validation",
+      "category": "engineering",
+      "title": "Log detection P1 runs in shadow: review findings against real evidence before any alerting (V272)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "842ff7cb",
+      "note": ""
+    },
+    {
+      "id": "sar_parser_nonnumeric_cpu_row_lost",
+      "category": "engineering",
+      "title": "SarParser: one non-numeric sar CPU value looks like a header, so the row and block are silently dropped (disabled test names it)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "9c3579a7",
       "note": ""
     }
   ]
