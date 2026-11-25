@@ -125,6 +125,7 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/zone-matrix/versions/*", Set.of("zone-matrix-version", "zone")),
             Map.entry("GET /api/v2/zone-matrix/draft", Set.of("zone-matrix-version")),
             Map.entry("GET /api/v2/zone-matrix/policies", Set.of("policy")),
+            Map.entry("GET /api/v2/zone-matrix/summary", Set.of("zone-matrix-version", "policy")),
             Map.entry("GET /api/v2/cutover/segments", Set.of("cutover-segment")),
             Map.entry("GET /api/v2/cutover/segments/*", Set.of("cutover-segment", "cutover-assessment")),
             Map.entry("GET /api/v2/cutover/assessments/*", Set.of("cutover-segment", "cutover-assessment")),

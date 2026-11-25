@@ -4,7 +4,9 @@ import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAd
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixSummaryView;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService.Refused;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService.View;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,16 +21,18 @@ import org.springframework.web.bind.annotation.*;
  * Zone matrix, delivery steps 1 and 2 (docs/design/ZONE_MATRIX_CONTRACT.md sections 3, 4, 6.1 and 10.1, FROZEN 2026-11-13). The gate
  * admits each route by its action (SecurityWebMvcConfig); this controller adds the second checks the contract names: the
  * blocks view needs {@code zone_matrix_zones_read}, the masked persona never sees or changes blocks, and the response
- * carries the caller's affordances so the screen computes no visibility of its own.
+ * carries the caller's affordances so the screen computes no visibility of its own. Step 4b-2b adds the read-only
+ * stored summary (sections 7.1 and 7.2): no route here mutates or deletes a run or a finding (ZM-37).
  */
 @RestController
 public final class ZoneMatrixController {
     private final ZoneMatrixService service;
+    private final ZoneMatrixRunService runs;
     private final RbacEvaluator rbac;
     private final ActionRegistry actions;
 
-    public ZoneMatrixController(ZoneMatrixService service, RbacEvaluator rbac, ActionRegistry actions) {
-        this.service = service; this.rbac = rbac; this.actions = actions;
+    public ZoneMatrixController(ZoneMatrixService service, ZoneMatrixRunService runs, RbacEvaluator rbac, ActionRegistry actions) {
+        this.service = service; this.runs = runs; this.rbac = rbac; this.actions = actions;
     }
 
     public record ZoneRequest(Long revision, String name, String description, String role, java.util.List<String> blocks) {}
@@ -181,6 +185,25 @@ public final class ZoneMatrixController {
                 body == null ? null : body.policy_id(),
                 body == null ? null : body.version_id(),
                 body != null && Boolean.TRUE.equals(body.include_witnesses())), request));
+    }
+
+    /**
+     * Step 4b-2b: the stored summary of the latest {@code COMPLETE} run of each policy (Violations and Coverage tabs).
+     * Read-only. The masked persona, and any caller without {@code policy_read}, get names through the masked
+     * projection; no caller gets blocks, addresses or witness data here.
+     */
+    @GetMapping("/api/v2/zone-matrix/summary")
+    public ResponseEntity<?> summary(@RequestParam(name = "policy_id", required = false) String policyId,
+            @RequestParam(name = "outcome", required = false) String outcome,
+            @RequestParam(name = "limit", required = false) String limit, HttpServletRequest request) {
+        boolean masked = masked(request);
+        return run(() -> {
+            ZoneMatrixSummaryView.Query.checkParameterNames(request.getParameterMap());
+            var query = ZoneMatrixSummaryView.Query.parse(policyId, outcome, limit);
+            var labels = service.summaryLabels(masked ? View.MASKED : View.NAMES,
+                    !masked && permitted(request, ActionRegistry.POLICY_READ));
+            return with(ZoneMatrixSummaryView.project(runs.storedSummary(), labels, query), request);
+        });
     }
 
     private View view(HttpServletRequest request, String blocks) {

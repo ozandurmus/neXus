@@ -23,7 +23,8 @@ class ZoneMatrixSecurityTest {
                 Map.entry("POST /api/v2/zone-matrix/draft/template-import", ActionRegistry.ZONE_MATRIX_EDIT),
                 Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM),
                 Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
-                Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE));
+                Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE),
+                Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ));
         Map<String, String> stepOne = Map.of(
                 "GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ,
                 "GET /api/v2/zone-matrix/versions/00000000-0000-4000-8000-000000000001", ActionRegistry.ZONE_MATRIX_READ,
@@ -49,8 +50,29 @@ class ZoneMatrixSecurityTest {
             assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN), tokens, action);
             assertFalse(tokens.contains(RoleToken.REPLAY_VIEWER), action);
         }
+        // step 4b-2b: the stored summary is the existing read action; viewer, onboarding, compliance and security roles read it,
+        // replay_viewer reads it masked (controller), no other role reads it.
+        assertEquals(ActionRegistry.ZONE_MATRIX_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("GET /api/v2/zone-matrix/summary"));
+        var summaryRoles = registry.find(ActionRegistry.ZONE_MATRIX_READ).orElseThrow().requiredRoleTokens();
+        for (String role : new String[]{RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.BACKUP_ADMIN}) {
+            assertFalse(summaryRoles.contains(role), role);
+        }
         // section 3.4: only compliance_admin confirms a reference (ZM-23)
         assertEquals(Set.of(RoleToken.COMPLIANCE_ADMIN),
                 registry.find(ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM).orElseThrow().requiredRoleTokens());
+    }
+
+    /** ZM-37: the zone matrix route set has no route that deletes or changes a run or a finding. */
+    @Test void zm37_noZoneMatrixRouteMutatesOrDeletesARunOrAFinding() {
+        for (String route : SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.keySet()) {
+            if (!route.contains(" /api/v2/zone-matrix/")) continue;
+            String method = route.substring(0, route.indexOf(' '));
+            String path = route.substring(route.indexOf(' ') + 1);
+            assertNotEquals("DELETE", method, route);
+            assertNotEquals("PATCH", method, route);
+            if (path.contains("/runs") || path.contains("/findings") || path.startsWith("/api/v2/zone-matrix/summary")) {
+                assertEquals("GET", method, route + " must be read-only");
+            }
+        }
     }
 }
