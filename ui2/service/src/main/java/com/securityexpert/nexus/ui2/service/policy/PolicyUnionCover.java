@@ -60,7 +60,7 @@ final class PolicyUnionCover {
      * bucket's box spans packed in one array, so a subject reads only the up to four keys {@link PolicyNormalization#compatible}
      * can accept (its own from/to or any, the same install-on) and rejects a prior on its spans before any box work.
      */
-    private static final class Earlier {
+    static final class Earlier {
         private record Key(Set<String> from, Set<String> to, Set<String> installOn) {}
         private static final class Bucket {
             final List<Match> matches = new ArrayList<>(); final List<Box> boxes = new ArrayList<>(); final List<Integer> orders = new ArrayList<>();
