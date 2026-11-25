@@ -13,8 +13,9 @@ import java.util.regex.Pattern;
  * {@code set:<name>}, a named service set of the same version. A value that is not in canonical form is refused, never
  * corrected (the same rule as zone blocks, section 3.1): no upper case, no leading zero, no {@code tcp/443-443}.</p>
  *
- * <p>Only TCP and UDP entries are evaluable in the first delivery; the others are stored as entered and marked with the
- * prerequisite that makes them evaluable (section 4.2 table, section 10.1 step 7).</p>
+ * <p>TCP and UDP entries are evaluable since the first delivery, and Palo Alto applications by name since delivery step 7
+ * (section 4.3: by exact name, for Palo Alto {@code application-default} rules only); the others are stored as entered
+ * and marked with the prerequisite that makes them evaluable (section 4.2 table, section 10.1 step 7).</p>
  */
 public record ServiceEntry(Kind kind, String text, int low, int high, String token) {
     public enum Kind { TCP, UDP, ICMP, ICMP6, IPPROTO, APP_PAN, SET }
@@ -68,10 +69,9 @@ public record ServiceEntry(Kind kind, String text, int low, int high, String tok
     /** Whether the first delivery's engine decides this entry, and if not, which prerequisite is missing (section 4.2). */
     public String notEvaluableReason() {
         return switch (kind) {
-            case TCP, UDP, SET -> null;
+            case TCP, UDP, SET, APP_PAN -> null;
             case ICMP, ICMP6 -> "ICMP is evaluated after hygiene model R1";
             case IPPROTO -> "IP protocol numbers are evaluated after hygiene model R4 and collection fix C4";
-            case APP_PAN -> "Palo Alto applications by name are evaluated in delivery step 7";
         };
     }
 

@@ -92,6 +92,12 @@ public final class ZoneMatrixPolicyBridge {
      *   <li>{@code cpApplicationConstraint}: Check Point {@code application-site} / {@code application-group} narrows
      *       matching; {@code COMPLIANT} iff {@code upperPorts}/{@code upperAny} lies inside every touched cell, else
      *       {@code NOT_EVALUABLE "application constraint"} (unless concrete sibling {@code lowerPorts} already violate).</li>
+     *   <li>{@code panApplicationNames} / {@code panApplicationNamesKnown}: for {@code panApplicationDefault} only, the
+     *       exact Palo Alto application names the rule is restricted to (§4.3, delivery step 7), application groups
+     *       expanded; known only when every name resolved ({@link ZoneMatrixPanApplications}). Empty and not known for
+     *       application {@code any} and for every other rule.</li>
+     *   <li>{@code panApplicationProblem}: why the names are not known, from the §5.4 vocabulary; null when known or
+     *       for application {@code any}. Read only for an {@code ALLOW_LISTED} cell that lists {@code app:pan:} entries.</li>
      * </ul>
      */
     public record ServiceBound(
@@ -101,7 +107,30 @@ public final class ZoneMatrixPolicyBridge {
             boolean cpApplicationConstraint,
             Map<String, List<PortRange>> upperPorts,
             Map<String, List<PortRange>> lowerPorts,
-            String notEvaluableReason) {}
+            String notEvaluableReason,
+            Set<String> panApplicationNames,
+            boolean panApplicationNamesKnown,
+            String panApplicationProblem) {
+        public ServiceBound {
+            panApplicationNames = panApplicationNames == null || panApplicationNames.isEmpty()
+                    ? Set.of() : Collections.unmodifiableSet(new TreeSet<>(panApplicationNames));
+            if (panApplicationNamesKnown && (!panApplicationDefault || panApplicationNames.isEmpty()))
+                throw new IllegalArgumentException("application names are known only for a non-empty application-default set");
+        }
+
+        /** A bound without Palo Alto application names (every rule except an application-default one). */
+        public ServiceBound(
+                boolean upperAny,
+                boolean lowerAny,
+                boolean panApplicationDefault,
+                boolean cpApplicationConstraint,
+                Map<String, List<PortRange>> upperPorts,
+                Map<String, List<PortRange>> lowerPorts,
+                String notEvaluableReason) {
+            this(upperAny, lowerAny, panApplicationDefault, cpApplicationConstraint, upperPorts, lowerPorts,
+                    notEvaluableReason, Set.of(), false, null);
+        }
+    }
 
     /**
      * Upper-bound classification of a single rule in a security section or Palo Alto default-override section.
@@ -1062,10 +1091,12 @@ public final class ZoneMatrixPolicyBridge {
             return new ServiceBound(false, false, false, false, Map.of(), Map.of(), "unresolved object");
         }
 
-        // Palo Alto built-in application-default service.
+        // Palo Alto built-in application-default service: the rule's application names decide it by identity (§4.3).
         if ("PAN".equals(vendor) && isPanApplicationDefault(snapshot, serviceCell)) {
             budget.spend();
-            return new ServiceBound(false, false, true, false, Map.of(), Map.of(), null);
+            ZoneMatrixPanApplications.Names apps = ZoneMatrixPanApplications.resolve(snapshot, appCell, budget);
+            return new ServiceBound(false, false, true, false, Map.of(), Map.of(), null,
+                    apps.names(), apps.known(), apps.problem());
         }
 
         // Check Point application column (§4.3): application-site / application-group narrows rule match;

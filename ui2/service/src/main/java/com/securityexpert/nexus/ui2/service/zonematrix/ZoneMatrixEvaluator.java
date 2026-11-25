@@ -251,7 +251,8 @@ public final class ZoneMatrixEvaluator {
             String severity,
             int severityRank,
             List<PortRange> tcpAllowed,
-            List<PortRange> udpAllowed) {}
+            List<PortRange> udpAllowed,
+            Set<String> panApplications) {}
 
     /** Compiles a published {@link ZoneMatrixContent} version once; recomputes {@code sha256} ({@code ZM-3}). */
     public static CompiledVersion compile(String versionId, int versionNumber, ZoneMatrixContent content) {
@@ -297,10 +298,12 @@ public final class ZoneMatrixEvaluator {
                 ZoneMatrixContent.Effective eff = statements.of(endpointIds[s], endpointIds[d]);
                 List<PortRange> tcp = new ArrayList<>();
                 List<PortRange> udp = new ArrayList<>();
+                Set<String> apps = new TreeSet<>();
                 for (String entryText : eff.services()) {
                     ServiceEntry se = ServiceEntry.parse(entryText);
                     if (se.kind() == ServiceEntry.Kind.TCP) tcp.add(new PortRange(se.low(), se.high()));
                     else if (se.kind() == ServiceEntry.Kind.UDP) udp.add(new PortRange(se.low(), se.high()));
+                    else if (se.kind() == ServiceEntry.Kind.APP_PAN) apps.add(se.token()); // exact name (§4.3)
                 }
                 grid[s][d] = new CellSpec(
                         endpointIds[s],
@@ -309,7 +312,8 @@ public final class ZoneMatrixEvaluator {
                         eff.severity(),
                         severityRank(eff.severity()),
                         ZoneMatrixPolicyBridge.mergePortRanges(tcp),
-                        ZoneMatrixPolicyBridge.mergePortRanges(udp));
+                        ZoneMatrixPolicyBridge.mergePortRanges(udp),
+                        Collections.unmodifiableSet(apps));
             }
         }
 
@@ -603,6 +607,7 @@ public final class ZoneMatrixEvaluator {
         Map<String, List<PortRange>> lowerPorts = cpApp
                 ? Map.of()
                 : intersectPortMap(a.lowerAny(), a.lowerPorts(), b.lowerAny(), b.lowerPorts());
+        // Inline-layer intersection is Check Point only; application names are never carried through it (fail closed).
         return new ServiceBound(upperAny, lowerAny, panAppDefault, cpApp, upperPorts, lowerPorts, null);
     }
 
@@ -850,7 +855,7 @@ public final class ZoneMatrixEvaluator {
             return svc.cpApplicationConstraint() ? "application constraint" : "denied";
         }
         // ALLOW_LISTED:
-        if (svc.panApplicationDefault()) return "application ports not collected";
+        if (svc.panApplicationDefault()) return panApplicationCellProblem(cell, svc);
         if (svc.upperAny()) {
             return svc.cpApplicationConstraint() ? "application constraint" : "denied";
         }
@@ -860,6 +865,22 @@ public final class ZoneMatrixEvaluator {
                 svc.upperPorts().getOrDefault("udp", List.of()), cell.udpAllowed);
         if (tcpDiff.isEmpty() && udpDiff.isEmpty()) return null;
         return svc.cpApplicationConstraint() ? "application constraint" : "denied";
+    }
+
+    /**
+     * §4.3 (delivery step 7): a Palo Alto {@code application-default} rule is inside an {@code ALLOW_LISTED} cell only
+     * when every one of its application names is listed in the cell as {@code app:pan:<name>} (exact string equality).
+     * Everything else stays undecided, never a violation: a cell without application entries, or a name the cell does
+     * not list (its standard ports are not collected), gives "application ports not collected"; a name set that did not
+     * resolve gives its resolution reason; application {@code any} (not decided by §4.3) keeps "application ports not
+     * collected".
+     */
+    private static String panApplicationCellProblem(CellSpec cell, ServiceBound svc) {
+        if (cell.panApplications.isEmpty()) return "application ports not collected";
+        if (!svc.panApplicationNamesKnown()) {
+            return svc.panApplicationProblem() != null ? svc.panApplicationProblem() : "application ports not collected";
+        }
+        return cell.panApplications.containsAll(svc.panApplicationNames()) ? null : "application ports not collected";
     }
 
     private record LowerViolation(List<String> notAllowedServices, String witnessService) {}
