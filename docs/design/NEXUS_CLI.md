@@ -53,6 +53,9 @@ server session and deletes the file.
 | `zone-matrix-template-import <revision> [replace]`, `zone-matrix-discard <revision>` | Zone matrix: Import template, Discard draft |
 | `zone-matrix-confirm-reference <json\|@file>`, `zone-matrix-publish <json\|@file>` | Zone matrix: Confirm reference, Publish (four-eyes) |
 | `zone-matrix-evaluate [policyId\|-] [versionId\|-] [witnesses]`, `zone-matrix-summary [policyId\|-] [outcome\|-] [limit]` | Zone matrix: Evaluate; Violations and Coverage summary |
+| `policy-offline-analyses <policyId> [page]`, `policy-offline-analysis <analysisId>`, `policy-offline-analysis-upload <policyId> <mappingJson\|@file> <file.csv>`, `policy-offline-analysis-delete <analysisId>` | Policy / Rule usage: saved offline CSV analyses, one analysis, upload CSV with column mapping, delete |
+| `path-query <json\|@file>`, `path-validate <json\|@file>`, `path-validation <validationId>` | Trace: path query, submit CLASS_0 hop validation, read hop validation outcomes |
+| `topology`, `topology-overrides`, `topology-override-add <json\|@file>`, `topology-override-revoke <overrideId>`, `topology-rebuild` | Trace / Topology: held L3 topology, link overrides, create or revoke override, rebuild (`security_admin` for writes) |
 | `policy-ha-pairs`, `policy-hygiene-summary` | Policy: HA pair policy comparison (SAME / HA_POLICY_DIVERGENT / UNKNOWN); cached fleet hygiene summary |
 | `policy-hygiene <policyId> [page] [findingClass] [severity] [days]`, `policy-hygiene-csv <policyId> [findingClass] [severity] [days]` | Policy: hygiene findings of a policy; the same as CSV (printed as received) |
 | `policy-insights <policyId> [page] [type] [grade] [days]`, `policy-insight <policyId> <insightId> [days]`, `policy-rule <policyId> <ruleId> [days]` | Policy: insight list, one insight, one rule |

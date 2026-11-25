@@ -29,6 +29,8 @@ dependencies {
     // AiviewReachableRoutes: the aiview route enumeration shared with the service's static masking audit.
     testImplementation(testFixtures(project(":service")))
     testImplementation(project(":sanitizer"))
+    // AiviewPacketCaseViewsSweepTest builds a case DuckDB with the real engine (CaseRunner, ProjectStore, Topology).
+    testImplementation(project(":packet-analysis"))
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.testcontainers)

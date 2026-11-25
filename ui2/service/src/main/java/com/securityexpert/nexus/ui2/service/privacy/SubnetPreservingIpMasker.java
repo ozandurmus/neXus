@@ -20,6 +20,15 @@ public class SubnetPreservingIpMasker {
     private static final Pattern IPV4_PATTERN = Pattern.compile("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(?:/(\\d{1,2}))?$");
     private static final Pattern EMBEDDED_IPV4_PATTERN = Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:/\\d{1,2})?)\\b");
 
+    /**
+     * A candidate IPv6 literal inside free text: colon-separated hex groups not glued to a word, a longer hex run or a
+     * dotted tail. {@link #isIpv6Literal} then decides whether it really is one (a MAC address, a time or a C++ scope
+     * is not).
+     */
+    private static final Pattern IPV6_CANDIDATE = Pattern.compile(
+            "(?<![0-9A-Za-z_:.])[0-9A-Fa-f:]*[0-9A-Fa-f]:[0-9A-Fa-f:]*(?![0-9A-Za-z_:]|\\.\\d)");
+    private static final String IPV6_REDACTED = "[REDACTED_IP]";
+
     public record SubnetInfo(long netLong, long mask, int prefixLen, String netAddressStr) {}
 
     private final byte[] secretKey;
@@ -131,12 +140,15 @@ public class SubnetPreservingIpMasker {
 
     /**
      * Finds any IPv4 addresses in free-form text (e.g. logs, terminal reasons)
-     * and replaces them with their relationship-preserving masked counterpart.
+     * and replaces them with their relationship-preserving masked counterpart. An IPv6 literal has no
+     * relationship-preserving masker yet and fails closed to {@code [REDACTED_IP]} (the same answer {@link #mask} gives
+     * an IPv6 value), so a Wireshark filter or a flow tuple that names one does not carry it past the projection.
      */
     public String maskText(String text) {
         if (text == null || text.isBlank()) {
             return text;
         }
+        text = redactIpv6Literals(text);
         Matcher matcher = EMBEDDED_IPV4_PATTERN.matcher(text);
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
@@ -145,6 +157,54 @@ public class SubnetPreservingIpMasker {
         }
         matcher.appendTail(sb);
         return sb.toString();
+    }
+
+    private static String redactIpv6Literals(String text) {
+        if (text.indexOf(':') < 0) {
+            return text;
+        }
+        Matcher matcher = IPV6_CANDIDATE.matcher(text);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            String candidate = matcher.group();
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(isIpv6Literal(candidate) ? IPV6_REDACTED : candidate));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * Whether the text is an IPv6 literal by its shape alone: eight groups of one to four hex digits, or fewer around one
+     * {@code ::}. The unspecified address and the loopback address describe protocol scope, not an estate identity, and
+     * stay as they are (as 0.0.0.0 and 127.x do).
+     */
+    static boolean isIpv6Literal(String candidate) {
+        if (candidate.equals("::") || candidate.equals("::1")) {
+            return false;
+        }
+        int gap = candidate.indexOf("::");
+        if (gap >= 0 && candidate.indexOf("::", gap + 1) >= 0) {
+            return false;
+        }
+        String[] groups = candidate.split(":", -1);
+        int present = 0;
+        for (int i = 0; i < groups.length; i++) {
+            String group = groups[i];
+            if (group.isEmpty()) {
+                continue; // the gap, or a leading/trailing colon of a gap
+            }
+            if (group.length() > 4) {
+                return false;
+            }
+            present++;
+        }
+        if (gap >= 0) {
+            // "::" stands for at least one all-zero group; a stray single leading or trailing colon is not a literal
+            boolean edgeColonOk = (!candidate.startsWith(":") || candidate.startsWith("::"))
+                    && (!candidate.endsWith(":") || candidate.endsWith("::"));
+            return edgeColonOk && present <= 7;
+        }
+        return groups.length == 8 && present == 8;
     }
 
     private String computeMaskedIp(String trimmed, boolean register) {
