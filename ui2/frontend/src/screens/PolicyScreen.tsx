@@ -12,7 +12,7 @@ import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
-import { PolicyRuleTable, RuleDetailPanel, RuleHistory, SnapshotFreshnessChip, freshnessColor, scheduleLabel, sectionLabel, snapshotFreshness, reportPolicyLoadError, policyFailureText, type FreshnessState } from "./PolicyRuleViewer";
+import { PolicyRuleTable, RuleDetailPanel, policyVendorKind, RuleHistory, SnapshotFreshnessChip, freshnessColor, scheduleLabel, sectionLabel, snapshotFreshness, reportPolicyLoadError, policyFailureText, type FreshnessState } from "./PolicyRuleViewer";
 import { installationSummary, syncStatusWords } from "./policyFirewalls";
 export { collectedLabel, snapshotFreshness } from "./PolicyRuleViewer";
 import { PaginationFooter } from "../shell/DataTable";
@@ -228,7 +228,7 @@ export function summarizeContainers(policies: readonly PolicyMetadata[]): Contai
   });
 }
 const GATEWAYS_SHOWN = 3;
-const vendorLabel = (vendor: string) => vendor === "PAN" ? "Panorama" : vendor === "CP" ? "MDS" : "Management server";
+const vendorLabel = (vendor: string) => vendor === "PAN" ? "Panorama" : vendor === "CP" ? "MDS" : vendor === "ASA" ? "Cisco ASA" : vendor === "FGT" ? "FortiGate" : "Management server";
 
 type PolicyTab = "Rules & Containers" | "Objects" | "Hygiene" | "Insights" | "Changes";
 /**
@@ -684,7 +684,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           const dot = running ? m3.primary : outcome === "FAILED" ? m3.error : outcome === "PARTIAL" ? m3.warning : outcome === "COMPLETED" ? m3.success : m3.outline;
           return <Box key={source.sourceId} role="group" aria-label="Policy source" sx={{ mb: 1, pb: 1, borderBottom: `1px solid ${m3.outlineVar}` }}>
             <Stack direction="row" spacing={0.75} alignItems="center">
-              <VendorBadge vendor={source.vendor === "PAN" ? "palo_alto" : source.vendor === "CP" ? "check_point" : null} />
+              <VendorBadge vendor={policyVendorKind(source.vendor)} />
               <Box component="span" aria-label={running ? "Collecting" : outcome === "FAILED" ? "Collection needs attention" : outcome === "PARTIAL" ? "Partial collection" : outcome === "COMPLETED" ? "Collected" : "Not collected"}
                 sx={{ width: 8, height: 8, flexShrink: 0, borderRadius: "50%", bgcolor: dot }} />
               <Button aria-expanded={expandedSources.has(source.sourceId) || !!term} onClick={() => expandSource(source.sourceId)} sx={{ minWidth: 0, textAlign: "left", textTransform: "none", justifyContent: "flex-start" }}>
@@ -693,7 +693,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               {collectMenu(source.sourceId, displayName(source.sourceName, "Management server"))}
             </Stack>
             <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-              {source.vendor === "PAN" ? "Panorama" : source.vendor === "CP" ? "MDS" : "Management server"} · {nodes.length} containers
+              {vendorLabel(source.vendor)} · {nodes.length} containers
             </Typography>
             {job && <Box sx={{ my: 0.5 }}>
               {running ? <Chip role="status" size="small" color="primary" sx={{ maxWidth: "100%", height: "auto", "& .MuiChip-label": { whiteSpace: "normal", py: 0.5 } }} label={job.packagesTotal !== undefined ? runningLabel(job, now) : job.layer ? `Collecting · unit ${bounded(job.layer, job.layers ?? 0)}${job.layers ? `/${job.layers}` : ""}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting · ${progress(job.step, job.total, false)}`} />
@@ -823,7 +823,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           : <PolicyContainerPrompt tab="Insights" now={now} open={openContainer} rows={policyRows} />)}
         <Box role="tabpanel" aria-label="Rules & Containers" hidden={tab !== "Rules & Containers"} sx={{ display: tab === "Rules & Containers" ? "contents" : "none" }}>
         {/* Installation (C2): the old tab is a section of this one, opened on demand so its read is made only when asked for. */}
-        {selected && objectMetadata && <Box component="section" aria-label="Installation" sx={{ mb: 1.5 }}>
+        {selected && objectMetadata && objectMetadata.vendor !== "ASA" && objectMetadata.vendor !== "FGT" && <Box component="section" aria-label="Installation" sx={{ mb: 1.5 }}>
           <Box component="button" type="button" aria-expanded={installationOpen} onClick={() => setInstallationOpen(open => !open)}
             sx={{ all: "unset", cursor: "pointer", color: m3.primary, fontSize: 13, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 0.75,
                   "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } }}>
