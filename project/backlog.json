@@ -209,13 +209,11 @@
       "note": ""
     },
     {
-      "id": "policy_insights_p1_checkpoint",
       "category": "engineering",
-      "title": "Policy Insights phase P1: Check Point Insights tab from existing engines, no logs",
-      "status": "planned",
       "priority": "P2",
-      "target": "PO_DECISION_RECORD_2026_11_24_POLICY_INSIGHTS.md",
-      "note": ""
+      "id": "policy_insights_p2",
+      "title": "Policy Insights phase P2: G1 engine, union cover (I3), partial shadow (I4), safe reorder (I5, I7) and reorder-only proposal; Check Point then Palo Alto",
+      "status": "in_progress"
     },
     {
       "id": "policy_insights_design_followups",

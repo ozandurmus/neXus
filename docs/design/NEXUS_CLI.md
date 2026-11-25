@@ -44,6 +44,15 @@ server session and deletes the file.
 | `policy`, `policy-set <on\|off> <cron> <days> <depth>` | Retention & Policies |
 | `jobs [k=v …]`, `jobs-export <dest.csv> [k=v …]` | Jobs screen filters, pages, Export CSV |
 | `inventory-collect <deviceId>`, `configuration-collect <deviceId>` | Collect now |
+| `zone-matrix-versions`, `zone-matrix-version <versionId> [blocks]` | Zone matrix: published versions; one version (blocks needs `zone_matrix_zones_read`) |
+| `zone-matrix-draft [blocks]`, `zone-matrix-template`, `zone-matrix-policies` | Zone matrix: draft with diff and publish check; template; policies |
+| `zone-matrix-lookup <address> [versionId]` | Zone matrix: Lookup |
+| `zone-matrix-zone-add <json\|@file>`, `zone-matrix-zone-update <zoneId> <json\|@file>`, `zone-matrix-zone-delete <zoneId> <revision>` | Zone matrix: add / edit / delete zone |
+| `zone-matrix-cell-set <json\|@file>`, `zone-matrix-cell-clear <json\|@file>`, `zone-matrix-default-set <json\|@file>` | Zone matrix: set / clear cell, set default |
+| `zone-matrix-service-set <json\|@file>`, `zone-matrix-service-set-delete <json\|@file>` | Zone matrix: save / delete service set |
+| `zone-matrix-template-import <revision> [replace]`, `zone-matrix-discard <revision>` | Zone matrix: Import template, Discard draft |
+| `zone-matrix-confirm-reference <json\|@file>`, `zone-matrix-publish <json\|@file>` | Zone matrix: Confirm reference, Publish (four-eyes) |
+| `zone-matrix-evaluate [policyId\|-] [versionId\|-] [witnesses]`, `zone-matrix-summary [policyId\|-] [outcome\|-] [limit]` | Zone matrix: Evaluate; Violations and Coverage summary |
 | `api GET\|POST\|PUT <path> [json\|@file]` | anything else |
 
 Exit codes: 0 success, 1 the service refused or failed, 2 usage / not logged

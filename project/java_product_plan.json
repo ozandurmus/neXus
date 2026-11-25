@@ -409,7 +409,8 @@
     "zone_matrix_step_6b_evidence_report_wiring": "java_feature",
     "zone_matrix_step_7_remaining": "java_feature",
     "policy_gaps_engine_attribution_harness_run": "java_feature",
-    "hosta_test_namespace_apply": "agent_operations"
+    "hosta_test_namespace_apply": "agent_operations",
+    "policy_insights_p2": "java_feature"
   },
   "converted_lessons": [
     {
