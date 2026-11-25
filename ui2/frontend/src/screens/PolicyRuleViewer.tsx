@@ -62,7 +62,22 @@ export function containerLabel(metadata: PolicyMetadata, section: PolicySection,
     const kind = PAN_KINDS[section.name] ?? { phase: "Pre", kind: "" };
     return `${section.source === "Shared" ? "Shared" : `Device group: ${section.source}`} (${kind.phase}${kind.kind ? ` ${kind.kind}` : ""})`;
   }
+  if (metadata.vendor === "ASA") {
+    if (section.source === "ASA access-group") {
+      const acl = rule.extras["asa-acl"]?.[0];
+      return `Access-group: ${acl ? `${acl} (${section.name})` : section.name}`;
+    }
+    return section.name || section.source;
+  }
+  if (metadata.vendor === "FGT") {
+    if (section.source === "FGT firewall policy") return `VDOM: ${metadata.containerName || section.name}`;
+    return section.name || section.source;
+  }
   return section.source;
+}
+/** The VendorBadge kind for a stored policy vendor code; an unknown code passes through so the badge says "Vendor UNKNOWN". */
+export function policyVendorKind(vendor: string) {
+  return vendor === "PAN" ? "palo_alto" : vendor === "CP" ? "check_point" : vendor === "ASA" ? "cisco_asa" : vendor === "FGT" ? "fortinet" : vendor;
 }
 export function sectionLabel(metadata: PolicyMetadata, section: PolicySection) {
   const kind = PAN_KINDS[section.name];
@@ -74,7 +89,7 @@ export function sectionLabel(metadata: PolicyMetadata, section: PolicySection) {
  * Words. Every presentation decision that a test can pin lives in a pure function: the action word, the usage words
  * (hits / last hit), the permissiveness words and the object kind. Nothing here infers evidence; UNKNOWN stays UNKNOWN.
  * ------------------------------------------------------------------------------------------------------------------ */
-const allowAction = /^(accept|allow)$/i, denyAction = /^(deny|drop|reject|reset-client|reset-server|reset-both|block)$/i;
+const allowAction = /^(accept|allow|permit)$/i, denyAction = /^(deny|drop|reject|reset-client|reset-server|reset-both|block)$/i;
 const natAction = /^(source-nat|destination-nat|source-and-destination-nat|no-nat)$/i;
 export type ActionTone = "allow" | "deny" | "nat" | "other";
 export function actionTone(action: string): ActionTone { return allowAction.test(action) ? "allow" : denyAction.test(action) ? "deny" : natAction.test(action) ? "nat" : "other"; }
@@ -185,7 +200,7 @@ export function unknownReasonGroup(reason: string | null | undefined): ReasonGro
   if (/section|layer/.test(text)) return reasonGroup("layers");
   if (/budget|limit/.test(text)) return reasonGroup("budget");
   if (/unresolved|object/.test(text)) return reasonGroup("objects");
-  if (/unsupported|constraint/.test(text)) return reasonGroup("constraints");
+  if (/unsupported|constraint|cited default|missing.?default|defaults_unproven|parser does not read|unparsed|acl.?not.?bound|not.?evaluated/.test(text)) return reasonGroup("constraints");
   return reasonGroup("other");
 }
 /** "Blocked by rule #12": the earlier rule that kept this one from being proven (a rule number, or the plain words when the number is unknown). */
@@ -328,7 +343,12 @@ const fieldLabels: Record<string, string> = { "source-user": "Source user", cate
   "source-translation-fallback-interface": "Fallback interface", "source-translation-fallback-ip": "Fallback IP", "source-translation-fallback-floating-ip": "Fallback floating IP",
   "translated-destination": "Translated destination", "translated-destination-port": "Translated port", "destination-dns-rewrite": "DNS rewrite",
   "translated-destination-dynamic": "Dynamic translated destination", "translated-destination-dynamic-port": "Dynamic translated port",
-  "destination-dynamic-distribution": "Distribution", "translated-service": "Translated service", "auto-generated": "Auto-generated" };
+  "destination-dynamic-distribution": "Distribution", "translated-service": "Translated service", "auto-generated": "Auto-generated",
+  "asa-acl": "ACL", "asa-direction": "Direction", "asa-acl-use": "ACL use", "asa-unparsed": "Unparsed CLI feature", "asa-nat-type": "ASA NAT type", "asa-nat-interfaces": "NAT interfaces",
+  "security-group": "Security group (SGT)", user: "User / group",
+  "fgt-action": "FortiGate action", "fgt-application": "Application / UTM filter", "fgt-vip": "Destination VIP", "fgt-match-vip": "Match VIP", "fgt-match-vip-only": "Match VIP only",
+  "fgt-internet-service": "Internet Service (dst)", "fgt-internet-service-src": "Internet Service (src)", "fgt-central-snat": "Central SNAT", "fgt-policy-table": "Policy table",
+  "fgt-not-evaluated-reason": "Not evaluated reason", "fgt-missing-default": "Unproven CLI default", "fgt-unparsed": "Unparsed CLI feature" };
 function Extra({ name, values, objects, openObject, title }: { name: string; values: string[]; objects: Map<string, PolicyObject>; openObject: (id: string) => void; title?: string }) {
   const [expanded, setExpanded] = useState(false);
   return <Box component="li" title={title} sx={{ fontSize: 12, overflowWrap: "anywhere", display: "flex", gap: 1, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -755,7 +775,7 @@ export function RuleDetailPanel({ rule, section, metadata, objects, openObject, 
   const extraRefs = [...new Set((rule.extras.time ?? []).concat(rule.extras.schedule ?? []))];
   return <Box><Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
       <Typography variant={inline ? "subtitle1" : "h6"} sx={{ fontWeight: 700 }}><Box component="span" sx={{ color: m3.onSurfaceVar, fontWeight: 600, mr: 1 }}>#{rule.number || "—"}</Box>{rule.name || "Unnamed rule"}</Typography>
-      <VendorBadge vendor={metadata.vendor === "PAN" ? "palo_alto" : metadata.vendor === "CP" ? "check_point" : metadata.vendor} size={24} />
+      <VendorBadge vendor={policyVendorKind(metadata.vendor)} size={24} />
       <ActionWord action={rule.action} size={13} />
       {rule.identityFallback && <Chip size="small" color="warning" label="Name identity fallback" />}
       {rule.enabled === false && <Chip size="small" label="Disabled" />}

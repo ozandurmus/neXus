@@ -60,6 +60,10 @@ server session and deletes the file.
 | `policy-show <policyId> [page] [q] [hitFilter] [days] [sort] [order]`, `policy-history <policyId> [rule] [page]`, `policy-object <objectId> [device] [policy]` | Policy: rules page; change history; one object |
 | `policy-domain-objects <domainId> <source> [page] [q] [type] [hygiene] [sort] [order]`, `policy-domain-object-usage <domainId> <source> <uid> [page] [sort] [order]`, `policy-domain-duplicates <domainId> <source> [page] [q]` | Policy domain: objects, object usage, duplicates |
 | `policy-domain-installation <domainId> <source> [page] [q] [policy] [sort] [order]`, `policy-domain-unused\|-gateways\|-hits <domainId> <source> [page]` | Policy domain: installation, unused objects, gateways, rule hits |
+| `policy-changes [from] [to] [policy] [device] [actor] [changeType] [field] [q] [cursor] [limit] [includeInitial]`, `policy-changes-csv` (same arguments), `policy-change-actors <revision>` | Policy: changes across the fleet; the same as CSV (printed as received); candidate administrators of an AMBIGUOUS actor (withheld from aiview) |
+| `policy-sources`, `policy-collection <jobId>`, `policy-collect <sourceId> [CHANGED_ONLY\|FULL] [domainRef]` | Policy: collection sources; status of a collection job; the Collect button (`POST .../sources/{id}/collect`, same role gates) |
+| `policy-lookup <policyId> <source> <destination> <service> [sourceZone] [destinationZone] [target] [context]` | Policy: lookup (read-only; `service` is `any`, `tcp/<port>` or `udp/<port>`; `-` leaves an optional field out) |
+| `policy-install-status [vendor] [state] [q] [page]` | Operations: Policy installation, read-only monitoring |
 | `api GET\|POST\|PUT <path> [json\|@file]` | anything else |
 
 Exit codes: 0 success, 1 the service refused or failed, 2 usage / not logged
