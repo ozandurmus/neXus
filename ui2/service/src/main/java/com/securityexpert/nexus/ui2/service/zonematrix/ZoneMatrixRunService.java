@@ -191,6 +191,24 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         }
     }
 
+    /**
+     * Open violations of one matrix cell on the active version (section 7.1 Matrix tab, 7.2 per-cell counts).
+     * {@code headlineRules} = distinct open (policy source, rule uid) in the headline set that violate the cell;
+     * {@code outsideHeadlineRules} = the same for rules that appear only in the outside-headline set;
+     * {@code highestSeverity} is the highest severity among the counted violating cells, {@code null} when unknown.
+     * A destination of {@code null} is a stored pair with no readable destination (shown as UNKNOWN).
+     */
+    public record CellCount(
+            String sourceZoneId,
+            String destinationZoneId,
+            int headlineRules,
+            int outsideHeadlineRules,
+            String highestSeverity) {
+        public CellCount {
+            Objects.requireNonNull(sourceZoneId, "sourceZoneId");
+        }
+    }
+
     /** Complete deterministic read projection across stored runs, findings, staleness and version-change resolutions. */
     public record StoredSummary(
             Instant evaluatedAt,
@@ -201,7 +219,8 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             List<StoredFinding> findings,
             StoredHeadline headline,
             List<ResolvedByVersionFinding> resolvedByVersionChangeLast7Days,
-            Map<String, List<ResolvedByVersionFinding>> resolvedByVersionChangeByVersion) {
+            Map<String, List<ResolvedByVersionFinding>> resolvedByVersionChangeByVersion,
+            List<CellCount> cellCounts) {
         public StoredSummary {
             Objects.requireNonNull(evaluatedAt, "evaluatedAt");
             Objects.requireNonNull(stalenessThreshold, "stalenessThreshold");
@@ -212,8 +231,14 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             Map<String, List<ResolvedByVersionFinding>> copy = new LinkedHashMap<>();
             resolvedByVersionChangeByVersion.forEach((k, v) -> copy.put(k, List.copyOf(v)));
             resolvedByVersionChangeByVersion = Collections.unmodifiableMap(copy);
+            // null = no active version, so no cell counts; an empty list = an active version with no open violation.
+            cellCounts = cellCounts == null ? null : List.copyOf(cellCounts);
         }
     }
+
+    private record HeadlineRuleKey(String policySourceId, String ruleUid) {}
+
+    private record CellKey(String sourceZone, String destinationZone) {}
 
     private final ZoneMatrixRunRepository runs;
     private final ZoneMatrixRepository versions;
@@ -485,10 +510,12 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         int unknownFindings = 0;
         int becameUndecidedFindings = 0;
 
-        record HeadlineRuleKey(String policySourceId, String ruleUid) {}
         Map<HeadlineRuleKey, List<ZoneMatrixRunRepository.Finding>> headlineByRule = new LinkedHashMap<>();
         Set<HeadlineRuleKey> outsideHeadlineRules = new LinkedHashSet<>();
         Set<String> headlineZonePairs = new LinkedHashSet<>();
+        Map<CellKey, Set<HeadlineRuleKey>> headlineRulesByCell = new LinkedHashMap<>();
+        Map<CellKey, Set<HeadlineRuleKey>> outsideRulesByCell = new LinkedHashMap<>();
+        Map<CellKey, Map<HeadlineRuleKey, String>> severityByCell = new LinkedHashMap<>();
 
         for (Map<String, Object> item : evaluableItems) {
             String policyId = str(item.get("id")).strip();
@@ -559,8 +586,10 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                     }
                     if (onActiveVersion && ZoneMatrixEvaluator.OUTCOME_VIOLATION.equals(f.outcome())) {
                         HeadlineRuleKey rk = new HeadlineRuleKey(f.policySourceId(), f.ruleUid());
-                        if (f.flags().contains("DENIED_BY_OTHER_ORDERED_LAYER")
-                                || f.flags().contains("OTHER_ORDERED_LAYERS_UNKNOWN")) {
+                        boolean outsideHeadline = f.flags().contains("DENIED_BY_OTHER_ORDERED_LAYER")
+                                || f.flags().contains("OTHER_ORDERED_LAYERS_UNKNOWN");
+                        tallyCells(f, rk, outsideHeadline ? outsideRulesByCell : headlineRulesByCell, severityByCell);
+                        if (outsideHeadline) {
                             outsideHeadlineRules.add(rk);
                         } else {
                             headlineByRule.computeIfAbsent(rk, k -> new ArrayList<>()).add(f);
@@ -577,6 +606,27 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         }
 
         outsideHeadlineRules.removeAll(headlineByRule.keySet());
+
+        // Per-cell counts follow the headline: a rule in the headline set counts only as a headline rule, an
+        // outside-headline rule counts only when it is not in the headline set. No active version: no cell counts (null).
+        List<CellCount> cellCounts = null;
+        if (active != null && active.number() != null) {
+            Set<CellKey> cellKeys = new LinkedHashSet<>(headlineRulesByCell.keySet());
+            cellKeys.addAll(outsideRulesByCell.keySet());
+            cellCounts = new ArrayList<>();
+            for (CellKey key : cellKeys) {
+                Set<HeadlineRuleKey> inHeadline = headlineRulesByCell.getOrDefault(key, Set.of());
+                Set<HeadlineRuleKey> outsideOnly = new LinkedHashSet<>(outsideRulesByCell.getOrDefault(key, Set.of()));
+                outsideOnly.removeAll(headlineByRule.keySet());
+                if (inHeadline.isEmpty() && outsideOnly.isEmpty()) continue;
+                String highest = null;
+                Map<HeadlineRuleKey, String> severities = severityByCell.getOrDefault(key, Map.of());
+                for (HeadlineRuleKey rk : inHeadline) highest = higherSeverity(highest, severities.get(rk));
+                for (HeadlineRuleKey rk : outsideOnly) highest = higherSeverity(highest, severities.get(rk));
+                cellCounts.add(new CellCount(key.sourceZone(), key.destinationZone(), inHeadline.size(),
+                        outsideOnly.size(), highest));
+            }
+        }
 
         StoredHeadline headline = null;
         if (active != null && active.number() != null) {
@@ -652,7 +702,59 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                 storedFindings,
                 headline,
                 recentResolved,
-                byVersion);
+                byVersion,
+                cellCounts);
+    }
+
+    /**
+     * Adds {@code rule} to the tally of each cell {@code f} violates: its {@code violatedCells()}, else its
+     * {@code violatedPairs()} "src->dst" strings (a pair with no arrow keeps a {@code null} destination), the same
+     * fallback the headline's zone-pair set uses. Remembers the highest severity per (cell, rule).
+     */
+    private static void tallyCells(ZoneMatrixRunRepository.Finding f, HeadlineRuleKey rule,
+            Map<CellKey, Set<HeadlineRuleKey>> rulesByCell, Map<CellKey, Map<HeadlineRuleKey, String>> severityByCell) {
+        if (!f.violatedCells().isEmpty()) {
+            for (ZoneMatrixRunRepository.Cell c : f.violatedCells()) {
+                tallyCell(new CellKey(c.sourceZone(), c.destinationZone()), c.severity(), rule, rulesByCell, severityByCell);
+            }
+            return;
+        }
+        for (String pair : f.violatedPairs()) {
+            int arrow = pair.indexOf("->");
+            CellKey key = arrow < 0
+                    ? new CellKey(pair, null)
+                    : new CellKey(pair.substring(0, arrow), pair.substring(arrow + 2));
+            tallyCell(key, null, rule, rulesByCell, severityByCell);
+        }
+    }
+
+    private static void tallyCell(CellKey key, String severity, HeadlineRuleKey rule,
+            Map<CellKey, Set<HeadlineRuleKey>> rulesByCell, Map<CellKey, Map<HeadlineRuleKey, String>> severityByCell) {
+        if (key.sourceZone() == null) return;
+        rulesByCell.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(rule);
+        severityByCell.computeIfAbsent(key, k -> new LinkedHashMap<>()).merge(rule, severity == null ? "" : severity,
+                ZoneMatrixRunService::higherSeverityOrEmpty);
+    }
+
+    private static final List<String> SEVERITY_RANK = List.of("CRITICAL", "HIGH", "MEDIUM", "LOW");
+
+    private static int severityRank(String severity) {
+        int i = severity == null ? -1 : SEVERITY_RANK.indexOf(severity);
+        return i < 0 ? SEVERITY_RANK.size() : i;
+    }
+
+    /** The higher of two severities; {@code null} / unknown values lose against a known one, both unknown stays {@code null}. */
+    private static String higherSeverity(String a, String b) {
+        String x = a != null && SEVERITY_RANK.contains(a) ? a : null;
+        String y = b != null && SEVERITY_RANK.contains(b) ? b : null;
+        if (x == null) return y;
+        if (y == null) return x;
+        return severityRank(y) < severityRank(x) ? y : x;
+    }
+
+    private static String higherSeverityOrEmpty(String a, String b) {
+        String h = higherSeverity(a, b);
+        return h == null ? "" : h;
     }
 
     /** Findings resolved with {@code MATRIX_VERSION_CHANGED} at or after {@code since} (all when {@code since == null}). */

@@ -53,6 +53,13 @@ server session and deletes the file.
 | `zone-matrix-template-import <revision> [replace]`, `zone-matrix-discard <revision>` | Zone matrix: Import template, Discard draft |
 | `zone-matrix-confirm-reference <json\|@file>`, `zone-matrix-publish <json\|@file>` | Zone matrix: Confirm reference, Publish (four-eyes) |
 | `zone-matrix-evaluate [policyId\|-] [versionId\|-] [witnesses]`, `zone-matrix-summary [policyId\|-] [outcome\|-] [limit]` | Zone matrix: Evaluate; Violations and Coverage summary |
+| `policy-ha-pairs`, `policy-hygiene-summary` | Policy: HA pair policy comparison (SAME / HA_POLICY_DIVERGENT / UNKNOWN); cached fleet hygiene summary |
+| `policy-hygiene <policyId> [page] [findingClass] [severity] [days]`, `policy-hygiene-csv <policyId> [findingClass] [severity] [days]` | Policy: hygiene findings of a policy; the same as CSV (printed as received) |
+| `policy-insights <policyId> [page] [type] [grade] [days]`, `policy-insight <policyId> <insightId> [days]`, `policy-rule <policyId> <ruleId> [days]` | Policy: insight list, one insight, one rule |
+| `policy-tree [source] [container] [device]`, `policy-devices`, `policy-device <deviceId> [policy] [page] [q]` | Policy: tree; policies and devices; the policy of one device |
+| `policy-show <policyId> [page] [q] [hitFilter] [days] [sort] [order]`, `policy-history <policyId> [rule] [page]`, `policy-object <objectId> [device] [policy]` | Policy: rules page; change history; one object |
+| `policy-domain-objects <domainId> <source> [page] [q] [type] [hygiene] [sort] [order]`, `policy-domain-object-usage <domainId> <source> <uid> [page] [sort] [order]`, `policy-domain-duplicates <domainId> <source> [page] [q]` | Policy domain: objects, object usage, duplicates |
+| `policy-domain-installation <domainId> <source> [page] [q] [policy] [sort] [order]`, `policy-domain-unused\|-gateways\|-hits <domainId> <source> [page]` | Policy domain: installation, unused objects, gateways, rule hits |
 | `api GET\|POST\|PUT <path> [json\|@file]` | anything else |
 
 Exit codes: 0 success, 1 the service refused or failed, 2 usage / not logged
