@@ -5,7 +5,17 @@ import { scheduleLabel, reportPolicyLoadError, policyFailureText } from "./Polic
 import { statusWord } from "../shell/presenters";
 import { SortHeaderCell, useServerTableSort } from "../shell/tableSort";
 
-const objectTypes = ["host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone"];
+const objectTypes = ["host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone", "address", "schedule"];
+/** The container label by vendor: Check Point and Palo Alto keep "Domain"; an ASA names its context and a FortiGate its VDOM. */
+export function containerCaption(vendor: string | null | undefined) {
+  return vendor === "ASA" ? "Context" : vendor === "FGT" ? "VDOM" : "Domain";
+}
+/** Local ASA and FortiGate policies come from the gateway's own stored configuration: no management package, no Check Point layer. */
+export function usageColumns(vendor: string | null | undefined) {
+  return vendor === "ASA" ? [["Policy", "policy"], ["Access-group", "layer"], ["Rule number", "number"]] as const
+    : vendor === "FGT" ? [["Policy", "policy"], ["Section", "layer"], ["Rule number", "number"]] as const
+    : [["Package", "policy"], ["Layer", "layer"], ["Rule number", "number"]] as const;
+}
 const hygieneFilters = { "": "All objects", unused: "Unused", duplicates: "Duplicates", empty: "Empty groups", single: "Single-member groups" };
 const truth = (value: boolean | null) => value == null ? "UNKNOWN" : value ? "Yes" : "No";
 /** Why a reported-installed cell is UNKNOWN: Check Point makes no installation claim the product can prove; elsewhere the server reported none. */
@@ -77,14 +87,22 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
     }).catch(failure => { if (active) { reportPolicyLoadError("usage", failure); setUsageError(policyFailureText(failure, "Object usage could not be loaded.")); } });
     return () => { active = false; };
   }, [metadata.sourceId, metadata.containerId, uid, usagePage, usageSortKey, usageSortOrder]);
+  // Types the server reported on loaded pages stay offered after a filter narrows the page, so a bucket never vanishes from the dropdown.
+  const [seenTypes, setSeenTypes] = useState<string[]>([]);
+  useEffect(() => {
+    if (!data || !("objects" in data)) return;
+    const found = [...data.types.map(t => t.type), ...data.objects.map(o => o.type)].filter(Boolean);
+    setSeenTypes(previous => found.every(t => previous.includes(t)) ? previous : [...new Set([...previous, ...found])]);
+  }, [data]);
+  const typeOptions = [...new Set([...objectTypes, ...seenTypes])];
   const duplicates = data && "objects" in data ? [...new Set(data.objects.map(o => o.duplicateId).filter(Boolean))] : [];
   return <Box role="tabpanel" aria-label={tab} sx={{ minWidth: 0 }}>
-    <Typography variant="subtitle2">Domain: {metadata.containerName}</Typography>
+    <Typography variant="subtitle2">{containerCaption(metadata.vendor)}: {metadata.containerName}</Typography>
     <Stack direction="row" flexWrap="wrap" gap={1} sx={{ my: 2 }}>
       <TextField size="small" label={`Search ${tab.toLowerCase()}`} value={search} inputProps={{ maxLength: 1000 }} onChange={e => setSearch(e.target.value)} />
       {tab === "Objects" ? <>
         <TextField select size="small" label="Object type" value={type} sx={{ minWidth: 160 }} onChange={e => { setType(e.target.value); setPage(0); }}>
-          <MenuItem value="">All types</MenuItem>{objectTypes.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+          <MenuItem value="">All types</MenuItem>{typeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
         </TextField>
         <TextField select size="small" label="Hygiene" value={hygiene} sx={{ minWidth: 180 }} onChange={e => { setHygiene(e.target.value); setPage(0); }}>
           {Object.entries(hygieneFilters).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
@@ -142,7 +160,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
           {usage.usageComplete !== true && <Box aria-label="Usage evidence gaps">
             {(usage.usageReasons?.length ? usage.usageReasons : ["Where-used evidence is incomplete."]).map(r => <Typography key={r} variant="caption" display="block">• {r}</Typography>)}
           </Box>}
-          <Table size="small" aria-label="Rules using object"><TableHead><TableRow>{([["Package", "policy"], ["Layer", "layer"], ["Rule number", "number"]] as const).map(([label, key]) => <SortHeaderCell key={label} label={label} state={usageSort.header(key)} />)}</TableRow></TableHead>
+          <Table size="small" aria-label="Rules using object"><TableHead><TableRow>{usageColumns(metadata.vendor).map(([label, key]) => <SortHeaderCell key={label} label={label} state={usageSort.header(key)} />)}</TableRow></TableHead>
             <TableBody>{usage.rules.map(r => <TableRow key={`${r.policyId}:${r.layerRef}:${r.ruleId}`}><TableCell>{r.policyName}</TableCell><TableCell>{r.layerName}</TableCell><TableCell>{r.number}</TableCell></TableRow>)}</TableBody></Table>
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Groups referencing object</Typography>
           {usage.groups.map(g => <Typography key={g.id}>{g.name}</Typography>)}
