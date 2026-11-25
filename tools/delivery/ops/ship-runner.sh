@@ -53,12 +53,12 @@ finish_batch() {
   # Back into the queue (mv keeps the mtime, so the order holds); the decisions below annotate or move them there.
   for i in "${!ok[@]}"; do mv "${ok[$i]}" "$SQ/"; ok[$i]="$SQ/$(basename "${ok[$i]}")"; done
   rm -rf "$D"
-  why=$(grep -E '^FAILED|not merged|did not pass' "$OUT" | tail -2 | tr '\n' ' ' | cut -c1-400); log "FAILED batch/$ID: $why"
+  why=$(grep -E '^FAILED|not merged|did not pass|could not open the pull request|HTTP (429|5[0-9][0-9])|Too Many Requests' "$OUT" | tail -3 | tr '\n' ' ' | cut -c1-400); log "FAILED batch/$ID: $why"
   # A failed batch never merges under its own ID again (retry/split ship new IDs): close its PR so GitHub lists only live work (4 stale PRs 2026-11-23).
   ( cd "$REPO" && gh pr list --head "batch/$ID" --state open --json number -q ".[].number" 2>/dev/null | xargs -I{} gh pr close {} --comment "Batch failed; its changes are retried or split into later batches by the ship runner." >/dev/null 2>&1 )
   # A unit-test or compile failure is never infrastructure: its summary quotes test titles, and one title holding "SSH"
   # matched the ssh pattern and paused the runner (2026-11-24, 414 compile error).
-  if ! echo "$why" | grep -q 'unit tests did not pass' && echo "$why" | grep -qiE 'preview e2e failed|security gate|still running|rebase|could not resolve|Connection|timed out|ssh|previous ship rolled back|GraphQL|api.github.com|pull request not merged|still pending|cancelled'; then
+  if ! echo "$why" | grep -q 'unit tests did not pass' && echo "$why" | grep -qiE 'preview e2e failed|security gate|still running|rebase|could not resolve|Connection|timed out|ssh|previous ship rolled back|GraphQL|api.github.com|pull request not merged|still pending|cancelled|could not open the pull request|HTTP (429|5[0-9][0-9])|Too Many Requests|Bad Gateway'; then
     infra=$((infra + 1))
     if [ "$infra" -ge 2 ]; then touch "$SQ/PAUSED"; log "PAUSED: two infrastructure failures in a row; items stay queued (rm $SQ/PAUSED to resume)"; fi
     return 0

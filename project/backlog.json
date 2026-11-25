@@ -594,15 +594,6 @@
       "note": ""
     },
     {
-      "id": "asa_port_operator_a0_asa_14_defect",
-      "category": "policy",
-      "title": "ASA lt/gt/neq port operators contradict A0-ASA-14: fix the mapper and enable the disabled DEFECT test",
-      "status": "planned",
-      "priority": "P2",
-      "target": "AsaA0ConformanceTest (disabled DEFECT test, 65430d84)",
-      "note": ""
-    },
-    {
       "id": "ha_policy_pair_merge_and_count",
       "category": "policy",
       "title": "HA policy pairs: merge and count a pair once (follow-up to HA_POLICY_DIVERGENT)",
@@ -617,7 +608,7 @@
       "title": "Zone matrix step 4b-2: run lifecycle, triggers, routes and tabs",
       "status": "in_progress",
       "priority": "P1",
-      "target": "85a28224: lifecycle and triggers done; 3252272a: stored-summary route done; tabs and other routes open",
+      "target": "85a28224: lifecycle and triggers; 3252272a: stored-summary route; 6d3149e1: Overview attention row; tabs and other routes open",
       "note": ""
     },
     {
@@ -626,7 +617,7 @@
       "title": "FortiGate lookup contradicts A0-FG-18 and A0-FG-20 (disabled DEFECT tests); A0-FG-11 and A0-FG-19 not modelled",
       "status": "planned",
       "priority": "P2",
-      "target": "FortiGateA0ConformanceTest (disabled tests, before 443fbdab)",
+      "target": "A0-FG-18 and A0-FG-20 fixed in b2aec1f5; A0-FG-11 and A0-FG-19 still not modelled",
       "note": ""
     },
     {
@@ -717,6 +708,42 @@
       "status": "planned",
       "priority": "P2",
       "target": "287515a6: docs/design/HOSTA_TEST_NAMESPACE_2026_11_24.md",
+      "note": ""
+    },
+    {
+      "id": "zone_matrix_attention_severity_po",
+      "category": "policy",
+      "title": "Zone matrix Overview attention row: PO to confirm the severity default (critical/serious/UNKNOWN is an engineering default)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "6d3149e1; docs/design/OVERVIEW_ATTENTION_LIST_DESIGN_2026_11_13.md",
+      "note": ""
+    },
+    {
+      "id": "zone_matrix_asa_fortigate_amendment_decision",
+      "category": "policy",
+      "title": "Zone matrix ASA/FortiGate coverage: PO to answer the questions of the DRAFT amendment proposal (stale contract 5.8 sentence reported, not reconciled)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/ZONE_MATRIX_ASA_FORTIGATE_AMENDMENT_PROPOSAL_2026_11_25.md (62093641)",
+      "note": ""
+    },
+    {
+      "id": "asa_mask_token_real_unit_check",
+      "category": "engineering",
+      "title": "ASA saved state: confirm the masked-secret token on a real unit (18 line shapes pinned, 7 assumed)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "2a1a3e13; AsaConfigRelationMaskShapesTest",
+      "note": ""
+    },
+    {
+      "id": "aiview_sweep_test_hosta_cause",
+      "category": "engineering",
+      "title": "AiviewRawVersusMaskedSweepTest failure on the HOST-A namespace: cause not established, next run names the exception class",
+      "status": "planned",
+      "priority": "P3",
+      "target": "b2aec1f5",
       "note": ""
     }
   ]
