@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0415 · Track: PCP.x · Generated: 2026-11-24T22:18:43Z
+Build: NXS-LOCAL-0416 · Track: PCP.x · Generated: 2026-11-25T00:57:57Z
 
 ## Now
-- NXS-LOCAL-0415 — RPT-17 Lifecycle and licensing report (V270), log detection engine DRAFT design, Management Center health read proposal, review fixes, NAT builder split (automated_validated)
+- NXS-LOCAL-0416 — Log detection engine P1 shadow (V272), zone matrix lifecycle wiring, parser UNKNOWN pins, MC device health gated read (V271), delivery orchestration record (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -13,11 +13,11 @@ Build: NXS-LOCAL-0415 · Track: PCP.x · Generated: 2026-11-24T22:18:43Z
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
 - P1/in_progress script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or...
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
+- P1/in_progress zone_matrix_step_4b2 — Zone matrix step 4b-2: run lifecycle, triggers, routes and
 - P1/planned cyberark_archive_key_custody
 - P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned recertification_council
 - P1/planned verify_first_scheduled_mds_export_and_asa_saved_state
-- P1/planned zone_matrix_step_4b2
 - P2/in_progress aiview_masked_readonly_admin
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress static_route_add_delete
@@ -37,6 +37,7 @@ Build: NXS-LOCAL-0415 · Track: PCP.x · Generated: 2026-11-24T22:18:43Z
 - P2/planned ha_policy_pair_merge_and_count
 - P2/planned https_configuration_collect
 - P2/planned log_detection_engine_design_open_questions
+- P2/planned log_detection_p1_shadow_validation
 - P2/planned mc_device_health_read_decision
 - P2/planned module_per_pod_split
 - P2/planned nspm_wave1_acceptance
@@ -76,6 +77,7 @@ Build: NXS-LOCAL-0415 · Track: PCP.x · Generated: 2026-11-24T22:18:43Z
 - P3/planned policy_insights_design_followups
 - P3/planned preview_golden_database_rollout
 - P3/planned radware_cc_identity_and_defensepro_reads
+- P3/planned sar_parser_nonnumeric_cpu_row_lost
 - P3/planned script_run_launcher_stdout_race
 - P3/planned trivy_cache_pvc_enable_attended
 - P3/planned waf_fortiweb_capability_scope_and_measurement
@@ -155,8 +157,8 @@ Build: NXS-LOCAL-0415 · Track: PCP.x · Generated: 2026-11-24T22:18:43Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0416 (automated_validated)
 - NXS-LOCAL-0415 (automated_validated)
 - NXS-LOCAL-0414 (automated_validated)
 - NXS-LOCAL-0413 (automated_validated)
 - NXS-LOCAL-0412 (automated_validated)
-- NXS-LOCAL-0411 (automated_validated)

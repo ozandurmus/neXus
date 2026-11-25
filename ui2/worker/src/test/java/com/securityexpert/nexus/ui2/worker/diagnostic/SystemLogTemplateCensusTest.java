@@ -185,6 +185,19 @@ class SystemLogTemplateCensusTest {
     }
 
     @Test
+    void panJsonLinesInTheCollectorShapeAreMined() throws Exception {
+        FakeFeed feed = new FakeFeed(Map.of("dev-1", "FW-DELTA-12"));
+        feed.add("dev-1", "pan_system", "2026-11-24", List.of(
+                "{\"receive_time\":\"2026/11/24 03:22:10\",\"seqno\":\"1\",\"type\":\"SYSTEM\",\"subtype\":\"hw\",\"eventid\":\"fan-failed\",\"severity\":\"critical\",\"opaque\":\"Fan tray 2: fan 3 failed (0 RPM)\"}",
+                "{\"receive_time\":\"2026/11/24 03:30:10\",\"seqno\":\"2\",\"type\":\"SYSTEM\",\"subtype\":\"hw\",\"eventid\":\"fan-failed\",\"severity\":\"critical\",\"opaque\":\"Fan tray 1: fan 2 failed (0 RPM)\"}",
+                "    continuation line"));
+        JsonNode fam = run(feed, options(1000)).get("families").get("pan_system");
+        assertEquals(1, fam.get("template_count").asInt());
+        assertEquals(1, fam.get("unparsed_lines").asInt());
+        assertEquals("critical", fam.get("templates").get(0).get("severity").asText());
+    }
+
+    @Test
     void guardRejectedLinesAreCountedNotMined() throws Exception {
         FakeFeed feed = new FakeFeed(Map.of("dev-1", "FW-ALPHA-01"));
         feed.add("dev-1", "cp_messages", "2026-11-10", List.of(ssh("FW-ALPHA-01", 7)), 3);

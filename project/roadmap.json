@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0415",
+  "current_build": "NXS-LOCAL-0416",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,11 +150,11 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0415",
-      "title": "RPT-17 Lifecycle and licensing report (V270), log detection engine DRAFT design, Management Center health read proposal, review fixes, NAT builder split",
+      "build": "NXS-LOCAL-0416",
+      "title": "Log detection engine P1 shadow (V272), zone matrix lifecycle wiring, parser UNKNOWN pins, MC device health gated read (V271), delivery orchestration record",
       "status": "automated_validated",
       "started": "2026-11-24",
-      "completed": "2026-11-24"
+      "completed": "2026-11-25"
     },
     "next": {
       "build": "recovery_offhost_key_custody",

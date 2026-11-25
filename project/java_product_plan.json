@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-11-24",
-  "reviewed_current_build": "NXS-LOCAL-0415",
+  "reviewed_at": "2026-11-25",
+  "reviewed_current_build": "NXS-LOCAL-0416",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -403,7 +403,9 @@
     "system_log_template_census_run": "java_feature",
     "zone_matrix_bridge_size_debt": "java_debt",
     "mc_device_health_read_decision": "java_feature",
-    "log_detection_engine_design_open_questions": "java_feature"
+    "log_detection_engine_design_open_questions": "java_feature",
+    "log_detection_p1_shadow_validation": "java_feature",
+    "sar_parser_nonnumeric_cpu_row_lost": "java_debt"
   },
   "converted_lessons": [
     {
