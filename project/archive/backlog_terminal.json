@@ -1287,6 +1287,15 @@
       "priority": "P3",
       "target": "Safe failure_reason_class copy in the Add device dialog (7b81aac4)",
       "note": ""
+    },
+    {
+      "id": "policy_insights_p1_checkpoint",
+      "category": "engineering",
+      "title": "Policy Insights phase P1: Check Point Insights tab from existing engines, no logs",
+      "status": "done",
+      "priority": "P2",
+      "target": "PO_DECISION_RECORD_2026_11_24_POLICY_INSIGHTS.md",
+      "note": ""
     }
   ]
 }

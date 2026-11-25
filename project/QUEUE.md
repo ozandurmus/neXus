@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T06:44:19Z
+Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T11:01:05Z
 
 ## Now
 - NXS-LOCAL-0418 — Zone matrix step 4b-2b part 1 stored-summary route, rule recertification council packet, HOST-A test runner image fixes and CPU burst (automated_validated)
@@ -20,6 +20,7 @@ Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T06:44:19Z
 - P1/planned verify_first_scheduled_mds_export_and_asa_saved_state
 - P2/in_progress aiview_masked_readonly_admin
 - P2/in_progress manifest_drift_service_worker_configuration_policy
+- P2/in_progress policy_insights_p2
 - P2/in_progress static_route_add_delete
 - P2/in_progress topology_sources_apic_citrix_f5
 - P2/in_progress ui2_database_roles_and_data_ownership
@@ -46,7 +47,6 @@ Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T06:44:19Z
 - P2/planned path_analysis_phase_b
 - P2/planned platform_backup_step1_host_roll
 - P2/planned policy_gaps_engine_attribution_harness_run
-- P2/planned policy_insights_p1_checkpoint
 - P2/planned policy_install_p2_p4
 - P2/planned product_rename_identity
 - P2/planned reports_r2
