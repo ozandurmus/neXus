@@ -114,6 +114,18 @@ class SubnetPreservingIpMaskerTest {
     }
 
     @Test
+    void redactsEmbeddedIpv6AddressesInFreeTextWhileKeepingTimestampsMacsAndProtocolScopes() {
+        String text = "Mismatch on (2001:db8:4a1f::3c2 / 2001:0db8:0000:0000:0000:0000:0000:0009/64) at 2026-11-25T12:00:00Z "
+                + "clock 10:15:00 mac 00:11:22:33:44:55 scopes :: ::1 fe80::1 ff02::1.";
+        String masked = masker.maskText(text);
+
+        assertThat(masked).doesNotContain("2001:db8").doesNotContain("2001:0db8").doesNotContain("4a1f");
+        assertThat(masked).contains("([REDACTED_IP] / [REDACTED_IP])");
+        assertThat(masked).contains("2026-11-25T12:00:00Z").contains("10:15:00").contains("00:11:22:33:44:55");
+        assertThat(masked).contains("scopes :: ::1 fe80::1 ff02::1.");
+    }
+
+    @Test
     void deterministicAcrossMultipleCalls() {
         String first = masker.mask("203.0.113.204");
         String second = masker.mask("203.0.113.204");

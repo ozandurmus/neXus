@@ -877,7 +877,7 @@ public final class PolicyQueryService {
         body.put("supported", true); body.put("days", days); body.put("page", page); body.put("pageSize", 200); body.put("total", rows.size());
         body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
         body.put("counts", map(report.counts())); body.put("byType", report.byType()); body.put("byGrade", report.byGrade());
-        body.put("unionCover", map(report.unionCover()));
+        body.put("unionCover", map(report.unionCover())); body.put("partialShadow", map(report.partialShadow()));
         body.put("insights", rows.stream().skip((long) page * 200).limit(200).map(this::insightRow).toList());
         return new PolicyResponse(body);
     }
@@ -902,7 +902,29 @@ public final class PolicyQueryService {
     }
     private PolicyInsights.Report insightReport(PolicySnapshot snapshot, int days) {
         var hygiene = analysis(snapshot, days);
-        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, unionCover(snapshot, hygiene));
+        var union = unionCover(snapshot, hygiene);
+        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, union, partialShadow(snapshot, hygiene, union));
+    }
+    private record CachedPartialShadow(PolicySnapshot snapshot, PolicyPartialShadow.Result result) {}
+    private final Map<String, CachedPartialShadow> partialShadowCache = new LinkedHashMap<>(8, 0.75f, true);
+    /**
+     * The I4 pass ({@link PolicyPartialShadow}) of one snapshot instance, cached exactly like {@link #unionCover}: it reads
+     * only the shadow verdicts and the I3 result, neither of which depends on the unused threshold or the clock.
+     */
+    private PolicyPartialShadow.Result partialShadow(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyUnionCover.Result union) {
+        String id = snapshot.metadata().id();
+        synchronized (partialShadowCache) {
+            var cached = partialShadowCache.get(id);
+            if (cached != null && cached.snapshot() == snapshot) return cached.result();
+        }
+        PolicyPartialShadow.Result result;
+        hygieneSlots.acquireUninterruptibly();
+        try { result = PolicyPartialShadow.analyze(snapshot, hygiene, union); } finally { hygieneSlots.release(); }
+        synchronized (partialShadowCache) {
+            partialShadowCache.put(id, new CachedPartialShadow(snapshot, result));
+            if (partialShadowCache.size() > 4) partialShadowCache.remove(partialShadowCache.keySet().iterator().next());
+        }
+        return result;
     }
     private record CachedUnionCover(PolicySnapshot snapshot, PolicyUnionCover.Result result) {}
     private final Map<String, CachedUnionCover> unionCoverCache = new LinkedHashMap<>(8, 0.75f, true);

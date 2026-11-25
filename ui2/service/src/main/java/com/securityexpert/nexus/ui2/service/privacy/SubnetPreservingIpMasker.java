@@ -10,6 +10,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
 
+import com.securityexpert.nexus.ui2.sanitizer.core.Addresses;
+
 /**
  * Deterministically pseudonymizes IPv4 addresses while preserving subnet membership,
  * prefix containment, and relative host offsets (PRIVATE_REPLAY_ARCHITECTURE §156).
@@ -19,6 +21,8 @@ public class SubnetPreservingIpMasker {
 
     private static final Pattern IPV4_PATTERN = Pattern.compile("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})(?:/(\\d{1,2}))?$");
     private static final Pattern EMBEDDED_IPV4_PATTERN = Pattern.compile("\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?:/\\d{1,2})?)\\b");
+    private static final Pattern EMBEDDED_IPV6_RUN = Pattern.compile("(?<![\\p{L}\\p{N}_:.])[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*");
+    private static final Pattern IPV6_PREFIX = Pattern.compile("/(\\d{1,3})(?![\\p{L}\\p{N}_.])");
 
     public record SubnetInfo(long netLong, long mask, int prefixLen, String netAddressStr) {}
 
@@ -130,14 +134,15 @@ public class SubnetPreservingIpMasker {
     }
 
     /**
-     * Finds any IPv4 addresses in free-form text (e.g. logs, terminal reasons)
-     * and replaces them with their relationship-preserving masked counterpart.
+     * Finds any IPv4 or IPv6 addresses in free-form text (e.g. logs, compliance findings, report prose, terminal reasons)
+     * and replaces them with their masked counterpart.
      */
     public String maskText(String text) {
         if (text == null || text.isBlank()) {
             return text;
         }
-        Matcher matcher = EMBEDDED_IPV4_PATTERN.matcher(text);
+        String ipv6Scrubbed = maskIpv6InText(text);
+        Matcher matcher = EMBEDDED_IPV4_PATTERN.matcher(ipv6Scrubbed);
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
             String ipMatch = matcher.group(1);
@@ -145,6 +150,65 @@ public class SubnetPreservingIpMasker {
         }
         matcher.appendTail(sb);
         return sb.toString();
+    }
+
+    private static String maskIpv6InText(String text) {
+        if (text.indexOf(':') < 0) {
+            return text;
+        }
+        Matcher m = EMBEDDED_IPV6_RUN.matcher(text);
+        StringBuilder out = null;
+        int cursor = 0;
+        while (m.find()) {
+            int start = m.start();
+            int end = m.end();
+            String run = text.substring(start, end);
+            while (!run.isEmpty() && Addresses.parseV6(run) == null && (run.endsWith(".") || run.endsWith(":"))) {
+                run = run.substring(0, run.length() - 1);
+                end--;
+            }
+            byte[] v6 = run.isEmpty() ? null : Addresses.parseV6(run);
+            if (v6 == null) {
+                continue;
+            }
+            if (end < text.length() && end == m.end()
+                    && (Character.isLetterOrDigit(text.charAt(end)) || text.charAt(end) == '_')) {
+                continue;
+            }
+            int stop = end;
+            if (stop < text.length() && text.charAt(stop) == '/') {
+                Matcher pm = IPV6_PREFIX.matcher(text).region(stop, text.length());
+                if (pm.lookingAt() && Integer.parseInt(pm.group(1)) <= 128) {
+                    stop = pm.end();
+                }
+            }
+            if (isPreservedIpv6(v6)) {
+                continue;
+            }
+            if (out == null) {
+                out = new StringBuilder(text.length());
+            }
+            out.append(text, cursor, start).append("[REDACTED_IP]");
+            cursor = stop;
+        }
+        if (out == null) {
+            return text;
+        }
+        out.append(text, cursor, text.length());
+        return out.toString();
+    }
+
+    /** Preserves unspecified (::), loopback (::1), link-local (fe80::/10) and multicast (ff00::/8) protocol scopes. */
+    private static boolean isPreservedIpv6(byte[] v6) {
+        int b0 = v6[0] & 0xff;
+        int b1 = v6[1] & 0xff;
+        if (b0 == 0xff) return true;
+        if (b0 == 0xfe && (b1 & 0xc0) == 0x80) return true;
+        for (int i = 0; i < 15; i++) {
+            if (v6[i] != 0) return false;
+        }
+        int last = v6[15] & 0xff;
+        return last == 0 || last == 1;
     }
 
     private String computeMaskedIp(String trimmed, boolean register) {

@@ -151,3 +151,48 @@ it("says an I3 whose budget ran out is not proven and claims nothing", async () 
   expect(within(region).getByLabelText("Union cover evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not be covered; nothing is claimed.");
   expect(within(region).queryByRole("note")).toBeNull();
 });
+
+const partialRule: PolicyInsight = { insightId: "44444444-4444-4444-4444-444444444444", insightType: "I4", evidenceGrade: "PROVEN", insightScope: "package",
+  rules: [{ ruleId: "r5", number: 5, name: "RULE-ALPHA-05", insightRole: "subject" }, { ruleId: "r1", number: 1, name: "RULE-ALPHA-01", insightRole: "overlapping" },
+    { ruleId: "r4", number: 4, name: "RULE-ALPHA-04", insightRole: "overlapping" }], objectIds: [],
+  raiseTo: { evidenceGrade: "PROVEN", insightNeeds: "NONE" }, insightCaveats: ["INSTALL_STATE_NOT_VERIFIED"],
+  evidence: ["Part of this match is proven to overlap earlier enabled rules of the same layer; every overlapping earlier rule has the same action."],
+  counter: { overlappingRules: 12, moreOverlapping: 2 } };
+const partialPage: PolicyInsightsPage = { ...page, insights: [partialRule], total: 1, byType: { ...page.byType, I4: 1 },
+  partialShadow: { evaluated: 9, partial: 1, differentAction: 3, notProven: 1, notEvaluable: [{ partialReason: "rule not resolved", rules: 2 }] } };
+it("lists I4 with its overlapping rules, offers it as a type filter and states the partial-shadow numbers", async () => {
+  expect(INSIGHT_TYPES).toContain("I4");
+  mount({ list: partialPage });
+  const table = await screen.findByRole("table", { name: "Policy insights" });
+  const row = within(table).getAllByRole("row")[1];
+  expect(row).toHaveTextContent("I4 · Partly shadowed");
+  expect(row).toHaveTextContent("#5 RULE-ALPHA-05 · #1 RULE-ALPHA-01 · #4 RULE-ALPHA-04");
+  expect(screen.getByLabelText("Insights by type")).toHaveTextContent("I4 Partly shadowed: 1");
+  expect(screen.getByLabelText("Partial shadow analysis")).toHaveTextContent(
+    "9 rules checked against the earlier rules of their layer · 1 partly shadowed, same action · 3 overlap an earlier rule with another action (counted, no insight) · 1 not proven (work budget) · not evaluated: 2 rule not resolved");
+});
+it("shows the I4 detail with the overlapping earlier rules, the fixed sentence and the number not listed", async () => {
+  mount({ list: partialPage, detail: { insight: partialRule, rules: [rule("r5", 5, "RULE-ALPHA-05"), rule("r1", 1, "RULE-ALPHA-01"), rule("r4", 4, "RULE-ALPHA-04")] as never, objects: [], days: 90 } });
+  fireEvent.click(await screen.findByRole("button", { name: "Open I4 detail" }));
+  const region = await screen.findByRole("region", { name: "Insight detail" });
+  expect(within(region).getAllByText("Overlapping earlier rule")).toHaveLength(2);
+  const evidence = within(region).getByLabelText("Partial shadow evidence");
+  expect(evidence).toHaveTextContent("Part of this rule's match is decided by earlier rules with the same action; its zero or low counter can be explained by them.");
+  expect(evidence).toHaveTextContent("Overlapping earlier rules: 12 (+2 more not listed).");
+  expect(within(region).getByRole("note")).toHaveTextContent(INSTALL_CAVEAT);
+});
+it("filters the Insights list by the I4 type chip", async () => {
+  const { fetchMock } = mount({ list: partialPage });
+  fireEvent.click(await screen.findByText("I4 Partly shadowed: 1"));
+  await waitFor(() => expect(fetchMock.mock.calls.some(call => String(call[0]).includes("type=I4") && String(call[0]).includes("page=0"))).toBe(true));
+});
+it("says an I4 whose budget ran out is not proven and claims nothing", async () => {
+  const budget: PolicyInsight = { ...partialRule, evidenceGrade: "NOT_EVALUABLE", rules: [partialRule.rules[0]], insightCaveats: [],
+    raiseTo: { evidenceGrade: "PROVEN", insightNeeds: "NOT_RESOLVABLE" }, evidence: ["Partial overlap analysis ran out of its work budget; whether earlier rules overlap part of this match is not proven."],
+    counter: { partialReason: "analysis budget" } };
+  mount({ list: { ...partialPage, insights: [budget] }, detail: { insight: budget, rules: [rule("r5", 5, "RULE-ALPHA-05")] as never, objects: [], days: 90 } });
+  fireEvent.click(await screen.findByRole("button", { name: "Open I4 detail" }));
+  const region = await screen.findByRole("region", { name: "Insight detail" });
+  expect(within(region).getByLabelText("Partial shadow evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not overlap earlier rules; nothing is claimed.");
+  expect(within(region).queryByRole("note")).toBeNull();
+});

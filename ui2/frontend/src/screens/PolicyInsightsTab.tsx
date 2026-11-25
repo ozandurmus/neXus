@@ -5,14 +5,15 @@ import { policyFailureText } from "./PolicyRuleViewer";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 
-/** Policy Insights phases P1 and P2a (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
+/** Policy Insights phases P1, P2a and P2b (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
 const n = (value: number) => value.toLocaleString("en-US");
-export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I8", "I9", "I10", "I11", "I12"];
+export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I4", "I8", "I9", "I10", "I11", "I12"];
 export const INSIGHT_GRADES: readonly InsightGrade[] = ["PROVEN", "SUPPORTED", "INDICATED", "NOT_ESTABLISHED", "NOT_EVALUABLE"];
 export const INSTALL_CAVEAT = "Proven for the stored management policy, not for what is installed on a gateway (INSTALL_STATE_NOT_VERIFIED).";
 
 export const TYPE_LABEL: Readonly<Record<InsightType, string>> = {
   I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I8: "Disabled rule", I9: "Expired or expiring schedule",
+  I4: "Partly shadowed",
   I10: "Zero or old hits", I11: "Unused object", I12: "Duplicate objects",
 };
 /** What the user does, one sentence per type; a grade other than PROVEN adds its own limit below the sentence. */
@@ -20,6 +21,7 @@ export const TYPE_SUGGESTION: Readonly<Record<InsightType, string>> = {
   I1: "Remove: an earlier rule already decides every packet this rule matches, with the same action.",
   I2: "Decide which rule is right: an earlier rule with a different action decides every packet this rule matches. Never removed automatically.",
   I3: "Remove: earlier rules of this layer together decide every packet this rule matches; the covering set is listed. If one of them has another action, decide which rule is right first.",
+  I4: "Review: earlier rules of this layer with the same action already decide part of this rule's match. Nothing here shows what changing the order would do.",
   I8: "Remove after your team's holding period.",
   I9: "Remove or renew the rule.",
   I10: "Review: the stored counters show no recent use. This does not prove the rule is unused.",
@@ -126,6 +128,10 @@ export function PolicyInsightsTab({ policy, openRule }: { policy: string; openRu
         I3 union cover: {n(data.unionCover.evaluated)} rules checked against the earlier rules of their layer · {n(data.unionCover.covered)} covered
         · {n(data.unionCover.notProven)} not proven (work budget){data.unionCover.notEvaluable.length > 0
           ? ` · not evaluated: ${data.unionCover.notEvaluable.map(r => `${n(r.rules)} ${r.unionReason}`).join(", ")}` : ""}</Typography>}
+      {data.partialShadow && <Typography variant="caption" display="block" aria-label="Partial shadow analysis" sx={{ color: m3.onSurfaceVar }}>
+        I4 partial shadow: {n(data.partialShadow.evaluated)} rules checked against the earlier rules of their layer · {n(data.partialShadow.partial)} partly shadowed, same action
+        · {n(data.partialShadow.differentAction)} overlap an earlier rule with another action (counted, no insight) · {n(data.partialShadow.notProven)} not proven (work budget){data.partialShadow.notEvaluable.length > 0
+          ? ` · not evaluated: ${data.partialShadow.notEvaluable.map(r => `${n(r.rules)} ${r.partialReason}`).join(", ")}` : ""}</Typography>}
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }} aria-label="Insights by type">
         {INSIGHT_TYPES.map(t => <Chip key={t} label={`${t} ${TYPE_LABEL[t]}: ${data.byType?.[t] ?? 0}`} color={type === t ? "primary" : "default"} onClick={() => { setType(type === t ? "" : t); setPage(0); }} />)}
       </Stack>
@@ -181,7 +187,7 @@ export function InsightDetail({ policy, insightId, days, openRule, close }: { po
     <Typography variant="body2" sx={{ mt: 1 }}>{TYPE_SUGGESTION[insight.insightType] ?? "UNKNOWN"}</Typography>
     {insight.rules.length > 0 && <Box aria-label="Rules involved" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: insight.rules.length > 1 ? "1fr 1fr" : "1fr" }, gap: 2, mt: 2 }}>
       {detail.rules.map(rule => <Box key={rule.id} data-role={role(rule.id)} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5 }}>
-        <Typography variant="subtitle2">{role(rule.id) === "covering" ? "Covering rule" : "Rule"}</Typography>
+        <Typography variant="subtitle2">{role(rule.id) === "covering" ? "Covering rule" : role(rule.id) === "overlapping" ? "Overlapping earlier rule" : "Rule"}</Typography>
         <Button onClick={() => openRule(rule.id, days)}>#{rule.number} · {rule.name || "Unnamed rule"}</Button>
         <Typography variant="body2">Action: {rule.action} · Log: {rule.log || "UNKNOWN"} · {rule.enabled === false ? "Disabled" : rule.enabled === true ? "Enabled" : "Enabled state UNKNOWN"}</Typography>
       </Box>)}
@@ -199,6 +205,11 @@ export function InsightDetail({ policy, insightId, days, openRule, close }: { po
     {insight.insightType === "I3" && <Box aria-label="Union cover evidence" sx={{ mt: 1 }}>
       {typeof counter.coveringRules === "number" && <Typography variant="body2">Covered together by {counter.coveringRules} earlier rules of the same layer. {COVER_ACTION_WORDS[String(counter.coverAction)] ?? "Action relation UNKNOWN."}</Typography>}
       {counter.unionReason !== undefined && <Typography variant="body2">Not proven: {String(counter.unionReason)}. The rule may or may not be covered; nothing is claimed.</Typography>}
+    </Box>}
+    {insight.insightType === "I4" && <Box aria-label="Partial shadow evidence" sx={{ mt: 1 }}>
+      {typeof counter.overlappingRules === "number" && <Typography variant="body2">Part of this rule's match is decided by earlier rules with the same action; its zero or low counter can be explained by them.
+        {" "}Overlapping earlier rules: {counter.overlappingRules}{Number(counter.moreOverlapping) > 0 ? ` (+${counter.moreOverlapping} more not listed)` : ""}.</Typography>}
+      {counter.partialReason !== undefined && <Typography variant="body2">Not proven: {String(counter.partialReason)}. The rule may or may not overlap earlier rules; nothing is claimed.</Typography>}
     </Box>}
     {detail.objects.length > 0 && <Box aria-label="Objects involved" sx={{ mt: 1 }}>
       <Typography variant="subtitle2">Objects (domain-wide)</Typography>

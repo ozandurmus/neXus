@@ -10,8 +10,9 @@ import java.util.*;
  * runs no analysis of its own: it reads the {@link PolicyHygiene} verdicts and findings of a snapshot and the object
  * where-used / duplicate rows of its {@link PolicyDomainIndex}, assigns the section 3.1 evidence grade by a fixed table
  * of conditions (never a weighted score), and counts the package the way section 3.2 defines. Phase P2 step a adds I3
- * (covered by several earlier rules together) from the {@link PolicyUnionCover} result; the package counts stay the
- * shadow engine's.
+ * (covered by several earlier rules together) from the {@link PolicyUnionCover} result and step b adds I4 (partly shadowed
+ * by earlier rules of the same action) from the {@link PolicyPartialShadow} result; the package counts stay the shadow
+ * engine's.
  *
  * <p>Everything an insight carries is a rule or object reference, a number, or a word from a closed vocabulary
  * ({@link #TYPES}, {@link #GRADES}, {@link #NEEDS}, {@link PolicyHygiene#EVIDENCE}, {@link PolicyHygiene#REASONS}), so the
@@ -27,15 +28,23 @@ public final class PolicyInsights {
     static final String PROVEN = "PROVEN", SUPPORTED = "SUPPORTED", INDICATED = "INDICATED", NOT_ESTABLISHED = "NOT_ESTABLISHED", NOT_EVALUABLE = "NOT_EVALUABLE";
     /** The closed grade vocabulary of design section 3.1, strongest first. */
     public static final List<String> GRADES = List.of(PROVEN, SUPPORTED, INDICATED, NOT_ESTABLISHED, NOT_EVALUABLE);
-    /** The insight types of phases P1 and P2a (design section 4), in display order. */
-    public static final List<String> TYPES = List.of("I1", "I2", "I3", "I8", "I9", "I10", "I11", "I12");
+    /** The insight types of phases P1, P2a and P2b (design section 4), in display order. */
+    public static final List<String> TYPES = List.of("I1", "I2", "I3", "I4", "I8", "I9", "I10", "I11", "I12");
     /** The fixed I3 evidence, one per {@link PolicyUnionCover} cover action and one for an exhausted budget. */
     static final String I3_SAME = "Earlier enabled rules together cover this match; each has the same action.",
         I3_DIFFERENT = "Earlier enabled rules together cover this match; at least one has a different action.",
         I3_INLINE = "Earlier enabled rules together cover this match; at least one is an Apply Layer rule whose inline layer is not analysed.",
         I3_BUDGET = "Union cover analysis ran out of its work budget; whether earlier rules together cover this match is not proven.";
+    /**
+     * The fixed I4 evidence: the overlap is proven for stored management intent; it says nothing about moving the rule
+     * (that is I7), and the other-action overlaps never reach this string (they are counted, not shown).
+     */
+    static final String I4_PARTIAL = "Part of this match is proven to overlap earlier enabled rules of the same layer; every overlapping earlier rule has the same action.",
+        I4_BUDGET = "Partial overlap analysis ran out of its work budget; whether earlier rules overlap part of this match is not proven.";
     /** Every evidence string an insight carries besides {@link PolicyHygiene#EVIDENCE}; PolicyPrivacy passes these unchanged. */
-    public static final Set<String> EVIDENCE = Set.of(I3_SAME, I3_DIFFERENT, I3_INLINE, I3_BUDGET);
+    public static final Set<String> EVIDENCE = Set.of(I3_SAME, I3_DIFFERENT, I3_INLINE, I3_BUDGET, I4_PARTIAL, I4_BUDGET);
+    /** An I4 insight lists at most this many overlapping earlier rules; the rest is the {@code moreOverlapping} counter. */
+    static final int MAX_OVERLAPPING = 10;
     static final String INSTALL_STATE_NOT_VERIFIED = "INSTALL_STATE_NOT_VERIFIED";
     /**
      * What raises a grade (the "raise to" column): nothing, traffic logs (phase P4), counter samples over time (phase P3),
@@ -80,8 +89,14 @@ public final class PolicyInsights {
      * rules evaluated, covered, not proven for the budget, and not evaluable by reason ({@link PolicyUnionCover#NOT_EVALUABLE_REASONS}).
      */
     record UnionCover(int evaluated, int covered, int notProven, List<Map<String, Object>> notEvaluable) {}
+    /**
+     * The I4 pass in numbers (design Q8): subject rules evaluated, {@code partial} (the I4 insights: every overlapping earlier
+     * rule has the rule's action), {@code differentAction} (an overlapping earlier rule has another action: counted, no
+     * insight), not proven for the budget, and not evaluable by reason.
+     */
+    record PartialShadow(int evaluated, int partial, int differentAction, int notProven, List<Map<String, Object>> notEvaluable) {}
     record Report(Counts counts, List<Insight> insights, Map<String, Integer> byType, Map<String, Integer> byGrade, boolean complete, String collectedAt,
-            UnionCover unionCover) {}
+            UnionCover unionCover, PartialShadow partialShadow) {}
 
     /**
      * @param index        the package's domain index (objects, where-used, duplicates), or null when not available:
@@ -95,9 +110,16 @@ public final class PolicyInsights {
     static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays) {
         return analyze(snapshot, hygiene, index, windowDays, thresholdDays, PolicyUnionCover.analyze(snapshot, hygiene));
     }
-    /** @param union the {@link PolicyUnionCover} result of the same snapshot and hygiene result (the service caches it) */
     static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
             PolicyUnionCover.Result union) {
+        return analyze(snapshot, hygiene, index, windowDays, thresholdDays, union, PolicyPartialShadow.analyze(snapshot, hygiene, union));
+    }
+    /**
+     * @param union   the {@link PolicyUnionCover} result of the same snapshot and hygiene result (the service caches it)
+     * @param partial the {@link PolicyPartialShadow} result of the same inputs (the service caches it too)
+     */
+    static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
+            PolicyUnionCover.Result union, PolicyPartialShadow.Result partial) {
         var meta = snapshot.metadata();
         List<Insight> insights = new ArrayList<>();
         int rules = 0, decided = 0, logs = 0, collection = 0, notResolvable = 0, hitsCollected = 0, hitsMissing = 0, disabled = 0, outside = 0;
@@ -123,6 +145,7 @@ public final class PolicyInsights {
                 }
                 shadow(meta, rule, a, hygiene, section, insights);
                 unionCover(meta, rule, union.rules().get(rule.id()), insights);
+                partialShadow(meta, rule, partial.rules().get(rule.id()), insights);
                 for (var f : a.findings()) {
                     if (f.findingClass().equals("expired")) insights.add(insight(meta, "I9", PROVEN, rule, List.of(), NONE, PROVEN, List.of(f.evidence()), Map.of()));
                     else if (f.findingClass().equals("unknown") && f.evidence().equals("Schedule evidence is incomplete."))
@@ -144,7 +167,9 @@ public final class PolicyInsights {
         for (var i : insights) { byType.merge(i.type(), 1, Integer::sum); byGrade.merge(i.grade(), 1, Integer::sum); }
         var unionCover = new UnionCover(union.evaluated(), union.covered(), union.notProven(), union.notEvaluable().entrySet().stream()
             .map(e -> Map.<String, Object>of("unionReason", e.getKey(), "rules", e.getValue())).toList());
-        return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt(), unionCover);
+        var partialShadow = new PartialShadow(partial.evaluated(), partial.partial(), partial.differentAction(), partial.notProven(), partial.notEvaluable().entrySet().stream()
+            .map(e -> Map.<String, Object>of("partialReason", e.getKey(), "rules", e.getValue())).toList());
+        return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt(), unionCover, partialShadow);
     }
 
     /** The reason that keeps a rule undecided; behind an earlier unreadable rule it is that rule's own reason. */
@@ -197,6 +222,33 @@ public final class PolicyInsights {
         };
         out.add(new Insight(id, "I3", PROVEN, "package", List.copyOf(refs), List.of(), PROVEN, NONE, List.of(INSTALL_STATE_NOT_VERIFIED),
             List.of(evidence), Map.of("coveringRules", cover.covering().size(), "coverAction", cover.coverAction())));
+    }
+
+    /**
+     * I4: part of the subject's match is also matched by earlier rules of its layer, every one with the subject's action
+     * (design section 4; G1 in {@link PolicyRegion}). PROVEN: the overlap is a proven intersection of two readable matches
+     * for stored management intent. It explains a low counter; it does not say the rule can be moved (I7). A subject with
+     * an overlapping rule of another action has no insight ({@link PolicyPartialShadow.Result#differentAction()} counts it).
+     * The overlapping rules are listed up to {@link #MAX_OVERLAPPING}, the rest is the {@code moreOverlapping} counter. An
+     * exhausted budget is NOT_EVALUABLE, as for I3.
+     */
+    private static void partialShadow(Metadata meta, Rule rule, PolicyPartialShadow.Partial partial, List<Insight> out) {
+        if (partial == null) return;
+        String id = PolicySnapshot.ref("insight", meta.id(), "I4", rule.id());
+        var subject = new RuleRef(rule.id(), rule.number(), rule.name(), "subject");
+        if (!partial.status().equals(PolicyPartialShadow.PARTIAL)) {
+            out.add(new Insight(id, "I4", NOT_EVALUABLE, "package", List.of(subject), List.of(), PROVEN, NOT_RESOLVABLE_NEEDS, List.of(),
+                List.of(I4_BUDGET), Map.of("partialReason", PolicyPartialShadow.BUDGET)));
+            return;
+        }
+        if (!partial.sameAction()) return;
+        var refs = new ArrayList<RuleRef>();
+        refs.add(subject);
+        for (Rule c : partial.overlapping().subList(0, Math.min(MAX_OVERLAPPING, partial.overlapping().size())))
+            refs.add(new RuleRef(c.id(), c.number(), c.name(), "overlapping"));
+        out.add(new Insight(id, "I4", PROVEN, "package", List.copyOf(refs), List.of(), PROVEN, NONE, List.of(INSTALL_STATE_NOT_VERIFIED),
+            List.of(I4_PARTIAL), Map.of("overlappingRules", partial.overlapping().size(),
+                "moreOverlapping", Math.max(0, partial.overlapping().size() - MAX_OVERLAPPING))));
     }
 
     /**
