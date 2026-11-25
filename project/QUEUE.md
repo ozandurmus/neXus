@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T11:01:05Z
+Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-25T14:08:23Z
 
 ## Now
-- NXS-LOCAL-0418 — Zone matrix step 4b-2b part 1 stored-summary route, rule recertification council packet, HOST-A test runner image fixes and CPU burst (automated_validated)
+- NXS-LOCAL-0419 — Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -27,7 +27,6 @@ Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T11:01:05Z
 - P2/planned analysis_container
 - P2/planned asa_failover_execution
 - P2/planned asa_fortinet_cluster_view
-- P2/planned asa_port_operator_a0_asa_14_defect
 - P2/planned backup_plane_separate_service
 - P2/planned change_ticket_matching
 - P2/planned cp_spark_backup_settings_sftp
@@ -54,11 +53,15 @@ Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T11:01:05Z
 - P2/planned system_log_template_census_run
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
+- P2/planned zone_matrix_asa_fortigate_amendment_decision
+- P2/planned zone_matrix_attention_severity_po
 - P2/planned zone_matrix_step_6b_evidence_report_wiring
 - P2/planned zone_matrix_step_7_remaining
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
+- P3/planned aiview_sweep_test_hosta_cause
+- P3/planned asa_mask_token_real_unit_check
 - P3/planned backup_claim_time_authorization_recheck
 - P3/planned backup_module_cutover_authorization
 - P3/planned corporate_inspection_ca_verify_with_it
@@ -161,8 +164,8 @@ Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T11:01:05Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0419 (automated_validated)
 - NXS-LOCAL-0418 (automated_validated)
 - NXS-LOCAL-0417 (automated_validated)
 - NXS-LOCAL-0416 (automated_validated)
 - NXS-LOCAL-0415 (automated_validated)
-- NXS-LOCAL-0414 (automated_validated)

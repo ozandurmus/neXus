@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-11-25",
-  "reviewed_current_build": "NXS-LOCAL-0418",
+  "reviewed_current_build": "NXS-LOCAL-0419",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -410,7 +410,11 @@
     "zone_matrix_step_7_remaining": "java_feature",
     "policy_gaps_engine_attribution_harness_run": "java_feature",
     "hosta_test_namespace_apply": "agent_operations",
-    "policy_insights_p2": "java_feature"
+    "policy_insights_p2": "java_feature",
+    "zone_matrix_attention_severity_po": "java_feature",
+    "zone_matrix_asa_fortigate_amendment_decision": "java_feature",
+    "asa_mask_token_real_unit_check": "java_debt",
+    "aiview_sweep_test_hosta_cause": "java_debt"
   },
   "converted_lessons": [
     {
