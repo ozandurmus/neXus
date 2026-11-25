@@ -1068,10 +1068,14 @@ public final class AsaPolicyMapper {
     }
 
     /**
-     * Converts a {@link PortOp} to a port range expression ({@code N} or {@code N-M}) for {@code protocol}
-     * ({@code tcp} or {@code udp}).
-     * Returns null when the operator is {@code lt}/{@code gt}/{@code neq} (port bounds not established by A0)
-     * or when a port literal is not in Table 7 for that protocol (A0-ASA-15).
+     * Converts a {@link PortOp} to a port range expression for {@code protocol} ({@code tcp} or {@code udp}): a
+     * single range {@code N} or {@code N-M}, or a comma-separated union of ranges (the same list form every policy
+     * consumer already reads for a {@code port:} value). A0-ASA-14: {@code lt N} is {@code 1..N-1}, {@code gt N} is
+     * {@code N+1..65535} and {@code neq N} is the two ranges {@code 1..N-1} and {@code N+1..65535}; an empty range is
+     * dropped and an operator whose result would be empty or whose operand is outside 1..65535 for {@code neq}
+     * (A0-ASA-14: port 0 is not a valid ASA port) is unresolved.
+     * Returns null when the operator is not decided, an operand literal is not in Table 7 for that protocol
+     * (A0-ASA-15) or the operator is {@code object-group} in port position.
      */
     private static String evalPortOp(PortOp op, String protocol) {
         if (op == null || op.operator() == null) return null;
@@ -1085,7 +1089,23 @@ public final class AsaPolicyMapper {
                 Integer b = AsaLiterals.resolvePort(op.port2(), protocol);
                 yield (a == null || b == null || a > b) ? null : a + "-" + b;
             }
-            // lt, gt, neq, and object-group in port op position -> UNSUPPORTED
+            case "lt" -> {
+                Integer n = AsaLiterals.resolvePort(op.port1(), protocol);
+                yield (n == null || n < 2) ? null : "1-" + (n - 1);
+            }
+            case "gt" -> {
+                Integer n = AsaLiterals.resolvePort(op.port1(), protocol);
+                yield (n == null || n > 65534) ? null : (n + 1) + "-65535";
+            }
+            case "neq" -> {
+                Integer n = AsaLiterals.resolvePort(op.port1(), protocol);
+                if (n == null || n < 1) yield null;
+                List<String> ranges = new ArrayList<>();
+                if (n > 1) ranges.add("1-" + (n - 1));
+                if (n < 65535) ranges.add((n + 1) + "-65535");
+                yield ranges.isEmpty() ? null : String.join(",", ranges);
+            }
+            // object-group in port op position, or an unknown operator -> UNSUPPORTED
             default -> null;
         };
     }

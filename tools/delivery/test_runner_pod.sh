@@ -11,6 +11,14 @@
 # stdout carries exactly one line: TESTRUN_SUMMARY {json} (TestRunSummary.java). All raw Gradle/vitest output stays in
 # /tmp, an emptyDir that dies with the pod. Exit: 0 PASS, 1 FAIL, 2 ERROR, 3 IMAGE_STALE.
 #
+# Order: (1) the frontend bundle is built once (`npm run build`, offline, from the image's node_modules) whenever a
+# phase packages :service -- the pod runs Gradle with -PfrontendPrebuilt=true, which skips the npm tasks, so without
+# this step :service:processResources packages no `static/` and FrontendBundleFreshnessTest has nothing to read
+# (2026-11-25, measured question 5). A failed build is ERROR frontend_build (the caller runs the same scope on the Mac,
+# which shows the compiler output). (2) The java, integration and vitest phases then run side by side; each has its
+# own Gradle project directory (integration works on a copy, ui2-it) and its own Gradle user home, so they never share
+# a lock or a build directory, and each reports its own duration.
+#
 #   test_runner_pod.sh --fingerprint <root>   prints the dependency fingerprint of the tree at <root> (also used once,
 #                                             by ui2/Containerfile.test-runner, to record what the image was seeded from)
 set -uo pipefail
@@ -69,8 +77,11 @@ if [ ! -s "$seed" ] || ! fingerprint "$workspace" | cmp -s - "$seed"; then
 fi
 
 mkdir -p "$results" "${GRADLE_USER_HOME:-/tmp/gradle-home}"
+gradle_home=${GRADLE_USER_HOME:-/tmp/gradle-home}
 gradle=("$gradle_bin" --offline --no-daemon --console=plain -PfrontendPrebuilt=true)
 phases=()
+ui2=$workspace/ui2
+[ -d "$ui2" ] || { error_line ERROR no_source; exit 2; }
 
 # A failed phase's reason token, read from its own raw log (which never leaves the pod).
 reason_of() {
@@ -83,7 +94,9 @@ reason_of() {
   fi
 }
 
-run_phase() {  # name log results... -- command...
+# name log results... -- command...   Writes the phase's own result line to $scratch/phase-<name>.res, so it can run in
+# the background; the lines are collected in a fixed order below.
+run_phase() {
   local name=$1 log=$2; shift 2
   local paths=()
   while [ "$1" != -- ]; do paths+=("$1"); shift; done
@@ -95,30 +108,62 @@ run_phase() {  # name log results... -- command...
   [ "$rc" = 0 ] || reason=$(reason_of "$log")
   local joined
   joined=$(IFS=,; printf '%s' "${paths[*]}")
-  phases+=("$name=$rc:$(( $(date +%s) - start )):$reason:$joined")
+  printf '%s=%s:%s:%s:%s\n' "$name" "$rc" "$(( $(date +%s) - start ))" "$reason" "$joined" >"$scratch/phase-$name.res"
 }
 
-cd "$workspace/ui2" || { error_line ERROR no_source; exit 2; }
+in_dir() { local dir=$1; shift; (cd "$dir" && exec "$@"); }
+
+# The frontend's node_modules come from the image (read-only), linked into the workspace once for every user of it.
+if [ -d "$node_modules" ] && [ ! -e "$ui2/frontend/node_modules" ]; then
+  ln -s "$node_modules" "$ui2/frontend/node_modules"
+fi
+
+# Which phases package :service (its processResources reads frontend/dist): :service:test, every full run, integration.
+needs_bundle=0
+[ "${TEST_JAVA:-none}" = full ] && needs_bundle=1
+[ "${TEST_INTEGRATION:-0}" = 1 ] && needs_bundle=1
+for task in ${tasks[@]+"${tasks[@]}"}; do
+  [ "$task" = :service:test ] && needs_bundle=1
+done
+if [ "$needs_bundle" = 1 ]; then
+  [ -d "$ui2/frontend" ] || { error_line ERROR no_source; exit 2; }
+  if ! in_dir "$ui2/frontend" npm run build >"$scratch/frontend.log" 2>&1 </dev/null; then
+    error_line ERROR frontend_build
+    exit 2
+  fi
+fi
+
+# Integration runs on its own copy of ui2/ when the java phase runs too (after the bundle exists, so the copy has it).
+integration_ui2=$ui2
+if [ "${TEST_INTEGRATION:-0}" = 1 ] && [ "${#tasks[@]}" -gt 0 ]; then
+  integration_ui2=$workspace/ui2-it
+  rm -rf "$integration_ui2"
+  cp -a "$ui2" "$integration_ui2" || { error_line ERROR no_source; exit 2; }
+fi
+
+rm -f "$scratch"/phase-*.res
 if [ "${#tasks[@]}" -gt 0 ]; then
   java_dirs=()
-  for module in */build.gradle.kts; do
-    module=${module%%/*}
-    [ "$module" = integration-tests ] || java_dirs+=("$workspace/ui2/$module/build/test-results/test")
+  for module in "$ui2"/*/build.gradle.kts; do
+    module=${module%/build.gradle.kts}
+    [ "${module##*/}" = integration-tests ] || java_dirs+=("$module/build/test-results/test")
   done
-  run_phase java "$scratch/java.log" "${java_dirs[@]}" -- "${gradle[@]}" --continue "${tasks[@]}"
+  run_phase java "$scratch/java.log" "${java_dirs[@]}" -- \
+    in_dir "$ui2" env GRADLE_USER_HOME="$gradle_home/java" "${gradle[@]}" --continue "${tasks[@]}" &
 fi
 if [ "${TEST_INTEGRATION:-0}" = 1 ]; then
-  run_phase integration "$scratch/integration.log" "$workspace/ui2/integration-tests/build/test-results/test" -- \
-    "${gradle[@]}" :integration-tests:test
+  run_phase integration "$scratch/integration.log" "$integration_ui2/integration-tests/build/test-results/test" -- \
+    in_dir "$integration_ui2" env GRADLE_USER_HOME="$gradle_home/integration" "${gradle[@]}" :integration-tests:test &
 fi
 if [ "${TEST_VITEST:-0}" = 1 ]; then
-  if [ -d "$node_modules" ] && [ ! -e "$workspace/ui2/frontend/node_modules" ]; then
-    ln -s "$node_modules" "$workspace/ui2/frontend/node_modules"
-  fi
-  cd "$workspace/ui2/frontend" || { error_line ERROR no_source; exit 2; }
+  [ -d "$ui2/frontend" ] || { error_line ERROR no_source; exit 2; }
   run_phase vitest "$scratch/vitest.log" "$results/vitest-junit.xml" -- \
-    ./node_modules/.bin/vitest run --reporter=junit --outputFile="$results/vitest-junit.xml"
+    in_dir "$ui2/frontend" ./node_modules/.bin/vitest run --reporter=junit --outputFile="$results/vitest-junit.xml" &
 fi
+wait
+for name in java integration vitest; do
+  if [ -f "$scratch/phase-$name.res" ]; then phases+=("$(cat "$scratch/phase-$name.res")"); fi
+done
 [ "${#phases[@]}" -gt 0 ] || { error_line ERROR empty_scope; exit 2; }
 
 java "$summary_java" "${phases[@]}" || exit $?

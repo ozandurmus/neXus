@@ -93,6 +93,7 @@ class AdfsSamlAuthenticationTest {
         fixture = Ui2PostgresFixture.createAndMigrate("saml_adfs");
         work = Files.createTempDirectory("ui2-saml-");
         context = new SpringApplicationBuilder(Ui2Application.class)
+                .initializers(ctx -> ctx.addBeanFactoryPostProcessor(AdfsSamlAuthenticationTest::dropMachineConnector))
                 .resourceLoader(new org.springframework.core.io.DefaultResourceLoader(consoleBundleLoader()))
                 .run("--server.port=0", "--spring.main.banner-mode=off",
                         "--ui2.db.url=" + fixture.databaseJdbcUrl(),
@@ -521,6 +522,17 @@ class AdfsSamlAuthenticationTest {
     }
 
     /** A stand-in static bundle, so the service starts without a built console (as the characterization suite does). */
+    /**
+     * The internal machine port is a fixed 8086 and HttpSurfaceCharacterizationTest owns it; this test reads only the main
+     * port. Without this, two forks booting the application at once make the later one fail to start (found on the HOST-A
+     * runner 2026-11-25, where the forks overlap differently). Same remedy as AiviewRawVersusMaskedSweepTest.
+     */
+    private static void dropMachineConnector(
+            org.springframework.beans.factory.config.ConfigurableListableBeanFactory beanFactory) {
+        ((org.springframework.beans.factory.support.BeanDefinitionRegistry) beanFactory)
+                .removeBeanDefinition("machineConnector");
+    }
+
     private static ClassLoader consoleBundleLoader() throws Exception {
         ClassLoader app = AdfsSamlAuthenticationTest.class.getClassLoader();
         if (app.getResource("static/index.html") != null) return app;

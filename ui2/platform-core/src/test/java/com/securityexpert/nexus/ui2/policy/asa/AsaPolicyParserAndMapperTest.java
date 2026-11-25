@@ -253,10 +253,12 @@ class AsaPolicyParserAndMapperTest {
         assertEquals("RESOLVED", s5.status());
         assertEquals(List.of("protocol: tcp", "port: 8000-8090"), s5.values());
 
-        // 6-8. lt, gt, neq -> UNSUPPORTED
-        assertEquals("UNSUPPORTED", objectOf(snapshot, rules.get(5).service()).status());
-        assertEquals("UNSUPPORTED", objectOf(snapshot, rules.get(6).service()).status());
-        assertEquals("UNSUPPORTED", objectOf(snapshot, rules.get(7).service()).status());
+        // 6-8. A0-ASA-14: lt N -> 1..N-1, gt N -> N+1..65535, neq N -> the two ranges (comma list)
+        assertEquals(List.of("protocol: tcp", "port: 1-1023"), objectOf(snapshot, rules.get(5).service()).values());
+        assertEquals(List.of("protocol: tcp", "port: 1024-65535"), objectOf(snapshot, rules.get(6).service()).values());
+        PolicyObject neq23 = objectOf(snapshot, rules.get(7).service());
+        assertEquals("RESOLVED", neq23.status());
+        assertEquals(List.of("protocol: tcp", "port: 1-22,24-65535"), neq23.values());
 
         // 9. object-group service legacy tcp-udp with port-object
         PolicyObject ogLegacy = objectOf(snapshot, rules.get(8).service());
@@ -859,6 +861,51 @@ class AsaPolicyParserAndMapperTest {
                 wccp 91 redirect-list acl-a
                 """);
         assertEquals(List.of("none"), use.get("ACL-A"));
+    }
+
+    @Test
+    void a0Asa14_comparisonOperatorEdgesAndLiteralsAndSourcePorts() {
+        AsaPolicyConfig parsed = AsaConfigPolicyParser.parse("""
+                access-list ACL-E extended permit tcp any any lt 1
+                access-list ACL-E extended permit tcp any any lt 2
+                access-list ACL-E extended permit tcp any any gt 65535
+                access-list ACL-E extended permit tcp any any gt 65534
+                access-list ACL-E extended permit tcp any any neq 0
+                access-list ACL-E extended permit tcp any any neq 1
+                access-list ACL-E extended permit tcp any any neq 65535
+                access-list ACL-E extended permit tcp any any lt www
+                access-list ACL-E extended permit udp any any neq domain
+                access-list ACL-E extended permit tcp any any lt snmp
+                access-list ACL-E extended permit tcp any gt 1023 any eq https
+                access-list ACL-E extended permit tcp any neq 22 any eq https
+                access-group ACL-E in interface outside
+                """);
+        PolicySnapshot snapshot = AsaPolicyMapper.map(
+                "dev-asa-01", "FW-TANGO-04", "2026-11-14T10:00:00Z", "artefact-01", parsed);
+        List<Rule> rules = snapshot.sections().get(0).rules();
+        assertEquals(12, rules.size());
+        // lt 1 and gt 65535 are empty ranges, neq 0 is outside 1..65535: unresolved, never a malformed range
+        for (int i : new int[] {0, 2, 4}) {
+            PolicyObject o = objectOf(snapshot, rules.get(i).service());
+            assertEquals("UNSUPPORTED", o.status(), "rule " + i);
+            assertEquals(List.of(), o.values(), "rule " + i);
+        }
+        assertEquals(List.of("protocol: tcp", "port: 1-1"), objectOf(snapshot, rules.get(1).service()).values());
+        assertEquals(List.of("protocol: tcp", "port: 65535-65535"), objectOf(snapshot, rules.get(3).service()).values());
+        assertEquals(List.of("protocol: tcp", "port: 2-65535"), objectOf(snapshot, rules.get(5).service()).values());
+        assertEquals(List.of("protocol: tcp", "port: 1-65534"), objectOf(snapshot, rules.get(6).service()).values());
+        // literal operands resolve through Table 7 for the ACE protocol
+        assertEquals(List.of("protocol: tcp", "port: 1-79"), objectOf(snapshot, rules.get(7).service()).values());
+        assertEquals(List.of("protocol: udp", "port: 1-52,54-65535"), objectOf(snapshot, rules.get(8).service()).values());
+        // a UDP-only literal on a TCP entry stays unresolved (A0-ASA-15)
+        assertEquals("UNSUPPORTED", objectOf(snapshot, rules.get(9).service()).status());
+        // source-port operators
+        assertEquals(
+                List.of("protocol/tcp/source-port: 1024-65535", "protocol/tcp/port: 443"),
+                objectOf(snapshot, rules.get(10).service()).values());
+        assertEquals(
+                List.of("protocol/tcp/source-port: 1-21,23-65535", "protocol/tcp/port: 443"),
+                objectOf(snapshot, rules.get(11).service()).values());
     }
 
     @Test
