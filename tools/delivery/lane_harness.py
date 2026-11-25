@@ -7,17 +7,22 @@ and runs the manifest's commands. Every run writes `harness-report.json`, bound 
 judged, so a ship pretest can reuse a PASS for that exact tree instead of running the tests again.
 
   lane_harness.py --worktree DIR [--base origin/main] [--fetch] [--meta FILE] [--queue-dir DIR] [--report FILE]
-                  [--profile lane|pretest] [--integration auto|local|hosta|skip] [--reuse-report FILE]
-                  [--agent-log FILE --agent-exit N] [--no-commit-derived] [--keep-going] [--allow-paths]
-                  [--jobs N] [--pytest-workers N]
+                  [--profile lane|pretest] [--integration auto|local|hosta|skip] [--carrier mac|hosta]
+                  [--reuse-report FILE] [--agent-log FILE --agent-exit N] [--no-commit-derived] [--keep-going]
+                  [--allow-paths] [--jobs N] [--pytest-workers N]
 
 Exit codes (typed, so the runner never has to grep text):
    0 pass            10 a check failed          12 conflict with fresh main     20 held for the Product Owner
   30 no change       40 agent permission denied 41 agent infrastructure error   50 harness error (retry; never the lane's fault)
 
-Nothing here pushes, opens a PR, deploys or reaches a host; the only commit it makes is a derived-file re-render on
-the lane's own branch. The HOST-A hand-off (`--integration hosta`) runs the repository's own integration script and
-nothing else."""
+Nothing here pushes, opens a PR or deploys, and it reaches a host only through the repository's own HOST-A test runner
+(tools/delivery/hosta_test_run.py); the only commit it makes is a derived-file re-render on the lane's own branch. The
+HOST-A hand-off (`--integration hosta`) runs that runner and nothing else.
+
+`--carrier hosta` (PO 2026-11-25, option A: the laptop keeps only agents and runners) carries java_scoped, integration
+and frontend_vitest to HOST-A's ui2-test namespace in ONE tools/delivery/hosta_test_run.py call with the scope the Mac
+would have used; every other step stays on the Mac. A runner error (exit 2/3, no answer, a timeout) never blocks
+delivery: the same steps run on the Mac and the report says `carrier: mac-fallback`."""
 from __future__ import annotations
 
 import argparse
@@ -184,6 +189,7 @@ class Out:
     detail: str = ""
     tail: str = ""
     extra: dict = dataclasses.field(default_factory=dict)
+    duration_s: float | None = None     # set when the work ran elsewhere (a HOST-A phase), not while this step waited
 
 
 @dataclasses.dataclass
@@ -218,6 +224,9 @@ class Context:
     snapshot_dir: Path | None = None
     snapshot_tree: str = ""
     concurrent: bool = False
+    # --carrier hosta: the one shared HOST-A run, made by whichever carried step needs it first.
+    hosta_lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
+    hosta: dict | None = None
 
     def say(self, message: str) -> None:
         """A progress line, only when groups run concurrently (the single-stream run stays as quiet as before)."""
@@ -1084,6 +1093,8 @@ def step_integration(ctx: Context, step: dict) -> Out:
     mode = ctx.args.integration
     if mode == "skip":
         return Out("skipped", "skipped by --integration skip; this report is not complete", extra={"skipped_by_flag": True})
+    if mode == "hosta" and ctx.args.carrier == "hosta":
+        return on_carrier(ctx, step, "integration", _integration_local)
     if mode == "hosta":
         argv = ctx.expand(step["hosta_cmd"])
         rc, tail, timed_out = ctx.run(argv, step_id="integration-hosta", timeout=step.get("timeout_s", 3000))
@@ -1092,6 +1103,10 @@ def step_integration(ctx: Context, step: dict) -> Out:
         if rc in (2, 3) or timed_out:  # 3: the host cannot run this tree yet (no image, image stale)
             return Out("error", "HOST-A integration runner failed to run (exit %s); not a test result" % rc, tail)
         return Out("fail", "HOST-A integration job reported test failures", tail, {"carrier": "hosta"})
+    return _integration_local(ctx, step)
+
+
+def _integration_local(ctx: Context, step: dict) -> Out:
     front = _frontend(ctx)
     if front is not None and not ctx.frontend_built:
         built = _build_frontend(ctx, front, 900)
@@ -1130,12 +1145,157 @@ def step_accept(ctx: Context, step: dict) -> Out:
     return Out("pass", "%d accept command(s) passed" % len(commands), extra={"accept": results})
 
 
+# -- the HOST-A carrier (--carrier hosta) ------------------------------------------------------------------------------
+
+# builtin -> the hosta_test_run.py phase that carries it
+CARRIED = {"java_scoped": "java", "integration": "integration", "frontend_vitest": "vitest"}
+HOSTA_CARRIER_CMD = ["{python}", "tools/delivery/hosta_test_run.py", "--repo", "{worktree}"]
+HOSTA_EXIT = {"PASS": 0, "FAIL": 1, "ERROR": 2, "TIMEOUT": 2, "NOT_CONFIGURED": 3, "IMAGE_STALE": 3}
+
+
+def _reusable(ctx: Context, step: dict) -> dict | None:
+    """The PASS record a report for the same tree holds for this step, when the step may reuse it."""
+    if not (ctx.reuse and step.get("tree_bound")):
+        return None
+    return next((c for c in ctx.reuse.get("checks", []) if c["id"] == step["id"] and c["status"] in ("pass", "reused")),
+                None)
+
+
+def hosta_plan(ctx: Context) -> dict:
+    """The phases the Mac would run itself, as hosta_test_run.py flags: Java scoped or full exactly as pretest_scope.py
+    says (the host recomputes the same tasks from the same base), integration when its path rule selects it and
+    `--integration` hands it over, vitest only when the frontend changed. A step not selected or reused is not asked."""
+    steps = {s.get("builtin"): s for s in ctx.manifest["steps"] if s.get("builtin") in CARRIED}
+
+    def wanted(builtin: str) -> bool:
+        step = steps.get(builtin)
+        return step is not None and step_selected(ctx, step, ctx.args.profile) is None and not _reusable(ctx, step)
+
+    java = "none"
+    if wanted("java_scoped") and (ctx.worktree / "ui2" / "gradlew").exists():
+        java = "scoped" if get_scope(ctx)["scope"] == "scoped" else "full"
+    integration = wanted("integration") and ctx.args.integration == "hosta"
+    vitest = wanted("frontend_vitest") and _frontend(ctx) is not None and _frontend_needed(ctx)
+    return {"java": java, "integration": integration, "vitest": vitest}
+
+
+def _last_json(text: str) -> dict | None:
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                value = json.loads(line)
+            except ValueError:
+                continue
+            return value if isinstance(value, dict) else None
+    return None
+
+
+def _call_hosta(ctx: Context) -> dict:
+    plan = hosta_plan(ctx)
+    asked = [name for name, on in (("java", plan["java"] != "none"), ("integration", plan["integration"]),
+                                   ("vitest", plan["vitest"])) if on]
+    run = {"plan": plan, "asked": asked, "used": "none", "reason": "", "phases": {}}
+    if not asked:
+        return run
+    timeout = int(ctx.manifest.get("hosta_carrier_timeout_s", 2700))
+    argv = ctx.expand(ctx.manifest.get("hosta_carrier_cmd") or HOSTA_CARRIER_CMD)
+    argv += ["--commit", ctx.head, "--base", ctx.base_sha, "--java", plan["java"], "--timeout", str(timeout)]
+    argv += ["--integration"] if plan["integration"] else []
+    argv += ["--vitest"] if plan["vitest"] else []
+    ctx.say("[carrier] HOST-A run: %s" % ", ".join(asked))
+    rc, tail, timed_out = ctx.run(argv, step_id="hosta-tests", timeout=timeout + 120)
+    result = _last_json(read_tail(ctx.log_dir / "hosta-tests.log", 1 << 20)) or {}
+    status = result.get("status")
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else None
+    run.update({"exit": rc, "status": status, "run": result.get("run", ""), "wall_s": result.get("wall_s")})
+    if timed_out:
+        run["reason"] = "the HOST-A run timed out after %ss" % (timeout + 120)
+    elif rc not in (0, 1):
+        run["reason"] = "HOST-A runner exit %s (%s/%s)" % (rc, status or "no answer", result.get("reason") or "-")
+    elif summary is None or not isinstance(summary.get("phases"), list) or HOSTA_EXIT.get(status) != rc:
+        run["reason"] = "HOST-A runner exit %s without a matching JSON summary" % rc
+    if run["reason"]:
+        run["used"] = "mac-fallback"
+        run["tail"] = tail
+        return run
+    run["used"] = "hosta"
+    run["phases"] = {p.get("name"): p for p in summary["phases"] if isinstance(p, dict)}
+    host_scope = result.get("scope") or {}
+    if plan["java"] == "scoped":
+        run["scope_tasks_match"] = host_scope.get("tasks") == list(get_scope(ctx).get("gradle_tasks") or [])
+    return run
+
+
+def hosta_run(ctx: Context) -> dict:
+    """The one shared HOST-A run of this harness run (made on first use; a cancelled call is not remembered)."""
+    with ctx.hosta_lock:
+        if ctx.hosta is None:
+            run = _call_hosta(ctx)
+            ctx.hosta = run
+            ctx.extras["carrier"] = "mac" if run["used"] == "none" else run["used"]
+            ctx.extras["hosta_run"] = {k: v for k, v in run.items() if k not in ("phases", "tail")}
+            if run["used"] == "mac-fallback":
+                ctx.notes.append("carrier=mac-fallback: %s; %s ran on the Mac instead" % (run["reason"],
+                                                                                     ", ".join(run["asked"])))
+        return ctx.hosta
+
+
+def _phase_out(name: str, phase: dict, run: dict) -> Out:
+    counts = "%d tests, %d failure(s), %d error(s), %d skipped" % (phase["tests"], phase["failures"], phase["errors"],
+                                                                   phase["skipped"])
+    if name == "java":
+        counts = "%s scope: %s" % (run["plan"]["java"], counts)
+    extra = {"carrier": "hosta", "run": run.get("run", ""), "tests": phase["tests"], "phase_reason": phase["reason"]}
+    if name == "java" and "scope_tasks_match" in run:
+        extra["scope_tasks_match"] = run["scope_tasks_match"]
+    duration = float(phase.get("duration_s") or 0)
+    if phase["status"] == "PASS":
+        return Out("pass", "HOST-A %s phase: %s" % (name, counts), extra=extra, duration_s=duration)
+    failed = [str(n) for n in phase.get("failed") or []]
+    extra["failed"] = failed
+    detail = "HOST-A %s phase failed (%s): %s" % (name, phase["reason"], counts)
+    if failed:
+        detail += "; failed: " + ", ".join(failed[:10]) + (" (+%d more)" % (len(failed) - 10) if len(failed) > 10 else "")
+    else:
+        detail += "; no test named (exit %s: a compile or task failure)" % phase.get("exit_code")
+    return Out("fail", detail, "\n".join("FAIL " + n for n in failed[:30]), extra, duration)
+
+
+def on_carrier(ctx: Context, step: dict, phase_name: str, local) -> Out:
+    """Satisfy a carried step from the shared HOST-A run, or run it on the Mac (`local`) when the host could not."""
+    if ctx.args.carrier != "hosta":
+        return local(ctx, step)
+    run = hosta_run(ctx)
+    if phase_name not in run["asked"]:
+        return local(ctx, step)         # nothing to carry: the local step skips (or, for --integration local, runs)
+    phase = run["phases"].get(phase_name)
+    if run["used"] == "hosta" and phase is not None and phase.get("status") in ("PASS", "FAIL"):
+        return _phase_out(phase_name, phase, run)
+    why = run["reason"] if run["used"] == "mac-fallback" else "the HOST-A run reported no %s phase" % phase_name
+    out = local(ctx, step)
+    out.detail = "carrier=mac-fallback (%s): %s" % (why, out.detail)
+    out.extra = dict(out.extra, carrier="mac-fallback")
+    if run["used"] == "hosta":
+        with ctx.lock:
+            ctx.notes.append("carrier=mac-fallback for %s: %s" % (step["id"], why))
+    return out
+
+
+def step_java(ctx: Context, step: dict) -> Out:
+    return on_carrier(ctx, step, "java", step_java_scoped)
+
+
+def step_vitest(ctx: Context, step: dict) -> Out:
+    return on_carrier(ctx, step, "vitest", step_frontend_vitest)
+
+
 BUILTINS = {
     "agent_outcome": step_agent_outcome, "preconditions": step_preconditions, "main_conflict": step_main_conflict,
     "guarded_paths": step_guarded_paths, "declared_paths": step_declared_paths, "derived_files": step_derived_files,
     "whitespace": step_whitespace, "secret_scan": step_secret_scan, "forbidden_tokens": step_forbidden_tokens,
     "migration_rule": step_migration_rule, "test_integrity": step_test_integrity, "queue_overlap": step_queue_overlap,
-    "java_scoped": step_java_scoped, "frontend_tsc": step_frontend_tsc, "frontend_vitest": step_frontend_vitest,
+    "java_scoped": step_java, "frontend_tsc": step_frontend_tsc, "frontend_vitest": step_vitest,
     "frontend_build": step_frontend_build, "integration": step_integration, "accept": step_accept,
 }
 
@@ -1205,8 +1365,7 @@ def step_selected(ctx: Context, step: dict, profile: str) -> str | None:
 def execute_step(ctx: Context, step: dict) -> dict:
     """Run one selected step and return its report record (`status` is the Out status)."""
     record = {"id": step["id"], "status": "skipped", "detail": "", "duration_s": 0.0}
-    reused = ctx.reuse and step.get("tree_bound") and next(
-        (c for c in ctx.reuse.get("checks", []) if c["id"] == step["id"] and c["status"] in ("pass", "reused")), None)
+    reused = _reusable(ctx, step)
     started = time.time()
     if reused:
         out = Out("reused", "PASS reused from a report for the same tree (%s)" % ctx.reuse.get("finished_at", "?"))
@@ -1221,7 +1380,11 @@ def execute_step(ctx: Context, step: dict) -> dict:
             out = Out("error", "a git or helper command timed out: %s" % str(error)[:120])
     if step.get("severity") == "warn" and out.status == "fail":
         out.status = "warn"
-    record.update({"status": out.status, "detail": out.detail, "duration_s": round(time.time() - started, 2)})
+    waited = round(time.time() - started, 2)
+    record.update({"status": out.status, "detail": out.detail,
+                   "duration_s": waited if out.duration_s is None else round(out.duration_s, 2)})
+    if out.duration_s is not None:
+        out.extra = dict(out.extra, waited_s=waited)
     if out.tail and out.status in ("fail", "error", "warn", "held", "conflict", "agent_permission", "agent_infra"):
         record["output_tail"] = out.tail
     if out.extra:
@@ -1382,7 +1545,11 @@ def parse_args(argv: list | None = None) -> argparse.Namespace:
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
     parser.add_argument("--profile", choices=("lane", "pretest"), default="lane")
-    parser.add_argument("--integration", choices=("auto", "local", "hosta", "skip"), default="auto")
+    parser.add_argument("--integration", choices=("auto", "local", "hosta", "skip"), default="auto",
+                        help="auto: hosta with --carrier hosta, else local")
+    parser.add_argument("--carrier", choices=("mac", "hosta"), default="mac",
+                        help="hosta: java_scoped, integration and frontend_vitest run in one HOST-A ui2-test pod; "
+                        "a runner error runs them on the Mac instead (carrier=mac-fallback)")
     parser.add_argument("--reuse-report", help="a harness-report.json whose PASS may be reused for the exact same tree")
     parser.add_argument("--agent-log", type=Path)
     parser.add_argument("--agent-exit", type=int)
@@ -1398,7 +1565,7 @@ def parse_args(argv: list | None = None) -> argparse.Namespace:
     parser.add_argument("--list", action="store_true", help="print the manifest's steps and exit")
     args = parser.parse_args(argv)
     if args.integration == "auto":
-        args.integration = "local"
+        args.integration = "hosta" if args.carrier == "hosta" else "local"
     args.jobs = max(1, args.jobs)
     return args
 
@@ -1430,6 +1597,7 @@ def main(argv: list | None = None) -> int:
         meta = parse_meta(args.meta)
         ctx = Context(worktree=worktree, manifest=manifest, manifest_sha=manifest_sha, args=args, meta=meta, base_ref=args.base)
         holder["ctx"] = ctx
+        ctx.extras["carrier"] = "mac"
         report_path = args.report or worktree / ".." / ("harness-report-%s.json" % worktree.name)
         report_path = Path(os.path.abspath(report_path))
         ctx.log_dir = args.log_dir or report_path.with_suffix("").with_name(report_path.stem + "-logs")
