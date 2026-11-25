@@ -753,3 +753,24 @@ def test_the_loader_is_closed_even_when_loading_fails(monkeypatch):
 def test_runner_image_seeds_the_host_supplied_gradle_distribution_before_the_first_gradlew():
     text = (ROOT / "ui2" / "Containerfile.test-runner").read_text()
     assert text.index("cp -a /seed/ui2/.gradle-home/wrapper /seed/home/wrapper") < text.index("GRADLE_USER_HOME=/seed/home ./gradlew")
+
+
+# --- HOST-A-only failures of 2026-11-25: small-icu Node (vitest stamps) and the aiview sweep's request timeout --------
+
+def test_runner_image_installs_full_icu_and_proves_a_product_stamp_at_build():
+    text = (ROOT / "ui2" / "Containerfile.test-runner").read_text()
+    assert " nodejs nodejs-full-i18n npm " in text and "ENV NODE_ICU_DATA=/opt/node-icu" in text
+    assert '"2026-10-18 06:49"' in text and 'supportedLocalesOf' in text
+
+
+def test_job_pins_ci_zone_and_locale_and_scales_only_the_sweep_request_timeout():
+    runner, = template()["spec"]["template"]["spec"]["containers"]
+    env = {e["name"]: e["value"] for e in runner["env"]}
+    assert env["TZ"] == "UTC" and env["LANG"] == "C.UTF-8"
+    assert 30 <= int(env["UI2_TEST_HTTP_TIMEOUT_S"]) <= 600
+    sweep = next(ROOT.glob("ui2/integration-tests/src/test/java/**/AiviewRawVersusMaskedSweepTest.java")).read_text()
+    assert 'System.getenv("UI2_TEST_HTTP_TIMEOUT_S")' in sweep and "Duration.ofSeconds(30))" not in sweep.replace(
+        "return Duration.ofSeconds(30);", "")
+    job = remote.render_job(template(), RUN_NAME, IMAGE, scope(integration=False), 1800)
+    env = {e["name"] for e in job["spec"]["template"]["spec"]["containers"][0]["env"]}
+    assert "UI2_TEST_HTTP_TIMEOUT_S" not in env and {"TZ", "LANG"} <= env

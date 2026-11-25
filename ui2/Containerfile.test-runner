@@ -26,12 +26,22 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
 
 RUN for attempt in 1 2 3; do \
       microdnf module enable -y nodejs:22 \
-      && microdnf install -y --nodocs --setopt=install_weak_deps=0 nodejs npm tar gzip findutils diffutils \
+      && microdnf install -y --nodocs --setopt=install_weak_deps=0 nodejs nodejs-full-i18n npm tar gzip findutils diffutils \
       && break; \
       [ "$attempt" = 3 ] && exit 1; \
       sleep 30; \
     done \
- && microdnf clean all
+ && microdnf clean all \
+ && icu_dat="$(rpm -ql nodejs-full-i18n | grep -E '/icudt[0-9]+l\.dat$')" \
+ && [ "$(printf '%s\n' "$icu_dat" | wc -l)" = 1 ] \
+ && ln -s "$(dirname "$icu_dat")" /opt/node-icu
+
+# Full ICU (2026-11-25): the module's nodejs is small-icu (English only); its locale data is the separate
+# nodejs-full-i18n package, which install_weak_deps=0 left out. Without it Intl.DateTimeFormat("sv-SE"/"en-GB"/"en-CA",
+# {timeZone: "Europe/Istanbul"}) falls back to en-US shapes and the backup-screen vitest suites failed on HOST-A only.
+# NODE_ICU_DATA names the data explicitly; the build fails here unless Node really formats a product stamp.
+ENV NODE_ICU_DATA=/opt/node-icu
+RUN node -e 'const w=["sv-SE","en-GB","en-CA","en-US"];const s=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(Date.UTC(2026,9,18,3,49)));process.exit(Intl.DateTimeFormat.supportedLocalesOf(w).length===w.length&&s==="2026-10-18 06:49"?0:1)'
 
 ENV NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
 WORKDIR /opt/test-runner/frontend

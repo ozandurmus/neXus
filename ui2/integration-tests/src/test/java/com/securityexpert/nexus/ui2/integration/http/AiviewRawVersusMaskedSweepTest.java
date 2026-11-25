@@ -1065,12 +1065,25 @@ class AiviewRawVersusMaskedSweepTest {
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
+    /**
+     * Per-request timeout: 30 s on a workstation and in CI. A shared, CPU-throttled runner (the HOST-A ui2-test pod) sets
+     * {@code UI2_TEST_HTTP_TIMEOUT_S} (30..600) to give a slow answer time; the sweep checks the same routes and values.
+     */
+    static final Duration REQUEST_TIMEOUT = requestTimeout(System.getenv("UI2_TEST_HTTP_TIMEOUT_S"));
+
+    static Duration requestTimeout(String seconds) {
+        if (seconds == null || seconds.isBlank()) return Duration.ofSeconds(30);
+        int value = Integer.parseInt(seconds.strip());
+        if (value < 30 || value > 600) throw new IllegalArgumentException("UI2_TEST_HTTP_TIMEOUT_S outside 30..600");
+        return Duration.ofSeconds(value);
+    }
+
     record Resp(int status, String contentType, String body) {
     }
 
     private static Resp get(String target, String cookie) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + target))
-                .timeout(Duration.ofSeconds(30)).header("Accept", "application/json, text/plain, */*");
+                .timeout(REQUEST_TIMEOUT).header("Accept", "application/json, text/plain, */*");
         if (cookie != null) request.header("Cookie", "ui2_session=" + cookie);
         HttpResponse<byte[]> response = HTTP.send(request.GET().build(), HttpResponse.BodyHandlers.ofByteArray());
         return new Resp(response.statusCode(), response.headers().firstValue("content-type").orElse(""),
@@ -1087,7 +1100,7 @@ class AiviewRawVersusMaskedSweepTest {
 
     private static String login() throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/login"))
-                .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
+                .timeout(REQUEST_TIMEOUT).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(Map.of("username", "aiview", "password", "aiview"))))
                 .build();
         HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());

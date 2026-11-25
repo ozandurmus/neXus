@@ -201,3 +201,19 @@ the test and the runner files, not from output; where that is not enough it says
 - **New question 11, memory and wall time of the concurrent phases.** For the next run: peak resident memory of the runner container
   with java and integration side by side, and the wall time of the whole run (target under 6 minutes; the integration
   phase alone was 321 s at a 4-core database, so the floor is that plus the bundle build).
+
+### HOST-A-only failures with three pods at once (2026-11-25, `fix-hosta-vitest-icu-and-aiview-timeout` lane)
+
+- **vitest, 54 failures in the backup screens.** Cause (from the files, not output): the image installs the UBI 9
+  `nodejs:22` module with `install_weak_deps=0`. That Node is small-icu (English only); its locale data is the separate
+  `nodejs-full-i18n` package. The product formats every stamp with `Intl.DateTimeFormat("sv-SE" / "en-GB" / "en-CA",
+  {timeZone: "Europe/Istanbul"})`, which then falls back to en-US shapes (`10/18/2026, 06:49` for `2026-10-18 06:49`).
+  Fixed in the image: `nodejs-full-i18n` installed, `NODE_ICU_DATA` set, and the build fails unless Node formats a product
+  stamp (IMAGE REBUILD NEEDED). The Job pins what CI has: `TZ=UTC`, `LANG=C.UTF-8`. Fake timers are not the cause: the
+  failing assertions are stamp shapes, not timeouts.
+- **`AiviewRawVersusMaskedSweepTest`, `HttpTimeoutException`.** The sweep GETs every route in sequence, each with a 30 s
+  request timeout (the 10 s connect timeout would show as `HttpConnectTimeoutException`). The runner requests 1 CPU and
+  shares it with the java and vitest phases, so with three pods one answer took more than 30 s. Fixed on the runner side:
+  the Job sets `UI2_TEST_HTTP_TIMEOUT_S=180` (bounded 30..600 by the test; the Mac and CI keep 30 s). The sweep checks
+  the same routes, values and coverage. The CPU request was not raised: that would take CPU share from production
+  under contention, which is a PO call.
