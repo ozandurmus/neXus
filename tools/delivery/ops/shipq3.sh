@@ -1,8 +1,33 @@
 #!/bin/bash
 # Usage: shipq.sh <out-file> <wait-for-out-or-""> <branch> <title> <notes> <logname> [extra ship args...]
 # Waits for the previous chain, avoids job windows, unit-tests the rebased branch, then ships it.
+# Pretest reuse (PO decision record 2026-11-24 D3, PO 2026-11-25 option A): when every item of the batch carries
+# harness=PASS and a harness report that is a PASS for the exact tree being shipped (pretest_reuse.py, which applies the
+# harness's own --reuse-report logic), the verdict is written without running jt.sh. Otherwise the pretest runs as
+# before. The ship out file says which path was taken: "PRETEST reused harness report: ..." or "PRETEST ran: ...".
+# NEXUS_SHIP_ITEMS names the batch's ship entries (ship-runner.sh: ship-queue/inflight/<id>).
 . "$(dirname "${BASH_SOURCE[0]}")/ops_lib.sh"
 S=$OPS_STATE/logs; J=$OPS_STATE; REPO=$OPS_REPO
+
+# pretest_decide <worktree> <items-dir>: sets PRETEST_PATH (reused|ran) and PRETEST_WHY; prints the log line.
+pretest_decide() {
+  local why
+  if [ -n "$2" ] && why=$(python3 "$OPS_DIR/pretest_reuse.py" --worktree "$1" --items "$2" 2>&1); then
+    PRETEST_PATH=reused; PRETEST_WHY=$why; echo "PRETEST reused harness report: $why"
+  else
+    PRETEST_PATH=ran; PRETEST_WHY=${why:-no batch items given}; echo "PRETEST ran: $PRETEST_WHY"
+  fi
+}
+# pretest_green <jt-output>: the jt.sh verdict (fail closed: no "failures 0" line is a failure).
+pretest_green() { grep -q "failures 0" "$1" && ! grep -qE "FAIL COMPILE|tsc-FAIL|tools-FAIL|vitest-FAIL" "$1"; }
+# pretest_execute <worktree> <scope> <base-ref> <output>: 0 = green. A reused harness PASS writes its line, runs nothing.
+pretest_execute() {
+  if [ "${PRETEST_PATH:-ran}" = reused ]; then echo "PRETEST reused harness report: $PRETEST_WHY" > "$4"; return 0; fi
+  bash "${NEXUS_JT:-$OPS_DIR/jt.sh}" "$1" "$2" "$3" > "$4" 2>&1
+  pretest_green "$4"
+}
+# Sourced (tests): functions only.
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 OUT=$(cd "$(dirname "$1")" && pwd)/$(basename "$1"); WAIT=$2; BR=$3; TITLE=$4; NOTES=$5; LOG=$6; shift 6
 # Development mode (PO 2026-11-03): scheduled jobs are suspended, so ships no longer wait for job windows.
 # Set NEXUS_SHIP_WINDOWS=1 to restore the 00/06/12/18 holds.
@@ -54,8 +79,10 @@ VERDICT=$S/pretest-$LOG.verdict; rm -f $VERDICT
 # Scoped tests for a narrow diff (module + dependents + architecture-tests); anything unusual selects the full suite.
 SCOPE=$(cd $W && python3 tools/delivery/pretest_scope.py --repo $W --base $M --branch HEAD 2>/dev/null)
 [ "${NEXUS_PRETEST_FULL:-0}" = 1 ] && SCOPE='{"scope": "full"}'
-( bash "$OPS_DIR/jt.sh" $W "$SCOPE" "$M" > $S/pretest-$LOG.out 2>&1
-  if grep -q "failures 0" $S/pretest-$LOG.out && ! grep -qE "FAIL COMPILE|tsc-FAIL|tools-FAIL|vitest-FAIL" $S/pretest-$LOG.out; then
+# NEXUS_PRETEST_FULL=1 asks for the full suite: never reuse then.
+ITEMS=${NEXUS_SHIP_ITEMS-$OPS_STATE/ship-queue/inflight/${LOG#ship-}}; [ "${NEXUS_PRETEST_FULL:-0}" = 1 ] && ITEMS=""
+pretest_decide $W "$ITEMS" >> $OUT
+( if pretest_execute $W "$SCOPE" "$M" $S/pretest-$LOG.out; then
     [ -n "$AFTER" ] && until grep -q "^DONE" "$AFTER" 2>/dev/null; do sleep 15; done
     # The ship ahead was rolled back: main still holds its change until the queued revert ships, so do not merge on it.
     if [ -n "$AFTER" ] && grep -q "^ROLLED BACK" "$AFTER"; then echo "FAIL previous ship rolled back; not merged on top of it" > $VERDICT

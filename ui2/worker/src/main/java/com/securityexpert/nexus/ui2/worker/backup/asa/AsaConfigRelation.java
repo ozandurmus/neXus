@@ -81,11 +81,18 @@ public record AsaConfigRelation(Result result, int linesCompared, int linesDiffe
         for (Map.Entry<Integer, List<Integer>> hunk : insertsByHunk.entrySet()) {
             List<Integer> dels = deletesByHunk.getOrDefault(hunk.getKey(), List.of());
             boolean[] used = new boolean[dels.size()];
+            // Deleted lines before this index are all paired already: a long run of masked lines is then not
+            // rescanned from its start for every line (that made the check budget run out on ~3000 masked lines,
+            // reading an otherwise identical pair of texts as MISMATCH purely because of the mask).
+            int firstFree = 0;
             for (int j : hunk.getValue()) {
                 String startupLine = s.get(j);
                 boolean paired = false;
+                while (firstFree < used.length && used[firstFree]) {
+                    firstFree++;
+                }
                 if (startupLine.contains(MASK)) {
-                    for (int d = 0; d < dels.size() && budget > 0; d++, budget--) {
+                    for (int d = firstFree; d < dels.size() && budget > 0; d++, budget--) {
                         if (!used[d] && matchesMasked(startupLine, r.get(dels.get(d)))) {
                             used[d] = true;
                             paired = true;

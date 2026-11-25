@@ -45,31 +45,35 @@ def test_infra_text_early_in_the_log_does_not_make_a_clean_no_change_an_infra_er
     assert outcome(ops, text) == "NO_CHANGE"
 
 
-def finish(ops, name=LANE):
-    r = ops.source("lane-runner.sh", f'finish_lane "$Q/started/{name}.brief"')
+def finish(ops, name=LANE, pre=""):
+    # The harness gate is a background job in production; here it only records that it was started.
+    r = ops.source("lane-runner.sh", f'start_harness_gate() {{ echo "GATE $1" >> "$L/gate-calls"; }}\n{pre}\n'
+                                     f'finish_lane "$Q/started/{name}.brief"')
     assert r.returncode == 0, r.stderr
     return r.stdout
 
 
-def test_exit_0_goes_to_the_ship_queue_and_done(ops):
+def gate_calls(ops):
+    f = ops.logs / "gate-calls"
+    return f.read_text().split("\n")[:-1] if f.exists() else []
+
+
+def test_exit_0_goes_through_the_harness_gate_never_straight_to_the_ship_queue(ops):
     ops.write_lane(LANE, "[argon] exit=0 head=abc x", meta="base=origin/main\nallow_paths=1\ntitle=T\n")
     out = finish(ops)
-    entry = (ops.sq / f"{LANE}.ship").read_text()
-    assert f"branch=lane/q-{LANE}" in entry and f"name={LANE}" in entry and "allow_paths=1" in entry and "title=T" in entry
-    assert (ops.lq / "done" / f"{LANE}.brief").exists() and (ops.lq / "done" / f"{LANE}.outcome").read_text().strip() == "OK"
-    assert not (ops.lq / "started" / f"{LANE}.brief").exists() and "ship-queued" in out
+    assert gate_calls(ops) == [f"GATE {LANE}"] and "harness gate started" in out
+    assert not (ops.sq / f"{LANE}.ship").exists()   # the gate writes the entry from a typed harness exit
+    # The gate reads the brief and meta from done/, so they are there before it starts.
+    assert (ops.lq / "done" / f"{LANE}.brief").exists() and (ops.lq / "done" / f"{LANE}.meta").exists()
+    assert (ops.lq / "done" / f"{LANE}.outcome").read_text().strip() == "OK"
+    assert not (ops.lq / "started" / f"{LANE}.brief").exists()
 
 
-def test_a_returned_review_flag_stays_on_the_ship_entry(ops):
-    ops.write_lane(LANE, "[argon] exit=0 head=abc x", meta="base=lane/q-x\nreview_returned=1\n")
-    finish(ops)
-    assert "review_returned=1" in (ops.sq / f"{LANE}.ship").read_text()
-
-
-def test_ship_no_lane_is_not_queued(ops):
+def test_ship_no_lane_is_not_gated_or_queued(ops):
     ops.write_lane(LANE, "[argon] exit=0 head=abc x", meta="base=origin/main\nship=no\n")
     finish(ops)
-    assert not (ops.sq / f"{LANE}.ship").exists() and (ops.lq / "done" / f"{LANE}.brief").exists()
+    assert gate_calls(ops) == [] and not (ops.sq / f"{LANE}.ship").exists()
+    assert (ops.lq / "done" / f"{LANE}.brief").exists()
 
 
 def test_exit_3_without_a_marker_is_an_explicit_no_change_not_a_silent_done(ops):

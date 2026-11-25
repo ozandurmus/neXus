@@ -215,7 +215,8 @@ the lane's change are kept. Run the tests the change touches, then commit with t
     mkdir -p "$SQ/inflight/$ID"; for f in "${ok[@]}"; do mv "$f" "$SQ/inflight/$ID/"; done
     log "SHIPPING batch/$ID: ${names[*]}${AFTER:+ (pipelined behind $(basename "$AFTER" .out | sed 's/^ship-//'))}"
     OUT=$L/ship-$ID.out; rm -f "$OUT"
-    NEXUS_SHIP_AFTER="$AFTER" nohup bash "$OPS_DIR/shipq3.sh" "$OUT" "" "batch/$ID" "$TITLE" "Auto ship by ship-runner. Lanes: ${names[*]}" "ship-$ID" >/dev/null 2>&1 &
+    # NEXUS_SHIP_ITEMS: shipq3.sh reuses a harness PASS for the exact shipped tree (PO 2026-11-25 option A).
+    NEXUS_SHIP_AFTER="$AFTER" NEXUS_SHIP_ITEMS="$SQ/inflight/$ID" nohup bash "$OPS_DIR/shipq3.sh" "$OUT" "" "batch/$ID" "$TITLE" "Auto ship by ship-runner. Lanes: ${names[*]}" "ship-$ID" >/dev/null 2>&1 &
     sleep 60
   done
 }

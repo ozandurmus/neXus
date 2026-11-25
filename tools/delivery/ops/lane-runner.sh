@@ -12,6 +12,10 @@
 #  * a worktree that cannot be created re-queues the brief once; the second failure becomes done/<name>.brief.FAILED_WORKTREE
 #    with an ALERT line (watch-check lists it, status.sh shows its age).
 #  * a lane brief carrying review_returned=1 (b-review.sh returned a BLOCK to the author) keeps that flag on its ship entry.
+# Merged from the live copy on 2026-11-25 (PO decision record 2026-11-24 D2, D3):
+#  * an exit-0 lane reaches the ship queue only through harness-gate.sh (typed harness exit -> ship entry, one repair turn,
+#    or held); a repair turn that changed nothing (NO_CHANGE) re-runs the gate once on the original lane (second chance).
+#  * with lane-queue/NO_REFILL set, the only refill is the P1 planner (exactly 3 lane briefs), see planner_due.
 # The file only defines functions when sourced (tests); it runs the loop when executed.
 . "$(dirname "${BASH_SOURCE[0]}")/ops_lib.sh"
 Q=$OPS_STATE/lane-queue; L=$OPS_STATE/logs; SQ=$OPS_STATE/ship-queue; REPO=$OPS_REPO
@@ -70,7 +74,7 @@ hold_lane() {
 
 # finish_lane <started-brief>: handle one lane in started/ whose engine wrapper has ended.
 finish_lane() {
-  local s=$1 n out age bfiles
+  local s=$1 n out age
   n=$(basename "$s" .brief)
   out=$(lane_outcome "$L/q-$n.nohup")
   [ "$out" = RUNNING ] && return 0
@@ -105,7 +109,8 @@ finish_lane() {
       # refuses a dirty one, the branch stays.
       log "NO_CHANGE $n: finished with exit 3 and no permission or infrastructure error; nothing to ship"
       git -C "$REPO" worktree remove "$OPS_CODO/nexus-q-$n" 2>/dev/null && log "removed worktree of $n"
-      archive_lane "$n" "$s" "NO_CHANGE"; return 0;;
+      archive_lane "$n" "$s" "NO_CHANGE"
+      second_chance "$n"; return 0;;
   esac
   if [ "$out" = FAILED ]; then
     # Fast-fail guard (2026-11-20 incident): a lane that ended non-zero within 120 s pauses the runner and goes back to the
@@ -118,22 +123,34 @@ finish_lane() {
     log "ALERT FAILED $n: $(lane_exit_line "$n")"
     archive_lane "$n" "$s" "FAILED"; return 0
   fi
-  # OK. PO 2026-11-22 "shipler arka arkaya girecek": a lane that ended exit=0 goes to the ship queue on its own
-  # (ship-runner.sh ships it); meta ship=no keeps review-only or PO-decision lanes out.
+  # OK. PO 2026-11-22 "shipler arka arkaya girecek": a lane that ended exit=0 goes on towards the ship queue on its own;
+  # meta ship=no keeps review-only or PO-decision lanes out. Harness gate (PO decision record 2026-11-24 D3, wired
+  # 2026-11-25): the ship entry is written by harness-gate.sh from a typed harness exit, never here. It starts after the
+  # brief and meta moved to done/ (the gate and its repair turn read them there).
+  local gate=""
   if ! grep -q '^ship=no' "$Q/started/$n.meta" 2>/dev/null; then
-    mkdir -p "$SQ"
-    { echo "branch=lane/q-$n"; echo "name=$n"; grep -E '^(allow_paths|title|review_returned)=' "$Q/started/$n.meta" 2>/dev/null; } > "$SQ/$n.ship"
-    # Tier B (PO 2026-11-23): production code outside the Estate UI gets a Sonnet review before batching.
-    bfiles=$(git -C "$REPO" diff --name-only "$(git -C "$REPO" merge-base "lane/q-$n" origin/main)" "lane/q-$n" 2>/dev/null \
-      | grep -E '^ui2/[^/]+/src/main/|^ui2/frontend/src/' | grep -vE '^ui2/frontend/src/estate/')
-    if [ -n "$bfiles" ]; then echo "review=pending" >> "$SQ/$n.ship"
-      ( nohup /bin/bash "$OPS_DIR/b-review.sh" "$n" > "$L/b-review-$n.nohup" 2>&1 & ); fi
-    log "ship-queued $n${bfiles:+ (tier B review pending)}"
+    gate=1
   else
     # A lane that never ships (ship=no: refill, review-only) needs no worktree either.
     git -C "$REPO" worktree remove "$OPS_CODO/nexus-q-$n" 2>/dev/null && log "removed worktree of $n"
   fi
   archive_lane "$n" "$s" "OK"
+  if [ -n "$gate" ]; then start_harness_gate "$n"; log "harness gate started for $n"; fi
+}
+
+# start_harness_gate <name>: the gate runs in the background (serialized by its own lock).
+start_harness_gate() { ( nohup /bin/bash "$OPS_DIR/harness-gate.sh" "$1" > "$L/harness-gate-$1.nohup" 2>&1 & ); }
+
+# second_chance <name>: a harness repair turn (meta repair_of=<original>) that changed nothing -- the lane judged the
+# failures load or flakes (2026-11-25 G601) -- re-runs the gate once on the original lane. The original's meta is marked
+# repair_of= first, so a second failure there is held for the PO session instead of getting another repair turn.
+second_chance() {
+  local n=$1 orig
+  orig=$(grep -E '^repair_of=' "$Q/done/$n.meta" 2>/dev/null | tail -1 | cut -d= -f2-)
+  [ -n "$orig" ] && [ -e "$Q/done/$orig.meta" ] || return 0
+  grep -q '^repair_of=' "$Q/done/$orig.meta" || echo "repair_of=$orig" >> "$Q/done/$orig.meta"
+  start_harness_gate "$orig"
+  log "repair turn $n changed nothing -> harness gate re-run for $orig (second chance)"
 }
 
 finish_pass() { local s; for s in "$Q"/started/*.brief; do [ -e "$s" ] || continue; finish_lane "$s"; done; }
@@ -150,22 +167,51 @@ wt_failed() {
   log "ALERT worktree failed twice for $n ($(tail -1 "$L/lane-runner.err" 2>/dev/null | cut -c1-120)); brief kept as done/$n.brief.FAILED_WORKTREE"
 }
 
-# Refill (PO 2026-11-22: work runs back to back): with fewer than 2 briefs queued and no refill lane queued or running,
-# queue one refill lane (UI parity and backlog in turn), at most every 10 minutes. NO_REFILL (PO 2026-11-24) disables it.
+# lane_hour: the current hour (00-23); a function so tests can pin it.
+lane_hour() { date +%H; }
+# Lane cap the planner fills to (PO decision record 2026-11-24 D1: 3 parallel lanes).
+PLANNER_LANES=${NEXUS_PLANNER_LANES:-3}
+
+# planner_due <queued-briefs> <last-refill-epoch>: 0 when the P1 planner must be queued now (PO decision record 2026-11-24
+# D2, enforced 2026-11-25 "beklemek tasarimda yok": the queue never waits for the PO session). Only with NO_REFILL set:
+#  * no brief waits AND fewer than PLANNER_LANES lanes run (an empty queue with every slot busy is not starvation:
+#    2026-11-25 the planner fired while 3 lanes ran and stacked 3 more briefs), or
+#  * at 08:xx or 16:xx, when fewer than 2 briefs wait and no refill was queued in the last 2 hours.
+planner_due() {
+  local qn=$1 last=$2 run_n hh
+  [ -e "$Q/NO_REFILL" ] || return 1
+  run_n=$(ls "$Q"/started/*.brief 2>/dev/null | wc -l | tr -d ' ')
+  [ "$qn" -eq 0 ] && [ "$run_n" -lt "$PLANNER_LANES" ] && return 0
+  hh=$(lane_hour)
+  { [ "$hh" = 08 ] || [ "$hh" = 16 ]; } && [ "$qn" -lt 2 ] && [ $(( $(date +%s) - last )) -gt 7200 ]
+}
+
+# Refill (PO 2026-11-22: work runs back to back): without NO_REFILL, with fewer than 4 briefs queued and no refill lane
+# queued or running, queue one rotating refill lane (p1 -> debt -> backlog -> review), at most every 5 minutes. With
+# NO_REFILL (PO 2026-11-24) the rotating refill stops and only the P1 planner runs (planner_due).
 maybe_refill() {
-  local qn last sq prev kind rn
+  local qn last sq prev kind rn pd=0
   qn=$(ls "$Q"/*.brief 2>/dev/null | wc -l | tr -d ' ')
   last=$(file_mtime "$Q/.last-refill")
   sq=$(ls "$SQ"/*.ship 2>/dev/null | wc -l | tr -d ' ')
-  # Do not outrun the ship pipeline (about 3-5 lanes per 20-minute ship): no refill while 30 or more lanes wait to ship.
-  if [ ! -e "$Q/NO_REFILL" ] && [ "$qn" -lt 4 ] && [ "$sq" -lt 10 ] && ! ls "$Q"/*-refill-*.brief "$Q"/started/*-refill-*.brief 2>/dev/null | grep -q . && [ $(( $(date +%s) - last )) -gt 300 ]; then
+  planner_due "$qn" "$last" && pd=1
+  # Do not outrun the ship pipeline: no refill while 10 or more lanes wait to ship.
+  if { [ "$pd" = 1 ] || { [ ! -e "$Q/NO_REFILL" ] && [ "$qn" -lt 4 ]; }; } && [ "$sq" -lt 10 ] \
+     && ! ls "$Q"/*-refill-*.brief "$Q"/started/*-refill-*.brief 2>/dev/null | grep -q . && [ $(( $(date +%s) - last )) -gt 300 ]; then
     prev=$(cat "$Q/.last-refill-kind" 2>/dev/null); case "$prev" in p1) kind=debt;; debt) kind=backlog;; backlog) kind=review;; *) kind=p1;; esac
+    [ "$pd" = 1 ] && kind=p1
     rn=$(bash "$OPS_DIR/lanename.sh" "refill-$kind")  # standard name at queue time (PO 2026-11-24)
     printf 'base=origin/main\nengine=claude\nship=no\nadddir=%s\n' "$OPS_STATE" > "$Q/$rn.meta"
-    cp "$OPS_STATE/refill-${kind%b}.template" "$Q/$rn.brief"
+    cp "$OPS_STATE/refill-${kind%b}.template" "$Q/$rn.brief.tmp" || { rm -f "$Q/$rn.meta" "$Q/$rn.brief.tmp"; log "ALERT refill template refill-${kind%b}.template missing"; return 0; }
+    if [ "$pd" = 1 ]; then
+      # The planner writes exactly as many briefs as the lane cap (PO 2026-11-24), whatever the template says.
+      sed_inplace 's/Write 3 to 6 lane briefs/Write exactly 3 lane briefs (lane cap 3, PO 2026-11-24)/' "$Q/$rn.brief.tmp"
+      grep -q 'exactly 3 lane briefs' "$Q/$rn.brief.tmp" || printf '\nWrite exactly 3 lane briefs (lane cap 3, PO 2026-11-24).\n' >> "$Q/$rn.brief.tmp"
+    fi
+    mv "$Q/$rn.brief.tmp" "$Q/$rn.brief"
     case "$kind" in p1*) printf 'claude_model=sonnet\neffort=high\n' >> "$Q/$rn.meta";; esac
     touch "$Q/.last-refill"; echo "$kind" > "$Q/.last-refill-kind"
-    log "queued refill $rn"
+    if [ "$pd" = 1 ]; then log "queued refill $rn (planner)"; else log "queued refill $rn"; fi
   fi
 }
 
