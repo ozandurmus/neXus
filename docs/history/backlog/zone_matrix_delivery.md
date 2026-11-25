@@ -54,10 +54,10 @@ Status: `PROVEN` = a test proves the whole sentence for the steps delivered; `PA
 | ZM-25 | PARTIAL | `COVERED_BY_EARLIER_DENY` with covering rule id on a violation: `Eval#zm6_zm24_zm25_...`. The "same install targets" condition is decided by the hygiene conflict analysis and is not pinned here; "toggling keeps first-observed" is STEP 4 |
 | ZM-26 | PARTIAL | evaluation-level headline never renders "0" for incomplete coverage or undecided rules: `Eval#zm7_zm26_...`, `Acc#zm7_...`; "distinct open" findings and a stale policy are STEP 4 |
 | ZM-27 | PROVEN | `Eval#zm19_zm21_zm27_zm30_...` |
-| ZM-28 | STEP 6 | report file hash and CSV escaping |
+| ZM-28 | PARTIAL | CSV formula-guard half proven on the evidence report content: `ZoneMatrixEvidenceReportInputsTest#zm28_plantedFormulaReferencesAndRuleNamesAreEscapedByTheR1CsvGuardAndTheBytesHashIsReproducible` (planted `=cmd`, `+1`, `-1`, `@SUM(1)` in reference fields and rule names escaped by `CsvReportRenderer`; CSV bytes and their sha256 reproducible). Missing (step 6b-2): the report is not in the Reports catalogue, is not stored as a file, and no audit row carries the stored file's sha256 written before the first byte is streamed |
 | ZM-29 | PROVEN | `Acc#zm29_publishDiffListsMovedAddressesWithEffectiveCounts`; `Part#movesListAddressesThatChangeOwner`; `Svc#addressesLeavingAZoneNeedARationaleAndTheOldVersionRetires` |
 | ZM-30 | PARTIAL | headline and Matrix tab show no BDDK pass or score: `Eval#zm19_zm21_zm27_zm30_...`, frontend `ZoneMatrixStepTwo.test.tsx` ("never renders compliant, BDDK, pass, score, percent or green in the Matrix tab"); report title and "N of M cells confirmed" header are STEP 6 |
-| ZM-31 | STEP 6 | report follows the caller's screen view |
+| ZM-31 | PARTIAL | projection half proven: `ZoneMatrixEvidenceReportInputsTest#zm31_maskedAndRawInputsDifferAndTheMaskedOneCarriesNoPlantedNameAndNoViewCarriesWitnessData` (the same stored data assembled with the masked and the raw `summaryLabels` differs; the masked input and built report carry no planted zone, policy, source, container, rule, service set, actor or reference text; zone names are `ZONE-<n>`; no view carries blocks, witness addresses or NAT views). Missing (step 6b-2): the rights test through a route (which persona gets which view, `report_raw_view` for raw content) and the opt-in blocks appendix (ZM-38) |
 | ZM-32 | STEP 6 | report period and resolved findings |
 | ZM-33 | PROVEN | `Sec#everyRouteResolvesToItsActionAndTheRolesMatchTheContract` (viewer and aiview hold neither `zone_matrix_zones_read` nor edit, evaluate or publish); `Eval#zm10_zm33_...` (witness refused without the right, `WITNESS_VIEW` audit row, fail-closed when the row cannot be written); `Svc#viewsHideBlocksUnlessPermittedAndMaskForAiview`, `Svc#aViewIsRefusedWhenItsAuditRowCannotBeWritten`, `Svc#addressesLeavingAZoneNeedARationaleAndTheOldVersionRetires` (lookup audit row) |
 | ZM-34 | STEP 4 | `BECAME_UNDECIDED`, rule missing from an uncollected scope |
@@ -70,9 +70,10 @@ Status: `PROVEN` = a test proves the whole sentence for the steps delivered; `PA
 | ZM-41 | PROVEN | `Two#unassignedToUnassignedIsDenyAllWhateverTheDefault`; `Two#cellsFollowTheStatementRulesAndRefusedLinesAreReportedOneByOne` (`ALLOW_ANY` default refused, `INVALID_DEFAULT`); `Eval#zm5_zm41_unassignedToUnassignedStaysDenyAll...` |
 | ZM-42 | STEP 4 | `firstObservedAnyVersion` |
 
-Counts (42 criteria): PROVEN 24, PARTIAL 8, STEP 4 five (ZM-8, ZM-34, ZM-35, ZM-39, ZM-42), STEP 6 five (ZM-11, ZM-28, ZM-31, ZM-32, ZM-38), DEFECT 0.
+Counts (42 criteria): PROVEN 24, PARTIAL 10, STEP 4 five (ZM-8, ZM-34, ZM-35, ZM-39, ZM-42), STEP 6 three (ZM-11, ZM-32, ZM-38), DEFECT 0.
 Partial rows and their open part: ZM-12 (real-environment measurement), ZM-19 (STEP 7), ZM-25 (install-target pin; first-observed STEP 4), ZM-26 (STEP 4), ZM-30 (STEP 6),
-ZM-36 (STEP 4/5), ZM-37 (runs and findings STEP 4; exact audit key set at database level), ZM-40 (no byte-level body limit).
+ZM-36 (STEP 4/5), ZM-37 (runs and findings STEP 4; exact audit key set at database level), ZM-40 (no byte-level body limit),
+ZM-28 (catalogue, stored file and its audit-row sha256: step 6b-2), ZM-31 (route-level rights test and ZM-38 appendix: step 6b-2).
 No code contradicted the contract in this pass: no test was disabled and no production code changed.
 
 2026-11-25: step 6a content builder (`ZoneMatrixEvidenceReport`, pure, pins ZM-11, ZM-30 title part, ZM-32), not wired: catalogue, rights, masking cell kind, stored file and ZM-28, ZM-31, ZM-38 remain for a later step.
@@ -80,3 +81,4 @@ No code contradicted the contract in this pass: no test was disabled and no prod
 2026-11-25: DRAFT amendment proposal for Cisco ASA and FortiGate coverage written (`docs/design/ZONE_MATRIX_ASA_FORTIGATE_AMENDMENT_PROPOSAL_2026_11_25.md`, engineering default (a) of the 2026-11-23 midday record); it approves nothing, freezes nothing and changes no contract text. It reports the stale ASA/FortiGate sentence of contract 5.8 as a contradiction and lists 11 questions for the Product Owner.
 
 2026-11-25: CLI parity for the zone matrix routes: `ZonesMatrixCli` (named so because ZM-13 keeps `ZoneMatrix*` classes off the cli package) gives a named `zone-matrix-*` command to each of the 20 `ZoneMatrixController` mappings, pinned by `ZoneMatrixCliParityTest`; rows added to the `NEXUS_CLI.md` command table.
+2026-11-25: step 6b-1: evidence report input assembler (`ZoneMatrixEvidenceReportInputs`, pure, stored summary to report input for the caller's screen view) and its projection test; ZM-28 formula-guard half pinned, ZM-31 projection half pinned. Catalogue, route, stored-file audit row, ZM-38 appendix and rights still open for 6b-2.

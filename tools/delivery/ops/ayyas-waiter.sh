@@ -37,7 +37,7 @@ waiter_main() {
   t0=$(date +%s); s1=$(log_lines "$L/ship-runner.log"); s2=$(log_lines "$L/lane-runner.log")
   while [ $(( $(date +%s) - t0 )) -lt "$max" ]; do
     n1=$(new_lines "$L/ship-runner.log" "$s1" | grep -E "FAILED|HELD|B-REVIEW BLOCK|CONFLICT${WAKE:+|$WAKE}" | head -5)
-    n2=$(new_lines "$L/lane-runner.log" "$s2" | grep -E ' done .*exit=[^0]| done .*mc-device-health|HELD|PAUSED' | head -5)
+    n2=$(new_lines "$L/lane-runner.log" "$s2" | grep -E ' done .*exit=[^0]| done .*mc-device-health|HELD|PAUSED' | grep -vE 'refill-[a-z0-9]+: .*exit=3' | head -5)
     idle=$(idle_next "$idle")
     [ -z "$n2" ] && n2=$(idle_event "$idle")
     if [ -n "$n1$n2" ]; then echo "EVENT:"; echo "$n1"; echo "$n2"; break; fi

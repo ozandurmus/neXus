@@ -151,7 +151,8 @@ public final class ZoneMatrixStaleness {
         return new CountHeadline(count, exact, exact ? Integer.toString(count) : "at least " + count);
     }
 
-    private static Instant parse(String text) {
+    /** Snapshot time text to an instant (ISO instant or offset form); {@code null} when missing or unreadable. */
+    static Instant parse(String text) {
         if (text == null || text.isBlank()) {
             return null;
         }

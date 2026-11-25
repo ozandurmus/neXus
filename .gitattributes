@@ -23,3 +23,7 @@
 *.jpeg binary
 *.ico binary
 *.pdf binary
+
+# Backlog history files are append-only logs (docs/history/backlog/<id>.md): two lanes appending to the same file
+# must both survive a rebase, not conflict (2026-11-25: most port lanes of the day came from these files).
+docs/history/backlog/*.md merge=union
