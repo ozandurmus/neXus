@@ -622,4 +622,21 @@ def test_runner_files_are_loaded_only_from_a_checkout_at_the_context_commit(monk
         image.load_runner_files("b" * 40, run=lambda *a, **k: calls.append(a))
     assert not calls
     image.load_runner_files("a" * 40, run=lambda *a, **k: calls.append(a) or subprocess.CompletedProcess(a, 0))
-    assert calls and calls[0][0][:5] == ["kubectl", "-n", "ui2-build", "exec", "-i"]
+    verbs = [c[0][1] if c[0][1] != "-n" else c[0][3] for c in calls]
+    assert verbs == ["apply", "wait", "exec", "delete"]
+
+
+def test_the_loader_is_closed_even_when_loading_fails(monkeypatch):
+    image = _image_tool()
+    monkeypatch.setattr(image, "checkout_commit", lambda root=None: "a" * 40)
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1 if "exec" in argv else 0)
+    with pytest.raises(RuntimeError):
+        image.load_runner_files("a" * 40, run=run)
+    assert calls[-1][:2] == ["kubectl", "delete"]
+def test_runner_image_seeds_the_host_supplied_gradle_distribution_before_the_first_gradlew():
+    text = (ROOT / "ui2" / "Containerfile.test-runner").read_text()
+    assert text.index("cp -a /seed/ui2/.gradle-home/wrapper /seed/home/wrapper") < text.index("GRADLE_USER_HOME=/seed/home ./gradlew")
