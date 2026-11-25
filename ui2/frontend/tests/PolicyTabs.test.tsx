@@ -35,10 +35,10 @@ it("opens the tabs and the Installation section, retains Rules and sends hit fil
   fireEvent.click(screen.getByRole("button", { name: `Policy ${metadata.name}` }));
   await screen.findByRole("region", { name: "Policy rulebase" });
   expect(screen.getByRole("tab", { name: "Rules & Containers" })).toHaveAttribute("aria-selected", "true");
-  // Four tabs (UI review 2026-11-05, C2), each named by its own label, grouped Browse · Judge · Trace.
+  // Five tabs (UI review 2026-11-05, C2; Insights added by Policy Insights P1), each named by its own label, grouped Browse · Judge · Trace.
   const tabs = within(screen.getByRole("tablist", { name: "Policy tabs" })).getAllByRole("tab");
-  expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules & Containers", "Objects", "Hygiene", "Changes"]);
-  expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Judge", "Trace"]);
+  expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules & Containers", "Objects", "Hygiene", "Insights", "Changes"]);
+  expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Judge", "Judge", "Trace"]);
   // The deep link to Trace > Policy rule lookup, scoped to the open policy.
   expect(screen.getByRole("link", { name: "Search in this policy" })).toHaveAttribute("href", "?screen=trace&mode=lookup&policy_id=policy-1");
   fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "No hits recorded (0 hits)" }));

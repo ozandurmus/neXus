@@ -17,11 +17,12 @@ host owns. Report the relationship, not the values (AGENTS.md, Sensitive identit
 in this document is a boolean, a count, an enum or a duration — never a host name, address, user name, token or
 output line.
 
-**Known gap at the time of writing (verify before ticking P1).** A source search of `ui2/service` and `ui2/worker` on
-`46050da0` found the script record, versions, secret scan, routes, CLI, per-run pod, broker, scheduler, masked audited
-output and the Operations › Script execution screen, but **no code that sends a syslog message or a mail at the end of
-a script run** (slice 3). If the running build does not have it, tick P1 "no" and mark every `N` step `NOT_RUN`; the
-rest of the checklist is still worth running.
+**Slice 3 deployment check (verify before ticking P1).** Slice 3 (`V266__script_execution_slice3_notifications.sql` and
+`ScriptRunNotifier`, landed at `8420aaf1`) is now in repository source on `origin/main` alongside slices 1, 2 and 4
+(script record, versions, secret scan, routes, CLI, per-run pod, broker, scheduler, masked audited output and the
+Operations › Script execution screen). Precondition P1 still checks whether the deployed build on the target cluster
+includes `V266`; if the running build predates `V266`, tick P1 "no" and mark every `N` step `NOT_RUN` (the rest of the
+checklist is still worth running).
 
 ---
 

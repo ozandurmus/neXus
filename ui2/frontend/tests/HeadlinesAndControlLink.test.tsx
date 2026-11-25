@@ -45,9 +45,9 @@ describe("headline lines (review 4.3): number · noun · denominator · age, UNK
     expect(policyHeadline({ catalog: [], sources: 0, loading: false, now })).toBe("0 containers · 0 sources · 0 rules · collected UNKNOWN");
   });
 
-  it("has four Policy tabs, grouped Browse · Judge · Trace (UI review 2026-11-05, C2)", () => {
+  it("has five Policy tabs, grouped Browse · Judge · Trace (UI review 2026-11-05, C2)", () => {
     expect(POLICY_TAB_GROUPS.map((g) => g.group)).toEqual(["Browse", "Judge", "Trace"]);
-    expect(POLICY_TAB_GROUPS.flatMap((g) => g.tabs)).toEqual(["Rules & Containers", "Objects", "Hygiene", "Changes"]);
+    expect(POLICY_TAB_GROUPS.flatMap((g) => g.tabs)).toEqual(["Rules & Containers", "Objects", "Hygiene", "Insights", "Changes"]);
   });
 });
 
