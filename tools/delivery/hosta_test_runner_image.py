@@ -100,11 +100,23 @@ def load_runner_files(commit, root=REPO, run=subprocess.run):
     """Put the runner files into the loaded context, from a checkout at the same commit only."""
     if checkout_commit(root) != commit:
         raise ValueError("this checkout is another commit than the loaded build context")
-    result = run(["kubectl", "-n", "ui2-build", "exec", "-i", LOADER, "--", "sh", "-c",
-                  "mkdir -p /workspace/tools/delivery && tar -xf - -C /workspace && chmod -R a+rX /workspace/tools"],
-                 input=runner_files_tar(root), capture_output=True, timeout=120)
-    if result.returncode:
-        raise RuntimeError("could not load the runner files into the build context")
+    # The loader pod exists only while run_build.sh loads a context; open and close it the same way it does.
+    manifest = str(root / "deploy" / "ui2-image-build" / "20-context-loader.yaml")
+    steps = [
+        (["kubectl", "apply", "-f", manifest], None),
+        (["kubectl", "wait", "--for=condition=Ready", "pod/" + LOADER, "-n", "ui2-build", "--timeout=60s"], None),
+        (["kubectl", "-n", "ui2-build", "exec", "-i", LOADER, "--", "sh", "-c",
+          "mkdir -p /workspace/tools/delivery && tar -xf - -C /workspace && chmod -R a+rX /workspace/tools"],
+         runner_files_tar(root)),
+    ]
+    try:
+        for argv, data in steps:
+            result = run(argv, input=data, capture_output=True, timeout=120)
+            if result.returncode:
+                raise RuntimeError("could not load the runner files into the build context")
+    finally:
+        run(["kubectl", "delete", "-f", manifest, "--grace-period=1", "--ignore-not-found"], input=None,
+            capture_output=True, timeout=120)
 
 
 def build(commit, sleep=time.sleep, monotonic=time.monotonic, load=load_runner_files):

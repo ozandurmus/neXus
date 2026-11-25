@@ -48,7 +48,12 @@ RUN npm config set cafile "$NODE_EXTRA_CA_CERTS" \
 WORKDIR /seed
 COPY ui2/ /seed/ui2/
 COPY tools/delivery/test_runner_seed.init.gradle.kts tools/delivery/test_runner_pod.sh /seed/
+# The Gradle distribution is a host-supplied input under ui2/.gradle-home/wrapper (HOST_A_RUNBOOK, "The Gradle
+# distribution download"; the build network cannot fetch it): put it where the wrapper looks before the first ./gradlew
+# (2026-11-25: the first build tried the download and got 503).
 RUN rm -rf /seed/ui2/frontend/node_modules /seed/ui2/.gradle \
+ && mkdir -p /seed/home \
+ && cp -a /seed/ui2/.gradle-home/wrapper /seed/home/wrapper \
  && cd /seed/ui2 \
  && GRADLE_USER_HOME=/seed/home ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true \
       --dependency-verification=lenient -I /seed/test_runner_seed.init.gradle.kts seedTestDependencies \
