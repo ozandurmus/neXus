@@ -464,6 +464,10 @@ public final class ScriptExecutionController {
         out.put("created_at", s.createdAt().toString());
         out.put("updated_at", s.updatedAt().toString());
         out.put("warnings", details.warnings());
+        // Outcome token and finish time of the latest FINISHED run only; null/null when none finished (never invented).
+        Optional<ScriptRunRecord> lastRun = service.lastFinishedRun(s.scriptId());
+        out.put("last_run_outcome", lastRun.flatMap(ScriptRunRecord::outcome).orElse(null));
+        out.put("last_run_at", lastRun.flatMap(ScriptRunRecord::finishedAt).map(Instant::toString).orElse(null));
         if (includeVersions) {
             List<Map<String, Object>> versionList = new ArrayList<>(versions.size());
             for (ScriptVersionRecord v : versions) {

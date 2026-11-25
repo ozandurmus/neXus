@@ -905,6 +905,19 @@ function ScriptSettingsAndDetailCard({
   );
 }
 
+/**
+ * The list's "Last run" cell: the outcome token of the latest FINISHED run and the age of that evidence. Only
+ * SUCCESS may look positive; FAILURE and TIMED_OUT are bad; a script that never finished a run, and any token this
+ * screen does not know, stay neutral (an unknown token is written as received, never as OK).
+ */
+function LastRunPill({ outcome, at }: { readonly outcome: string | null | undefined; readonly at: string | null | undefined }) {
+  if (!outcome) {
+    return <StatusPill tone="neutral" word="never run" dense fact="last-run-never" />;
+  }
+  const tone = outcome === "SUCCESS" ? "ok" : outcome === "FAILURE" || outcome === "TIMED_OUT" ? "bad" : "neutral";
+  return <StatusPill tone={tone} word={outcome} age={at ?? undefined} title={at ? `Finished ${at}` : undefined} dense fact="last-run-outcome" />;
+}
+
 export function ScriptExecutionPanel() {
   const session = useSession();
   const [data, setData] = useState<ScriptListResponse | null>(null);
@@ -1250,6 +1263,7 @@ export function ScriptExecutionPanel() {
                 <TableCell>Current version</TableCell>
                 <TableCell>Schedule</TableCell>
                 <TableCell>Enabled</TableCell>
+                <TableCell>Last run</TableCell>
                 <TableCell>Next fires</TableCell>
                 <TableCell>Warnings</TableCell>
                 {showRowActions ? <TableCell align="right">Actions</TableCell> : null}
@@ -1316,6 +1330,9 @@ export function ScriptExecutionPanel() {
                         word={row.enabled ? "Enabled" : "Disabled"}
                         dense
                       />
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }} data-testid={`last-run-${row.script_id}`}>
+                      <LastRunPill outcome={row.last_run_outcome} at={row.last_run_at} />
                     </TableCell>
                     <TableCell sx={{ whiteSpace: "nowrap" }}>
                       {row.next_five_fires.length > 0 ? (

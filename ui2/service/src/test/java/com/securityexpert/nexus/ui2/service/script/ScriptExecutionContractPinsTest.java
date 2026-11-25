@@ -152,7 +152,7 @@ import com.securityexpert.nexus.ui2.service.security.SessionHasher;
  * S3.5d  | Notification failure recorded on run; never fails or mutates completed   | PARTIAL ScriptRunNotificationTest#aSendFailureIsRecordedFailedAndTheRunRowIsNeverTouched tested a FAILED run only -&gt; COMPLETED/SUCCESS run preserving outcome while joining FAILED notification row now proven by ScriptExecutionContractPinsTest#s3_5_notificationFailureRecordedWithoutFailingCompletedRun
  * S3.5e  | External syslog receiver and corporate SMTP / STARTTLS delivery          | REAL_ENV_ONLY Live syslog collector and SMTP relay / TLS handshake (checklist P1, P4, N01-N05)
  * S3.6a  | Screen editor/upload, 5-fire preview, egress, notify, Run now, history   | PROVEN ScriptExecutionServiceTest#appendOnlyMonotonicVersioningAndScheduleNextFiveFiresAndDeviceEgressWarning (plus frontend Vitest suites ScriptExecutionPanel.test.tsx and ScriptRunNotifications.test.tsx)
- * S3.6b  | Operations &gt; Script Execution list includes last run outcome per script  | DEFECT ScriptExecutionContractPinsTest#s3_6b_scriptListIncludesLastRunOutcome (@Disabled: GET /api/v2/scripts in ScriptExecutionController#toScriptMap and ScriptExecutionPanel list table omit last_run_outcome)
+ * S3.6b  | Operations &gt; Script Execution list includes last run outcome per script  | PROVEN ScriptExecutionContractPinsTest#s3_6b_scriptListIncludesLastRunOutcome (plus ScriptExecutionContractPinsTest#s3_6b_neverRunQueuedAndCrossScriptOutcomes, #s3_6b_replayViewerListCarriesOnlyTokenAndTimestamp and the ScriptExecutionPanel.test.tsx Last run column)
  * S3.6c  | CLI parity: script-list / script-add / script-set / script-run / -runs   | PROVEN ScriptCliTest#everyScriptCommandCallsTheExpectedRouteWithExpectedPayload, ScriptCliTest#usageErrorsExitTwoWithoutSendingRequests
  * S3.6d  | Roles: security_admin write; operator+ run; everyone with job_log_read   | PARTIAL ScriptExecutionSecurityRouteTest#writeActionRequiresSecurityAdminAndReadActionIsOpenToEveryAuthenticatedRole, #onlySecurityAdminMayMutateScriptsAndEveryOtherRoleAndMachineSessionIsRefused, #everyAuthenticatedRoleMayReadScriptMetadata, #operatorAndAboveMayRunScriptsWhileViewerAndReplayViewerAreRefused did not pin SCRIPT_READ == JOB_LOG_READ role set -&gt; now proven by ScriptExecutionContractPinsTest#s3_6d_scriptReadMatchesJobLogReadAndRoleMatrixHolds
  * S4-1   | PO decision 1: dedicated runner pod                                      | SUPERSEDED_BY B-1
@@ -998,12 +998,8 @@ class ScriptExecutionContractPinsTest {
 
     /**
      * Clause S3.6b (FROZEN contract section 3.6): "Operations > Script Execution: list (name, kind, version, schedule,
-     * last run outcome, next fire)".
-     *
-     * <p>Contradiction found: {@code GET /api/v2/scripts} ({@code ScriptExecutionController#toScriptMap}) and
-     * {@code ScriptExecutionPanel.tsx} omit {@code last_run_outcome} from script list rows.</p>
+     * last run outcome, next fire)". The list row carries the outcome token and finish time of the latest FINISHED run.
      */
-    @Disabled("S3.6b: GET /api/v2/scripts in ScriptExecutionController#toScriptMap and ScriptExecutionPanel list table omit last_run_outcome")
     @Test
     void s3_6b_scriptListIncludesLastRunOutcome() {
         FileArtefactStore store = newArtefactStore(tempDir.resolve("s3-6b-store"));
@@ -1017,14 +1013,134 @@ class ScriptExecutionContractPinsTest {
                 List.of(), List.of(), "none", RoleToken.OPERATOR), adminReq);
         String scriptId = (String) created.getBody().get("script_id");
         String jobId = ((RunOutcome.RunSubmitted) service.runNow(scriptId, "op-1")).run().jobId();
-        repo.completeRun(jobId, "COMPLETED", "SUCCESS", FIXED_NOW.plusSeconds(2), 2000L, 0,
-                3, 0, false, false, Optional.empty(), Optional.empty(), null, Optional.empty(), Optional.empty(),
-                Optional.of("ok"), List.of(), List.of(), Optional.empty(), "system:script_runner");
+        finishRun(repo, jobId, "COMPLETED", "SUCCESS", FIXED_NOW.plusSeconds(2));
 
         var listRes = controller.list(adminReq);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> scripts = (List<Map<String, Object>>) listRes.getBody().get("scripts");
         assertEquals("SUCCESS", scripts.get(0).get("last_run_outcome"));
+        assertEquals(FIXED_NOW.plusSeconds(2).toString(), scripts.get(0).get("last_run_at"));
+        var detail = controller.get(scriptId, adminReq);
+        assertEquals("SUCCESS", detail.getBody().get("last_run_outcome"));
+        assertEquals(FIXED_NOW.plusSeconds(2).toString(), detail.getBody().get("last_run_at"));
+    }
+
+    /**
+     * Clause S3.6b edge cases: a script that never finished a run has null/null; a queued latest run shows the previous
+     * finished outcome; two scripts never leak each other's outcome.
+     */
+    @Test
+    void s3_6b_neverRunQueuedAndCrossScriptOutcomes() {
+        FileArtefactStore store = newArtefactStore(tempDir.resolve("s3-6b-edge-store"));
+        InMemoryScriptRepo repo = new InMemoryScriptRepo();
+        ScriptExecutionService service = new ScriptExecutionService(repo, credRefs(), null, store, FIXED_CLOCK, 65536);
+        ScriptExecutionController controller = new ScriptExecutionController(service, null, null);
+        MockHttpServletRequest adminReq = authedAdminRequest("secadmin");
+
+        String neverRun = createScript(controller, adminReq, "never-run");
+        String failed = createScript(controller, adminReq, "failed-then-queued");
+        String succeeded = createScript(controller, adminReq, "succeeded");
+
+        String failedJob = ((RunOutcome.RunSubmitted) service.runNow(failed, "op-1")).run().jobId();
+        finishRun(repo, failedJob, "FAILED", "FAILURE", FIXED_NOW.plusSeconds(5));
+        service.runNow(failed, "op-1"); // a newer run stays queued: it is not a "last outcome"
+        String okJob = ((RunOutcome.RunSubmitted) service.runNow(succeeded, "op-1")).run().jobId();
+        finishRun(repo, okJob, "COMPLETED", "SUCCESS", FIXED_NOW.plusSeconds(9));
+
+        Map<String, Map<String, Object>> byId = new java.util.HashMap<>();
+        for (Map<String, Object> row : listRows(controller, adminReq)) {
+            byId.put((String) row.get("script_id"), row);
+        }
+        assertTrue(byId.get(neverRun).containsKey("last_run_outcome"));
+        assertNull(byId.get(neverRun).get("last_run_outcome"));
+        assertNull(byId.get(neverRun).get("last_run_at"));
+        assertEquals("FAILURE", byId.get(failed).get("last_run_outcome"));
+        assertEquals(FIXED_NOW.plusSeconds(5).toString(), byId.get(failed).get("last_run_at"));
+        assertEquals("SUCCESS", byId.get(succeeded).get("last_run_outcome"));
+        assertEquals(FIXED_NOW.plusSeconds(9).toString(), byId.get(succeeded).get("last_run_at"));
+    }
+
+    /** Clause S3.6b masking: the replay_viewer list carries the outcome token and timestamp, identical to the admin's. */
+    @Test
+    void s3_6b_replayViewerListCarriesOnlyTokenAndTimestamp() {
+        FileArtefactStore store = newArtefactStore(tempDir.resolve("s3-6b-masked-store"));
+        InMemoryScriptRepo repo = new InMemoryScriptRepo();
+        ScriptExecutionService service = new ScriptExecutionService(repo, credRefs(), null, store, FIXED_CLOCK, 65536);
+        ScriptExecutionController controller = new ScriptExecutionController(service, null, null);
+        MockHttpServletRequest adminReq = authedAdminRequest("secadmin");
+        String scriptId = createScript(controller, adminReq, "masked-check");
+        String jobId = ((RunOutcome.RunSubmitted) service.runNow(scriptId, "op-1")).run().jobId();
+        finishRun(repo, jobId, "TIMED_OUT", "TIMED_OUT", FIXED_NOW.plusSeconds(3));
+
+        MockHttpServletRequest viewerReq = new MockHttpServletRequest();
+        viewerReq.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "viewer-actor");
+        viewerReq.setAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, Boolean.TRUE);
+
+        Map<String, Object> admin = listRows(controller, adminReq).get(0);
+        Map<String, Object> viewer = listRows(controller, viewerReq).get(0);
+        assertEquals("TIMED_OUT", viewer.get("last_run_outcome"));
+        assertEquals(FIXED_NOW.plusSeconds(3).toString(), viewer.get("last_run_at"));
+        assertEquals(admin.get("last_run_outcome"), viewer.get("last_run_outcome"));
+        assertEquals(admin.get("last_run_at"), viewer.get("last_run_at"));
+        // Only the two scalar fields exist: no run id, output, requester or failure text rides on the list row.
+        assertTrue(viewer.get("last_run_outcome") instanceof String);
+        assertTrue(viewer.get("last_run_at") instanceof String);
+        assertFalse(viewer.keySet().stream().anyMatch(k -> k.startsWith("last_run") && !k.equals("last_run_outcome")
+                && !k.equals("last_run_at")));
+    }
+
+    /**
+     * Clause S3.6b persistence: {@link JooqScriptRepository#findLastFinishedRun} is one bounded read of finished runs
+     * only (outcome and finish time recorded), newest finish first, and maps no row to empty.
+     */
+    @Test
+    void s3_6b_jooqLastFinishedRunIsOneBoundedFinishedOnlyRead() {
+        List<String> sqlLog = new ArrayList<>();
+        List<Object[]> bindingsLog = new ArrayList<>();
+        boolean[] hasRow = {true};
+        DSLContext dsl = DSL.using(new MockConnection(ctx -> {
+            sqlLog.add(ctx.sql().toLowerCase(Locale.ROOT));
+            bindingsLog.add(ctx.bindings());
+            Result<Record> row = hasRow[0]
+                    ? typedScriptRunResult("job-s36b", "scr-9", 1, "COMPLETED", "SUCCESS", "MANUAL",
+                            RoleToken.OPERATOR, "op-1", Timestamp.from(FIXED_NOW), Timestamp.from(FIXED_NOW.plusSeconds(4)),
+                            2000L, 0, null, null, null, null, null, null)
+                    : stringRows(new String[] {"job_id"});
+            return new MockResult[] {new MockResult(hasRow[0] ? 1 : 0, row)};
+        }), SQLDialect.POSTGRES);
+        JooqScriptRepository jooqRepo = new JooqScriptRepository(new JooqTransactionBoundary(dsl));
+
+        ScriptRunRecord last = jooqRepo.findLastFinishedRun(" scr-9 ").orElseThrow();
+        assertEquals("job-s36b", last.jobId());
+        assertEquals(Optional.of("SUCCESS"), last.outcome());
+        assertEquals(1, sqlLog.size());
+        String sql = sqlLog.get(0);
+        assertTrue(sql.contains("outcome is not null") && sql.contains("finished_at is not null"), sql);
+        assertTrue(sql.contains("order by finished_at desc") && sql.contains("limit 1"), sql);
+        assertEquals("scr-9", bindingsLog.get(0)[0]);
+
+        hasRow[0] = false;
+        assertTrue(jooqRepo.findLastFinishedRun("scr-9").isEmpty());
+        assertTrue(jooqRepo.findLastFinishedRun(" ").isEmpty());
+        assertEquals(2, sqlLog.size(), "a blank script id must not reach the database");
+    }
+
+    private static String createScript(ScriptExecutionController controller, MockHttpServletRequest req, String name) {
+        var created = controller.create(new CreateScriptRequest(
+                name, name + ".sh", "sh", "echo ok\n", null, "0 2 * * *", true, 60,
+                List.of(), List.of(), "none", RoleToken.OPERATOR), req);
+        return (String) created.getBody().get("script_id");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> listRows(ScriptExecutionController controller, MockHttpServletRequest req) {
+        return (List<Map<String, Object>>) controller.list(req).getBody().get("scripts");
+    }
+
+    private static void finishRun(InMemoryScriptRepo repo, String jobId, String state, String outcome, Instant at) {
+        repo.completeRun(jobId, state, outcome, at, 2000L, 0, 3, 0, false, false, Optional.empty(), Optional.empty(),
+                null, Optional.empty(), Optional.empty(), Optional.of("ok"), List.of(), List.of(), Optional.empty(),
+                "system:script_runner");
     }
 
     /**
@@ -1703,6 +1819,14 @@ class ScriptExecutionContractPinsTest {
                     .filter(r -> r.scriptId().equals(scriptId))
                     .limit(limit)
                     .toList();
+        }
+
+        @Override
+        public Optional<ScriptRunRecord> findLastFinishedRun(String scriptId) {
+            return runs.values().stream()
+                    .filter(r -> r.scriptId().equals(scriptId) && r.outcome().isPresent() && r.finishedAt().isPresent())
+                    .max(java.util.Comparator.comparing((ScriptRunRecord r) -> r.finishedAt().get())
+                            .thenComparing(ScriptRunRecord::jobId));
         }
 
         @Override

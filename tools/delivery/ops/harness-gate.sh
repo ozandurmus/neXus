@@ -35,6 +35,9 @@ gate_unlock() { rmdir "$GATE_LOCK" 2>/dev/null; return 0; }
 # gate_integration <worktree>: hosta when the lane's own manifest hands integration to the ui2-test runner on HOST-A
 # (PO 2026-11-25); older bases keep the harness's auto choice (local PostgreSQL).
 gate_integration() { if grep -q 'hosta_test_run.py' "$1/tools/delivery/checks.yaml" 2>/dev/null; then echo hosta; else echo auto; fi; }
+# gate_carrier <worktree>: --carrier hosta (Java, integration and vitest in one HOST-A pod; PO 2026-11-25 option A) when the
+# lane's harness knows the carrier, else nothing (older bases keep the Mac run).
+gate_carrier() { if grep -q '^hosta_carrier_cmd:' "$1/tools/delivery/checks.yaml" 2>/dev/null; then echo "--carrier hosta"; fi; }
 
 # gate_run_harness <name> <worktree> <meta> <report>: runs the harness once; prints its exit code.
 gate_run_harness() {
@@ -42,7 +45,7 @@ gate_run_harness() {
   harness=${NEXUS_LANE_HARNESS:-$wt/tools/delivery/lane_harness.py}
   grep -q '^allow_paths=1' "$meta" 2>/dev/null && allow=--allow-paths
   python3 "$harness" --worktree "$wt" --fetch --meta "$meta" --lane-name "$n" --queue-dir "$SQ" --report "$report" \
-    --log-dir "$L/harness-$n" --jobs 3 --integration "$(gate_integration "$wt")" --keep-going $allow > "$L/harness-$n.out" 2>&1
+    --log-dir "$L/harness-$n" --jobs 3 --integration "$(gate_integration "$wt")" $(gate_carrier "$wt") --keep-going $allow > "$L/harness-$n.out" 2>&1
   echo $?
 }
 

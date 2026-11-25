@@ -681,6 +681,14 @@ public final class ScriptExecutionService {
         return scriptRepository.findRunsByScriptId(scriptId.strip(), limit <= 0 ? 50 : Math.min(limit, 500));
     }
 
+    /** The latest finished run of a script, or empty when it never finished one (queued/executing runs do not count). */
+    public Optional<ScriptRunRecord> lastFinishedRun(String scriptId) {
+        if (scriptId == null || scriptId.isBlank()) {
+            return Optional.empty();
+        }
+        return scriptRepository.findLastFinishedRun(scriptId.strip());
+    }
+
     public Optional<ScriptRunRecord> findRun(String runId) {
         if (runId == null || runId.isBlank()) {
             return Optional.empty();
