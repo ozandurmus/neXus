@@ -40,6 +40,11 @@ class PolicyInsightsQueryTest {
         var detail = json(query.insightDetail(snapshot, row.path("insightId").asText(), 90).orElseThrow().body());
         assertEquals(2, detail.path("rules").size());
         assertEquals("r2", detail.path("rules").get(0).path("id").asText());
+        // The cells of both rules resolve: every object they name is listed once, without members or values.
+        var named = new java.util.TreeSet<String>();
+        for (JsonNode o : detail.path("ruleObjects")) { named.add(o.path("id").asText()); assertEquals(0, o.path("values").size()); }
+        assertEquals(java.util.Set.of("any", "host"), named);
+        assertEquals(named.size(), detail.path("ruleObjects").size());
         assertTrue(query.insightDetail(snapshot, "not-an-insight", 90).isEmpty());
     }
     @Test void aPackageOfAnotherVendorIsUnsupportedNotEmpty() {
@@ -67,5 +72,7 @@ class PolicyInsightsQueryTest {
         var detail = masked(query.insightDetail(snapshot, detailId, 90).orElseThrow().body());
         assertEquals(2, detail.path("rules").size());
         assertFalse(detail.toString().contains("OBJ-RULE-"));
+        assertEquals(2, detail.path("ruleObjects").size());
+        assertFalse(detail.toString().contains("OBJ-TEST-"), "object names in the compared cells are pseudonymised for aiview");
     }
 }

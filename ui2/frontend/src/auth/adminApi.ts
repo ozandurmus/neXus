@@ -2541,6 +2541,8 @@ export interface PolicyInsightsPage {
 }
 export interface PolicyInsightDetail {
   insight: PolicyInsight; rules: PolicyRuleDetail["rule"][]; objects: { id: string; uid: string; name: string; type: string; values?: string[]; members?: string[]; ruleCount?: number; groupCount?: number }[];
+  /** The objects the involved rules' cells and reference extras name (id, name, type, status), for the cell-by-cell comparison. Absent from an older service. */
+  ruleObjects?: PolicyObject[];
   days: number; collectedAt?: string; complete?: boolean;
 }
 export const getPolicyInsights = (id: string, page = 0, type = "", grade = "", days = 90) =>

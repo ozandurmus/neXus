@@ -1,56 +1,20 @@
-import { useEffect, useState } from "react";
-import { Box, Button, Chip, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from "@mui/material";
-import { getPolicyInsight, getPolicyInsights, type InsightGrade, type InsightNeeds, type InsightType, type PolicyInsight, type PolicyInsightCounts, type PolicyInsightDetail, type PolicyInsightsPage } from "../auth/adminApi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { getPolicyInsights, responsesAreMasked, type InsightGrade, type InsightType, type PolicyInsight, type PolicyInsightCounts, type PolicyInsightsPage } from "../auth/adminApi";
+import { downloadText } from "./DeviceShared";
+import { ChangeListPanel, InsightDetail } from "./PolicyInsightDetail";
 import { policyFailureText } from "./PolicyRuleViewer";
+import { GRADE_EXPLAIN, TYPE_LABEL, TYPE_SUGGESTION, changeItem, changeListCsv, changeListText, gradeColor, loadChangeList, raiseText, saveChangeList, withChange, withoutChange,
+  type ChangeItem, type SuggestedAction } from "./policyInsightActions";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
+
+export { COVER_ACTION_WORDS, INSTALL_CAVEAT, TYPE_LABEL, TYPE_SUGGESTION, raiseText } from "./policyInsightActions";
 
 /** Policy Insights phases P1, P2a and P2b (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
 const n = (value: number) => value.toLocaleString("en-US");
 export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I4", "I8", "I9", "I10", "I11", "I12"];
 export const INSIGHT_GRADES: readonly InsightGrade[] = ["PROVEN", "SUPPORTED", "INDICATED", "NOT_ESTABLISHED", "NOT_EVALUABLE"];
-export const INSTALL_CAVEAT = "Proven for the stored management policy, not for what is installed on a gateway (INSTALL_STATE_NOT_VERIFIED).";
-
-export const TYPE_LABEL: Readonly<Record<InsightType, string>> = {
-  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I8: "Disabled rule", I9: "Expired or expiring schedule",
-  I4: "Partly shadowed",
-  I10: "Zero or old hits", I11: "Unused object", I12: "Duplicate objects",
-};
-/** What the user does, one sentence per type; a grade other than PROVEN adds its own limit below the sentence. */
-export const TYPE_SUGGESTION: Readonly<Record<InsightType, string>> = {
-  I1: "Remove: an earlier rule already decides every packet this rule matches, with the same action.",
-  I2: "Decide which rule is right: an earlier rule with a different action decides every packet this rule matches. Never removed automatically.",
-  I3: "Remove: earlier rules of this layer together decide every packet this rule matches; the covering set is listed. If one of them has another action, decide which rule is right first.",
-  I4: "Review: earlier rules of this layer with the same action already decide part of this rule's match. Nothing here shows what changing the order would do.",
-  I8: "Remove after your team's holding period.",
-  I9: "Remove or renew the rule.",
-  I10: "Review: the stored counters show no recent use. This does not prove the rule is unused.",
-  I11: "Remove the object or tighten the group that holds it.",
-  I12: "Consolidate: these objects have the same type and the same values.",
-};
-const GRADE_EXPLAIN: Readonly<Record<InsightGrade, string>> = {
-  PROVEN: "Follows from the stored policy by set semantics.",
-  SUPPORTED: "Proven on the policy side, plus dated runtime evidence with a known window.",
-  INDICATED: "Runtime evidence exists but its window or completeness is unknown, or the analysis ignored a constraint.",
-  NOT_ESTABLISHED: "The policy shows a candidate but nothing shows it is safe.",
-  NOT_EVALUABLE: "The analysis cannot read this; the reason is named.",
-};
-const NEEDS_WORDS: Readonly<Record<InsightNeeds, string>> = {
-  NONE: "nothing", TRAFFIC_LOGS: "traffic logs", COUNTER_SAMPLES: "hit-counter samples over time", NEW_COLLECTION: "a new collection",
-  VENDOR_REPORT: "the management's unused-object report", NOT_RESOLVABLE: "nothing in this design",
-};
-export const raiseText = (insight: PolicyInsight) => {
-  const { evidenceGrade: to, insightNeeds } = insight.raiseTo;
-  return insightNeeds === "NONE" || to === insight.evidenceGrade ? "Nothing raises this" : `${to} with ${NEEDS_WORDS[insightNeeds] ?? "UNKNOWN"}`;
-};
-const gradeColor = (grade: InsightGrade): "success" | "info" | "warning" | "default" =>
-  grade === "PROVEN" ? "success" : grade === "SUPPORTED" ? "info" : grade === "INDICATED" ? "warning" : "default";
-/** I3: how the covering rules' actions relate to the rule's own (the I1/I2 split, for a set). */
-export const COVER_ACTION_WORDS: Readonly<Record<string, string>> = {
-  SAME: "Every covering rule has this rule's action.",
-  DIFFERENT: "At least one covering rule has another action: which rule is right is a question of intent.",
-  INLINE_LAYER: "At least one covering rule is an Apply Layer rule; its inline layer's verdict is not analysed.",
-};
 const reasonClassWords = { LOGS: "traffic logs could decide", COLLECTION: "a new collection could decide", NOT_RESOLVABLE: "nothing in this design can decide" } as const;
 
 export interface PackageNumbers {
@@ -100,21 +64,44 @@ function PackageOverview({ counts, complete, collectedAt }: { counts: PolicyInsi
   </Box>;
 }
 
-export function PolicyInsightsTab({ policy, openRule }: { policy: string; openRule: (id: string, days: number) => void }) {
+/** Which drawer is open: the detail of the highlighted insight, or the package's change list. */
+type Panel = null | "detail" | "changes";
+
+export function PolicyInsightsTab({ policy, policyName, openRule, openObject = () => {} }: { policy: string; policyName?: string;
+  openRule: (id: string, days: number) => void; openObject?: (id: string) => void }) {
   const [data, setData] = useState<PolicyInsightsPage | null>(null), [error, setError] = useState("");
   const [type, setType] = useState(""), [grade, setGrade] = useState(""), [days, setDays] = useState(90), [page, setPage] = useState(0), [revision, setRevision] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  // The highlighted row outlives the drawer: closing the detail leaves the row marked and focused.
+  const [selected, setSelected] = useState<string | null>(null), [panel, setPanel] = useState<Panel>(null);
+  // The change list of this package in this browser; `masked` is known only once a response has come back.
+  const [changes, setChanges] = useState<ChangeItem[]>([]), [masked, setMasked] = useState<boolean | null>(null);
+  const rows = useRef(new Map<string, HTMLTableRowElement>()), changesButton = useRef<HTMLButtonElement | null>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const validDays = Number.isInteger(days) && days >= 1 && days <= 36500;
   useEffect(() => {
-    let active = true; setData(null); setError(""); setSelected(null);
+    let active = true; setData(null); setError(""); setSelected(null); setPanel(null);
     if (!policy || !validDays) return;
     getPolicyInsights(policy, page, type, grade, days).then(result => {
       if (typeof result?.supported !== "boolean") throw new Error("Invalid insights response");
       if (result.supported && (!Array.isArray(result.insights) || !result.counts)) throw new Error("Invalid insights response");
-      if (active) setData(result);
+      if (active) { setData(result); setMasked(responsesAreMasked()); }
     }).catch(failure => { if (active) setError(policyFailureText(failure, "Insights could not be loaded.")); });
     return () => { active = false; };
   }, [policy, page, type, grade, days, revision, validDays]);
+  useEffect(() => { if (policy && masked !== null) setChanges(loadChangeList(policy, masked)); }, [policy, masked]);
+  // Focus goes back to where the drawer was opened from, after the drawer has let go of it.
+  useEffect(() => { if (panel === null && returnFocus.current) { returnFocus.current.focus(); returnFocus.current = null; } }, [panel]);
+  const store = useCallback((next: ChangeItem[]) => { setChanges(next); if (policy && masked !== null) saveChangeList(policy, masked, next); }, [policy, masked]);
+  const openDetail = (id: string) => { returnFocus.current = rows.current.get(id) ?? null; setSelected(id); setPanel("detail"); };
+  const openChanges = () => { returnFocus.current = changesButton.current; setPanel("changes"); };
+  const close = () => setPanel(null);
+  const addChange = (insight: PolicyInsight, action: SuggestedAction, snapshotAt: string | undefined) => store(withChange(changes, changeItem(insight, action, snapshotAt ?? data?.collectedAt)));
+  const removeChange = (insightId: string) => store(withoutChange(changes, insightId));
+  const exportList = (kind: "txt" | "csv") => {
+    const at = new Date(), name = `policy-change-list-${at.toISOString().slice(0, 16).replace(/[:T]/g, "-")}Z.${kind}`;
+    if (kind === "csv") downloadText(name, changeListCsv(changes));
+    else downloadText(name, changeListText(changes, { packageName: policyName, masked: masked === true, exportedAt: at }), "text/plain;charset=utf-8");
+  };
   if (!policy) return <Typography role="status">Select a stored policy to view insights.</Typography>;
   return <Box role="tabpanel" aria-label="Insights">
     <Typography variant="body2">Insights read the stored policy and its stored hit counters. Each one carries an evidence grade, never a percentage: <b>PROVEN</b> follows from the policy, <b>SUPPORTED</b> adds dated runtime evidence, <b>INDICATED</b> rests on evidence whose window is unknown, <b>NOT_EVALUABLE</b> could not be read. No device is contacted.</Typography>
@@ -135,7 +122,7 @@ export function PolicyInsightsTab({ policy, openRule }: { policy: string; openRu
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }} aria-label="Insights by type">
         {INSIGHT_TYPES.map(t => <Chip key={t} label={`${t} ${TYPE_LABEL[t]}: ${data.byType?.[t] ?? 0}`} color={type === t ? "primary" : "default"} onClick={() => { setType(type === t ? "" : t); setPage(0); }} />)}
       </Stack>
-      <Stack direction="row" gap={2} flexWrap="wrap" sx={{ mb: 2 }}>
+      <Stack direction="row" gap={2} flexWrap="wrap" alignItems="flex-start" sx={{ mb: 2 }}>
         <TextField select size="small" label="Insight type" value={type} onChange={e => { setType(e.target.value); setPage(0); }} sx={{ minWidth: 260 }}>
           <MenuItem value="">All types</MenuItem>{INSIGHT_TYPES.map(t => <MenuItem key={t} value={t}>{t} · {TYPE_LABEL[t]}</MenuItem>)}
         </TextField>
@@ -144,78 +131,44 @@ export function PolicyInsightsTab({ policy, openRule }: { policy: string; openRu
         </TextField>
         <TextField size="small" type="number" label="Unused threshold (days)" value={days} error={!validDays} helperText={!validDays ? "Enter 1–36500 whole days" : undefined}
           onChange={e => { setDays(Number(e.target.value)); setPage(0); }} inputProps={{ min: 1, max: 36500 }} />
+        <Button ref={changesButton} variant="outlined" onClick={openChanges} sx={{ ml: "auto", height: 40, gap: 1 }}
+          aria-label={`Change list, ${changes.length} planned ${changes.length === 1 ? "change" : "changes"}`} title="Planned changes for this package. Nothing is sent to the firewall.">
+          Change list<Box component="span" data-change-count sx={{ minWidth: 22, px: 0.75, borderRadius: 999, fontSize: 12, fontWeight: 700, lineHeight: "22px", textAlign: "center",
+            bgcolor: changes.length ? m3.primary : m3.scHigh, color: changes.length ? m3.onPrimary : m3.onSurfaceVar }}>{changes.length}</Box></Button>
       </Stack>
       {data.total === 0 && <Typography role="status">No insight matches these filters.</Typography>}
       {(data.total ?? 0) > 0 && <Box sx={{ overflowX: "auto" }}><Table size="small" aria-label="Policy insights">
-        <TableHead><TableRow>{["Type", "Rules / objects", "Suggestion", "Grade", "Raise to"].map(t => <TableCell key={t}>{t}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{data.insights!.map(insight => <TableRow key={insight.insightId} hover selected={selected === insight.insightId}>
-          <TableCell><Button size="small" aria-label={`Open ${insight.insightType} detail`} onClick={() => setSelected(insight.insightId)}>{insight.insightType} · {TYPE_LABEL[insight.insightType] ?? "UNKNOWN"}</Button></TableCell>
+        <TableHead><TableRow>{["Type", "Rules / objects", "Suggestion", "Grade", "Raise to", "Change list"].map(t => <TableCell key={t}>{t}</TableCell>)}</TableRow></TableHead>
+        <TableBody>{data.insights!.map(insight => { const planned = changes.find(c => c.insightId === insight.insightId); return <TableRow key={insight.insightId} hover selected={selected === insight.insightId}
+          tabIndex={0} data-insight-id={insight.insightId} ref={(el: HTMLTableRowElement | null) => { if (el) rows.current.set(insight.insightId, el); else rows.current.delete(insight.insightId); }}
+          onClick={() => openDetail(insight.insightId)}
+          onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetail(insight.insightId); } }}
+          sx={{ cursor: "pointer", "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: "-2px" } }}>
+          {/* The whole row opens the detail (click, Enter, Space); the button names the action for assistive technology and is not a second tab stop. */}
+          <TableCell><Button size="small" tabIndex={-1} aria-label={`Open ${insight.insightType} detail`}>{insight.insightType} · {TYPE_LABEL[insight.insightType] ?? "UNKNOWN"}</Button></TableCell>
           <TableCell>{insight.rules.length > 0
             ? insight.rules.map(r => `#${r.number || "?"} ${r.name}`).join(" · ")
             : `${insight.objectIds.length} ${insight.objectIds.length === 1 ? "object" : "objects"} (${insight.insightScope === "domain" ? "domain-wide" : "package"})`}</TableCell>
           <TableCell>{TYPE_SUGGESTION[insight.insightType] ?? "UNKNOWN"}</TableCell>
           <TableCell><Chip size="small" color={gradeColor(insight.evidenceGrade)} label={insight.evidenceGrade} title={GRADE_EXPLAIN[insight.evidenceGrade]} /></TableCell>
           <TableCell><Typography variant="caption">{raiseText(insight)}</Typography></TableCell>
-        </TableRow>)}</TableBody>
+          <TableCell>{planned ? <Chip size="small" variant="outlined" color="primary" label={planned.label} title={planned.plan} /> : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>—</Typography>}</TableCell>
+        </TableRow>; })}</TableBody>
       </Table></Box>}
       <Stack direction="row" alignItems="center"><Button disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous insights page</Button>
         <Typography variant="caption">{n(data.total ?? 0)} matching insights · Page {page + 1}</Typography>
         <Button disabled={(page + 1) * (data.pageSize ?? 200) >= (data.total ?? 0)} onClick={() => setPage(p => p + 1)}>Next insights page</Button></Stack>
-      {selected && <InsightDetail key={selected} policy={policy} insightId={selected} days={days} openRule={openRule} close={() => setSelected(null)} />}
+      {/* Esc and the backdrop close through onClose; focus is handed back by the effect above, so the drawer does not restore it itself. */}
+      <Drawer anchor="right" open={panel !== null} onClose={close} ModalProps={{ disableRestoreFocus: true }}
+        PaperProps={{ sx: { width: { xs: "100%", md: 860 }, maxWidth: "100vw", bgcolor: m3.surface } }}>
+        <Box role="dialog" aria-modal="true" aria-label={panel === "changes" ? "Change list" : "Insight detail"} sx={{ p: { xs: 2, md: 3 }, overflowWrap: "anywhere" }}>
+          {panel === "detail" && selected && <InsightDetail key={selected} policy={policy} insightId={selected} days={days} openRule={openRule} openObject={openObject}
+            planned={changes.find(c => c.insightId === selected)} changeCount={changes.length} addChange={addChange} removeChange={removeChange}
+            showChanges={() => setPanel("changes")} close={close} />}
+          {panel === "changes" && <ChangeListPanel items={changes} remove={removeChange} exportText={() => exportList("txt")} exportCsv={() => exportList("csv")}
+            back={selected && returnFocus.current !== changesButton.current ? () => setPanel("detail") : undefined} close={close} />}
+        </Box>
+      </Drawer>
     </>}
-  </Box>;
-}
-
-export function InsightDetail({ policy, insightId, days, openRule, close }: { policy: string; insightId: string; days: number; openRule: (id: string, days: number) => void; close: () => void }) {
-  const [detail, setDetail] = useState<PolicyInsightDetail | null>(null), [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    getPolicyInsight(policy, insightId, days).then(result => { if (active) setDetail(result); })
-      .catch(failure => { if (active) setError(policyFailureText(failure, "Insight detail could not be loaded.")); });
-    return () => { active = false; };
-  }, [policy, insightId, days]);
-  if (error) return <Typography role="alert">{error}</Typography>;
-  if (!detail) return <Typography role="status">Loading insight detail…</Typography>;
-  const insight = detail.insight, counter = insight.counter ?? {};
-  const role = (id: string) => insight.rules.find(r => r.ruleId === id)?.insightRole;
-  return <Box role="region" aria-label="Insight detail" sx={{ mt: 2, p: 2, border: `1px solid ${m3.outlineVar}`, borderRadius: 2 }}>
-    <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
-      <Typography variant="h6">{insight.insightType} · {TYPE_LABEL[insight.insightType] ?? "UNKNOWN"}</Typography>
-      <Chip size="small" color={gradeColor(insight.evidenceGrade)} label={insight.evidenceGrade} title={GRADE_EXPLAIN[insight.evidenceGrade]} />
-      <Button size="small" onClick={close}>Close detail</Button>
-    </Stack>
-    <Typography variant="body2" sx={{ mt: 1 }}>{TYPE_SUGGESTION[insight.insightType] ?? "UNKNOWN"}</Typography>
-    {insight.rules.length > 0 && <Box aria-label="Rules involved" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: insight.rules.length > 1 ? "1fr 1fr" : "1fr" }, gap: 2, mt: 2 }}>
-      {detail.rules.map(rule => <Box key={rule.id} data-role={role(rule.id)} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5 }}>
-        <Typography variant="subtitle2">{role(rule.id) === "covering" ? "Covering rule" : role(rule.id) === "overlapping" ? "Overlapping earlier rule" : "Rule"}</Typography>
-        <Button onClick={() => openRule(rule.id, days)}>#{rule.number} · {rule.name || "Unnamed rule"}</Button>
-        <Typography variant="body2">Action: {rule.action} · Log: {rule.log || "UNKNOWN"} · {rule.enabled === false ? "Disabled" : rule.enabled === true ? "Enabled" : "Enabled state UNKNOWN"}</Typography>
-      </Box>)}
-    </Box>}
-    <Typography variant="subtitle2" sx={{ mt: 2 }}>Evidence</Typography>
-    <Box component="ul" aria-label="Insight evidence" sx={{ m: 0, pl: 2 }}>
-      {insight.evidence.map(e => <li key={e}><Typography variant="body2">{e}</Typography></li>)}
-      {insight.evidence.length === 0 && <li><Typography variant="body2">Derived from the stored object inventory and where-used counts.</Typography></li>}
-    </Box>
-    {insight.insightType === "I10" && <Box aria-label="Counter evidence" sx={{ mt: 1 }}>
-      <Typography variant="body2">Hits: {counter.hits ?? "UNKNOWN"} · First hit: {formatStamp(counter.firstHit as string | null)} · Last hit: {formatStamp(counter.lastHit as string | null)}</Typography>
-      <Typography variant="body2">Source: {String(counter.hitSource ?? "UNKNOWN")} · Collected: {formatStamp(counter.hitsCollectedAt as string | null)}</Typography>
-      <Typography variant="body2">{String(counter.counterWindow ?? "Counter window unknown.")}{counter.windowKnown === true ? ` Measured window: ${counter.windowDays} days.` : " No measured window; hit counters carry no window start."}</Typography>
-    </Box>}
-    {insight.insightType === "I3" && <Box aria-label="Union cover evidence" sx={{ mt: 1 }}>
-      {typeof counter.coveringRules === "number" && <Typography variant="body2">Covered together by {counter.coveringRules} earlier rules of the same layer. {COVER_ACTION_WORDS[String(counter.coverAction)] ?? "Action relation UNKNOWN."}</Typography>}
-      {counter.unionReason !== undefined && <Typography variant="body2">Not proven: {String(counter.unionReason)}. The rule may or may not be covered; nothing is claimed.</Typography>}
-    </Box>}
-    {insight.insightType === "I4" && <Box aria-label="Partial shadow evidence" sx={{ mt: 1 }}>
-      {typeof counter.overlappingRules === "number" && <Typography variant="body2">Part of this rule's match is decided by earlier rules with the same action; its zero or low counter can be explained by them.
-        {" "}Overlapping earlier rules: {counter.overlappingRules}{Number(counter.moreOverlapping) > 0 ? ` (+${counter.moreOverlapping} more not listed)` : ""}.</Typography>}
-      {counter.partialReason !== undefined && <Typography variant="body2">Not proven: {String(counter.partialReason)}. The rule may or may not overlap earlier rules; nothing is claimed.</Typography>}
-    </Box>}
-    {detail.objects.length > 0 && <Box aria-label="Objects involved" sx={{ mt: 1 }}>
-      <Typography variant="subtitle2">Objects (domain-wide)</Typography>
-      <Box component="ul" sx={{ m: 0, pl: 2 }}>{detail.objects.map(o => <li key={o.uid}><Typography variant="body2">{o.name} · {o.type}{o.values?.length ? ` · ${o.values.join(", ")}` : ""} · used by {o.ruleCount ?? 0} rules, {o.groupCount ?? 0} groups</Typography></li>)}</Box>
-    </Box>}
-    <Typography variant="body2" sx={{ mt: 1 }}>Raise to: {raiseText(insight)}.</Typography>
-    {insight.insightCaveats.includes("INSTALL_STATE_NOT_VERIFIED") && <Typography role="note" variant="caption" display="block" sx={{ mt: 1, color: m3.warningInk }}>{INSTALL_CAVEAT}</Typography>}
   </Box>;
 }

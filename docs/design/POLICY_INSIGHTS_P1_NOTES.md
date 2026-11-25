@@ -37,6 +37,14 @@ Over enabled security rules (NAT rulebase and disabled rules left out and report
 
 New response keys are projected by `PolicyPrivacy` through closed vocabularies (`insightType`, `evidenceGrade`, `insightNeeds`, `insightCaveats`, `insightScope`, `insightRole`, `reasonClass`); rule names go through the existing rule pseudonyms; evidence strings are `PolicyHygiene.EVIDENCE`.
 
+## Detail panel and change list (PO 2026-11-25)
+
+- A row (click, Enter, Space) opens the detail in a right-side drawer, full width on a small screen; Esc / Close returns focus to the row, which stays highlighted.
+- The panel shows one headline sentence per type (I1, I2, I3, I4, I8, I9, I10, I11, I12), the involved rules side by side (every covering rule marked "Decides first", every overlapping earlier rule "Overlapping earlier rule", the shadowed rule "Never reached" or "Partly shadowed") and the suggested actions. Highlighted cells are the ones the engine's verdict rests on: position, source, destination, service / application, install-on and action for I1/I2/I3/I4 (when proven); the enabled flag for I8; the schedule for I9.
+- `GET .../insight` carries one more key, `ruleObjects`: the objects the involved rules' cells and reference extras name (id, name, type, status; no members or values), the same projection the rule detail carries, masked by `PolicyPrivacy` the same way. No new route and no new action id.
+- Actions by type: I1 remove / disable instead; I2 review intent / move above the covering rule (never a remove; the move is shown as not verdict-safe); I3 like I1 when PROVEN with `coverAction=SAME` (remove / disable instead with "No behaviour change"), or review intent / disable instead when a covering rule has a different action or calls an inline layer; I4 narrow rule / reorder above overlapping rules (never a one-click remove, always "Behaviour may change" until I7 verifies reorder safety); I8 remove; I9 remove / extend schedule; I10 disable for one window with logging on (Q5); I11 remove object; I12 merge. The grade never hides an action: PROVEN makes the strong action the main button, any other grade shows it with that grade's warning. Only a PROVEN I1 or PROVEN same-action I3 is labelled "No behaviour change" (design section 4).
+- **No action writes to a device** (Q7). A button adds one line to the package's change list (one planned change per insight; another choice replaces it). The list is browser state (`localStorage`, key per package and per masked / unmasked view so names written by one view never show in the other), with a text and a CSV export.
+
 ## Not in P1 (open)
 
 - Insight list CSV export (design section 8.2); ASA/FortiGate/Palo Alto insights.

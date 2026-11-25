@@ -819,7 +819,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer} rows={policyRows} />
           </>)}
         {tab === "Insights" && (selected || loadingTree || error
-          ? <PolicyInsightsTab key={`${selected}:${revision}`} policy={selected} openRule={(id, days) => void openRuleId(id, days)} />
+          ? <PolicyInsightsTab key={`${selected}:${revision}`} policy={selected} policyName={selectedMetadata?.name} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
           : <PolicyContainerPrompt tab="Insights" now={now} open={openContainer} rows={policyRows} />)}
         <Box role="tabpanel" aria-label="Rules & Containers" hidden={tab !== "Rules & Containers"} sx={{ display: tab === "Rules & Containers" ? "contents" : "none" }}>
         {/* Installation (C2): the old tab is a section of this one, opened on demand so its read is made only when asked for. */}

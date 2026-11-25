@@ -33,7 +33,7 @@ function mount(responses: { list?: unknown; detail?: unknown } = {}, openRule = 
   render(<ThemeProvider theme={m3Theme}><PolicyInsightsTab policy="p1" openRule={openRule} /></ThemeProvider>);
   return { fetchMock, openRule };
 }
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); window.localStorage.clear(); });
 
 it("states the three package numbers as counts first and a share second, with up to as a ceiling", async () => {
   mount();
@@ -67,9 +67,9 @@ it("lists each insight with its type, rules, grade and what raises the grade", a
 it("opens the detail view with the rules, the evidence and the install-state caveat for a PROVEN insight", async () => {
   const { fetchMock, openRule } = mount();
   fireEvent.click(await screen.findByRole("button", { name: "Open I1 detail" }));
-  const region = await screen.findByRole("region", { name: "Insight detail" });
+  const region = await screen.findByRole("dialog", { name: "Insight detail" });
   expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/insight?insightId=11111111-1111-1111-1111-111111111111"))).toBe(true);
-  expect(within(region).getByLabelText("Rules involved")).toHaveTextContent("Covering rule");
+  expect(await within(region).findByRole("table", { name: "Rule comparison" })).toHaveTextContent("Decides first");
   expect(within(region).getByLabelText("Insight evidence")).toHaveTextContent("Earlier enabled rule fully covers this match with the same action.");
   expect(within(region).getByRole("note")).toHaveTextContent(INSTALL_CAVEAT);
   expect(INSTALL_CAVEAT).toContain("INSTALL_STATE_NOT_VERIFIED");
@@ -79,8 +79,8 @@ it("opens the detail view with the rules, the evidence and the install-state cav
 it("shows the counter evidence of a zero-hit insight with an unknown window and no install-state caveat", async () => {
   mount({ detail: { ...detail, insight: zero, rules: [rule("r3", 3, "RULE-ALPHA-03")] } });
   fireEvent.click(await screen.findByRole("button", { name: "Open I10 detail" }));
-  const region = await screen.findByRole("region", { name: "Insight detail" });
-  const counter = within(region).getByLabelText("Counter evidence");
+  const region = await screen.findByRole("dialog", { name: "Insight detail" });
+  const counter = await within(region).findByLabelText("Counter evidence");
   expect(counter).toHaveTextContent("Hits: 0");
   expect(counter).toHaveTextContent("Counter window unknown. No measured window; hit counters carry no window start.");
   expect(within(region).queryByRole("note")).toBeNull();
@@ -136,8 +136,8 @@ it("lists I3 with its covering set, offers it as a type filter and states the un
 it("shows the I3 detail with every covering rule and the action relation", async () => {
   mount({ list: unionPage, detail: { insight: union, rules: [rule("r5", 5, "RULE-ALPHA-05"), rule("r1", 1, "RULE-ALPHA-01"), rule("r4", 4, "RULE-ALPHA-04")] as never, objects: [], days: 90 } });
   fireEvent.click(await screen.findByRole("button", { name: "Open I3 detail" }));
-  const region = await screen.findByRole("region", { name: "Insight detail" });
-  expect(within(region).getAllByText("Covering rule")).toHaveLength(2);
+  const region = await screen.findByRole("dialog", { name: "Insight detail" });
+  expect(await within(region).findAllByText("Decides first")).toHaveLength(2);
   expect(within(region).getByLabelText("Union cover evidence")).toHaveTextContent(`Covered together by 2 earlier rules of the same layer. ${COVER_ACTION_WORDS.DIFFERENT}`);
   expect(within(region).getByRole("note")).toHaveTextContent(INSTALL_CAVEAT);
 });
@@ -147,8 +147,8 @@ it("says an I3 whose budget ran out is not proven and claims nothing", async () 
     counter: { unionReason: "analysis budget" } };
   mount({ list: { ...unionPage, insights: [budget] }, detail: { insight: budget, rules: [rule("r5", 5, "RULE-ALPHA-05")] as never, objects: [], days: 90 } });
   fireEvent.click(await screen.findByRole("button", { name: "Open I3 detail" }));
-  const region = await screen.findByRole("region", { name: "Insight detail" });
-  expect(within(region).getByLabelText("Union cover evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not be covered; nothing is claimed.");
+  const region = await screen.findByRole("dialog", { name: "Insight detail" });
+  expect(await within(region).findByLabelText("Union cover evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not be covered; nothing is claimed.");
   expect(within(region).queryByRole("note")).toBeNull();
 });
 
@@ -174,8 +174,8 @@ it("lists I4 with its overlapping rules, offers it as a type filter and states t
 it("shows the I4 detail with the overlapping earlier rules, the fixed sentence and the number not listed", async () => {
   mount({ list: partialPage, detail: { insight: partialRule, rules: [rule("r5", 5, "RULE-ALPHA-05"), rule("r1", 1, "RULE-ALPHA-01"), rule("r4", 4, "RULE-ALPHA-04")] as never, objects: [], days: 90 } });
   fireEvent.click(await screen.findByRole("button", { name: "Open I4 detail" }));
-  const region = await screen.findByRole("region", { name: "Insight detail" });
-  expect(within(region).getAllByText("Overlapping earlier rule")).toHaveLength(2);
+  const region = await screen.findByRole("dialog", { name: "Insight detail" });
+  expect(await within(region).findAllByText("Overlapping earlier rule")).toHaveLength(2);
   const evidence = within(region).getByLabelText("Partial shadow evidence");
   expect(evidence).toHaveTextContent("Part of this rule's match is decided by earlier rules with the same action; its zero or low counter can be explained by them.");
   expect(evidence).toHaveTextContent("Overlapping earlier rules: 12 (+2 more not listed).");
@@ -192,7 +192,7 @@ it("says an I4 whose budget ran out is not proven and claims nothing", async () 
     counter: { partialReason: "analysis budget" } };
   mount({ list: { ...partialPage, insights: [budget] }, detail: { insight: budget, rules: [rule("r5", 5, "RULE-ALPHA-05")] as never, objects: [], days: 90 } });
   fireEvent.click(await screen.findByRole("button", { name: "Open I4 detail" }));
-  const region = await screen.findByRole("region", { name: "Insight detail" });
-  expect(within(region).getByLabelText("Partial shadow evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not overlap earlier rules; nothing is claimed.");
+  const region = await screen.findByRole("dialog", { name: "Insight detail" });
+  expect(await within(region).findByLabelText("Partial shadow evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not overlap earlier rules; nothing is claimed.");
   expect(within(region).queryByRole("note")).toBeNull();
 });
