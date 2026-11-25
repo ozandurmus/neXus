@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0417 · Track: PCP.x · Generated: 2026-11-25T04:48:49Z
+Build: NXS-LOCAL-0418 · Track: PCP.x · Generated: 2026-11-25T06:44:19Z
 
 ## Now
-- NXS-LOCAL-0417 — Zone matrix step 7a per-family resolution, ZM-25/ZM-37 pins, step 6a evidence report builder, HOST-A test namespace, policy gaps harness, contract gate fix (automated_validated)
+- NXS-LOCAL-0418 — Zone matrix step 4b-2b part 1 stored-summary route, rule recertification council packet, HOST-A test runner image fixes and CPU burst (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -161,8 +161,8 @@ Build: NXS-LOCAL-0417 · Track: PCP.x · Generated: 2026-11-25T04:48:49Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0418 (automated_validated)
 - NXS-LOCAL-0417 (automated_validated)
 - NXS-LOCAL-0416 (automated_validated)
 - NXS-LOCAL-0415 (automated_validated)
 - NXS-LOCAL-0414 (automated_validated)
-- NXS-LOCAL-0413 (automated_validated)

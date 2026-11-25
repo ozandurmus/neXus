@@ -394,7 +394,7 @@
       "title": "Decision council on the recertification contract before freeze",
       "status": "planned",
       "priority": "P1",
-      "target": "After revision 2 (batch 3)",
+      "target": "After revision 2 (batch 3); packet 2d402640 ready",
       "note": ""
     },
     {
@@ -619,7 +619,7 @@
       "title": "Zone matrix step 4b-2: run lifecycle, triggers, routes and tabs",
       "status": "in_progress",
       "priority": "P1",
-      "target": "85a28224: lifecycle and triggers done; routes and tabs open",
+      "target": "85a28224: lifecycle and triggers done; 3252272a: stored-summary route done; tabs and other routes open",
       "note": ""
     },
     {
