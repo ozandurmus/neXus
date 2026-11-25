@@ -19,6 +19,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -45,6 +49,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
+import com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch;
+import com.securityexpert.nexus.ui2.jobs.failover.FgtFailoverReadinessSwitch;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactClass;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
@@ -73,6 +79,15 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
  * Output names the route, the HTTP status and the value <em>class</em> with a count --
  * never a value. A surviving raw value fails the test unless the route and class are on {@link #KNOWN_LEAKS}, which
  * must match the findings exactly (an entry that stops leaking fails too, so the list only shrinks on purpose).</p>
+ *
+ * <p>Round 3 (2026-11-25): Zone Matrix evaluation history -- two COMPLETE runs of the seeded policy (the latest on the
+ * ACTIVE version with a VIOLATION, an UNKNOWN and a NOT_EVALUABLE finding carrying raw rule and section names, an
+ * inline parent path, two violated cells with witness ranges and a NAT view; the earlier with one finding resolved by a
+ * version change) -- and failover run history: one finished run per vendor family (Check Point and Palo Alto: a
+ * failover run with its approval; Cisco ASA and FortiGate: a readiness run, their readiness switches switched on in this
+ * test's application only) on pairs that carry raw cluster references, hostnames, serials, addresses and the
+ * administrator. Not covered: failover approvals and runs of VSX virtual systems (units need real VSX inventory
+ * contexts), the in-flight run states, dispatch intents and check results.</p>
  *
  * <p>The application's artefact store is configured from environment variables only; this test replaces the
  * {@code artefactStoreAccess} bean with a store on a temporary directory so the masked system-log text route reads a
@@ -132,7 +147,6 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/zone-matrix/versions/*", Set.of("zone-matrix-version", "zone")),
             Map.entry("GET /api/v2/zone-matrix/draft", Set.of("zone-matrix-version")),
             Map.entry("GET /api/v2/zone-matrix/policies", Set.of("policy")),
-            Map.entry("GET /api/v2/zone-matrix/summary", Set.of("zone-matrix-version", "policy")),
             Map.entry("GET /api/v2/cutover/segments", Set.of("cutover-segment")),
             Map.entry("GET /api/v2/cutover/segments/*", Set.of("cutover-segment", "cutover-assessment")),
             Map.entry("GET /api/v2/cutover/assessments/*", Set.of("cutover-segment", "cutover-assessment")),
@@ -154,7 +168,22 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/packet-analysis/cases", Set.of("pa-case", "pa-run")),
             Map.entry("GET /api/v2/packet-analysis/cases/*", Set.of("pa-case", "pa-capture", "pa-run")),
             Map.entry("GET /api/v2/packet-analysis/runs/*", Set.of("pa-case", "pa-run")),
-            Map.entry("GET /api/v2/packet-analysis/runs/*/report", Set.of("pa-case", "pa-run")));
+            Map.entry("GET /api/v2/packet-analysis/runs/*/report", Set.of("pa-case", "pa-run")),
+            // round 3 (2026-11-25)
+            Map.entry("GET /api/v2/zone-matrix/summary", Set.of("zone-matrix-version", "policy", "zone-matrix-run",
+                    "zone-matrix-finding", "zone-matrix-resolved")),
+            Map.entry("GET /api/v2/cp-failover/runs", Set.of("failover-run-check_point")),
+            Map.entry("GET /api/v2/cp-failover/runs/*", Set.of("failover-run-check_point")),
+            Map.entry("GET /api/v2/cp-failover/approvals", Set.of("failover-approval-check_point")),
+            Map.entry("GET /api/v2/pan-failover/runs", Set.of("failover-run-palo_alto")),
+            Map.entry("GET /api/v2/pan-failover/runs/*", Set.of("failover-run-palo_alto")),
+            Map.entry("GET /api/v2/pan-failover/approvals", Set.of("failover-approval-palo_alto")),
+            Map.entry("GET /api/v2/asa-failover/runs", Set.of("failover-run-cisco_asa")),
+            Map.entry("GET /api/v2/asa-failover/runs/*", Set.of("failover-run-cisco_asa")),
+            Map.entry("GET /api/v2/pan-failover/units/*", Set.of("ha-unit")),
+            Map.entry("GET /api/v2/fgt-failover/units/*", Set.of("ha-unit")),
+            Map.entry("GET /api/v2/fgt-failover/runs", Set.of("failover-run-fortinet")),
+            Map.entry("GET /api/v2/fgt-failover/runs/*", Set.of("failover-run-fortinet")));
 
     private static Ui2PostgresFixture fixture;
     private static ConfigurableApplicationContext context;
@@ -205,6 +234,13 @@ class AiviewRawVersusMaskedSweepTest {
         registry.removeBeanDefinition("artefactStoreAccess");
         beanFactory.registerSingleton("artefactStoreAccess", new DeviceCompositionConfiguration.ArtefactStoreAccess(store));
         registry.removeBeanDefinition("machineConnector");
+        // Round 3: Cisco ASA and FortiGate failover readiness are off unless an environment variable says on; the runs routes
+        // of those two vendors answer an empty list while off, so this test's application runs with both on (readiness only:
+        // no execution path depends on either switch).
+        registry.removeBeanDefinition("asaFailoverReadinessSwitch");
+        beanFactory.registerSingleton("asaFailoverReadinessSwitch", new AsaFailoverReadinessSwitch(true));
+        registry.removeBeanDefinition("fgtFailoverReadinessSwitch");
+        beanFactory.registerSingleton("fgtFailoverReadinessSwitch", new FgtFailoverReadinessSwitch(true));
     }
 
     @AfterAll
@@ -340,6 +376,40 @@ class AiviewRawVersusMaskedSweepTest {
         }
     }
 
+    /**
+     * Round 3 of the sweep (2026-11-25): the Zone Matrix finding rows (rule and section names beyond the seeded policy's own)
+     * and two more failover pairs, a Palo Alto active/passive pair and a FortiGate pair, so every failover vendor family
+     * has an enrolled pair of its own (Check Point and Cisco ASA pairs are seeded above).
+     */
+    record R3(String zmNotEvaluableRule, String zmResolvedRule, String zmNotEvaluableSection, String panCluster,
+            AsaUnit panA, AsaUnit panB, String fgtCluster, AsaUnit fgtA, AsaUnit fgtB) {
+
+        static R3 generate(int base, Map<String, ValueClass> raw) {
+            R3 r = new R3("zmr-" + tag() + "-legacy", "zmr-" + tag() + "-retired", "zms-" + tag() + "-batch",
+                    "pan-ha-" + tag() + "-dc",
+                    new AsaUnit(Ui2Rows.opaqueId("dev"), "pan" + tag() + "-edge-a", "0" + digits(11), "192.0.2." + (base + 10), "active"),
+                    new AsaUnit(Ui2Rows.opaqueId("dev"), "pan" + tag() + "-edge-b", "0" + digits(11), "192.0.2." + (base + 11), "passive"),
+                    "fgt-ha-" + tag() + "-dc",
+                    new AsaUnit(Ui2Rows.opaqueId("dev"), "fgt" + tag() + "-edge-a", "FGT" + hex(4).toUpperCase(Locale.ROOT), "192.0.2." + (base + 12), "primary"),
+                    new AsaUnit(Ui2Rows.opaqueId("dev"), "fgt" + tag() + "-edge-b", "FGT" + hex(4).toUpperCase(Locale.ROOT), "192.0.2." + (base + 13), "secondary"));
+            raw.put(r.zmNotEvaluableRule(), ValueClass.RULE_NAME);
+            raw.put(r.zmResolvedRule(), ValueClass.RULE_NAME);
+            raw.put(r.zmNotEvaluableSection(), ValueClass.RULE_NAME);
+            raw.put(r.panCluster(), ValueClass.CLUSTER_NAME);
+            raw.put(r.fgtCluster(), ValueClass.CLUSTER_NAME);
+            for (AsaUnit u : r.units()) {
+                raw.put(u.hostname(), ValueClass.HOSTNAME);
+                raw.put(u.serial(), ValueClass.SERIAL);
+                raw.put(u.managementAddress(), ValueClass.ADDRESS);
+            }
+            return r;
+        }
+
+        List<AsaUnit> units() {
+            return List.of(panA, panB, fgtA, fgtB);
+        }
+    }
+
     private static String hex16() {
         return Integer.toHexString(0x1000 + RANDOM.nextInt(0xefff));
     }
@@ -348,7 +418,7 @@ class AiviewRawVersusMaskedSweepTest {
     record Estate(Device cpMemberA, Device cpMemberB, Device panFirewall, Device management, String cluster,
             String ipv6Management, String principal, String ruleName, String sectionName, String objectName,
             String objectAddress, String policyName, String policyId, String domainId, String objectId, String ruleId,
-            P1 p1, R2 r2, Map<String, ValueClass> raw) {
+            P1 p1, R2 r2, R3 r3, Map<String, ValueClass> raw) {
 
         static Estate generate() {
             String cluster = "CLX-ROMEO-" + tag().toUpperCase(Locale.ROOT);
@@ -393,9 +463,10 @@ class AiviewRawVersusMaskedSweepTest {
             raw.put("203.0.113.10", ValueClass.ADDRESS);
             P1 p1 = P1.generate(principal, pan.hostname(), base, raw);
             R2 r2 = R2.generate(principal, pan, b, raw);
+            R3 r3 = R3.generate(base, raw);
             return new Estate(a, b, pan, mgmt, cluster, v6, principal, ruleName, sectionName, objectName, objectAddress,
                     policyName, "policy-" + UUID.randomUUID(), "domain-" + UUID.randomUUID(),
-                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, r2, Map.copyOf(raw));
+                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, r2, r3, Map.copyOf(raw));
         }
 
         List<Device> devices() {
@@ -567,6 +638,8 @@ class AiviewRawVersusMaskedSweepTest {
             seedScripts(c, e);
             seedLogFindings(c, e);
             seedPacketAnalysis(c, e);
+            seedZoneMatrixRuns(c, e);
+            seedFailoverHistory(c, e, credential);
         }
     }
 
@@ -709,6 +782,203 @@ class AiviewRawVersusMaskedSweepTest {
     }
 
     /**
+     * Zone Matrix evaluation history (V267, round 3): two COMPLETE runs of the seeded policy on the ACTIVE version. The
+     * earlier run (two days ago) holds one VIOLATION finding that the latest run resolved with
+     * {@code MATRIX_VERSION_CHANGED}; the latest run holds a VIOLATION (the seeded rule and section, an inline parent path
+     * of two rule ids, two violated cells whose zone ids are the seeded zones, witness ranges, a NAT view and the two
+     * Check Point members as targets), an UNKNOWN (the seeded disabled rule) and a NOT_EVALUABLE finding (a rule and
+     * section of their own). Findings are inserted while their run is RUNNING and the run is then completed, as the
+     * engine does (V267 guard triggers).
+     */
+    private static void seedZoneMatrixRuns(Connection c, Estate e) throws Exception {
+        P1 p = e.p1();
+        R3 r = e.r3();
+        String versionId = ids.get("zoneMatrixActive");
+        String sha = ids.get("zoneMatrixActiveSha");
+        String zoneA = ids.get("zoneA");
+        String zoneB = ids.get("zoneB");
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant earlierStart = now.minus(Duration.ofDays(2));
+        Instant earlierEnd = earlierStart.plusSeconds(30);
+        Instant latestStart = now.minusSeconds(120);
+        Instant latestEnd = now.minusSeconds(90);
+        String earlierRun = UUID.randomUUID().toString();
+        String latestRun = UUID.randomUUID().toString();
+        String violationUid = "uid-" + UUID.randomUUID();
+        String resolvedUid = "uid-" + UUID.randomUUID();
+        List<String> parentPath = List.of("rule-" + UUID.randomUUID(), "rule-" + UUID.randomUUID());
+        List<String> targets = List.of(e.cpMemberA().id(), e.cpMemberB().id());
+        List<Map<String, Object>> cells = List.of(
+                zoneCell(zoneB, zoneA, "HIGH", p.zoneV4B() + "/30", p.zoneV4A() + "/30", p.zoneV4A()),
+                zoneCell(zoneA, zoneB, "CRITICAL", p.zoneV4A() + "/30", p.zoneV4B() + "/30", p.zoneV4B()));
+        List<String> pairs = List.of(zoneB + "->" + zoneA, zoneA + "->" + zoneB);
+        audited(c, () -> {
+            zoneRunStart(c, earlierRun, versionId, sha, e.policyId(), earlierStart);
+            zoneFinding(c, earlierRun, e.policyId(), resolvedUid, List.of(), List.of(zoneB + "->" + zoneA), e.ruleId(), 4,
+                    r.zmResolvedRule(), "section-1", e.sectionName(), targets, "VIOLATION", null, "HIGH", List.of(),
+                    List.of(cells.get(0)), List.of(), earlierStart, latestEnd, "MATRIX_VERSION_CHANGED");
+            zoneRunComplete(c, earlierRun, earlierEnd, 1, 0, 0, 0, 1);
+            zoneRunStart(c, latestRun, versionId, sha, e.policyId(), latestStart);
+            zoneFinding(c, latestRun, e.policyId(), violationUid, parentPath, pairs, e.ruleId(), 1, e.ruleName(),
+                    "section-1", e.sectionName(), targets, "VIOLATION", null, "CRITICAL", List.of("INLINE_LAYER_COVER"),
+                    cells, List.of(), latestStart, null, null);
+            zoneFinding(c, latestRun, e.policyId(), "uid-" + UUID.randomUUID(), List.of(), List.of(), "rule-" + UUID.randomUUID(), 2,
+                    p.disabledRuleName(), "section-1", e.sectionName(), targets, "UNKNOWN", "action semantics not modelled",
+                    null, List.of(), List.of(), List.of("service"), latestStart, null, null);
+            zoneFinding(c, latestRun, e.policyId(), "uid-" + UUID.randomUUID(), List.of(), List.of(), "rule-" + UUID.randomUUID(), 3,
+                    r.zmNotEvaluableRule(), "section-2", r.zmNotEvaluableSection(), targets, "NOT_EVALUABLE",
+                    "inline layer cleanup not collected", null, List.of(), List.of(), List.of(), latestStart, null, null);
+            zoneRunComplete(c, latestRun, latestEnd, 1, 1, 1, 1, 3);
+        });
+        ids.put("zmRun", latestRun);
+        ids.put("zmFindingUid", violationUid);
+        ids.put("zmResolvedUid", resolvedUid);
+    }
+
+    /** One violated cell as the engine stores it, with its witness (ranges, a service, sample addresses) and a NAT view. */
+    private static Map<String, Object> zoneCell(String source, String destination, String severity, String sourceRange,
+            String destinationRange, String natAddress) {
+        Map<String, Object> witness = new LinkedHashMap<>();
+        witness.put("source_range", sourceRange);
+        witness.put("destination_range", destinationRange);
+        witness.put("service", "tcp/443");
+        witness.put("sample_source_ip", 3405803776L + 17);
+        witness.put("sample_destination_ip", 3405803776L + 65);
+        Map<String, Object> cell = new LinkedHashMap<>();
+        cell.put("source_zone", source);
+        cell.put("destination_zone", destination);
+        cell.put("statement", "DENY_ALL");
+        cell.put("severity", severity);
+        cell.put("not_allowed_services", List.of("tcp/443"));
+        cell.put("nat_view", "translated to " + natAddress);
+        cell.put("witness", witness);
+        return cell;
+    }
+
+    private static OffsetDateTime at(Instant instant) {
+        return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+    }
+
+    private static void zoneRunStart(Connection c, String runId, String versionId, String sha, String policyId,
+            Instant started) throws SQLException {
+        exec(c, "insert into zone_matrix_run(run_id, version_id, version_number, content_sha256, policy_source_id, "
+                + "engine_version, state, started_at, snapshot_collected_at) values (?, ?, 1, ?, ?, 'synthetic-engine', "
+                + "'RUNNING', ?, '2026-11-20T10:00:00Z'::timestamptz)",
+                runId, versionId, sha, policyId, at(started));
+    }
+
+    private static void zoneRunComplete(Connection c, String runId, Instant finished, int violation, int compliant,
+            int notEvaluable, int unknown, int findings) throws SQLException {
+        exec(c, "update zone_matrix_run set state = 'COMPLETE', finished_at = ?, snapshot_rule_count = 3, vendor = 'CP', "
+                + "evaluated = true, coverage = 'COMPLETE', coverage_items = '[]'::jsonb, collection_failures = 0, "
+                + "count_violation = ?, count_compliant = ?, count_not_evaluable = ?, count_unknown = ?, "
+                + "count_not_applicable = 0, count_findings = ?, duration_ms = 30000 where run_id = ?",
+                at(finished), violation, compliant, notEvaluable, unknown, findings, runId);
+    }
+
+    private static void zoneFinding(Connection c, String runId, String policyId, String ruleUid, List<String> parentPath,
+            List<String> pairs, String ruleId, int ruleNumber, String ruleName, String sectionId, String sectionName,
+            List<String> targets, String outcome, String reason, String severity, List<String> flags,
+            List<Map<String, Object>> cells, List<String> undecided, Instant observed, Instant resolvedAt,
+            String resolution) throws Exception {
+        exec(c, "insert into zone_matrix_finding(run_id, policy_source_id, rule_uid, inline_parent_path, violated_pairs, "
+                + "rule_id, rule_number, rule_name, section_id, section_name, target_device_ids, outcome, reason, "
+                + "highest_severity, flags, covering_rule_id, violated_cells, undecided_parts, nat_view, first_observed_at, "
+                + "first_observed_any_version, last_observed_at, resolved_at, resolution_reason) values (?, ?, ?, ?::jsonb, "
+                + "?::jsonb, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?)",
+                runId, policyId, ruleUid, JSON.writeValueAsString(parentPath), JSON.writeValueAsString(pairs), ruleId,
+                ruleNumber, ruleName, sectionId, sectionName, JSON.writeValueAsString(targets), outcome, reason, severity,
+                JSON.writeValueAsString(flags), flags.isEmpty() ? null : "rule-" + UUID.randomUUID(),
+                JSON.writeValueAsString(cells), JSON.writeValueAsString(undecided),
+                cells.isEmpty() ? null : "translated by the gateway", at(observed), at(observed), at(observed),
+                resolvedAt == null ? null : at(resolvedAt), resolution);
+    }
+
+    /**
+     * Failover run history (V101/V109/V137, round 3): one finished run per vendor family on an enrolled pair that carries
+     * a raw cluster reference, raw hostnames, serials and addresses. Check Point and Palo Alto: a finished failover run
+     * with its approval (raw reason and the administrator as approver; a legacy window-only approval, the shape a plain
+     * insert can fill -- a request-bound approval needs a nonce and member bindings of the signed request flow). Cisco ASA
+     * and FortiGate: a finished readiness run (readiness is all those vendors have; the test application switches their
+     * readiness on). Every run's stored message names the raw cluster reference, a member's hostname and serial, an
+     * address and the administrator -- the only free-text column the runs views project. Palo Alto and FortiGate pairs
+     * are enrolled here; every member of the four pairs gets an inventory run (a unit is not derived without one) and the
+     * Palo Alto members the active-passive HA fact their unit derivation requires.
+     */
+    private static void seedFailoverHistory(Connection c, Estate e, String credential) throws Exception {
+        P1 p = e.p1();
+        R3 r = e.r3();
+        for (AsaUnit u : List.of(r.panA(), r.panB())) {
+            seedHaMember(c, credential, "palo_alto", "pan_xml_api", u, r.panCluster(), "11.1.2");
+        }
+        for (AsaUnit u : List.of(r.fgtA(), r.fgtB())) {
+            seedHaMember(c, credential, "fortinet", "ssh_exec", u, r.fgtCluster(), "7.4.5");
+        }
+        List<AsaUnit> allUnits = new ArrayList<>(p.asaUnits());
+        allUnits.addAll(r.units());
+        audited(c, () -> {
+            for (AsaUnit u : allUnits) {
+                String job = job(c, u.id(), "inventory_collect", "COMPLETED", null, "device", null);
+                String run = Ui2Rows.opaqueId("inv");
+                exec(c, "insert into device_inventory_run(run_id, device_id, job_id, collected_at, context_count) "
+                        + "values (?, ?, ?, now(), 1)", run, u.id(), job);
+                if (r.panA().equals(u) || r.panB().equals(u)) {
+                    exec(c, "insert into device_inventory_ha(ha_id, run_id, context, role, cluster_mode, source) "
+                            + "values (?, ?, 'physical', ?, 'active-passive', 'pan_high_availability_state')",
+                            Ui2Rows.opaqueId("ha"), run, u.haRole());
+                }
+            }
+            failoverRun(c, e, "check_point", e.cluster(), e.cpMemberA(), "FAILOVER", true);
+            failoverRun(c, e, "palo_alto", r.panCluster(), r.panA(), "FAILOVER", true);
+            failoverRun(c, e, "cisco_asa", p.asaCluster(), p.asaA(), "READINESS", false);
+            failoverRun(c, e, "fortinet", r.fgtCluster(), r.fgtA(), "READINESS", false);
+        });
+    }
+
+    private static void failoverRun(Connection c, Estate e, String vendor, String cluster, Object member, String kind,
+            boolean withApproval) throws SQLException {
+        String hostname = member instanceof Device d ? d.hostname() : ((AsaUnit) member).hostname();
+        String serial = member instanceof Device d ? d.serial() : ((AsaUnit) member).serial();
+        String address = member instanceof Device d ? d.managementAddress() : ((AsaUnit) member).managementAddress();
+        String approval = null;
+        if (withApproval) {
+            approval = "apr-" + UUID.randomUUID();
+            exec(c, "insert into failover_approval(approval_id, cluster_ref, vs_id, window_from, window_until, reason, "
+                    + "approved_by, vendor) values (?, ?, null, now() - interval '1 hour', now() + interval '1 hour', ?, ?, ?)",
+                    approval, cluster, "planned maintenance of " + hostname + " at " + address + ", requested by " + e.principal(),
+                    e.principal(), vendor);
+            ids.put("failoverApproval:" + vendor, approval);
+        }
+        String run = "run-" + UUID.randomUUID();
+        exec(c, "insert into failover_run(run_id, cluster_ref, vs_id, approval_id, requested_by, scheduled_for, job_id, state, "
+                + "step, started_at, finished_at, outcome, failed_check, message, vendor, run_kind) values (?, ?, null, ?, ?, "
+                + "now() - interval '30 minutes', null, 'DONE', 'DONE', now() - interval '29 minutes', now() - interval '20 minutes', "
+                + "'SUCCEEDED', null, ?, ?, ?)",
+                run, cluster, approval, e.principal(),
+                "finished on " + cluster + ": " + hostname + " serial " + serial + " at " + address + " for " + e.principal(),
+                vendor, kind);
+        ids.put("failoverRun:" + vendor, run);
+    }
+
+    /** One enrolled member of a failover pair: the device row, its endpoint and platform serial (as the ASA seed above). */
+    private static void seedHaMember(Connection c, String credential, String vendor, String transport, AsaUnit u,
+            String cluster, String version) throws Exception {
+        audited(c, () -> {
+            exec(c, "insert into devices(device_id, vendor_hint, registration_source, is_test_target, enrollment_state, "
+                    + "disabled, credential_reference_id, role, identity_mismatch_state, peer_follow_outcome, "
+                    + "observed_hostname, observed_model, observed_software_version, observed_ha_role, "
+                    + "recorded_identity_primary, recorded_identity_recorded_at, cluster_member_ref, backup_target, "
+                    + "discovery_match_key) values (?, ?, 'manual', true, 'ENROLLED', false, ?, 'gateway', 'NONE', "
+                    + "'CORROBORATED', ?, 'synthetic-model', ?, ?, ?, now(), ?, true, ?)",
+                    u.id(), vendor, credential, u.hostname(), version, u.haRole(), u.serial(), cluster, vendor + "|" + u.serial());
+            exec(c, "insert into endpoints(endpoint_id, device_id, transport_kind, address_ref) values (?, ?, ?, ?)",
+                    Ui2Rows.opaqueId("ep"), u.id(), transport, u.managementAddress());
+            exec(c, "insert into device_platform_facts(device_id, serial_number, platform_family, source_read) "
+                    + "values (?, ?, 'synthetic', 'synthetic_seed')", u.id(), u.serial());
+        });
+    }
+
+    /**
      * Zone Matrix (V216/V220/V267): one ACTIVE version and one DRAFT based on it, with their revision rows. The canonical
      * content holds two zones with raw names, IPv4 and IPv6 blocks and a description, and one cell whose rationale,
      * regulation reference and confirmation name the administrator and a hostname. The administrator created,
@@ -752,7 +1022,9 @@ class AiviewRawVersusMaskedSweepTest {
         });
         ids.put("zoneMatrixActive", activeId);
         ids.put("zoneMatrixDraft", draftId);
+        ids.put("zoneMatrixActiveSha", active.sha256());
         ids.put("zoneA", zoneA);
+        ids.put("zoneB", zoneB);
     }
 
     /**
@@ -1019,6 +1291,13 @@ class AiviewRawVersusMaskedSweepTest {
             byName.put("captureId", ids.get("paCapture"));
             byName.put("jobId", ids.get("paRun"));
         }
+        String family = failoverFamily(template);
+        if (family != null) {
+            String opaque = opaque(failoverCluster(e, family));
+            byName.put("clusterId", opaque);
+            byName.put("unitId", opaque);
+            byName.put("runId", ids.get("failoverRun:" + family));
+        }
         Matcher m = Pattern.compile("\\{([^}/:]+)(?::[^}]*)?}").matcher(path);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
@@ -1031,7 +1310,34 @@ class AiviewRawVersusMaskedSweepTest {
                 .replace("{rule}", e.ruleId()).replace("{object}", e.objectId()).replace("{device}", e.cpMemberA().id())
                 .replace("{policy}", e.policyId())
                 .replace("{cluster}", java.net.URLEncoder.encode(e.cluster(), StandardCharsets.UTF_8))
+                .replace("{fcluster}", family == null ? "" : opaque(failoverCluster(e, family)))
                 .replace("{artefact}", ids.get("artefactId"));
+    }
+
+    /**
+     * The vendor family ("check_point", "palo_alto", "cisco_asa", "fortinet") of a failover route template, or null. One
+     * controller serves the four prefixes; each reads the pair of its own vendor.
+     */
+    private static String failoverFamily(String template) {
+        if (template.startsWith("/api/v2/cp-failover/")) return "check_point";
+        if (template.startsWith("/api/v2/pan-failover/")) return "palo_alto";
+        if (template.startsWith("/api/v2/asa-failover/")) return "cisco_asa";
+        if (template.startsWith("/api/v2/fgt-failover/")) return "fortinet";
+        return null;
+    }
+
+    private static String failoverCluster(Estate e, String family) {
+        return switch (family) {
+            case "check_point" -> e.cluster();
+            case "palo_alto" -> e.r3().panCluster();
+            case "cisco_asa" -> e.p1().asaCluster();
+            default -> e.r3().fgtCluster();
+        };
+    }
+
+    /** The failover service's opaque cluster and unit id: a name-based UUID of the cluster reference. */
+    private static String opaque(String clusterReference) {
+        return UUID.nameUUIDFromBytes(clusterReference.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     /** Required (or identity-bearing) query parameters of some routes, so the handler reaches its data. */
@@ -1048,12 +1354,12 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("/api/v2/policy/domains/{id}/hits", "source={source}"),
             Map.entry("/api/v2/system-logs/gaps", "deviceId={device}"),
             Map.entry("/api/v2/log-findings/coverage", "device_id={device}"),
-            Map.entry("/api/v2/cp-failover/runs", "clusterId={cluster}"),
-            Map.entry("/api/v2/cp-failover/approvals", "clusterId={cluster}"),
-            Map.entry("/api/v2/pan-failover/runs", "clusterId={cluster}"),
-            Map.entry("/api/v2/pan-failover/approvals", "clusterId={cluster}"),
-            Map.entry("/api/v2/asa-failover/runs", "clusterId={cluster}"),
-            Map.entry("/api/v2/fgt-failover/runs", "clusterId={cluster}"),
+            Map.entry("/api/v2/cp-failover/runs", "clusterId={fcluster}&unitId={fcluster}"),
+            Map.entry("/api/v2/cp-failover/approvals", "clusterId={fcluster}&unitId={fcluster}"),
+            Map.entry("/api/v2/pan-failover/runs", "clusterId={fcluster}&unitId={fcluster}"),
+            Map.entry("/api/v2/pan-failover/approvals", "clusterId={fcluster}&unitId={fcluster}"),
+            Map.entry("/api/v2/asa-failover/runs", "clusterId={fcluster}&unitId={fcluster}"),
+            Map.entry("/api/v2/fgt-failover/runs", "clusterId={fcluster}&unitId={fcluster}"),
             Map.entry("/api/v2/diagnostics/ports", "device_id={device}"),
             Map.entry("/api/v2/estate/as-of", "at=2026-11-23T00:00:00Z"),
             Map.entry("/api/v2/policy/changes/actor-candidates", "revision=1"),
@@ -1166,6 +1472,15 @@ class AiviewRawVersusMaskedSweepTest {
         markers.put(ids.get("paCase"), "pa-case");
         markers.put(ids.get("paCapture"), "pa-capture");
         markers.put(ids.get("paRun"), "pa-run");
+        markers.put(ids.get("zmRun"), "zone-matrix-run");
+        markers.put(ids.get("zmFindingUid"), "zone-matrix-finding");
+        markers.put(ids.get("zmResolvedUid"), "zone-matrix-resolved");
+        for (String family : List.of("check_point", "palo_alto", "cisco_asa", "fortinet")) {
+            markers.put(ids.get("failoverRun:" + family), "failover-run-" + family);
+        }
+        for (AsaUnit u : estate.r3().units()) markers.put(u.id(), "ha-unit");
+        markers.put(ids.get("failoverApproval:check_point"), "failover-approval-check_point");
+        markers.put(ids.get("failoverApproval:palo_alto"), "failover-approval-palo_alto");
         Map<String, Set<String>> seen = new TreeMap<>();
 
         Map<String, Map<ValueClass, Integer>> leaks = new TreeMap<>();

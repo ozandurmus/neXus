@@ -2506,10 +2506,10 @@ export interface PolicyHygienePage {
     split?: { class: string; cell: string; status: string; type: string; nativeType: string; partialPrior: boolean | "UNKNOWN"; blockers: number; blockedRules: number }[] };
 }
 /** Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the closed vocabularies the service sends. */
-export type InsightType = "I1" | "I2" | "I3" | "I8" | "I9" | "I10" | "I11" | "I12";
+export type InsightType = "I1" | "I2" | "I3" | "I4" | "I8" | "I9" | "I10" | "I11" | "I12";
 export type InsightGrade = "PROVEN" | "SUPPORTED" | "INDICATED" | "NOT_ESTABLISHED" | "NOT_EVALUABLE";
 export type InsightNeeds = "NONE" | "TRAFFIC_LOGS" | "COUNTER_SAMPLES" | "NEW_COLLECTION" | "VENDOR_REPORT" | "NOT_RESOLVABLE";
-export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "UNKNOWN" }
+export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "overlapping" | "UNKNOWN" }
 export interface PolicyInsight {
   insightId: string; insightType: InsightType; evidenceGrade: InsightGrade; insightScope: "package" | "domain";
   rules: InsightRuleRef[]; objectIds: string[];
@@ -2517,7 +2517,8 @@ export interface PolicyInsight {
   insightCaveats: string[]; evidence: string[];
   /**
    * I10: the counter evidence (hits, first/last hit, source, collection time, window); I11/I12: counts; I3: coveringRules
-   * and coverAction (SAME | DIFFERENT | INLINE_LAYER), or unionReason when the work budget ran out.
+   * and coverAction (SAME | DIFFERENT | INLINE_LAYER), or unionReason when the work budget ran out; I4: overlappingRules and
+   * moreOverlapping (the overlapping rules listed are capped at 10), or partialReason when the work budget ran out.
    */
   counter: Record<string, string | number | boolean | string[] | null>;
 }
@@ -2534,6 +2535,8 @@ export interface PolicyInsightsPage {
   byType?: Record<string, number>; byGrade?: Record<string, number>;
   /** Phase P2a: the I3 union-cover pass in numbers. Absent from an older service. */
   unionCover?: { evaluated: number; covered: number; notProven: number; notEvaluable: { unionReason: string; rules: number }[] };
+  /** Phase P2b: the I4 partial-shadow pass in numbers. Absent from an older service. */
+  partialShadow?: { evaluated: number; partial: number; differentAction: number; notProven: number; notEvaluable: { partialReason: string; rules: number }[] };
   total?: number; page?: number; pageSize?: number; days?: number; collectedAt?: string; complete?: boolean;
 }
 export interface PolicyInsightDetail {

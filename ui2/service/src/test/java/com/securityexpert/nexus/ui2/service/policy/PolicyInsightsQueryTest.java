@@ -58,7 +58,7 @@ class PolicyInsightsQueryTest {
             assertTrue(PolicyInsights.TYPES.contains(row.path("insightType").asText()));
             assertTrue(PolicyInsights.GRADES.contains(row.path("evidenceGrade").asText()));
             assertTrue(PolicyInsights.NEEDS.contains(row.path("raiseTo").path("insightNeeds").asText()));
-            for (JsonNode e : row.path("evidence")) assertTrue(PolicyHygiene.EVIDENCE.contains(e.asText()), e.asText());
+            for (JsonNode e : row.path("evidence")) assertTrue(PolicyHygiene.EVIDENCE.contains(e.asText()) || PolicyInsights.EVIDENCE.contains(e.asText()), e.asText());
             for (JsonNode rule : row.path("rules")) assertNotEquals(names.maskPolicyName("x", "y"), "", "projection ran");
         }
         // The synthetic rule names must not pass through unchanged.
