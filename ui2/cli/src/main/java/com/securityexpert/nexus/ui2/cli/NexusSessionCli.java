@@ -191,6 +191,7 @@ final class NexusSessionCli {
         ScriptCli.printUsage();
         StaticRouteCli.printUsage();
         ZonesMatrixCli.printUsage();
+        PathTopologyCli.printUsage();
         PolicyCli.printUsage();
         PolicyOpsCli.printUsage();
     }
@@ -478,6 +479,8 @@ final class NexusSessionCli {
                     if (staticRoute != -1) yield staticRoute;
                     int zoneMatrix = new ZonesMatrixCli(this).run(args);
                     if (zoneMatrix != -1) yield zoneMatrix;
+                    int pathTopology = new PathTopologyCli(this).run(args);
+                    if (pathTopology != -1) yield pathTopology;
                     int policyScreens = new PolicyCli(this).run(args);
                     if (policyScreens != -1) yield policyScreens;
                     int policyOps = new PolicyOpsCli(this).run(args);
