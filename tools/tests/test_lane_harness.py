@@ -920,6 +920,16 @@ def test_profiles_select_steps(repo, tmp_path):
     assert statuses(report) == {"lane_only": "skipped", "tests": "pass"}
 
 
+def test_the_quick_profile_skips_only_the_heavy_test_steps(repo, tmp_path):
+    write(repo, "ui2/service/src/main/java/A.java", "x\n")
+    commit(repo)
+    light = {"id": "light", "cmd": ["{python}", "-c", "pass"]}
+    heavy = dict(integration_step(1), id="integration")
+    code, report = run_harness(repo, tmp_path, PRE + [light, heavy], "--profile", "quick", "--integration", "hosta")
+    st = statuses(report)
+    assert code == 0 and st["light"] == "pass" and st["integration"] == "skipped"
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Harness errors are typed, never a traceback
 

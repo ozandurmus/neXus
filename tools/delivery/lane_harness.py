@@ -1353,8 +1353,17 @@ def load_reuse(path: str | None, ctx: Context) -> dict | None:
     return report
 
 
+# --profile quick (PO 2026-11-25): the lane profile without the heavy test steps; the ship pretest runs them. Used by the
+# gate while the Mac or HOST-A cannot carry every lane's full test load without slowing delivery.
+QUICK_SKIPPED = ("java_scoped", "java_project_plan_reader", "frontend_build", "frontend_vitest", "integration")
+
+
 def step_selected(ctx: Context, step: dict, profile: str) -> str | None:
     """None when the step runs, else the reason it is skipped."""
+    if profile == "quick":
+        if step["id"] in QUICK_SKIPPED or step.get("builtin") in QUICK_SKIPPED:
+            return "heavy step: the quick profile leaves it to the ship pretest"
+        profile = "lane"
     if profile not in step.get("profiles", ["lane"]):
         return "not in profile %s" % profile
     if step.get("when") and not ctx.any_changed(step["when"], step.get("when_not")):
@@ -1544,7 +1553,7 @@ def parse_args(argv: list | None = None) -> argparse.Namespace:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
-    parser.add_argument("--profile", choices=("lane", "pretest"), default="lane")
+    parser.add_argument("--profile", choices=("lane", "pretest", "quick"), default="lane")
     parser.add_argument("--integration", choices=("auto", "local", "hosta", "skip"), default="auto",
                         help="auto: hosta with --carrier hosta, else local")
     parser.add_argument("--carrier", choices=("mac", "hosta"), default="mac",
