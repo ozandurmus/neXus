@@ -75,11 +75,11 @@ import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyInput;
  * A0-FG-16  Fg16 ipv6CellsAreKeptButUnresolvedByTheIpv4Engine                                    UNKNOWN-PINNED
  * A0-FG-17  Fg17 vipDnatIsNotEvaluatedAndKeepsTheHopUnknown                                      UNKNOWN-PINNED
  * A0-FG-18  Fg18 vipPolicyBeforeAnOrdinaryPolicyIsUnknown                                        UNKNOWN-PINNED
- * A0-FG-18  Fg18 earlierOrdinaryAndLaterVipPolicyBothMatchingIsUnknown (@Disabled)               DEFECT
+ * A0-FG-18  Fg18 earlierOrdinaryAndLaterVipPolicyBothMatchingIsUnknown                         UNKNOWN-PINNED (FGT_VIP_PRIORITY_UNPROVEN)
  * A0-FG-19  Fg19 vipDestinationPolicyStaysUnknownForExtipAndMappedQueries                        UNKNOWN-PINNED
  * A0-FG-19  Fg19 extipAndMappedAddressAreEvaluatedInParallel (@Disabled)                         NOT MODELLED
  * A0-FG-20  Fg20 matchVipDefaultAndExplicitOptions                                               PINNED / UNKNOWN-PINNED
- * A0-FG-20  Fg20 denyPolicyDefaultMatchVipAlsoMatchesTheMappedAddress (@Disabled)                DEFECT
+ * A0-FG-20  Fg20 denyPolicyDefaultMatchVipAlsoMatchesTheMappedAddress                          UNKNOWN-PINNED (FGT_MATCH_VIP_UNPROVEN)
  * A0-FG-21  Fg21 centralNatIsUnsupportedForNat                                                   UNKNOWN-PINNED
  * A0-FG-22  Fg22 ippoolSnatIsKeptAsExtrasAndEgressSnatIsUnknown                                  PINNED / UNKNOWN-PINNED
  * A0-FG-23  Fg23 addressTypesResolveAsTheEntryRequires                                           PINNED
@@ -866,11 +866,55 @@ class FortiGateA0ConformanceTest {
             assertEquals(1, undecidable(result).size());
         }
 
-        @org.junit.jupiter.api.Disabled("A0-FG-18 DEFECT: PolicyLookup returns ALLOWED from the earlier ordinary policy and never looks at the later VIP policy; FGT_VIP_PRIORITY_UNPROVEN is not implemented")
         @Test void earlierOrdinaryAndLaterVipPolicyBothMatchingIsUnknown() {
             var s = snap(cfg(VIP_WEB, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "dstaddr \"VIP-WEB\"", "action deny")));
             var result = https(s);
             assertEquals("UNKNOWN", result.get("verdict"));
+            assertEquals("FGT_VIP_PRIORITY_UNPROVEN", result.get("lookupReason"));
+            assertTrue(PolicyLookup.REASONS.contains("FGT_VIP_PRIORITY_UNPROVEN"));
+            // The earlier ordinary policy stays the reported rule; the later VIP policy is the undecided one.
+            assertEquals("accept", ((Map<?, ?>) result.get("decidingRule")).get("action"));
+            assertEquals(1, undecidable(result).size());
+            var later = (Map<?, ?>) undecidable(result).get(0);
+            assertEquals("deny", later.get("action"));
+            assertEquals("FGT_VIP_PRIORITY_UNPROVEN", later.get("lookupReason"));
+        }
+
+        @Test void anEarlierDenyAndALaterVipPolicyBothMatchingIsUnknownToo() {
+            var s = snap(cfg(VIP_WEB, pol(1, "dstaddr \"HOST-WEB\"", "action deny") + pol(2, "dstaddr \"VIP-WEB\"")));
+            var result = https(s);
+            assertEquals("UNKNOWN", result.get("verdict"));
+            assertEquals("FGT_VIP_PRIORITY_UNPROVEN", result.get("lookupReason"));
+        }
+
+        @Test void aLaterVipPolicyTheQueryCannotMeetKeepsTheEarlierDecision() {
+            String extra = VIP_WEB + "config firewall address\n    edit \"HOST-OTHER\"\n        set subnet 192.0.2.99 255.255.255.255\n    next\nend\n";
+            // A different service: the VIP policy only takes SSH, the packet is HTTPS.
+            var service = snap(cfg(extra, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "dstaddr \"VIP-WEB\"", "service \"SSH\"")));
+            assertEquals("ALLOWED", https(service).get("verdict"));
+            assertEquals("first matching rule", https(service).get("lookupReason"));
+            // A different source: the VIP policy only takes another host.
+            var source = snap(cfg(extra, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "srcaddr \"HOST-OTHER\"", "dstaddr \"VIP-WEB\"")));
+            assertEquals("ALLOWED", https(source).get("verdict"));
+            // A different ingress interface.
+            var ingress = snap(cfg(extra, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "srcintf \"port3\"", "dstaddr \"VIP-WEB\"")));
+            assertEquals("ALLOWED", https(ingress).get("verdict"));
+            // The VIP policy is not disjoint on any resolved dimension: UNKNOWN again (the control of the three above).
+            var same = snap(cfg(extra, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "dstaddr \"VIP-WEB\"")));
+            assertEquals("UNKNOWN", https(same).get("verdict"));
+        }
+
+        @Test void withoutAVipPolicyAfterTheMatchNothingChanges() {
+            // A VIP exists in the VDOM, but no later policy carries it.
+            var vipDefined = snap(cfg(VIP_WEB, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "action deny")));
+            assertEquals("ALLOWED", https(vipDefined).get("verdict"));
+            assertEquals("first matching rule", https(vipDefined).get("lookupReason"));
+            // No VIP anywhere.
+            var none = snap(cfg("", pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "action deny")));
+            assertEquals("ALLOWED", https(none).get("verdict"));
+            // A VIP policy BEFORE the match is the already pinned earlier-unknown case, a later one is not looked at past a disabled rule.
+            var disabled = snap(cfg(VIP_WEB, pol(1, "dstaddr \"HOST-WEB\"") + pol(2, "dstaddr \"VIP-WEB\"", "status disable")));
+            assertEquals("ALLOWED", https(disabled).get("verdict"));
         }
     }
 
@@ -922,11 +966,48 @@ class FortiGateA0ConformanceTest {
             }
         }
 
-        @org.junit.jupiter.api.Disabled("A0-FG-20 DEFECT: with the default match-vip=enable a deny policy whose dstaddr covers only the VIP's mapped address is not matched by PolicyLookup for the pre-DNAT query, so a later accept on the external address yields ALLOWED where the entry requires UNKNOWN (path analysis is shielded by the hop NAT UNKNOWN)")
+        private static final String MAPPED_NET = VIP_WEB + "config firewall address\n    edit \"NET-MAPPED\"\n        set subnet 192.0.2.0 255.255.255.0\n    next\n"
+                + "    edit \"HOST-OTHER\"\n        set subnet 192.0.2.99 255.255.255.255\n    next\nend\n";
+
         @Test void denyPolicyDefaultMatchVipAlsoMatchesTheMappedAddress() {
-            var s = snap(cfg(VIP_WEB + "config firewall address\n    edit \"NET-MAPPED\"\n        set subnet 192.0.2.0 255.255.255.0\n    next\nend\n",
+            var s = snap(cfg(MAPPED_NET, pol(1, "dstaddr \"NET-MAPPED\"", "action deny") + pol(2, "dstaddr \"HOST-WEB\"")));
+            var result = https(s);
+            assertEquals("UNKNOWN", result.get("verdict"));
+            assertEquals("earlier rule could match", result.get("lookupReason"));
+            assertEquals(1, undecidable(result).size());
+            var deny = (Map<?, ?>) undecidable(result).get(0);
+            assertEquals("deny", deny.get("action"));
+            assertEquals("FGT_MATCH_VIP_UNPROVEN", deny.get("lookupReason"));
+            assertTrue(PolicyLookup.REASONS.contains("FGT_MATCH_VIP_UNPROVEN"));
+        }
+
+        @Test void anAcceptPolicyOnTheMappedAddressIsNotUsedAndNeverDecidesTheExtipPacket() {
+            // "match-vip" applies to deny policies only: the accept on the mapped address does not match the extip packet.
+            var s = snap(cfg(MAPPED_NET, pol(1, "dstaddr \"NET-MAPPED\"") + pol(2, "dstaddr \"HOST-WEB\"", "action deny")));
+            assertEquals("DENIED", https(s).get("verdict"));
+            assertEquals("first matching rule", https(s).get("lookupReason"));
+        }
+
+        @Test void aDenyPolicyTheVipCannotReachIsNotAffected() {
+            // No VIP covers the queried address: the deny on the mapped network is ordinary and does not match.
+            var other = snap(cfg(MAPPED_NET, pol(1, "dstaddr \"NET-MAPPED\"", "action deny") + pol(2)));
+            assertEquals("ALLOWED", look(other, "192.0.2.5", "198.51.100.77", "tcp/443", "port1", "port2").get("verdict"));
+            // The deny policy does not meet the source, the service or the ingress interface; destination NAT changes none of them.
+            assertEquals("ALLOWED", https(snap(cfg(MAPPED_NET,
+                    pol(1, "srcaddr \"HOST-OTHER\"", "dstaddr \"NET-MAPPED\"", "action deny") + pol(2, "dstaddr \"HOST-WEB\"")))).get("verdict"));
+            assertEquals("ALLOWED", https(snap(cfg(MAPPED_NET,
+                    pol(1, "dstaddr \"NET-MAPPED\"", "action deny", "service \"SSH\"") + pol(2, "dstaddr \"HOST-WEB\"")))).get("verdict"));
+            assertEquals("ALLOWED", https(snap(cfg(MAPPED_NET,
+                    pol(1, "srcintf \"port3\"", "dstaddr \"NET-MAPPED\"", "action deny") + pol(2, "dstaddr \"HOST-WEB\"")))).get("verdict"));
+            // A packet addressed to the mapped address itself is matched by the deny policy as written.
+            assertEquals("DENIED", look(snap(cfg(MAPPED_NET, pol(1, "dstaddr \"NET-MAPPED\"", "action deny") + pol(2, "dstaddr \"HOST-WEB\""))),
+                    "192.0.2.5", "192.0.2.10", "tcp/443", "port1", "port2").get("verdict"));
+        }
+
+        @Test void withoutAVipTheDenyPolicyOnTheMappedNetworkIsOrdinary() {
+            var s = snap(cfg("config firewall address\n    edit \"NET-MAPPED\"\n        set subnet 192.0.2.0 255.255.255.0\n    next\nend\n",
                     pol(1, "dstaddr \"NET-MAPPED\"", "action deny") + pol(2, "dstaddr \"HOST-WEB\"")));
-            assertEquals("UNKNOWN", https(s).get("verdict"));
+            assertEquals("ALLOWED", https(s).get("verdict"));
         }
     }
 

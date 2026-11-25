@@ -51,6 +51,10 @@ spec:
         emptyDir: {}
       - name: pg-tmp
         emptyDir: {}
+      - name: pg-init
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Mi
       - name: workspace
         emptyDir: {}
       - name: gradle-home
@@ -65,7 +69,18 @@ spec:
         command:
         - /bin/sh
         - -c
-        - umask 077 && head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > /run/test-db/password
+        - |
+          set -eu
+          umask 077
+          head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > /run/test-db/password
+          # What the in-cluster hook (deploy/ui2/10-configmap.yaml create-app-role.sh) has already done on the live
+          # server when a migration runs, and the integration fixture does not do for this role: the broker's login
+          # role exists (NOLOGIN) before the first migration, so V261's conditional EXECUTE grant on
+          # ui2_job_owner_valid is applied. Without it ScriptRunnerDatabaseRoleIntegrationTest fails on a fresh server
+          # (it passed on the Mac only because an earlier run had left the role in the persistent server).
+          cat > /run/test-db-init/10-cluster-roles.sql <<'SQL'
+          CREATE ROLE ui2_script_runner NOLOGIN;
+          SQL
         resources:
           requests:
             cpu: 50m
@@ -84,6 +99,8 @@ spec:
         volumeMounts:
         - name: test-db
           mountPath: /run/test-db
+        - name: pg-init
+          mountPath: /run/test-db-init
       - name: postgres
         image: postgres:16@sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54
         restartPolicy: Always
@@ -107,12 +124,12 @@ spec:
           failureThreshold: 90
         resources:
           requests:
-            cpu: 250m
+            cpu: 500m
             memory: 1Gi
             ephemeral-storage: 512Mi
           limits:
-            cpu: 500m
-            memory: 1Gi
+            cpu: "4"
+            memory: 2Gi
             ephemeral-storage: 2Gi
         securityContext:
           allowPrivilegeEscalation: false
@@ -130,6 +147,9 @@ spec:
           mountPath: /var/run/postgresql
         - name: pg-tmp
           mountPath: /tmp
+        - name: pg-init
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
       containers:
       - name: runner
         image: TEST_RUNNER_IMAGE
@@ -167,7 +187,7 @@ spec:
             ephemeral-storage: 2Gi
           limits:
             cpu: "8"
-            memory: 6Gi
+            memory: 12Gi
             ephemeral-storage: 7Gi
         securityContext:
           allowPrivilegeEscalation: false

@@ -92,13 +92,15 @@ def test_priority_is_below_every_production_class_and_the_default_and_never_pree
     assert template()["spec"]["template"]["spec"]["priorityClassName"] == test_class["metadata"]["name"]
 
 
-def test_quota_is_8_cpu_requested_27_cpu_burst_24_gib_3_pods_and_forbids_secrets_services_and_claims():
+def test_quota_is_8_cpu_requested_39_cpu_burst_24_gib_3_pods_and_forbids_secrets_services_and_claims():
     # PO 2026-11-25: the host is half idle; pods request little (priority -1000 keeps production first) and may burst
-    # into idle CPU up to 8 cores each.
+    # into idle CPU: the runner up to 8 cores, the database sidecar up to 4 (13 per pod, three pods).
     hard = one("ResourceQuota")["spec"]["hard"]
     assert quantity(hard["requests.cpu"]) == 8000
-    assert quantity(hard["limits.cpu"]) == 27000
-    assert quantity(hard["requests.memory"]) == quantity(hard["limits.memory"]) == 24 * 1024 ** 3
+    assert quantity(hard["limits.cpu"]) == 39000
+    # 2026-11-25: java and integration side by side were OOMKilled at 6.75 GiB; requests stay 24 GiB, limits burst to 45.
+    assert quantity(hard["requests.memory"]) == 24 * 1024 ** 3
+    assert quantity(hard["limits.memory"]) == 45 * 1024 ** 3
     assert hard["pods"] == "3"
     for key in ("secrets", "services", "persistentvolumeclaims", "services.nodeports", "services.loadbalancers"):
         assert hard[key] == "0", key
@@ -185,6 +187,22 @@ def test_job_template_runs_as_an_unprivileged_secretless_low_priority_pod():
     postgres, = [c for c in spec["initContainers"] if c["name"] == "postgres"]
     assert postgres["args"] == ["-c", "listen_addresses=127.0.0.1"]
     assert postgres["image"].startswith("postgres:16@sha256:")
+    assert quantity(postgres["resources"]["limits"]["cpu"]) == 4000  # measured 2026-11-25: 0.5 core doubled the integration phase
+
+
+def test_database_starts_with_the_brokers_login_role_like_the_in_cluster_hook_leaves_it():
+    # V261 grants ui2_job_owner_valid to ui2_script_runner only if the role exists when the migration runs; the live
+    # server has it from the in-cluster hook, the integration fixture does not create it. On a fresh sidecar
+    # ScriptRunnerDatabaseRoleIntegrationTest therefore failed until the sidecar's first start creates it NOLOGIN.
+    spec = template()["spec"]["template"]["spec"]
+    password, postgres = spec["initContainers"]
+    script = "\n".join(password["command"])
+    assert "CREATE ROLE ui2_script_runner NOLOGIN;" in script and "/run/test-db-init/" in script
+    assert "LOGIN PASSWORD" not in script and "SUPERUSER" not in script
+    mounts = {m["name"]: m for m in postgres["volumeMounts"]}
+    assert mounts["pg-init"]["mountPath"] == "/docker-entrypoint-initdb.d" and mounts["pg-init"]["readOnly"] is True
+    assert {m["mountPath"] for m in password["volumeMounts"] if m["name"] == "pg-init"} == {"/run/test-db-init"}
+    assert "ui2_script_runner" in (ROOT / "deploy" / "ui2" / "10-configmap.yaml").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("integration", [True, False])
@@ -203,7 +221,7 @@ def test_rendered_job_keeps_every_rule_and_drops_the_database_when_unused(integr
         assert env["UI2_TEST_JDBC_URL"].startswith("jdbc:postgresql://127.0.0.1:5432/")
     else:
         assert spec["initContainers"] == [] and "UI2_TEST_JDBC_URL" not in env
-        assert not any(v["name"] == "test-db" for v in spec["volumes"])
+        assert not any(v["name"] in ("test-db", "pg-init") for v in spec["volumes"])
 
 
 @pytest.mark.parametrize("bad", [
@@ -357,6 +375,8 @@ def git_repo(tmp):
     repo = tmp / "lane"
     (repo / "ui2" / "worker").mkdir(parents=True)
     (repo / "ui2" / "worker" / "A.java").write_text("class A {}\n")
+    (repo / "deploy" / "ui2").mkdir(parents=True)
+    (repo / "deploy" / "ui2" / "10-configmap.yaml").write_text("kind: ConfigMap\n")
     (repo / "docs" / "operations" / "sql").mkdir(parents=True)
     (repo / "docs" / "operations" / "sql" / "x.sql").write_text("select 1;\n")
     env = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull)
@@ -409,6 +429,8 @@ def test_pass_round_trip_ships_the_tree_runs_one_job_and_cleans_everything(host)
     workspace = host["state"] / "workspace"
     assert (workspace / "ui2" / "worker" / "A.java").is_file()
     assert (workspace / "docs" / "operations" / "sql" / "x.sql").is_file()
+    # DatabaseRoleGrantMatrixIntegrationTest reads the in-cluster hook SQL from here (2026-11-25: it failed without it)
+    assert (workspace / "deploy" / "ui2" / "10-configmap.yaml").is_file()
     assert (workspace / ".runner" / "test_runner_pod.sh").read_text() == \
         (ROOT / "tools" / "delivery" / "test_runner_pod.sh").read_text()
     assert (host["state"] / "deleted").read_text().split() == [result["run"]]
@@ -503,7 +525,18 @@ JAVA = shutil.which("java")
 
 FAKE_GRADLE = r'''#!/usr/bin/env bash
 # Writes one JUnit report per selected module; FAKE_GRADLE_MODE=fail makes one test fail, compile gives no report.
+# Every call appends "<phase> <cwd> <gradle user home> bundle=<yes|no>" to $FAKE_LOG; FAKE_GRADLE_MODE=meet makes each phase
+# wait (bounded) for the other one's start marker, which only happens when the two phases overlap in time.
 mode=${FAKE_GRADLE_MODE:-pass}
+case " $* " in *" -x "*) phase=java other=integration ;; *" :integration-tests:test "*) phase=integration other=java ;;
+               *) phase=java other=integration ;; esac
+bundle=no; [ -f frontend/dist/index.html ] && bundle=yes
+echo "$phase $PWD $GRADLE_USER_HOME bundle=$bundle" >> "$FAKE_LOG"
+if [ "$mode" = meet ]; then
+  touch "$FAKE_LOG.$phase"
+  for _ in $(seq 1 100); do [ -f "$FAKE_LOG.$other" ] && break; sleep 0.1; done
+  [ -f "$FAKE_LOG.$other" ] || exit 1
+fi
 if [ "$mode" = compile ]; then echo "> Execution failed for task ':worker:compileJava'"; exit 1; fi
 if [ "$mode" = offline ]; then echo "No cached version of x:y:1 available for offline mode"; exit 1; fi
 for module in worker integration-tests; do
@@ -512,7 +545,7 @@ for module in worker integration-tests; do
   mkdir -p "$module/build/test-results/test"
   failures=0; body='<testcase classname="com.example.AlphaTest" name="works()"/>'
   if [ "$mode" = fail ] && [ "$module" = worker ]; then
-    failures=1; body="$body"'<testcase classname="com.example.BetaTest" name="breaks()"><failure message="10.0.0.1 secret" type="AssertionError">trace</failure></testcase>'
+    failures=1; body="$body"'<testcase classname="com.example.BetaTest" name="breaks()"><failure message="10.0.0.1 secret" type="org.opentest4j.AssertionFailedError">trace</failure></testcase>'
   fi
   printf '<testsuite name="x" tests="%s" failures="%s" errors="0" skipped="0">%s</testsuite>\n' \
     "$((1 + failures))" "$failures" "$body" > "$module/build/test-results/test/TEST-com.example.AlphaTest.xml"
@@ -522,12 +555,26 @@ exit 0
 '''
 
 
+FAKE_NPM = r'''#!/usr/bin/env bash
+# `npm run build` in ui2/frontend: writes a dist/index.html, or fails when FAKE_NPM_MODE=fail. Anything else is a bug.
+[ "$1 $2" = "run build" ] || exit 9
+echo "npm $PWD" >> "$FAKE_LOG"
+[ "${FAKE_NPM_MODE:-pass}" = fail ] && { echo "src/App.tsx(1,1): error TS2322 raw compiler text"; exit 1; }
+mkdir -p dist && echo "<html></html>" > dist/index.html
+'''
+
+
 @pytest.fixture
 def pod(tmp_path):
     workspace = tmp_path / "workspace"
     for module in ("worker", "integration-tests"):
         (workspace / "ui2" / module).mkdir(parents=True)
         (workspace / "ui2" / module / "build.gradle.kts").write_text("// " + module + "\n")
+    (workspace / "ui2" / "frontend").mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "npm").write_text(FAKE_NPM)
+    (bin_dir / "npm").chmod(0o755)
     (workspace / "ui2" / "settings.gradle.kts").write_text("include()\n")
     (workspace / ".runner").mkdir()
     shutil.copy(ROOT / "tools" / "delivery" / "TestRunSummary.java", workspace / ".runner")
@@ -541,8 +588,9 @@ def pod(tmp_path):
     scratch.mkdir()
     env = dict(os.environ, TEST_WORKSPACE=str(workspace), TEST_RUNNER_SEED=str(seed), TEST_SCRATCH=str(scratch),
                TEST_GRADLE_BIN=str(gradle), GRADLE_USER_HOME=str(tmp_path / "gh"), TEST_JAVA="scoped",
-               TEST_GRADLE_TASKS=":worker:test", TEST_INTEGRATION="1", TEST_VITEST="0")
-    return dict(workspace=workspace, env=env, seed=seed)
+               TEST_GRADLE_TASKS=":worker:test", TEST_INTEGRATION="1", TEST_VITEST="0", FAKE_LOG=str(tmp_path / "calls"),
+               PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], TEST_NODE_MODULES=str(tmp_path / "no-node-modules"))
+    return dict(workspace=workspace, env=env, seed=seed, calls=tmp_path / "calls")
 
 
 def run_pod(p, **env):
@@ -579,8 +627,70 @@ def test_pod_fail_names_the_test_and_never_its_message(pod):
     code, summary, stdout = run_pod(pod, FAKE_GRADLE_MODE="fail")
     assert code == 1 and summary["status"] == "FAIL"
     java_phase = summary["phases"][0]
-    assert java_phase["failed"] == ["BetaTest.breaks"] and java_phase["failures"] == 1
+    # the exception's simple class name rides along (a code identifier), never its message or trace
+    assert java_phase["failed"] == ["BetaTest.breaks (AssertionFailedError)"] and java_phase["failures"] == 1
     assert "10.0.0.1" not in stdout and "secret" not in stdout and "trace" not in stdout
+
+
+def calls(p):
+    return [line.split() for line in p["calls"].read_text().splitlines()] if p["calls"].exists() else []
+
+
+@pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")
+def test_pod_builds_the_frontend_bundle_once_before_a_phase_that_packages_service(pod):
+    # -PfrontendPrebuilt=true skips the npm tasks: without this step :service has no static/ (measured question 5).
+    code, summary, stdout = run_pod(pod, TEST_GRADLE_TASKS=":service:test")
+    assert code == 0, stdout
+    seen = calls(pod)
+    assert [c[0] for c in seen].count("npm") == 1 and seen[0][0] == "npm"
+    assert seen[0][1].endswith("/ui2/frontend")
+    assert {c[3] for c in seen if c[0] != "npm"} == {"bundle=yes"}
+    assert "raw compiler text" not in stdout
+
+
+@pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")
+@pytest.mark.parametrize("env", [dict(TEST_GRADLE_TASKS=":worker:test", TEST_INTEGRATION="0"),
+                                 dict(TEST_JAVA="none", TEST_GRADLE_TASKS="", TEST_INTEGRATION="0", TEST_VITEST="1")])
+def test_pod_skips_the_frontend_bundle_when_no_phase_packages_service(pod, env):
+    code, _, stdout = run_pod(pod, **env)
+    assert not any(c[0] == "npm" for c in calls(pod)), stdout
+
+
+@pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")
+@pytest.mark.parametrize("env,expect", [(dict(TEST_JAVA="full", TEST_GRADLE_TASKS="", TEST_INTEGRATION="0"), "java"),
+                                        (dict(TEST_GRADLE_TASKS=":worker:test", TEST_INTEGRATION="1"), "integration")])
+def test_pod_builds_the_bundle_for_a_full_run_and_for_integration(pod, env, expect):
+    run_pod(pod, **env)
+    assert [c[0] for c in calls(pod)].count("npm") == 1 and expect in {c[0] for c in calls(pod)}
+
+
+@pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")
+def test_pod_answers_error_without_running_gradle_when_the_bundle_does_not_build(pod):
+    code, summary, stdout = run_pod(pod, FAKE_NPM_MODE="fail", TEST_GRADLE_TASKS=":service:test")
+    assert code == 2 and summary == {"status": "ERROR", "reason": "frontend_build", "phases": []}
+    assert [c[0] for c in calls(pod)] == ["npm"]
+    assert "TS2322" not in stdout
+
+
+@pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")
+def test_pod_runs_java_and_integration_side_by_side_in_separate_project_dirs_and_gradle_homes(pod):
+    # FAKE_GRADLE_MODE=meet: each phase waits for the other's start marker, so a sequential run fails the java phase.
+    code, summary, stdout = run_pod(pod, FAKE_GRADLE_MODE="meet")
+    assert code == 0, stdout
+    assert [(p["name"], p["status"]) for p in summary["phases"]] == [("java", "PASS"), ("integration", "PASS")]
+    assert all(p["duration_s"] >= 0 for p in summary["phases"])
+    by_phase = {c[0]: c for c in calls(pod) if c[0] != "npm"}
+    assert by_phase["java"][1].endswith("/workspace/ui2") and by_phase["integration"][1].endswith("/workspace/ui2-it")
+    assert by_phase["java"][2] != by_phase["integration"][2]
+    assert by_phase["java"][2].startswith(os.environ.get("GRADLE_USER_HOME", "") or str(pod["env"]["GRADLE_USER_HOME"]))
+
+
+@pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")
+def test_pod_integration_alone_uses_the_one_project_dir(pod):
+    code, summary, _ = run_pod(pod, TEST_JAVA="none", TEST_GRADLE_TASKS="")
+    assert [p["name"] for p in summary["phases"]] == ["integration"]
+    assert [c[1] for c in calls(pod) if c[0] == "integration"][0].endswith("/workspace/ui2")
+    assert not (pod["workspace"] / "ui2-it").exists()
 
 
 @pytest.mark.skipif(JAVA is None, reason="no JDK on this machine")

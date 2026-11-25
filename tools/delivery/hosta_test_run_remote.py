@@ -145,7 +145,8 @@ def render_job(template, name, image, scope, deadline_s):
     if not scope["integration"]:
         # No database phase: no database containers, no password volume, no database env.
         spec["initContainers"] = []
-        spec["volumes"] = [v for v in spec["volumes"] if v["name"] not in ("test-db", "pg-data", "pg-socket", "pg-tmp")]
+        spec["volumes"] = [v for v in spec["volumes"]
+                           if v["name"] not in ("test-db", "pg-data", "pg-socket", "pg-tmp", "pg-init")]
         runner["env"] = [e for e in runner["env"] if not e["name"].startswith("UI2_TEST_")]
         runner["volumeMounts"] = [m for m in runner["volumeMounts"] if m["name"] != "test-db"]
     return job
@@ -279,9 +280,10 @@ def run(name, commit, tree, deadline_s, payload, stdin, state):
         heartbeat()
         wait(deadline, state["poll"])
     queued_s = round(time.monotonic() - started)
-    # Only the candidate's committed source crosses into the pod, plus the Mac's runner files.
+    # Only the candidate's committed source crosses into the pod, plus the Mac's runner files. deploy/ui2 is there because
+    # DatabaseRoleGrantMatrixIntegrationTest runs the in-cluster hook SQL it reads from deploy/ui2/10-configmap.yaml.
     exec_in = ["exec", "-i", pod, "-c", "runner", "--"]
-    with subprocess.Popen(git + ["archive", commit, "ui2", "docs/operations/sql"], stdout=subprocess.PIPE,
+    with subprocess.Popen(git + ["archive", commit, "ui2", "docs/operations/sql", "deploy/ui2"], stdout=subprocess.PIPE,
                           stderr=subprocess.DEVNULL) as archive:
         copied = subprocess.run(["kubectl", "-n", NAMESPACE, *exec_in, "tar", "-xf", "-", "-C", "/workspace"],
                                 stdin=archive.stdout, capture_output=True, timeout=max(1, deadline - time.monotonic()))

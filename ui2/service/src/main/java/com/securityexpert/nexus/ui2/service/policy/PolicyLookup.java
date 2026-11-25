@@ -23,8 +23,12 @@ public final class PolicyLookup {
     // FortiGate (A0-FG-3, A0-FG-10)
     static final String FGT_IMPLICIT_DENY = "no rule matched; implicit deny";
     static final String FGT_INTRAZONE_UNKNOWN = "no rule matched; zone intrazone setting not evaluated";
+    /** A0-FG-18: an earlier ordinary policy and a later VIP policy both match; whether VIP policies take priority is unproven. */
+    static final String FGT_VIP_PRIORITY_UNPROVEN = "FGT_VIP_PRIORITY_UNPROVEN";
+    /** A0-FG-20: a deny policy with the default match-vip may also match the packet after the VIP changed its destination. */
+    static final String FGT_MATCH_VIP_UNPROVEN = "FGT_MATCH_VIP_UNPROVEN";
     public static final Set<String> REASONS = Set.of(ASA_IMPLICIT_DENY, ASA_LEVEL_ALLOW, ASA_LEVEL_UNPROVEN, ASA_SAME_INTER, ASA_SAME_INTRA,
-        ASA_INTERFACE_UNKNOWN, ASA_RESULTS, FGT_IMPLICIT_DENY, FGT_INTRAZONE_UNKNOWN, CP_CLEANUP, PAN_INTRAZONE, PAN_INTERZONE,
+        ASA_INTERFACE_UNKNOWN, ASA_RESULTS, FGT_IMPLICIT_DENY, FGT_INTRAZONE_UNKNOWN, FGT_VIP_PRIORITY_UNPROVEN, FGT_MATCH_VIP_UNPROVEN, CP_CLEANUP, PAN_INTRAZONE, PAN_INTERZONE,
         "multiple ordered layers not evaluated", "ordered layer results", "all ordered layers allowed", "first matching rule", "earlier rule could match",
         "partial query coverage", "analysis budget", "snapshot collection incomplete", "unsupported evaluation scope",
         "inline layer evaluation unsupported", "zone or target required", "target context unproven", "application constraint",
@@ -236,13 +240,28 @@ public final class PolicyLookup {
             java.util.function.IntPredicate layers, int depth) {
         if (depth > 32) throw new Unknown("analysis budget");
         List<Map<String, Object>> unknown = new ArrayList<>();
-        for (Entry entry : entries) {
+        boolean fgt = snapshot.metadata().vendor().equals("FGT");
+        List<VipTarget> vips = null;
+        for (int index = 0; index < entries.size(); index++) {
+            Entry entry = entries.get(index);
             budget.spend();
             if (!Objects.equals(entry.section().parentRuleId(), parent) || parent == null && !layers.test(entry.layer())) continue;
             String problem = entry.match().problem();
             if (problem == null) {
                 var selectors = entry.match().selectors();
-                if (!covers(selectors.get(0), "ipv4", source, budget) || !covers(selectors.get(1), "ipv4", destination, budget)) continue;
+                if (!covers(selectors.get(0), "ipv4", source, budget)) continue;
+                if (!covers(selectors.get(1), "ipv4", destination, budget)) {
+                    // A0-FG-20: a deny policy whose destination misses the queried (pre-DNAT) address may still match the
+                    // address a VIP maps it to; that is not decided here, so the policy stays an earlier unknown.
+                    if (fgt) {
+                        if (vips == null) vips = vipTargets(snapshot, budget);
+                        if (matchVipMayMatch(entry, query, source, destination, vips, budget)) {
+                            if (unknown.size() >= 128) throw new Unknown("analysis budget");
+                            var row = new LinkedHashMap<>(rule(entry)); row.put("lookupReason", FGT_MATCH_VIP_UNPROVEN); unknown.add(row);
+                        }
+                    }
+                    continue;
+                }
                 var service = selectors.get(2);
                 if (query.service().equals("any")) { if (!service.any()) problem = "service-wide query requires partitioning"; }
                 else {
@@ -285,6 +304,11 @@ public final class PolicyLookup {
                 if (unknown.size() >= 128) throw new Unknown("analysis budget");
                 var row = new LinkedHashMap<>(rule(entry)); row.put("lookupReason", problem); unknown.add(row); continue;
             }
+            if (fgt && unknown.isEmpty()) {
+                // A0-FG-18: a later VIP policy that may match the packet too: which of the two wins is not proven.
+                List<Map<String, Object>> later = laterVipPolicies(snapshot, entries, index, query, source, destination, budget);
+                if (!later.isEmpty()) return new Decision("UNKNOWN", FGT_VIP_PRIORITY_UNPROVEN, rule(entry), List.copyOf(later));
+            }
             return new Decision(unknown.isEmpty() ? (ALLOWING_ACTIONS.contains(entry.rule().action()) ? "ALLOWED" : "DENIED") : "UNKNOWN",
                 unknown.isEmpty() ? "first matching rule" : "earlier rule could match", rule(entry), List.copyOf(unknown));
         }
@@ -297,6 +321,88 @@ public final class PolicyLookup {
             : query.sourceZone().isEmpty() || query.destinationZone().isEmpty() ? "zone or target required"
             : query.sourceZone().equals(query.destinationZone()) ? PAN_INTRAZONE : PAN_INTERZONE;
         return new Decision("UNKNOWN", unknown.isEmpty() ? reason : "earlier rule could match", null, List.copyOf(unknown));
+    }
+    /**
+     * A0-FG-18 (MEDIUM: "Policies with VIPs applied have priority over typical firewall policies", the effect on order is
+     * not stated): the policies after {@code matched} that carry a VIP and that the packet may also match. A VIP policy is
+     * never a full match here (its destination is a VIP object), so what bounds it is what resolves of it: source and
+     * service, and the ingress interface; its destination is never used (a VIP policy may match the extip or the mapped
+     * address, A0-FG-19). A VIP policy no resolved dimension rules out is listed, and the caller answers UNKNOWN.
+     */
+    private static List<Map<String, Object>> laterVipPolicies(PolicySnapshot snapshot, List<Entry> entries, int matched, Query query, Range source,
+            Range destination, Budget budget) {
+        List<Map<String, Object>> found = new ArrayList<>(); Resolver resolver = null;
+        Entry first = entries.get(matched);
+        for (int i = matched + 1; i < entries.size(); i++) {
+            Entry later = entries.get(i); budget.spend();
+            if (later.layer() != first.layer() || !Objects.equals(later.section().parentRuleId(), first.section().parentRuleId())) continue;
+            if (!later.rule().extras().containsKey("fgt-vip")) continue;
+            if (resolver == null) resolver = new Resolver(snapshot.objects(), budget);
+            if (!vipPolicyMayMatch(snapshot, later, query, source, destination, resolver)) continue;
+            if (found.size() >= 128) throw new Unknown("analysis budget");
+            var row = new LinkedHashMap<>(rule(later)); row.put("lookupReason", FGT_VIP_PRIORITY_UNPROVEN); found.add(row);
+        }
+        return found;
+    }
+    private static boolean vipPolicyMayMatch(PolicySnapshot snapshot, Entry vip, Query query, Range source, Range destination, Resolver resolver) {
+        var rule = vip.rule(); var extras = new LinkedHashMap<>(rule.extras()); extras.remove("fgt-vip");
+        var stripped = new Rule(rule.id(), rule.uuid(), rule.number(), rule.name(), rule.enabled(), rule.source(), rule.destination(), rule.service(),
+            rule.application(), rule.action(), rule.log(), rule.comment(), extras);
+        Partial prior = partial(snapshot, vip.section(), stripped, resolver);
+        if (prior == null) return true;
+        var selectors = new ArrayList<>(prior.selectors()); selectors.set(1, null);
+        if (disjoint(new Partial(prior.rule(), selectors, prior.placements()), source, destination, query)) return false;
+        Set<String> from = prior.placements().getOrDefault("from", Set.of());
+        return from.isEmpty() || from.contains("any") || query.sourceZone().isEmpty() || from.contains(query.sourceZone());
+    }
+    /** A static VIP of the VDOM: the external address range(s) and the mapped range(s); {@code null} where a value did not parse. */
+    private record VipTarget(List<long[]> external, List<long[]> mapped, boolean portForward) {}
+    private static List<VipTarget> vipTargets(PolicySnapshot snapshot, Budget budget) {
+        List<VipTarget> out = new ArrayList<>();
+        for (PolicyObject object : snapshot.objects().values()) {
+            budget.spend();
+            if (object.values().stream().noneMatch(v -> v.startsWith("vip-mapped: "))) continue;
+            List<long[]> external = new ArrayList<>(), mapped = new ArrayList<>(); boolean portForward = false;
+            for (String value : object.values()) {
+                try {
+                    if (value.startsWith("ip-netmask: ")) external.add(PolicyRuleQuery.interval(value.substring(12)));
+                    else if (value.startsWith("ip-range: ")) external.add(PolicyRuleQuery.interval(value.substring(10)));
+                    else if (value.startsWith("vip-mapped: ")) for (String part : value.substring(12).split(",")) mapped.add(PolicyRuleQuery.interval(part));
+                    else if (value.startsWith("vip-mappedport: ")) portForward = true;
+                } catch (IllegalArgumentException invalid) { external = null; break; }
+            }
+            // A VIP whose addresses did not parse may translate anything: no range is known.
+            out.add(external == null || external.isEmpty() || mapped.isEmpty() ? new VipTarget(null, null, true) : new VipTarget(external, mapped, portForward));
+        }
+        return out;
+    }
+    /**
+     * A0-FG-20 (the default {@code match-vip enable} is HIGH, 7.4 CLI table; "a deny policy also matches the VIP's mapped
+     * address" is MEDIUM): whether a deny policy that does not cover the queried address may still match the address a
+     * VIP translates it to. An accept policy's {@code match-vip} is not used. A policy carrying an explicit match-vip or
+     * match-vip-only option is already an unsupported rule constraint, so only the default reaches here. Source and
+     * ingress interface are not changed by destination NAT and may rule the policy out; the destination interface is
+     * routed on the mapped address and the service port may be translated, so those are used only where no port is mapped.
+     */
+    private static boolean matchVipMayMatch(Entry entry, Query query, Range source, Range destination, List<VipTarget> vips, Budget budget) {
+        if (ALLOWING_ACTIONS.contains(entry.rule().action()) || entry.rule().extras().containsKey("fgt-vip")) return false;
+        var selectors = entry.match().selectors(); boolean portForward = false, relevant = false, mappedOverlap = false;
+        for (VipTarget vip : vips) {
+            budget.spend();
+            if (vip.external() == null) { relevant = true; mappedOverlap = true; portForward = true; continue; }
+            boolean hit = false;
+            for (long[] e : vip.external()) hit |= e[0] <= destination.end() && e[1] >= destination.start();
+            if (!hit) continue;
+            relevant = true; portForward |= vip.portForward();
+            for (long[] m : vip.mapped()) mappedOverlap |= overlaps(selectors.get(1), "ipv4", new Range(m[0], m[1]));
+        }
+        if (!relevant || !mappedOverlap) return false;
+        if (!portForward && !query.service().equals("any")) {
+            String protocol = query.service().substring(0, 3); long port = Long.parseLong(query.service().substring(4));
+            if (!covers(selectors.get(2), protocol, new Range(port, port), budget)) return false;
+        }
+        Set<String> from = entry.match().placements().getOrDefault("from", Set.of());
+        return from.isEmpty() || from.contains("any") || query.sourceZone().isEmpty() || from.contains(query.sourceZone());
     }
     /**
      * FortiGate after the last policy (A0-FG-3, A0-FG-10): the mapper's implicit section holds a synthetic intrazone

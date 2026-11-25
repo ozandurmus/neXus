@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
@@ -45,7 +44,7 @@ import com.securityexpert.nexus.ui2.policy.asa.AsaPolicyMapper;
  * A0-ASA-11  | A0Asa11                           | PINNED (any, any4); UNKNOWN-PINNED (any6)
  * A0-ASA-12  | A0Asa12                           | PINNED
  * A0-ASA-13  | A0Asa13                           | UNKNOWN-PINNED (DYNAMIC, never resolved from the name)
- * A0-ASA-14  | A0Asa14                           | PINNED (eq, range, groups); DEFECT (lt, gt, neq, one disabled test)
+ * A0-ASA-14  | A0Asa14                           | PINNED (eq, range, lt, gt, neq, groups)
  * A0-ASA-15  | A0Asa15                           | PINNED; UNKNOWN-PINNED (dns, literal not in the table)
  * A0-ASA-16  | A0Asa16                           | UNKNOWN-PINNED
  * A0-ASA-16a | A0Asa16a                          | PINNED (narrows only, never decides or covers)
@@ -591,7 +590,6 @@ class AsaA0ConformanceTest {
             assertNotEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.22", "tcp/80", "outside", "inside"));
         }
 
-        @Disabled("A0-ASA-14 DEFECT: lt, gt and neq port operators map to UNSUPPORTED (AsaPolicyMapper.evalPortOp) though the FROZEN entry decides neq -> two ranges, lt -> 1..N-1, gt -> N+1..65535")
         @Test void lessThanGreaterThanAndNotEqualAreDecidedRanges() {
             var s = asa("""
                     access-list ACL-OUT extended permit tcp any host 198.51.100.20 neq 23
@@ -606,6 +604,44 @@ class AsaA0ConformanceTest {
             assertEquals("DENIED", verdict(s, "10.0.0.1", "198.51.100.21", "tcp/1024", "outside", "inside"));
             assertEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.22", "tcp/1024", "outside", "inside"));
             assertEquals("DENIED", verdict(s, "10.0.0.1", "198.51.100.22", "tcp/1023", "outside", "inside"));
+        }
+
+        @Test void comparisonOperatorBoundsAreExactAndEmptyRangesStayUnknown() {
+            var s = asa("""
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.20 lt 1
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.21 gt 65535
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.22 neq 0
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.23 neq 1
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.24 neq 65535
+                    access-group ACL-OUT in interface outside
+                    """);
+            // an empty range or a port-0 operand is never decided as an allow
+            assertNotEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.20", "tcp/80", "outside", "inside"));
+            assertNotEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.21", "tcp/80", "outside", "inside"));
+            assertNotEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.22", "tcp/80", "outside", "inside"));
+            assertEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.23", "tcp/2", "outside", "inside"));
+            assertEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.23", "tcp/65535", "outside", "inside"));
+            assertEquals("DENIED", verdict(s, "10.0.0.1", "198.51.100.23", "tcp/1", "outside", "inside"));
+            assertEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.24", "tcp/65534", "outside", "inside"));
+            assertEquals("DENIED", verdict(s, "10.0.0.1", "198.51.100.24", "tcp/65535", "outside", "inside"));
+        }
+
+        @Test void comparisonOperatorsTakeLiteralOperandsAndUdpAndSourcePorts() {
+            var s = asa("""
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.20 lt www
+                    access-list ACL-OUT extended permit udp any host 198.51.100.21 neq domain
+                    access-list ACL-OUT extended permit tcp any gt 1023 host 198.51.100.22 eq https
+                    access-list ACL-OUT extended permit tcp any host 198.51.100.23 lt snmp
+                    access-group ACL-OUT in interface outside
+                    """);
+            assertEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.20", "tcp/79", "outside", "inside"));
+            assertEquals("DENIED", verdict(s, "10.0.0.1", "198.51.100.20", "tcp/80", "outside", "inside"));
+            assertEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.21", "udp/54", "outside", "inside"));
+            assertEquals("DENIED", verdict(s, "10.0.0.1", "198.51.100.21", "udp/53", "outside", "inside"));
+            // a TCP query on the UDP entry never matches
+            assertNotEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.21", "tcp/54", "outside", "inside"));
+            // a UDP-only literal on a TCP entry stays unresolved (A0-ASA-15)
+            assertNotEquals("ALLOWED", verdict(s, "10.0.0.1", "198.51.100.23", "tcp/80", "outside", "inside"));
         }
     }
 

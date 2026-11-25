@@ -19,10 +19,10 @@ spec:
       ephemeral-storage: 1Gi
     max:
       cpu: "8"
-      memory: 7Gi
+      memory: 12Gi
       ephemeral-storage: 10Gi
   - type: Pod
     max:
-      cpu: "9"
-      memory: 8Gi
+      cpu: "13"
+      memory: 15Gi
       ephemeral-storage: 10Gi

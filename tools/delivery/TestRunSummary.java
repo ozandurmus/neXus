@@ -12,7 +12,9 @@ import org.w3c.dom.*;
  *
  * Arguments: one per phase, {@code <name>=<exit code>:<seconds>:<reason>:<report path>[,<report path>...]}; a path is
  * a directory of TEST-*.xml files or one XML file. Failure messages, display names and parameters never leave the pod:
- * a failed test is reported as Class.method (Java) or file > test title (vitest) in a closed character set.
+ * a failed test is reported as Class.method (Java) or file > test title (vitest) in a closed character set. A Java
+ * failure also carries the simple name of its exception class, "Class.method (AssertionFailedError)": a code identifier,
+ * never a message, so a run can tell a timeout, a bind error or a missing file from a failed assertion (2026-11-25).
  * Exit 0 PASS, 1 FAIL, 2 ERROR.
  */
 class TestRunSummary {
@@ -129,7 +131,20 @@ class TestRunSummary {
     static String javaName(Element c) {
         String cls = c.getAttribute("classname").replaceFirst("^.*\\.", "");
         String method = c.getAttribute("name").replaceFirst("[(\\[].*$", "").strip();
-        return cls.matches(IDENT) && method.matches(IDENT) ? cls + "." + method : "<unnamed>";
+        String name = cls.matches(IDENT) && method.matches(IDENT) ? cls + "." + method : "<unnamed>";
+        String type = failureType(c);
+        return type == null ? name : name + " (" + type + ")";
+    }
+
+    /** Simple class name from the type attribute of the first failure/error child; null unless it is a plain identifier. */
+    static String failureType(Element c) {
+        for (String tag : new String[] {"failure", "error"}) {
+            var found = c.getElementsByTagName(tag);
+            if (found.getLength() == 0) continue;
+            String simple = ((Element) found.item(0)).getAttribute("type").replaceFirst("^.*[.]", "");
+            return simple.length() <= 60 && simple.matches(IDENT) ? simple : null;
+        }
+        return null;
     }
 
     static String vitestName(Element c) {
