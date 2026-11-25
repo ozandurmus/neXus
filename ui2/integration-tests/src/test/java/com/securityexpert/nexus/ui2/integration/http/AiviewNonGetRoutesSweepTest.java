@@ -91,9 +91,15 @@ class AiviewNonGetRoutesSweepTest {
     // ------------------------------------------------------------------ the reviewed table
 
     /** One request of a row. */
-    record Req(String method, String target, String contentType, byte[] body, Map<String, String> headers, String variant) {
+    record Req(String method, String target, String contentType, byte[] body, Map<String, String> headers, String variant,
+            Integer expected) {
         Req(String method, String target, String contentType, byte[] body, Map<String, String> headers) {
-            this(method, target, contentType, body, headers, null);
+            this(method, target, contentType, body, headers, null, null);
+        }
+
+        /** The same request, which must answer exactly {@code status} (narrower than the statuses of its row). */
+        Req expecting(int status) {
+            return new Req(method, target, contentType, body, headers, variant, status);
         }
 
         static Req json(String method, String target, Object body) {
@@ -110,14 +116,14 @@ class AiviewNonGetRoutesSweepTest {
 
         /** The same request, labelled as one that carries seeded raw values typed by the caller (its echo is reported apart). */
         Req typedRaw() {
-            return new Req(method, target, contentType, body, headers, "typed raw input");
+            return new Req(method, target, contentType, body, headers, "typed raw input", expected);
         }
     }
 
     /**
      * What the sweep does with one route. {@code requests} is empty for a skip. {@code covered} says whether the success
-     * path of the route is exercised (then every expected status is 2xx); a fired route that is only refused is
-     * {@code NOT COVERED} and {@code note} says why.
+     * path of the route is exercised (then an expected status is 2xx; a request may name its own exact status); a fired
+     * route that is only refused is {@code NOT COVERED} and {@code note} says why.
      */
     record Row(String action, String note, boolean covered, Set<Integer> statuses, Function<Ctx, List<Req>> requests) {
         static Row fire(String note, int status, Function<Ctx, List<Req>> requests) {
@@ -125,7 +131,7 @@ class AiviewNonGetRoutesSweepTest {
         }
 
         static Row fire(String note, Set<Integer> statuses, Function<Ctx, List<Req>> requests) {
-            return new Row("FIRE", note, statuses.stream().allMatch(s -> s / 100 == 2), statuses, requests);
+            return new Row("FIRE", note, statuses.stream().anyMatch(s -> s / 100 == 2), statuses, requests);
         }
 
         static Row skip(String reason) {
@@ -194,12 +200,12 @@ class AiviewNonGetRoutesSweepTest {
                 200, c -> List.of("RPT-01", "RPT-02", "RPT-03", "RPT-05", "RPT-17").stream()
                         .map(t -> Req.json("POST", "/api/v2/reports/preview", reportBody(t, "MASKED", null))).toList()));
         TABLE.put("POST /api/v2/path-analysis/query", Row.fire(
-                "NOT COVERED: the topology the application builds at start holds 0 attachments and 0 segments for the seed "
-                        + "(interface rows carry no prefix length), so no masked address resolves; the raw seeded addresses are "
-                        + "refused (422 PSEUDONYM_REFUSED) before the engine runs",
-                422, c -> List.of(Req.json("POST", "/api/v2/path-analysis/query", Map.of(
-                        "src", c.e.cpMemberA().managementAddress(), "dst", c.e.panFirewall().managementAddress(),
-                        "protocol", "tcp", "port", 443)).typedRaw())));
+                "reads the masked topology aiview sees (GET /api/v2/topology: the seeded connected estate must build segments "
+                        + "and attachments), then asks two masked questions of it (a cluster leaf host to a firewall leaf "
+                        + "host, which binds the seeded Check Point rule; the same source to a host inside the cutover "
+                        + "segment, which adds the fabric-redirect caveat) and one with raw seeded addresses (422 "
+                        + "PSEUDONYM_REFUSED); the audit rows are read back from authz_decisions",
+                Set.of(200, 422), c -> pathQueries(c)));
         TABLE.put("POST /api/v2/path-analysis/validate", Row.fire(
                 "NOT COVERED: a resolvable path would start device validation jobs, which this sweep never does (and the seed "
                         + "topology resolves none, see the query); the raw seeded addresses are refused (422 PSEUDONYM_REFUSED) "
@@ -320,7 +326,8 @@ class AiviewNonGetRoutesSweepTest {
     static final Map<String, Function<Estate, String>> MARKERS = Map.of(
             "POST /api/v2/policy/policies/*/lookup", Estate::ruleId,
             "POST /compliance/evaluate", e -> "\"total_firewalls\":",
-            "POST /api/v2/reports/preview", e -> "RPT-05");
+            "POST /api/v2/reports/preview", e -> "RPT-05",
+            "POST /api/v2/path-analysis/query", e -> "\"verdict\":");
 
     private static String enc(String value) {
         return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
@@ -346,6 +353,143 @@ class AiviewNonGetRoutesSweepTest {
     private static byte[] emptyPcap() {
         return new byte[] {(byte) 0xd4, (byte) 0xc3, (byte) 0xb2, (byte) 0xa1, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 (byte) 0xff, (byte) 0xff, 0, 0, 1, 0, 0, 0};
+    }
+
+    // ------------------------------------------------------------------ path analysis query
+
+    private static final String PATH_QUERY = "POST /api/v2/path-analysis/query";
+    /** The 200 answers of the path query row (read after the sweep: computed, with hops, nothing raw). */
+    private static final List<String> PATH_ANSWERS = new ArrayList<>();
+
+    /**
+     * The row's requests. The application builds the topology on a background thread after start, so the row waits for
+     * the masked topology read to show it, then derives masked hosts from the attachments the viewer was shown: the host
+     * offset inside a {@code /29} is preserved by the masker, so a host next to a firewall address is a host of the
+     * same masked leaf network (the PathPseudonymMap rule: "a host offset it picked inside a masked network it was shown").
+     */
+    private static List<Req> pathQueries(Ctx c) {
+        JsonNode topology = awaitBuiltTopology();
+        Map<String, String> vendorOfNode = new LinkedHashMap<>();
+        for (JsonNode n : topology.path("nodes")) vendorOfNode.put(n.path("node_id").asText(), n.path("vendor").asText());
+        Set<String> stubs = new TreeSet<>();
+        for (JsonNode seg : topology.path("segments")) {
+            if (seg.path("segment_kind").asText().equals("STUB")) stubs.add(seg.path("segment_id").asText());
+        }
+        var topo = c.e.topo();
+        long cpLeaf = -1;
+        long panLeaf = -1;
+        long panCutover = -1;
+        int panLeafOffset = hostOffset(topo.dstLeafMember());
+        int panCutoverOffset = hostOffset(topo.cutoverMember());
+        for (JsonNode a : topology.path("attachments")) {
+            String vendor = vendorOfNode.get(a.path("node_id").asText());
+            String address = a.path("address").asText("");
+            if (vendor == null || !stubs.contains(a.path("segment_id").asText()) || !address.contains("/")) continue;
+            long host = ipValue(address.substring(0, address.indexOf('/')));
+            if (vendor.equals("check_point")) {
+                cpLeaf = host;
+            } else if (vendor.equals("palo_alto")) {
+                if (host % 8 == panLeafOffset) panLeaf = host;
+                else if (host % 8 == panCutoverOffset) panCutover = host;
+            }
+        }
+        assertTrue(cpLeaf >= 0 && panLeaf >= 0 && panCutover >= 0,
+                "the masked topology must show the cluster leaf, the firewall leaf and the cutover attachment on stub segments");
+        // the seeded hosts sit one below (source, destination leaf host) or one above (cutover) the attachment address
+        String src = ipText(cpLeaf - (hostOffset(topo.srcLeafVip()) - hostOffset(c.e.objectAddress())));
+        String dst = ipText(panLeaf - (panLeafOffset - hostOffset(topo.dstHost())));
+        String cutoverDst = ipText(panCutover + (hostOffset(c.e.p1().flowSource()) - panCutoverOffset));
+        Map<String, Object> plain = Map.of("src", src, "dst", dst, "protocol", "tcp", "port", 443);
+        Map<String, Object> cutover = Map.of("src", src, "dst", cutoverDst, "protocol", "tcp", "port", 443);
+        return List.of(
+                Req.json("POST", "/api/v2/path-analysis/query", plain).expecting(200),
+                Req.json("POST", "/api/v2/path-analysis/query", cutover).expecting(200),
+                Req.json("POST", "/api/v2/path-analysis/query", Map.of(
+                        "src", c.e.cpMemberA().interfaceAddress(), "dst", c.e.panFirewall().interfaceAddress(),
+                        "protocol", "tcp", "port", 443)).typedRaw().expecting(422));
+    }
+
+    /** {@code GET /api/v2/topology} as aiview until the start-up build shows (counted like any answer, last one only). */
+    private static JsonNode awaitBuiltTopology() {
+        try {
+            long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
+            Resp resp;
+            JsonNode body;
+            do {
+                resp = send(Req.bare("GET", "/api/v2/topology"), sessionCookie, sessionCsrf);
+                body = JSON.readTree(resp.body());
+                if (resp.status() == 200 && "BUILT".equals(body.path("status").asText())) break;
+                Thread.sleep(500);
+            } while (System.nanoTime() < deadline);
+            record("GET /api/v2/topology (setup, masked)", resp);
+            assertEquals(200, resp.status(), "aiview topology read");
+            assertEquals("BUILT", body.path("status").asText(), "the topology the application builds at start");
+            assertTrue(body.path("segments").size() >= 3, "seeded estate: transit, leaf and cutover segments, got "
+                    + body.path("segments").size());
+            assertTrue(body.path("attachments").size() >= 5, "seeded estate: attachments, got " + body.path("attachments").size());
+            return body;
+        } catch (IOException | InterruptedException failure) {
+            throw new IllegalStateException("topology read failed", failure);
+        } catch (Exception failure) {
+            throw new IllegalStateException("topology read failed: " + failure.getClass().getSimpleName(), failure);
+        }
+    }
+
+    private static int hostOffset(String address) {
+        return (int) (ipValue(address) % 8);
+    }
+
+    private static long ipValue(String address) {
+        long value = 0;
+        for (String octet : address.split("\\.")) value = value * 256 + Integer.parseInt(octet);
+        return value;
+    }
+
+    private static String ipText(long value) {
+        return (value >> 24 & 255) + "." + (value >> 16 & 255) + "." + (value >> 8 & 255) + "." + (value & 255);
+    }
+
+    /** What the path query row must show after the sweep: computed answers with hops and caveats, nothing raw in the audit rows. */
+    private static void assertPathQueryAnswersAndAudit(List<String> problems) throws Exception {
+        if (PATH_ANSWERS.size() != 2) {
+            problems.add("path query: " + PATH_ANSWERS.size() + " computed answers, expected 2");
+            return;
+        }
+        boolean cutoverCaveat = false;
+        // the seeded Check Point rule decided a hop of the first answer: its id passes (opaque), its name and section are masked
+        if (!PATH_ANSWERS.get(0).contains(estate.ruleId())) problems.add("path query: the seeded rule is not bound to a hop");
+        for (String body : PATH_ANSWERS) {
+            JsonNode answer = JSON.readTree(body);
+            if (!"COMPUTED".equals(answer.path("status").asText())) problems.add("path query answer is not COMPUTED");
+            JsonNode branches = answer.path("branches");
+            if (branches.isEmpty() || branches.get(0).path("hops").isEmpty()) problems.add("path query answer has no hops");
+            for (JsonNode caveat : answer.path("caveats")) {
+                cutoverCaveat |= "FABRIC_REDIRECT_NOT_MODELLED".equals(caveat.asText());
+            }
+        }
+        if (!cutoverCaveat) problems.add("path query: no answer carries FABRIC_REDIRECT_NOT_MODELLED for the cutover segment");
+        int computedRows = 0;
+        int refusedRows = 0;
+        int rows = 0;
+        try (var connection = fixture.migrateConnection();
+                var statement = connection.prepareStatement("select coalesce(reason_code, ''), coalesce(target_ref, ''), "
+                        + "coalesce(authority, '') from authz_decisions where action_id = 'path_analysis_read' "
+                        + "and authority = 'path_analysis_query'");
+                var result = statement.executeQuery()) {
+            while (result.next()) {
+                rows++;
+                String evidence = result.getString(1) + "\n" + result.getString(2);
+                Map<ValueClass, Integer> found = AiviewSweepEstate.count(evidence, estate.raw());
+                if (!found.isEmpty()) problems.add("authz_decisions path query row holds seeded raw values: " + found);
+                if (evidence.contains("\"verdict\":\"REFUSED\"")) refusedRows++;
+                else if (evidence.contains("\"masked_input\":true")) computedRows++;
+            }
+        }
+        System.out.println("AIVIEW_NONGET path_analysis audit rows=" + rows + " computed=" + computedRows + " refused=" + refusedRows);
+        if (rows != 3 || computedRows != 2 || refusedRows != 1) {
+            problems.add("authz_decisions path query rows: " + rows + " (computed " + computedRows + ", refused " + refusedRows
+                    + "), expected 3 (2, 1)");
+        }
     }
 
     private static final String BOUNDARY = "----aiviewsweep7d2f1c";
@@ -550,8 +694,9 @@ class AiviewNonGetRoutesSweepTest {
             }
             for (Req req : row.requests().apply(ctx)) {
                 Resp resp = send(req, sessionCookie, sessionCsrf);
-                if (!row.statuses().contains(resp.status())) {
-                    wrongStatus.add(key + " answered " + resp.status() + ", expected " + row.statuses());
+                Set<Integer> allowed = req.expected() == null ? row.statuses() : Set.of(req.expected());
+                if (!allowed.contains(resp.status())) {
+                    wrongStatus.add(key + " answered " + resp.status() + ", expected " + allowed);
                 }
                 String variant = req.variant() == null ? "" : " (" + req.variant() + ")";
                 record(key + variant + (row.covered() ? "" : " [NOT COVERED]"), resp);
@@ -568,6 +713,8 @@ class AiviewNonGetRoutesSweepTest {
                 }
             }
         }
+
+        assertPathQueryAnswersAndAudit(wrongStatus);
 
         REPORT.forEach(System.out::println);
         System.out.println("AIVIEW_NONGET_SUMMARY reachable_non_get_routes=" + nonGet.size() + " fired=" + fired
@@ -625,6 +772,7 @@ class AiviewNonGetRoutesSweepTest {
 
     /** The ids a later row needs from an earlier answer (never printed). */
     private static void captureIds(String key, Resp resp, Ctx ctx) {
+        if (key.equals(PATH_QUERY) && resp.status() == 200) PATH_ANSWERS.add(resp.body());
         if (key.equals("POST " + PA + "/cases")) {
             String id = field(resp.body(), "case_id");
             if (id != null) ctx.state.put("caseId", id);
