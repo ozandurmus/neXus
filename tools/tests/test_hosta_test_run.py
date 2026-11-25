@@ -92,9 +92,12 @@ def test_priority_is_below_every_production_class_and_the_default_and_never_pree
     assert template()["spec"]["template"]["spec"]["priorityClassName"] == test_class["metadata"]["name"]
 
 
-def test_quota_is_8_cpu_24_gib_3_pods_and_forbids_secrets_services_and_claims():
+def test_quota_is_8_cpu_requested_27_cpu_burst_24_gib_3_pods_and_forbids_secrets_services_and_claims():
+    # PO 2026-11-25: the host is half idle; pods request little (priority -1000 keeps production first) and may burst
+    # into idle CPU up to 8 cores each.
     hard = one("ResourceQuota")["spec"]["hard"]
-    assert quantity(hard["requests.cpu"]) == quantity(hard["limits.cpu"]) == 8000
+    assert quantity(hard["requests.cpu"]) == 8000
+    assert quantity(hard["limits.cpu"]) == 27000
     assert quantity(hard["requests.memory"]) == quantity(hard["limits.memory"]) == 24 * 1024 ** 3
     assert hard["pods"] == "3"
     for key in ("secrets", "services", "persistentvolumeclaims", "services.nodeports", "services.loadbalancers"):

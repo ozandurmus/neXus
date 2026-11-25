@@ -166,7 +166,7 @@ spec:
             memory: 6Gi
             ephemeral-storage: 2Gi
           limits:
-            cpu: "2"
+            cpu: "8"
             memory: 6Gi
             ephemeral-storage: 7Gi
         securityContext:
