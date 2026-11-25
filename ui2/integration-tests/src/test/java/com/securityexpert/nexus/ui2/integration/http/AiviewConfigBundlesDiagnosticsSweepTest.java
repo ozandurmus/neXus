@@ -93,50 +93,15 @@ class AiviewConfigBundlesDiagnosticsSweepTest {
     }
 
     /**
-     * Open multi-projection leaks found by sweep round 6 and left for a dedicated multi-projection fix lane:
-     * <ol>
-     *   <li>{@code ConfigurationController} ({@code GET /devices/{panDeviceId}/configuration}): {@code index[].context},
-     *       {@code overrides[].context}, {@code overrides[].element_path}, and {@code overrides[].panorama_source} are
-     *       not masked by {@code PrivacyMaskingResponseBodyAdvice}.</li>
-     *   <li>{@code BackupContentController} / {@code TopologyNamePseudonymizer}
-     *       ({@code GET /backups/{leftId}/compare?with={rightId}}): an archive entry path embedding a device hostname
-     *       between underscores ({@code hcp_report_<hostname>_...tar.gz}) bypasses {@code knownNamesPattern()} word
-     *       boundaries.</li>
-     *   <li>{@code SupportBundleController} ({@code GET /api/v2/support-bundles},
-     *       {@code GET /api/v2/devices/{deviceId}/support-bundles}, {@code GET /api/v2/support-bundles/{id}}):
-     *       {@code prechecks} is parsed via {@code ObjectMapper.readTree} into a Jackson {@code JsonNode}, which
-     *       {@code PrivacyMaskingResponseBodyAdvice.maskObject} returns untouched because it only recurses into
-     *       {@code Map} and {@code List}.</li>
-     *   <li>{@code SupportBundleUploadController} ({@code GET /api/v2/support-bundles/{id}/uploads}): while
-     *       {@code destination_host} (for {@code generic_sftp}), {@code remote_user}, {@code case_ref}, {@code reason},
-     *       and {@code requested_by} are withheld from {@code aiview}, {@code error_detail} (e.g. {@code SshSupport}
-     *       connection failure naming the generic SFTP host) and {@code remote_status} are still returned unwithheld.</li>
-     * </ol>
-     *
-     * <p>Pinned by exact {@code route -> (value_class -> count)} so any new leak, any increased count, or any fix that
-     * shrinks a count without updating this map fails the test.</p>
+     * Expected surviving raw value counts by {@code route -> (value_class -> count)}. Empty now that all four
+     * multi-projection leaks identified in sweep round 6 ({@code ConfigurationController} index/override contexts,
+     * element paths and Panorama sources; {@code TopologyNamePseudonymizer.knownNamesPattern()} underscore-delimited
+     * archive entry hostnames; {@code PrivacyMaskingResponseBodyAdvice} Jackson {@code JsonNode} recursion on
+     * support-bundle {@code prechecks}; {@code SupportBundleUploadController} {@code error_detail} and
+     * {@code remote_status} withholding/masking) are closed. Kept as an exact-match assertion so any future leak fails
+     * the sweep immediately.
      */
-    static final Map<String, Map<ValueClass, Integer>> KNOWN_LEAKS = Map.of(
-            "GET /devices/{panDeviceId}/configuration", Map.of(
-                    ValueClass.DOMAIN_OR_VS_NAME, 2,
-                    ValueClass.PANORAMA_NAME, 2,
-                    ValueClass.INTERFACE_OR_OBJECT_LABEL, 2),
-            "GET /backups/{leftId}/compare?with={rightId}", Map.of(
-                    ValueClass.HOSTNAME, 1),
-            "GET /api/v2/support-bundles", Map.of(
-                    ValueClass.HOSTNAME, 1,
-                    ValueClass.ADDRESS, 1,
-                    ValueClass.SERIAL, 1),
-            "GET /api/v2/devices/{deviceId}/support-bundles", Map.of(
-                    ValueClass.HOSTNAME, 1,
-                    ValueClass.ADDRESS, 1,
-                    ValueClass.SERIAL, 1),
-            "GET /api/v2/support-bundles/{id}", Map.of(
-                    ValueClass.HOSTNAME, 1,
-                    ValueClass.ADDRESS, 1,
-                    ValueClass.SERIAL, 1),
-            "GET /api/v2/support-bundles/{id}/uploads", Map.of(
-                    ValueClass.SFTP_OR_CASE_REF, 5));
+    static final Map<String, Map<ValueClass, Integer>> KNOWN_LEAKS = Map.of();
 
     private static Ui2PostgresFixture fixture;
     private static ConfigurableApplicationContext context;

@@ -92,11 +92,37 @@ class TopologyNamePseudonymizerTest {
     @Test
     void masksWholeTokensWithoutTouchingLongerNamesOrBuildIds() {
         String masked = pseudonymizer.maskDeviceName("synthetic-edge", null);
-        String text = "synthetic-edge-long build-synthetic-edge synthetic-edge.example.invalid Xsynthetic-edge";
+        String text = "synthetic-edge9 build2synthetic-edge presynthetic-edgepost Xsynthetic-edge";
         assertThat(pseudonymizer.maskText(text)).isEqualTo(text);
         assertThat(pseudonymizer.maskText("(synthetic-edge), synthetic-edge: failed"))
                 .isEqualTo("(" + masked + "), " + masked + ": failed");
         assertThat(pseudonymizer.maskText(masked)).isEqualTo(masked);
+    }
+
+    @Test
+    void masksKnownNamesDelimitedByUnderscoreDotDashAndSlashWithoutTouchingAlphanumericSubstrings() {
+        String rawHost = "FW-TANGO-04";
+        String masked = pseudonymizer.maskDeviceName(rawHost, null);
+
+        // Underscore-, dot-, dash- and slash-delimited occurrences are all masked
+        assertThat(pseudonymizer.maskText("var/log/hcp_report_" + rawHost + "_25_11_26_03_00.tar.gz"))
+                .isEqualTo("var/log/hcp_report_" + masked + "_25_11_26_03_00.tar.gz");
+        assertThat(pseudonymizer.maskText(rawHost + ".example.invalid"))
+                .isEqualTo(masked + ".example.invalid");
+        assertThat(pseudonymizer.maskText("archive-" + rawHost + "-daily"))
+                .isEqualTo("archive-" + masked + "-daily");
+        assertThat(pseudonymizer.maskText("var/backups/" + rawHost + "/db.tgz"))
+                .isEqualTo("var/backups/" + masked + "/db.tgz");
+
+        // Substrings inside longer ASCII alphanumeric tokens must NOT be masked
+        String shortHost = "fwedge04";
+        pseudonymizer.maskDeviceName(shortHost, null);
+        String superstrings = "X" + shortHost + " " + shortHost + "9 pre" + shortHost + "post";
+        assertThat(pseudonymizer.maskText(superstrings)).isEqualTo(superstrings);
+
+        // Already-minted pseudonyms keep their dictionary word even if a VS shares that word
+        pseudonymizer.maskVirtualSystem("TANGO", null);
+        assertThat(pseudonymizer.maskText("device FW-TANGO-09 ready")).isEqualTo("device FW-TANGO-09 ready");
     }
 
 

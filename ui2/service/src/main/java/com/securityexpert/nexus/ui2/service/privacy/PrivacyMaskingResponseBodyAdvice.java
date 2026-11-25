@@ -19,6 +19,7 @@ import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobEvent;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
@@ -133,10 +134,17 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
     }
 
     private void preRegisterSubnets(Object obj) {
+        if (obj instanceof JsonNode jsonNode) {
+            preRegisterSubnets(plainFromJsonNode(jsonNode));
+            return;
+        }
         if (obj instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String key = String.valueOf(entry.getKey());
                 Object val = entry.getValue();
+                if (val instanceof JsonNode jsonVal) {
+                    val = plainFromJsonNode(jsonVal);
+                }
                 if (("address".equals(key) || "destination".equals(key) || "management_ip".equals(key)
                         || "network".equals(key) || "src".equals(key) || "dst".equals(key)
                         || "client_ip".equals(key) || "server_ip".equals(key)
@@ -185,6 +193,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
         if (obj == null) {
             return null;
         }
+        if (obj instanceof JsonNode jsonNode) {
+            return maskObject(plainFromJsonNode(jsonNode), parentContextRef);
+        }
         if (obj instanceof String text) {
             return topologyPseudonymizer.maskText(ipMasker.maskText(text));
         }
@@ -228,6 +239,39 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return maskList((List<?>) list, parentContextRef);
         }
         return obj;
+    }
+
+    private static Object plainFromJsonNode(JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) {
+            return null;
+        }
+        if (node.isObject()) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var entry = fields.next();
+                out.put(entry.getKey(), plainFromJsonNode(entry.getValue()));
+            }
+            return out;
+        }
+        if (node.isArray()) {
+            List<Object> out = new ArrayList<>(node.size());
+            for (JsonNode item : node) {
+                out.add(plainFromJsonNode(item));
+            }
+            return out;
+        }
+        if (node.isTextual()) {
+            return node.textValue();
+        }
+        if (node.isBoolean()) {
+            return node.booleanValue();
+        }
+        if (node.isNumber()) {
+            return node.numberValue();
+        }
+        // Fail closed on binary or arbitrary POJO nodes: never pass uninspected node payloads through.
+        return null;
     }
 
     private Map<String, Object> maskMap(Map<?, ?> map, String parentContextRef) {

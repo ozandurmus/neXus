@@ -459,6 +459,9 @@ public class TopologyNamePseudonymizer {
     private volatile java.util.regex.Pattern knownNames;
     private volatile int knownNamesSize = -1;
 
+    private static final Pattern MINTED_PSEUDONYM = Pattern.compile(
+            "^(?:FW|CLS|VS|DOM|MD|POL|RULE|ADDR|GRP|SVC|APP|TAG|ZONE|PROF|OBJ)-[A-Z]+-(?:\\d{2,4}|M\\d{1,2})(?:-(?:M\\d{1,2}|\\d{2,4}))?$");
+
     private java.util.regex.Pattern knownNamesPattern() {
         int size = rawNameToPseudonym.size();
         java.util.regex.Pattern current = knownNames;
@@ -473,10 +476,10 @@ public class TopologyNamePseudonymizer {
                     .sorted((a, b) -> Integer.compare(b.length(), a.length())).toList();
             knownNamesSize = rawNameToPseudonym.size();
             knownNames = names.isEmpty() ? null
-                    : java.util.regex.Pattern.compile("(?<![\\p{L}\\p{N}_.-])(?:"
+                    : java.util.regex.Pattern.compile("(?<![A-Za-z0-9])(?:"
                             + names.stream().map(java.util.regex.Pattern::quote)
                                     .collect(java.util.stream.Collectors.joining("|"))
-                            + ")(?![\\p{L}\\p{N}_.-])");
+                            + ")(?![A-Za-z0-9])");
             return knownNames;
         }
     }
@@ -535,11 +538,33 @@ public class TopologyNamePseudonymizer {
         }
         StringBuilder out = new StringBuilder();
         do {
-            String replacement = rawNameToPseudonym.getOrDefault(matcher.group(), matcher.group());
+            String replacement = insideMintedPseudonym(text, matcher.start(), matcher.end())
+                    ? matcher.group()
+                    : rawNameToPseudonym.getOrDefault(matcher.group(), matcher.group());
             matcher.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(replacement));
         } while (matcher.find());
         matcher.appendTail(out);
         return out.toString();
+    }
+
+    private static boolean insideMintedPseudonym(String text, int matchStart, int matchEnd) {
+        int a = matchStart;
+        while (a > 0 && isTokenOrHyphen(text.charAt(a - 1))) {
+            a--;
+        }
+        int b = matchEnd;
+        while (b < text.length() && isTokenOrHyphen(text.charAt(b))) {
+            b++;
+        }
+        if (a == matchStart && b == matchEnd) {
+            return false;
+        }
+        String enclosing = text.substring(a, b);
+        return MINTED_PSEUDONYM.matcher(enclosing).matches() || UNKNOWN_HOST_TOKEN.matcher(enclosing).matches();
+    }
+
+    private static boolean isTokenOrHyphen(char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
     }
 
     private String computeClusterName(String raw) {
