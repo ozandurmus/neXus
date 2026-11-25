@@ -192,6 +192,7 @@ final class NexusSessionCli {
         StaticRouteCli.printUsage();
         ZonesMatrixCli.printUsage();
         PolicyCli.printUsage();
+        PolicyOpsCli.printUsage();
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -478,7 +479,9 @@ final class NexusSessionCli {
                     int zoneMatrix = new ZonesMatrixCli(this).run(args);
                     if (zoneMatrix != -1) yield zoneMatrix;
                     int policyScreens = new PolicyCli(this).run(args);
-                    yield policyScreens != -1 ? policyScreens : new SanitizerCli(this).run(args);
+                    if (policyScreens != -1) yield policyScreens;
+                    int policyOps = new PolicyOpsCli(this).run(args);
+                    yield policyOps != -1 ? policyOps : new SanitizerCli(this).run(args);
                 }
             };
         } catch (IllegalArgumentException e) {
