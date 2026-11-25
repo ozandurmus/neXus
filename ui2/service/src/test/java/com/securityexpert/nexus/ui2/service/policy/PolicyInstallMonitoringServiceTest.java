@@ -277,4 +277,21 @@ class PolicyInstallMonitoringServiceTest {
         Map<String, Object> pseudoSearch = service.status(new Request("", "", expectedPseudoHost, 0), true);
         assertEquals(1, pseudoSearch.get("total"));
     }
+
+    /** Masking leak audit round 4 (2026-11-25): a virtual-system name in the context column and row id is configuration text. */
+    @Test
+    void aiviewMasksTheVirtualSystemContextInTheColumnAndTheRowId() {
+        Instant t12 = Instant.parse("2026-11-17T12:00:00Z");
+        String vsys = "vsys-synthetic-cardholder";
+        PolicySnapshot.Metadata panPkg = new PolicySnapshot.Metadata(
+                "pkg-pan-1", "pano-1", "Customer-Panorama", "PAN", "dg-1", "Customer-DG", "Customer-Pkg",
+                t12.toString(), "art-pan", List.of(new PolicySnapshot.Target("dev-pan-1", "fw-pan-1", vsys, "IN_SYNC")));
+        StoredEvidence evidence = new StoredEvidence(List.of(panPkg), Map.of(), Map.of(), Map.of(), List.of(), List.of());
+        PolicyInstallMonitoringService service = new PolicyInstallMonitoringService(() -> evidence, names);
+
+        String masked = service.status(new Request("", "", "", 0), true).toString();
+        assertFalse(masked.contains(vsys), "the replay viewer never receives the virtual-system name");
+        String raw = service.status(new Request("", "", "", 0), false).toString();
+        assertTrue(raw.contains(vsys), "operators keep the real context");
+    }
 }

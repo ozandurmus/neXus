@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0419",
+      "status": "automated_validated",
+      "title": "Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge",
+      "summary": "The Overview attention list gained one zone-matrix row read from the stored summary, never green unless every covered policy is current and complete (6d3149e1); the aiview raw-versus-masked sweep now covers 216 GET routes with no surviving",
+      "started": "2026-11-25",
+      "completed": "2026-11-25",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0419.md"
+    },
+    {
       "build": "NXS-LOCAL-0418",
       "status": "automated_validated",
       "title": "Zone matrix step 4b-2b part 1 stored-summary route, rule recertification council packet, HOST-A test runner image fixes and CPU burst",

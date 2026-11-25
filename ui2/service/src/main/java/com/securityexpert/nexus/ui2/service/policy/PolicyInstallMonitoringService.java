@@ -696,11 +696,17 @@ public final class PolicyInstallMonitoringService {
             displayPolicyName = masked ? names.maskPolicyName("policy", rawPolicyName) : rawPolicyName;
         }
 
+        // A virtual-system or VDOM name is configuration text: the replay viewer sees the same pseudonym the other
+        // screens use (PolicyLookupController, ZoneMatrixService), in the context column and in the row id built from it.
+        String rawContext = context == null ? "" : context;
+        String displayContext = masked && !rawContext.isEmpty() ? names.maskVirtualSystem(rawContext, null) : rawContext;
+        String displayRowId = masked && !rawContext.isEmpty() && rowId.endsWith(":" + rawContext)
+                ? rowId.substring(0, rowId.length() - rawContext.length()) + displayContext : rowId;
         Map<String, Object> row = new LinkedHashMap<>();
-        row.put("row_id", rowId);
+        row.put("row_id", displayRowId);
         row.put("device_id", deviceId);
         row.put("hostname", displayHostname);
-        row.put("context", context == null ? "" : context);
+        row.put("context", displayContext);
         row.put("vendor", vendor);
         row.put("container_id", containerId == null ? "" : containerId);
         row.put("container_name", displayContainerName);
