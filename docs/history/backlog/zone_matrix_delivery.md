@@ -74,3 +74,5 @@ Counts (42 criteria): PROVEN 24, PARTIAL 8, STEP 4 five (ZM-8, ZM-34, ZM-35, ZM-
 Partial rows and their open part: ZM-12 (real-environment measurement), ZM-19 (STEP 7), ZM-25 (install-target pin; first-observed STEP 4), ZM-26 (STEP 4), ZM-30 (STEP 6),
 ZM-36 (STEP 4/5), ZM-37 (runs and findings STEP 4; exact audit key set at database level), ZM-40 (no byte-level body limit).
 No code contradicted the contract in this pass: no test was disabled and no production code changed.
+
+2026-11-25: step 6a content builder (`ZoneMatrixEvidenceReport`, pure, pins ZM-11, ZM-30 title part, ZM-32), not wired: catalogue, rights, masking cell kind, stored file and ZM-28, ZM-31, ZM-38 remain for a later step.

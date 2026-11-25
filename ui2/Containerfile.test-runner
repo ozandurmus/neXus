@@ -1,0 +1,69 @@
+# HOST-A test-runner image -- the runner container of the ui2-test Job (deploy/ui2-test/40-test-run-job.yaml;
+# docs/design/HOSTA_TEST_NAMESPACE_2026_11_24.md, DRAFT). Test equipment only: never deployed as part of the product.
+#
+# JDK 21 (the same pinned UBI 9 OpenJDK 21 build base as ui2/Containerfile) + Node.js 22 from the UBI 9 module stream
+# (the way Containerfile.script-exec installs it; grafting the vendor Node binaries onto this base fails on library
+# versions) + everything a test run needs that the network-less test pod cannot download:
+#   /opt/gradle                 the Gradle distribution the wrapper names (run directly; no wrapper download)
+#   /opt/gradle-ro-cache        a read-only Gradle dependency cache (GRADLE_RO_DEP_CACHE), shared by concurrent pods
+#   /opt/test-runner/frontend/node_modules   npm ci of ui2/frontend/package-lock.json
+#   /opt/test-runner/seed.sha256             fingerprint of every dependency-defining file the image was seeded from
+# A run whose fingerprint differs answers IMAGE_STALE (exit 3) without running anything: rebuild the image
+# (tools/delivery/hosta_test_runner_image.py) and the caller runs that tree on the Mac meanwhile.
+#
+# Build context: the repository root. Built by tools/delivery/hosta_test_runner_image.py with the host build proxy
+# (kaniko RUN steps see it only as the predefined proxy build args).
+FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:c8fcb7571677a9f6f1f2f3325c9765103ecc2834ff13ce20eb5ee6d1088f7e12
+
+USER 0
+
+# Optional corporate CA anchors for this build's own downloads (as in ui2/Containerfile). TLS verification stays on.
+COPY ui2/.ca/ /tmp/corp-ca/
+RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
+      cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
+    fi \
+ && rm -rf /tmp/corp-ca
+
+RUN for attempt in 1 2 3; do \
+      microdnf module enable -y nodejs:22 \
+      && microdnf install -y --nodocs --setopt=install_weak_deps=0 nodejs npm tar gzip findutils diffutils \
+      && break; \
+      [ "$attempt" = 3 ] && exit 1; \
+      sleep 30; \
+    done \
+ && microdnf clean all
+
+ENV NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+WORKDIR /opt/test-runner/frontend
+COPY ui2/frontend/package.json ui2/frontend/package-lock.json ./
+RUN npm config set cafile "$NODE_EXTRA_CA_CERTS" \
+ && npm config set strict-ssl true \
+ && npm ci --no-audit --no-fund \
+ && npm cache clean --force \
+ && rm -f /root/.npmrc
+
+# Gradle: resolve every resolvable configuration of every module once (tools/delivery/test_runner_seed.init.gradle.kts),
+# then keep the distribution and the module cache only. Lenient verification for the seed alone: the test runs verify
+# every artifact they use against ui2/gradle/verification-metadata.xml as usual.
+WORKDIR /seed
+COPY ui2/ /seed/ui2/
+COPY tools/delivery/test_runner_seed.init.gradle.kts tools/delivery/test_runner_pod.sh /seed/
+RUN rm -rf /seed/ui2/frontend/node_modules /seed/ui2/.gradle \
+ && cd /seed/ui2 \
+ && GRADLE_USER_HOME=/seed/home ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true \
+      --dependency-verification=lenient -I /seed/test_runner_seed.init.gradle.kts seedTestDependencies \
+ && dist="$(find /seed/home/wrapper/dists -mindepth 3 -maxdepth 3 -type d -name 'gradle-*')" \
+ && [ "$(printf '%s\n' "$dist" | wc -l)" = 1 ] && [ -x "$dist/bin/gradle" ] \
+ && mv "$dist" /opt/gradle \
+ && mkdir -p /opt/gradle-ro-cache \
+ && mv /seed/home/caches/modules-2 /opt/gradle-ro-cache/modules-2 \
+ && find /opt/gradle-ro-cache -name '*.lock' -delete \
+ && rm -f /opt/gradle-ro-cache/modules-2/gc.properties \
+ && bash /seed/test_runner_pod.sh --fingerprint /seed > /opt/test-runner/seed.sha256 \
+ && test -s /opt/test-runner/seed.sha256 \
+ && cd / && rm -rf /seed \
+ && chmod -R a+rX /opt/gradle /opt/gradle-ro-cache /opt/test-runner
+
+WORKDIR /workspace
+USER 999
+HEALTHCHECK NONE
