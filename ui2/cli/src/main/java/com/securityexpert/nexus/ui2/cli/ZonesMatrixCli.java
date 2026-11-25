@@ -43,6 +43,7 @@ final class ZonesMatrixCli {
         System.out.println("  zone-matrix-publish <jsonBody|@file>           body: revision, content_sha256, rationale (four-eyes)");
         System.out.println("  zone-matrix-evaluate [policyId|-] [versionId|-] [witnesses]   evaluate a version against the policies; witnesses adds witness data");
         System.out.println("  zone-matrix-summary [policyId|-] [outcome|-] [limit]   stored summary of the latest complete run of each policy");
+        System.out.println("  zone-matrix-run <policyId> [--version <versionId>]   start a stored run of one policy (active version unless named); prints run_id, already_running, state");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not a zone-matrix command */
@@ -108,6 +109,14 @@ final class ZonesMatrixCli {
                     fields.add("\"include_witnesses\":true");
                 }
                 yield NexusSessionCli.print(cli.call("POST", BASE + "/evaluate", "{" + String.join(",", fields) + "}"));
+            }
+            case "zone-matrix-run" -> {
+                String usage = "zone-matrix-run <policyId> [--version <versionId>]";
+                require(args, 2, usage);
+                if (args.length != 2 && !(args.length == 4 && args[2].equals("--version"))) throw new IllegalArgumentException("usage: " + usage);
+                String body = "{\"policy_id\":" + quote(args[1])
+                        + (args.length == 4 ? ",\"version_id\":" + quote(SanitizerCli.id(args[3])) : "") + "}";
+                yield NexusSessionCli.print(cli.call("POST", BASE + "/runs", body));
             }
             case "zone-matrix-summary" -> {
                 List<String> query = new ArrayList<>();

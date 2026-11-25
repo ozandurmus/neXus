@@ -44,6 +44,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // Zone matrix, delivery step 3 (sections 3.4, 5 and 10.1): stored-policy catalogue and on-demand evaluation.
             Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
             Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE),
+            // Zone matrix, delivery step 4b-2 (section 5.1): the on-demand durable run, same action as the evaluation.
+            Map.entry("POST /api/v2/zone-matrix/runs", ActionRegistry.ZONE_MATRIX_EVALUATE),
             // Zone matrix, delivery step 4b-2b (sections 7.1 and 7.2): the read-only stored summary; names masked in the controller.
             Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),

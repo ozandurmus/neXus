@@ -8,3 +8,5 @@ Heap ceiling of contract 5.1 not enforced, needs the in-pod measurement; V267 ne
 
 2026-11-25: Stored summary carries per-cell open-violation counts (`cell_counts` in `GET /api/v2/zone-matrix/summary`, contract 7.1 Matrix, 7.2); a rule in both headline sets counts only as a headline rule, and the Matrix and Violations tabs can read the key now
 2026-11-25: Violations and Coverage tabs on GET /api/v2/zone-matrix/summary (frontend); evidence-report wiring remains.
+
+2026-11-25: On-demand durable run reachable (contract 5.1 third trigger): `POST /api/v2/zone-matrix/runs` (existing action `zone_matrix_evaluate`, 202 with `run_id`, `already_running`, `state`; ZM-40 byte limit applies) and CLI `zone-matrix-run <policyId> [--version <versionId>]`; no UI button is added, `POST /api/v2/zone-matrix/evaluate` is unchanged

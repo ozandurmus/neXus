@@ -22,7 +22,9 @@ import org.springframework.web.bind.annotation.*;
  * admits each route by its action (SecurityWebMvcConfig); this controller adds the second checks the contract names: the
  * blocks view needs {@code zone_matrix_zones_read}, the masked persona never sees or changes blocks, and the response
  * carries the caller's affordances so the screen computes no visibility of its own. Step 4b-2b adds the read-only
- * stored summary (sections 7.1 and 7.2): no route here mutates or deletes a run or a finding (ZM-37).
+ * stored summary (sections 7.1 and 7.2): no route here mutates or deletes a run or a finding (ZM-37). Step 4b-2 adds the
+ * on-demand trigger of section 5.1 ({@code POST /api/v2/zone-matrix/runs}): it starts a new durable run through the same
+ * {@link ZoneMatrixRunService#submit} the publish and collection triggers use, and never changes or deletes an existing run.
  */
 @RestController
 public final class ZoneMatrixController {
@@ -46,6 +48,7 @@ public final class ZoneMatrixController {
     public record TemplateImportRequest(Long revision, Boolean replace) {}
     public record ConfirmRequest(Long revision, String source, String destination, String cell_sha256) {}
     public record EvaluateRequest(String policy_id, String version_id, Boolean include_witnesses) {}
+    public record RunRequest(String policy_id, String version_id) {}
 
     @GetMapping("/api/v2/zone-matrix/versions")
     public ResponseEntity<?> versions(HttpServletRequest request) {
@@ -185,6 +188,28 @@ public final class ZoneMatrixController {
                 body == null ? null : body.policy_id(),
                 body == null ? null : body.version_id(),
                 body != null && Boolean.TRUE.equals(body.include_witnesses())), request));
+    }
+
+    /**
+     * Step 4b-2, section 5.1 "On demand (zone_matrix_evaluate), same code path": starts a durable run of one stored policy
+     * against the active version or a named published version, on the run service's own bounded pool. Answers 202 with the
+     * run id, whether a run of that policy was already running (then its id is returned), and the run state. The answer
+     * carries ids and a state only; the result is read later from the stored summary, which shows COMPLETE runs only.
+     * Refusals are the ones {@link ZoneMatrixRunService#submit} throws. The masked persona never starts a run.
+     */
+    @PostMapping("/api/v2/zone-matrix/runs")
+    public ResponseEntity<?> startRun(@RequestBody(required = false) RunRequest body, HttpServletRequest request) {
+        ResponseEntity<?> answer = run(() -> {
+            if (masked(request)) throw new Refused(403, "READ_ONLY_PERSONA", "the masked persona cannot start a zone matrix run");
+            ZoneMatrixRunService.Submission submission = runs.submit(body == null ? null : body.policy_id(),
+                    body == null ? null : body.version_id());
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("run_id", submission.runId());
+            out.put("already_running", submission.alreadyRunning());
+            out.put("state", submission.state());
+            return out;
+        });
+        return answer.getStatusCode().value() == 200 ? ResponseEntity.accepted().body(answer.getBody()) : answer;
     }
 
     /**

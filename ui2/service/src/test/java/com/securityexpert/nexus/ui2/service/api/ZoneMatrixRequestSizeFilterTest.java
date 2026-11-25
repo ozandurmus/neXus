@@ -3,13 +3,20 @@ package com.securityexpert.nexus.ui2.service.api;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository;
+import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.service.boot.ZoneMatrixConfiguration;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
@@ -22,10 +29,15 @@ import jakarta.servlet.ServletInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -221,6 +233,74 @@ class ZoneMatrixRequestSizeFilterTest {
         // and so is a body that is not JSON at all and over the limit (it is not parsed, so it is not a 400)
         verifyRefused(mvc, PLANTED.repeat(LIMIT / PLANTED.length() + 2));
         verify(service, never()).discardDraft("actor-1", 8L);
+    }
+
+    /**
+     * Step 4b-2: the on-demand run route ({@code POST /api/v2/zone-matrix/runs}) is under the same limit: an over-limit body,
+     * declared or chunked, is refused 413 unread and never reaches the run service; an in-bound body passes unchanged.
+     */
+    @Test
+    void theRunRouteIsUnderTheSameLimitDeclaredAndChunked() throws Exception {
+        String route = "/api/v2/zone-matrix/runs";
+        var inBound = new MockHttpServletRequest("POST", route);
+        inBound.setContent(new byte[LIMIT]);
+        var inChain = new MockFilterChain();
+        var inResponse = new MockHttpServletResponse();
+        filter.doFilter(inBound, inResponse, inChain);
+        assertNotNull(inChain.getRequest(), "a body at the limit reaches the controller");
+        assertEquals(200, inResponse.getStatus());
+
+        var declared = new CountingRequest("POST", route, LIMIT + 1L, new InfiniteStream(PLANTED));
+        var declaredChain = new MockFilterChain();
+        var declaredResponse = new MockHttpServletResponse();
+        filter.doFilter(declared, declaredResponse, declaredChain);
+        assertNull(declaredChain.getRequest());
+        assertRefused(declaredResponse);
+        assertEquals(0, declared.stream.read.get(), "refused without reading a byte");
+
+        var chunked = new CountingRequest("POST", route, -1, new InfiniteStream(PLANTED));
+        var chunkedChain = new MockFilterChain();
+        var chunkedResponse = new MockHttpServletResponse();
+        filter.doFilter(chunked, chunkedResponse, chunkedChain);
+        assertNull(chunkedChain.getRequest());
+        assertRefused(chunkedResponse);
+        assertEquals(LIMIT + 1L, chunked.stream.read.get(), "reading stops at exactly one byte past the limit");
+    }
+
+    /**
+     * Through MVC: an over-limit run request is 413 before parsing and the run service is never called; a missing body gets
+     * the same 400 {@code INVALID_POLICY} that {@code /evaluate} gives for a missing policy.
+     */
+    @Test
+    void theRunRouteRefusesAnOversizedBodyBeforeParsingAndAMissingBodyLikeEvaluate() throws Exception {
+        var mapper = new ObjectMapper();
+        var clock = Clock.fixed(Instant.parse("2026-11-25T09:00:00Z"), ZoneOffset.UTC);
+        var zones = new ZoneMatrixService(mock(ZoneMatrixRepository.class), new ZoneMatrixService.Principals() {
+            @Override public boolean holdsComplianceAdmin(String actor) { return false; }
+            @Override public boolean isRoot(String actor) { return false; }
+        }, mapper, clock);
+        var runStore = mock(ZoneMatrixRunRepository.class);
+        var rbac = mock(RbacEvaluator.class);
+        when(rbac.evaluateAny(anyString(), anySet(), any(Instant.class))).thenReturn(
+                new RbacEvaluator.Decision(AuthzOutcome.DENIED, Optional.empty(), Optional.empty(), Optional.empty()));
+        try (var runService = new ZoneMatrixRunService(runStore, mock(ZoneMatrixRepository.class), null, mapper, clock, Duration.ofSeconds(30))) {
+            MockMvc mvc = MockMvcBuilders.standaloneSetup(new ZoneMatrixController(zones, runService, rbac, new ActionRegistry()))
+                    .addFilters(filter).build();
+            String head = "{\"policy_id\":\"pol-1\"}";
+            var result = mvc.perform(post("/api/v2/zone-matrix/runs").requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1")
+                            .contentType(MediaType.APPLICATION_JSON).content(head + " ".repeat(LIMIT + 1 - head.length())))
+                    .andExpect(status().isPayloadTooLarge()).andReturn();
+            assertTrue(result.getResponse().getContentAsString().contains(ZoneMatrixRequestSizeFilter.CODE));
+            verify(runStore, never()).start(any());
+            verify(runStore, never()).runningRunOf(any());
+
+            for (String route : new String[]{"/api/v2/zone-matrix/runs", "/api/v2/zone-matrix/evaluate"}) {
+                mvc.perform(post(route).requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.error").value("INVALID_POLICY"));
+            }
+            verify(runStore, never()).start(any());
+        }
     }
 
     private static void verifyRefused(MockMvc mvc, String body) throws Exception {
