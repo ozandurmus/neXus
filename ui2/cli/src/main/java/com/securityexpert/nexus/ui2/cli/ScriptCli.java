@@ -11,15 +11,28 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * CLI parity for Operations › Script Execution, slice 1 ({@code SCRIPT_EXECUTION_CONTRACT.md} sections 3.6, 3.7
+ * CLI parity for Operations › Script Execution ({@code SCRIPT_EXECUTION_CONTRACT.md} sections 3.5, 3.6, 3.7
  * and Amendment 2026-11-18 in {@code PO_DECISION_RECORD_2026_11_18_SCRIPT_EXECUTION_NO_REFUSALS.md}):
- * {@code script-list}, {@code script-add <file>}, {@code script-version-add <id> <file>}, {@code script-set <id>}
- * and {@code script-enable} / {@code script-disable}.
+ * {@code script-list}, {@code script-get}, {@code script-add <file>}, {@code script-version-add <id> <file>},
+ * {@code script-set <id>}, {@code script-enable} / {@code script-disable}, {@code script-run <id>},
+ * {@code script-runs <id>}, {@code script-run-show <runId>} and {@code script-output <runId>}.
  */
 final class ScriptCli {
 
     static final String BASE = "/api/v2/scripts";
     private static final Pattern OPAQUE = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
+    private static final List<String> NAMES = List.of(
+            "script-list",
+            "script-get",
+            "script-add",
+            "script-version-add",
+            "script-set",
+            "script-enable",
+            "script-disable",
+            "script-run",
+            "script-runs",
+            "script-run-show",
+            "script-output");
 
     private final NexusSessionCli cli;
 
@@ -27,18 +40,27 @@ final class ScriptCli {
         this.cli = cli;
     }
 
+    static List<String> names() {
+        return NAMES;
+    }
+
     static void printUsage() {
         System.out.println("  script-list [scriptId]                         list scripts (metadata only) or one script with versions");
+        System.out.println("  script-get <scriptId>                          show one script (metadata and versions, never body)");
         System.out.println("  script-add <file> [--name <name>] [--kind <kind>] [--schedule <cron>] [--enabled <true|false|on|off>]");
         System.out.println("             [--timeout <seconds>] [--egress <host:port,...|none>] [--notify <syslog|smtp|both|none>]");
-        System.out.println("             [--credential-refs <ref1,ref2,...|none>] [--run-as <actor>] [--script-id <id>]");
+        System.out.println("             [--mail-on-failure-only <true|false|on|off>] [--credential-refs <ref1,ref2,...|none>]");
+        System.out.println("             [--run-as <actor>] [--script-id <id>]");
         System.out.println("  script-version-add <scriptId> <file> [--kind <kind>] [--credential-refs <ref1,ref2,...|none>]");
         System.out.println("  script-set <scriptId> [--schedule <cron|clear>] [--enabled <true|false|on|off>] [--timeout <seconds>]");
         System.out.println("             [--egress <host:port,...|none>] [--notify <syslog|smtp|both|none>]");
-        System.out.println("             [--credential-refs <ref1,ref2,...|none>] [--run-as <actor>]");
-        System.out.println("  script-enable <scriptId> | script-disable <scriptId>");
+        System.out.println("             [--mail-on-failure-only <true|false|on|off>] [--credential-refs <ref1,ref2,...|none>]");
+        System.out.println("             [--run-as <actor>]");
+        System.out.println("  script-enable <scriptId>                       enable a script's schedule");
+        System.out.println("  script-disable <scriptId>                      disable a script's schedule");
         System.out.println("  script-run <scriptId>                          trigger an immediate script_run job");
         System.out.println("  script-runs <scriptId>                         list recent runs for a script");
+        System.out.println("  script-run-show <runId>                        show one script run (metadata, masked output tail, notification)");
         System.out.println("  script-output <runId>                          download audited captured output for a run");
     }
 
@@ -91,6 +113,14 @@ final class ScriptCli {
                 }
                 yield NexusSessionCli.print(cli.call("GET", BASE + "/" + opaque(args[1]) + "/runs", null));
             }
+            case "script-run-show" -> {
+                need(args, 2, "script-run-show <runId>");
+                if (args.length > 2) {
+                    throw new IllegalArgumentException("usage: script-run-show <runId>");
+                }
+                String runId = opaque(args[1]);
+                yield NexusSessionCli.print(cli.call("GET", BASE + "/runs/" + runId, null));
+            }
             case "script-output" -> {
                 need(args, 2, "script-output <runId>");
                 if (args.length > 2) {
@@ -105,8 +135,8 @@ final class ScriptCli {
     private int add(String[] args) throws IOException, InterruptedException {
         String usage = "script-add <file> [--name <name>] [--kind <kind>] [--schedule <cron>] "
                 + "[--enabled <true|false|on|off>] [--timeout <seconds>] [--egress <host:port,...|none>] "
-                + "[--notify <syslog|smtp|both|none>] [--credential-refs <ref1,ref2,...|none>] "
-                + "[--run-as <actor>] [--script-id <id>]";
+                + "[--notify <syslog|smtp|both|none>] [--mail-on-failure-only <true|false|on|off>] "
+                + "[--credential-refs <ref1,ref2,...|none>] [--run-as <actor>] [--script-id <id>]";
         need(args, 2, usage);
         Path file = Path.of(args[1]);
         if (!Files.isRegularFile(file)) {
@@ -120,6 +150,7 @@ final class ScriptCli {
         List<String> egress = null;
         List<String> credentialRefs = null;
         String notify = null;
+        Boolean mailOnFailureOnly = null;
         String runAs = null;
         String scriptId = null;
 
@@ -133,10 +164,14 @@ final class ScriptCli {
                 case "--egress" -> egress = parseCsvOrNone(value(args, ++i, usage));
                 case "--credential-refs" -> credentialRefs = parseCsvOrNone(value(args, ++i, usage));
                 case "--notify" -> notify = value(args, ++i, usage);
+                case "--mail-on-failure-only" -> mailOnFailureOnly = parseBooleanFlag(value(args, ++i, usage), usage);
                 case "--run-as" -> runAs = value(args, ++i, usage);
                 case "--script-id" -> scriptId = opaque(value(args, ++i, usage));
                 default -> throw new IllegalArgumentException("usage: " + usage);
             }
+        }
+        if (scriptId != null && mailOnFailureOnly != null) {
+            throw new IllegalArgumentException("usage: " + usage);
         }
 
         byte[] bytes = Files.readAllBytes(file);
@@ -162,6 +197,7 @@ final class ScriptCli {
         if (egress != null) body.append(",\"egress\":").append(jsonArray(egress));
         if (credentialRefs != null) body.append(",\"credential_refs\":").append(jsonArray(credentialRefs));
         if (notify != null) body.append(",\"notify\":").append(quote(notify));
+        if (mailOnFailureOnly != null) body.append(",\"notify_mail_on_failure_only\":").append(mailOnFailureOnly);
         if (runAs != null) body.append(",\"run_as\":").append(quote(runAs));
         body.append('}');
         return NexusSessionCli.print(cli.call("POST", BASE, body.toString()));
@@ -196,7 +232,8 @@ final class ScriptCli {
     private int set(String[] args) throws IOException, InterruptedException {
         String usage = "script-set <scriptId> [--schedule <cron|clear>] [--enabled <true|false|on|off>] "
                 + "[--timeout <seconds>] [--egress <host:port,...|none>] [--notify <syslog|smtp|both|none>] "
-                + "[--credential-refs <ref1,ref2,...|none>] [--run-as <actor>]";
+                + "[--mail-on-failure-only <true|false|on|off>] [--credential-refs <ref1,ref2,...|none>] "
+                + "[--run-as <actor>]";
         need(args, 3, usage);
         String scriptId = opaque(args[1]);
         String schedule = null;
@@ -206,6 +243,7 @@ final class ScriptCli {
         List<String> egress = null;
         List<String> credentialRefs = null;
         String notify = null;
+        Boolean mailOnFailureOnly = null;
         String runAs = null;
         int fieldsSet = 0;
 
@@ -240,6 +278,10 @@ final class ScriptCli {
                     notify = value(args, ++i, usage);
                     fieldsSet++;
                 }
+                case "--mail-on-failure-only" -> {
+                    mailOnFailureOnly = parseBooleanFlag(value(args, ++i, usage), usage);
+                    fieldsSet++;
+                }
                 case "--run-as" -> {
                     runAs = value(args, ++i, usage);
                     fieldsSet++;
@@ -271,6 +313,9 @@ final class ScriptCli {
         }
         if (notify != null) {
             entries.add("\"notify\":" + quote(notify));
+        }
+        if (mailOnFailureOnly != null) {
+            entries.add("\"notify_mail_on_failure_only\":" + mailOnFailureOnly);
         }
         if (runAs != null) {
             entries.add("\"run_as\":" + quote(runAs));
