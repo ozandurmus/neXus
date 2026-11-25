@@ -109,6 +109,14 @@ def test_the_whole_test_load_goes_to_hosta_when_the_lanes_manifest_knows_the_car
     assert "--carrier hosta" in harness_calls(ops)[0] and "--integration hosta" in harness_calls(ops)[0]
 
 
+def test_the_carrier_off_switch_keeps_java_and_vitest_on_the_mac(ops):
+    done_lane(ops, checks_yaml='hosta_carrier_cmd: ["{python}", "tools/delivery/hosta_test_run.py"]\n'
+                               "steps:\n  - id: integration\n    cmd: python3 tools/delivery/hosta_test_run.py\n")
+    (ops.state / "GATE_CARRIER_OFF").write_text("HOST-A vitest difference\n")
+    gate(ops)
+    assert "--carrier" not in harness_calls(ops)[0] and "--integration hosta" in harness_calls(ops)[0]
+
+
 def test_an_older_base_without_the_carrier_keeps_the_mac_run(ops):
     done_lane(ops)
     gate(ops)
