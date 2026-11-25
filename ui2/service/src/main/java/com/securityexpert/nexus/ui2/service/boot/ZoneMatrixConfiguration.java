@@ -7,6 +7,7 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.JooqZoneMatrixReposit
 import com.securityexpert.nexus.ui2.persistence.zonematrix.JooqZoneMatrixRunRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository;
+import com.securityexpert.nexus.ui2.service.api.ZoneMatrixRequestSizeFilter;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
 import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +39,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 @Configuration
 public class ZoneMatrixConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(ZoneMatrixConfiguration.class);
+    /** The Spring Security filter chain is registered at order -100 (NexusSecurityFilterChainConfiguration); one after it. */
+    private static final int AFTER_SECURITY_FILTER_CHAIN = -99;
 
     @Bean
     public ZoneMatrixRepository zoneMatrixRepository(TransactionBoundary transactionBoundary) {
@@ -130,6 +134,18 @@ public class ZoneMatrixConfiguration {
                 LOG.warn("zone_matrix_collection_poll_failed error_class={}", e.getClass().getSimpleName());
             }
         }
+    }
+
+    /**
+     * Section 3.1 / ZM-40: the byte limit on every zone matrix body, applied before Jackson reads it. Ordered just after
+     * the security chain, so a caller without a session or the right still gets 401/403 and learns nothing from a 413.
+     */
+    @Bean
+    public FilterRegistrationBean<ZoneMatrixRequestSizeFilter> zoneMatrixRequestSizeFilter() {
+        var registration = new FilterRegistrationBean<>(new ZoneMatrixRequestSizeFilter());
+        registration.addUrlPatterns(ZoneMatrixRequestSizeFilter.URL_PATTERN);
+        registration.setOrder(AFTER_SECURITY_FILTER_CHAIN);
+        return registration;
     }
 
     /** compliance_admin through a real binding (the root identity never counts as holding it); root by its authority. */

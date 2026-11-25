@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 /**
  * Step 1 acceptance criteria of the ACI segmentation design (section 11) pinned as labelled tests
  * ({@code docs/design/ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md}; backlog {@code aci_segmentation_step1}). Every test
- * display name starts with its criterion id. Synthetic documentation ranges only; Palo Alto and Check Point targets only.
+ * display name starts with its criterion id. Synthetic documentation ranges only; Palo Alto and Check Point targets, plus ASA and FortiGate targets for ACI-3.
  *
  * <table>
  * <caption>Criterion, test, status</caption>
@@ -56,7 +56,18 @@ import java.util.regex.Pattern;
  *     {@link #aci8ARoutedAssessmentIsStaleWhenTheHeldTopologyChanges}</td>
  *     <td>PROVEN (the state is the {@code stale} flag with named reasons; the screen prints "STALE")</td></tr>
  * <tr><td>ACI-16</td><td>{@code CutoverCliParityTest} in the cli module</td><td>PROVEN</td></tr>
- * <tr><td>ACI-2, ACI-3</td><td>none here</td><td>OUT OF SCOPE (no upper-bound pass on main; a queued lane makes ASA/FortiGate targets evaluable)</td></tr>
+ * <tr><td>ACI-2</td><td>{@link #aci2TheUpperBoundNamesAConditionalRuleOnANotDecidedFlowAndNeverDecidesOne},
+ *     {@link #aci2EveryDecisionEqualsTheStoredPolicyLookupVerdict}</td>
+ *     <td>PROVEN through the engine's public entry point ({@code CutoverAssessment.start} / {@code Run.read} / {@code Run.finish}); the
+ *     second test compares every flow with {@code PolicyLookup} alone, so the upper bound is shown to move no decision</td></tr>
+ * <tr><td>ACI-3</td><td>{@link #aci3AnAsaAndAFortiGateTargetAreDecidedThroughTheStoredPolicyLookup},
+ *     {@link #aci3AVendorOutsideTheLookupIsNotEvaluableForEveryTuple},
+ *     {@link #aci3AnAsaOrFortiGateTupleTheStoredPolicyCannotDecideIsNeverAnAllow}</td>
+ *     <td>PROVEN, read as amended by PO decision Q8 ({@code docs/design/PO_DECISION_RECORD_2026_11_14_ACI_SEGMENTATION_SUPPORT.md}):
+ *     ASA and FortiGate are redirect targets decided through the stored-policy lookup ({@code CutoverAssessment.LOOKUP_VENDORS}). The
+ *     DRAFT design sentence "ASA/FortiGate give NOT_EVALUABLE (VENDOR_POLICY_NOT_COLLECTED) for every tuple" is superseded by Q8 and
+ *     main commit 3ea02652; only a vendor outside {@code LOOKUP_VENDORS} stays NOT_EVALUABLE for every tuple. This row is a pointer,
+ *     not a new decision</td></tr>
  * <tr><td>ACI-9 .. ACI-15</td><td>none</td><td>OUT OF SCOPE (APIC and the watch view are not built)</td></tr>
  * </table>
  */
@@ -220,6 +231,171 @@ class CutoverAcceptanceCriteriaTest {
         prepared.run().read(new ByteArrayInputStream("src,dst,port,proto\n192.0.2.8,198.51.100.8,443,tcp\n".getBytes(StandardCharsets.UTF_8)),
             Map.of("source", "src", "destination", "dst", "port", "port", "protocol", "proto"));
         return prepared.run().finish(Instant.now().plusSeconds(60));
+    }
+
+    // ---- ACI-2 ------------------------------------------------------------------------------------------------
+
+    static final String UPPER_BOUND_LOG = "src,dst,port,proto\n"
+        + "192.0.2.8,198.51.100.8,443,tcp\n"     // only the upper bound reaches it: the first rule matches at most, under a user constraint
+        + "192.0.2.70,198.51.100.8,450,tcp\n"    // allowed by a plain rule
+        + "192.0.2.70,198.51.100.8,22,tcp\n"     // dropped by a plain rule
+        + "192.0.2.130,198.51.100.8,8080,tcp\n"  // reaches a rule over an unresolved service object
+        + "198.51.100.8,192.0.2.8,22,tcp\n";     // reverse direction, no rule names it
+
+    /**
+     * A rulebase with a plain allow, a plain drop, a rule over an unresolved service and a conditional rule, in that order
+     * (a rule the lookup cannot decide stops the walk for every flow that reaches it, so the plain rules come first).
+     */
+    static PolicySnapshot upperBoundPolicy() {
+        var objects = objects();
+        objects.put("ssh", object("ssh", "service", "protocol: tcp", "port: 22"));
+        objects.put("net2", object("net2", "address", "ip-netmask: 192.0.2.64/26"));
+        objects.put("net3", object("net3", "address", "ip-netmask: 192.0.2.128/25"));
+        objects.put("ghost", new PolicyObject("ghost", "OBJ-GHOST-01", "service", List.of(), List.of(), "UNRESOLVED"));
+        var conditional = edit(rule("r1", "host", "port", "allow", true), cell("host"), Map.of("source-user", List.of("USR-ALPHA-01")));
+        var base = pan(rule("r2", "net2", "ports", "allow", true), rule("r3", "net2", "ssh", "deny", true),
+            rule("r4", "net3", "ghost", "allow", true), conditional);
+        var merged = new HashMap<>(base.objects()); merged.putAll(objects);
+        return new PolicySnapshot(base.metadata(), base.sections(), merged);
+    }
+
+    @Test @DisplayName("ACI-2 the upper-bound pass only explains a NOT_DECIDED flow with a named rule and its dropped constraint kinds; it never decides one")
+    void aci2TheUpperBoundNamesAConditionalRuleOnANotDecidedFlowAndNeverDecidesOne() throws Exception {
+        var snapshot = upperBoundPolicy();
+        var result = CutoverAssessmentTest.assess(CutoverAssessmentTest.target(snapshot, "Z-SEG", "Z-PEER"), UPPER_BOUND_LOG);
+        assertEquals(5, result.flows().size());
+        int explained = 0, allowed = 0, dropped = 0;
+        for (var flow : result.flows()) {
+            String decision = (String) flow.get("decision");
+            boolean hasUpperBound = flow.containsKey("conditionalRule") || flow.containsKey("droppedConstraints");
+            if (hasUpperBound) {
+                explained++;
+                // Attached only to a flow that is not decided, as a named rule plus the constraint kinds the pass dropped.
+                assertEquals("NOT_DECIDED", decision, String.valueOf(flow));
+                assertFalse(flow.containsKey("decidingRule"), String.valueOf(flow));
+                assertNotNull(((Map<?, ?>) flow.get("conditionalRule")).get("ruleId"));
+                var kinds = (List<?>) flow.get("droppedConstraints");
+                assertFalse(kinds.isEmpty()); assertTrue(CutoverAssessment.CONSTRAINT_KINDS.containsAll(kinds), String.valueOf(kinds));
+                assertTrue(((List<?>) flow.get("flags")).contains("CONDITIONAL_RULE"));
+            } else {
+                assertFalse(((List<?>) flow.get("flags")).contains("CONDITIONAL_RULE"), String.valueOf(flow));
+            }
+            if (decision.equals("WOULD_ALLOW") || decision.equals("WOULD_DROP")) {
+                // A decided flow cites the rule that decided it and carries no upper-bound text.
+                assertFalse(hasUpperBound, String.valueOf(flow)); assertNotNull(flow.get("decidingRule"), String.valueOf(flow));
+                if (decision.equals("WOULD_ALLOW")) allowed++; else dropped++;
+            }
+        }
+        assertEquals(1, explained); assertEquals(1, allowed); assertEquals(1, dropped);
+        var conditional = CutoverAssessmentTest.flow(result, "192.0.2.8", "198.51.100.8", 443);
+        assertEquals("NOT_DECIDED", conditional.get("decision"));
+        assertEquals("r1", ((Map<?, ?>) conditional.get("conditionalRule")).get("ruleId"));
+        assertEquals(List.of("source-user"), conditional.get("droppedConstraints"));
+        // A flow stopped by an unresolved object is undecided and gets no upper-bound explanation.
+        var unresolved = CutoverAssessmentTest.flow(result, "192.0.2.130", "198.51.100.8", 8080);
+        assertEquals("NOT_DECIDED", unresolved.get("decision")); assertFalse(unresolved.containsKey("conditionalRule"));
+        assertEquals("BLOCKERS_FOUND", result.readiness());
+    }
+
+    @Test @DisplayName("ACI-2 every decision of the engine equals what the stored-policy lookup alone says; the upper bound moves none")
+    void aci2EveryDecisionEqualsTheStoredPolicyLookupVerdict() throws Exception {
+        var snapshot = upperBoundPolicy();
+        var result = CutoverAssessmentTest.assess(CutoverAssessmentTest.target(snapshot, "Z-SEG", "Z-PEER"), UPPER_BOUND_LOG);
+        var verdicts = new HashSet<String>();
+        for (var flow : result.flows()) {
+            boolean forward = flow.get("direction").equals("SEGMENT_TO_PEER");
+            var lookup = PolicyLookup.evaluate(snapshot, new PolicyLookup.Query((String) flow.get("flowSource"), (String) flow.get("flowDestination"),
+                flow.get("protocol") + "/" + flow.get("port"), forward ? "Z-SEG" : "Z-PEER", forward ? "Z-PEER" : "Z-SEG", null, null), 250_000).body();
+            String verdict = String.valueOf(lookup.get("verdict")); verdicts.add(verdict);
+            assertEquals(switch (verdict) { case "ALLOWED" -> "WOULD_ALLOW"; case "DENIED" -> "WOULD_DROP"; default -> "NOT_DECIDED"; }, flow.get("decision"), String.valueOf(flow));
+        }
+        // The set exercises the three outcomes, so the comparison is not vacuous.
+        assertEquals(Set.of("ALLOWED", "DENIED", "UNKNOWN"), verdicts);
+    }
+
+    // ---- ACI-3 (amended by PO decision Q8) -------------------------------------------------------------------
+
+    static final String ASA_FGT_LOG = "src,dst,port,proto\n192.0.2.8,198.51.100.8,443,tcp\n192.0.2.8,198.51.100.8,8080,tcp\n192.0.2.8,198.51.100.8,0,icmp\n";
+
+    CutoverAssessmentService.Prepared prepare(String policyId, String segmentZone, String peerZone) {
+        var override = new CutoverAssessmentService.TargetOverride(DEVICE, policyId, "", segmentZone, peerZone);
+        var mapping = List.of(Map.of("source", "src", "destination", "dst", "port", "port", "protocol", "proto"));
+        return service.prepare(SEGMENT, new CutoverAssessmentService.Spec(override, null, null, null, mapping), Optional.empty(), null);
+    }
+    CutoverAssessment.Result finish(CutoverAssessmentService.Prepared prepared, String log) throws Exception {
+        prepared.run().read(new ByteArrayInputStream(log.getBytes(StandardCharsets.UTF_8)),
+            Map.of("source", "src", "destination", "dst", "port", "port", "protocol", "proto"));
+        return prepared.run().finish(Instant.now().plusSeconds(60));
+    }
+
+    @Test @DisplayName("ACI-3 (amended by Q8) an ASA and a FortiGate target with a stored policy are decided through the stored-policy lookup")
+    void aci3AnAsaAndAFortiGateTargetAreDecidedThroughTheStoredPolicyLookup() throws Exception {
+        segment(1);
+        assertTrue(CutoverAssessment.LOOKUP_VENDORS.containsAll(Set.of("ASA", "FGT")));
+        var cases = List.of(List.of("cisco_asa", "ASA", "outside", "inside", "WOULD_ALLOW"), List.of("fortinet", "FGT", "port1", "port2", "WOULD_DROP"));
+        for (var c : cases) {
+            var snapshot = c.get(1).equals("ASA") ? CutoverAssessmentServiceTest.asaPolicy(DEVICE) : CutoverAssessmentServiceTest.fortiGatePolicy(DEVICE);
+            when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of(c.get(0)));
+            when(policies.find("p-" + c.get(1))).thenReturn(Optional.of(snapshot));
+            var prepared = prepare("p-" + c.get(1), c.get(2), c.get(3));
+            var result = finish(prepared, "src,dst,port,proto\n192.0.2.8,198.51.100.8,443,tcp\n");
+            var flow = result.flows().get(0);
+            assertEquals(c.get(4), flow.get("decision"), c.get(1));
+            // The decision is the lookup's own: same tuple, same interfaces, same device.
+            var direct = CutoverAssessment.stored(snapshot, DEVICE, "").decide("192.0.2.8", "198.51.100.8", "tcp", 443, c.get(2), c.get(3));
+            assertEquals(direct.decision(), flow.get("decision")); assertEquals(direct.reason(), flow.get("decisionReason"));
+            assertNotNull(flow.get("decidingRule"));
+            assertEquals(c.get(1), prepared.provenance().get("targetVendor"));
+            assertFalse(codes(result.summary()).contains("TARGET_NOT_EVALUABLE"), c.get(1));
+        }
+    }
+
+    @Test @DisplayName("ACI-3 (amended by Q8) a target outside the lookup vendors is NOT_EVALUABLE for every tuple with a named reason, never a guessed decision")
+    void aci3AVendorOutsideTheLookupIsNotEvaluableForEveryTuple() throws Exception {
+        assertFalse(CutoverAssessment.LOOKUP_VENDORS.contains("RAD"));
+        // A stored policy of a vendor the lookup does not evaluate.
+        var other = pan(rule("r1", "any", "any", "allow", true));
+        var foreign = new PolicySnapshot(new Metadata("p9", "s9", "MGR-BRAVO-01", "RAD", "c1", "DOM-TANGO-01", "POL-ALPHA-02",
+            other.metadata().collectedAt(), "a1", List.of()), other.sections(), other.objects());
+        var stored = CutoverAssessmentTest.assess(CutoverAssessmentTest.localTarget(foreign, DEVICE, "z1", "z2"), ASA_FGT_LOG + "198.51.100.8,192.0.2.8,53,udp\n");
+        // No stored policy at all: an enrolled device of a vendor without a policy model.
+        segment(1);
+        when(repository.deviceVendor(DEVICE)).thenReturn(Optional.of("radware"));
+        var uncollected = finish(prepare(null, "", ""), ASA_FGT_LOG + "198.51.100.8,192.0.2.8,53,udp\n");
+        for (var c : List.of(List.of(stored, CutoverAssessment.VENDOR_POLICY_NOT_EVALUABLE), List.of(uncollected, CutoverAssessment.VENDOR_POLICY_NOT_COLLECTED))) {
+            var result = (CutoverAssessment.Result) c.get(0);
+            assertEquals(4, result.flows().size());
+            for (var flow : result.flows()) {
+                assertEquals("NOT_EVALUABLE", flow.get("decision"), String.valueOf(flow)); assertEquals(c.get(1), flow.get("decisionReason"));
+                assertFalse(flow.containsKey("decidingRule")); assertFalse(flow.containsKey("conditionalRule"));
+            }
+            assertEquals("NOT_DECIDED", result.readiness()); assertTrue(codes(result.summary()).contains("TARGET_NOT_EVALUABLE"));
+        }
+    }
+
+    @Test @DisplayName("ACI-3 (amended by Q8) an ASA or FortiGate tuple its stored policy cannot decide stays NOT_DECIDED or NOT_EVALUABLE, never WOULD_ALLOW")
+    void aci3AnAsaOrFortiGateTupleTheStoredPolicyCannotDecideIsNeverAnAllow() throws Exception {
+        var asa = CutoverAssessmentServiceTest.asaPolicy(DEVICE);
+        var fgt = CutoverAssessmentServiceTest.fortiGatePolicy(DEVICE);
+        for (var c : List.of(List.of(asa, "outside", "inside"), List.of(fgt, "port1", "port2"))) {
+            var snapshot = (PolicySnapshot) c.get(0); String vendor = snapshot.metadata().vendor();
+            // A missing interface on either side: the lookup cannot place the flow, so nothing is decided.
+            for (var zones : List.of(List.of("", ""), List.of((String) c.get(1), ""), List.of("", (String) c.get(2)))) {
+                var result = CutoverAssessmentTest.assess(CutoverAssessmentTest.localTarget(snapshot, DEVICE, zones.get(0), zones.get(1)), ASA_FGT_LOG);
+                for (var flow : result.flows()) {
+                    assertTrue(Set.of("NOT_DECIDED", "NOT_EVALUABLE").contains(flow.get("decision")), vendor + zones + flow);
+                    assertFalse(flow.containsKey("decidingRule"), vendor + zones);
+                }
+                assertEquals("NOT_DECIDED", result.readiness());
+            }
+            // An interface the policy does not know, a service it does not name and a protocol the lookup does not take.
+            var unknown = CutoverAssessmentTest.assess(CutoverAssessmentTest.localTarget(snapshot, DEVICE, "nowhere", "nowhere-else"), ASA_FGT_LOG);
+            for (var flow : unknown.flows()) assertNotEquals("WOULD_ALLOW", flow.get("decision"), vendor);
+            var known = CutoverAssessmentTest.assess(CutoverAssessmentTest.localTarget(snapshot, DEVICE, (String) c.get(1), (String) c.get(2)), ASA_FGT_LOG);
+            assertNotEquals("WOULD_ALLOW", CutoverAssessmentTest.flow(known, "192.0.2.8", "198.51.100.8", 8080).get("decision"), vendor);
+            var icmp = CutoverAssessmentTest.flow(known, "192.0.2.8", "198.51.100.8", 0);
+            assertEquals("NOT_EVALUABLE", icmp.get("decision")); assertEquals(CutoverAssessment.PROTOCOL, icmp.get("decisionReason"));
+        }
     }
 
     // ---- ACI-4 ------------------------------------------------------------------------------------------------
