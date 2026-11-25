@@ -140,11 +140,8 @@ public final class InventoryCapabilityExecutor {
     private final PanCredentialResolver panCredentialResolver;
     private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
     private final PanConfiguredInterfaceSource configuredInterfaces;
-    /** Lifecycle reads, group A (PO 2026-11-10): off unless the worker wires a switch in; see {@link LifecycleReadSwitch}. */
-    private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
-    private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
-    /** Where the parsed-and-stored result of each lifecycle read goes (default: nowhere); see {@link LifecycleResultSink}. */
-    private LifecycleResultSink lifecycleResults = LifecycleResultSink.NONE;
+    /** Lifecycle reads (group A and B): see {@link InventoryLifecycleReads}. */
+    private final InventoryLifecycleReads lifecycle;
 
     /** Inventory run tokens (device_inventory_run.not_collected) for interfaces derived from configuration (PO 2026-10-24). */
     public static final String TOKEN_INTERFACES_FROM_CONFIGURATION = "pan_interfaces_from_configuration";
@@ -166,6 +163,7 @@ public final class InventoryCapabilityExecutor {
             com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches,
             PanConfiguredInterfaceSource configuredInterfaces) {
         this.transport = Objects.requireNonNull(transport, "transport");
+        this.lifecycle = new InventoryLifecycleReads(transport);
         this.panCredentialResolver = panCredentialResolver;
         this.panSwitches = Objects.requireNonNull(panSwitches, "panSwitches");
         this.configuredInterfaces = Objects.requireNonNull(configuredInterfaces, "configuredInterfaces");
@@ -173,19 +171,19 @@ public final class InventoryCapabilityExecutor {
 
     /** The lifecycle reads, group A (measure-first, default {@link LifecycleReadSwitch#OFF}: no new command is ever sent). */
     public InventoryCapabilityExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
-        this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        lifecycle.withReads(lifecycleReads);
+        return this;
+    }
+
+    /** The sink of the lifecycle reads' results (called only for a read the switch allowed; a failing sink changes nothing). */
+    public InventoryCapabilityExecutor withLifecycleResults(LifecycleResultSink sink) {
+        lifecycle.withResults(sink);
         return this;
     }
 
     /** Where the masked [LIFECYCLE_MEASURE] lines go (default: the log). */
-    /** The sink of the lifecycle reads' results (called only for a read the switch allowed; a failing sink changes nothing). */
-    public InventoryCapabilityExecutor withLifecycleResults(LifecycleResultSink sink) {
-        this.lifecycleResults = LifecycleResultSink.guarded(sink);
-        return this;
-    }
-
     public InventoryCapabilityExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
-        this.lifecycleSink = Objects.requireNonNull(sink, "sink");
+        lifecycle.withSink(sink);
         return this;
     }
 
@@ -606,9 +604,9 @@ public final class InventoryCapabilityExecutor {
                 LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY] outcome=SKIPPED reason={0}", installSkip.get());
             }
             // Lifecycle reads, group A: last, after every other read of the run; never changes the result.
-            if (lifecycleReads.anyFor(deviceId)) {
+            if (lifecycle.anyFor(deviceId)) {
                 boolean sparkIdentified = platformFacts.platformFamily().filter("gaia_embedded"::equals).isPresent();
-                lifecycleCheckPointReads(session, deviceId, managementServer, vsxHost, sparkIdentified, clishLanding);
+                lifecycle.checkPointReads(session, deviceId, managementServer, vsxHost, sparkIdentified, clishLanding);
             }
             InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(gaiaHostname,
                     observedModel, gaiaVersion, mdsHaRole);
@@ -616,85 +614,6 @@ public final class InventoryCapabilityExecutor {
                     Optional.of(platformFacts), observed, List.of(), Optional.empty(), installEvents);
         } finally {
             transport.disconnect(session);
-        }
-    }
-
-    /**
-     * Lifecycle reads, group A (PO 2026-11-10): the approved form for where this run landed, each read alone in its own
-     * try/catch, 60 s, no retry, no fallback channel. A management server gets the bare literal in the interactive Expert
-     * shell; a Quantum Spark identified in this run only {@code show license}; a device in clish that is not a Spark gets
-     * none; a Gaia gateway the login-shell form (the {@code vsenv 0} form on a VSX host). The answer is reduced to a masked
-     * shape and logged; it is never returned, stored or recorded in a transcript.
-     */
-    private void lifecycleCheckPointReads(TransportSession session, String deviceId, boolean managementServer, boolean vsxHost,
-            boolean sparkIdentified, boolean clishLanding) {
-        LifecycleReadSwitch.Kind cplic = LifecycleReadSwitch.Kind.CP_CPLIC_PRINT;
-        LifecycleReadSwitch.Kind cplp = LifecycleReadSwitch.Kind.CP_CPLP_LIST;
-        LifecycleReadSwitch.Kind spark = LifecycleReadSwitch.Kind.CP_SPARK_SHOW_LICENSE;
-        if (managementServer) {
-            lifecycleSkip(spark, deviceId, "management_server");
-            lifecycleCliRead(session, cplic, deviceId, InventoryReadPlan.CP_CPLIC_PRINT_MDS, true);
-            lifecycleCliRead(session, cplp, deviceId, InventoryReadPlan.CP_CPLP_LIST_MDS, true);
-        } else if (sparkIdentified) {
-            lifecycleSkip(cplic, deviceId, "spark_gets_show_license_only");
-            lifecycleSkip(cplp, deviceId, "spark_gets_show_license_only");
-            lifecycleCliRead(session, spark, deviceId, InventoryReadPlan.SPARK_SHOW_LICENSE, true);
-        } else if (clishLanding) {
-            lifecycleSkip(cplic, deviceId, "no_approved_form_for_landing_shell");
-            lifecycleSkip(cplp, deviceId, "no_approved_form_for_landing_shell");
-            lifecycleSkip(spark, deviceId, "no_approved_form_for_landing_shell");
-        } else {
-            lifecycleCliRead(session, cplic, deviceId, InventoryReadPlan.cplicPrintGateway(vsxHost), false);
-            lifecycleCliRead(session, cplp, deviceId, InventoryReadPlan.cplpListGateway(vsxHost), false);
-        }
-    }
-
-    private void lifecycleSkip(LifecycleReadSwitch.Kind kind, String deviceId, String reason) {
-        if (lifecycleReads.allows(kind, deviceId)) {
-            lifecycleResults.notCollected(kind, deviceId, "SKIPPED", reason);
-            emitLifecycle(LifecycleReadShape.skippedLine(kind, deviceId, reason));
-        }
-    }
-
-    private void lifecycleCliRead(TransportSession session, LifecycleReadSwitch.Kind kind, String deviceId, String command,
-            boolean interactive) {
-        if (!lifecycleReads.allows(kind, deviceId)) {
-            return;
-        }
-        String line;
-        try {
-            ExecSpec spec = new ExecSpec(command);
-            // Nothing from these reads is kept in a job transcript: the scope, if one is open on this thread, is lifted.
-            ExecResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
-                    () -> interactive ? transport.execInteractive(session, spec, InventoryReadPlan.LIFECYCLE_READ_TIMEOUT)
-                            : transport.exec(session, spec, InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
-            line = switch (result) {
-                case ExecResult.Completed completed -> {
-                    lifecycleResults.answer(kind, deviceId, null, completed.output());
-                    yield LifecycleReadShape.cliLine(kind, deviceId, completed.output());
-                }
-                case ExecResult.TimedOut timedOut -> {
-                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "TimedOut");
-                    yield LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
-                }
-                case ExecResult.ChannelFailed failed -> {
-                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "ChannelFailed");
-                    yield LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
-                }
-            };
-        } catch (RuntimeException e) {
-            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
-            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
-            line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
-        }
-        emitLifecycle(line);
-    }
-
-    private void emitLifecycle(String line) {
-        try {
-            lifecycleSink.accept(line);
-        } catch (RuntimeException ignored) {
-            // A measurement sink never changes an inventory result.
         }
     }
 
@@ -748,14 +667,14 @@ public final class InventoryCapabilityExecutor {
             // Lifecycle reads, group B, amendment C (PO 2026-11-10, "Evet, aç"): a Panorama gets the license and support
             // reads (gate rows pan_panorama_lifecycle_*) only when the extended-scope setting lists it; last, after every
             // other read, and never changing the result.
-            if (lifecycleReads.allowsPanExtended(deviceId)) {
-                lifecyclePanXmlRead(target, headers, LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId,
+            if (lifecycle.allowsPanExtended(deviceId)) {
+                lifecycle.panXmlRead(target, headers, LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId,
                         InventoryReadPlan.PAN_REQUEST_LICENSE_INFO);
-                lifecyclePanXmlRead(target, headers, LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId,
+                lifecycle.panXmlRead(target, headers, LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId,
                         InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO);
             } else {
-                lifecycleSkip(LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId, "panorama");
-                lifecycleSkip(LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId, "panorama");
+                lifecycle.skip(LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId, "panorama");
+                lifecycle.skip(LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId, "panorama");
             }
             return panorama;
         }
@@ -914,70 +833,11 @@ public final class InventoryCapabilityExecutor {
                 : PlatformFactsRead.paloAltoFirewallNotCollected();
         var policyInstall = panPolicyInstall(target, headers);
         // Lifecycle reads, group B: last, after every other read of the run; never changes the result.
-        lifecyclePaloAltoFirewallReads(target, headers, deviceId, version.swVersion().orElse(null));
+        lifecycle.paloAltoFirewallReads(target, headers, deviceId, version.swVersion().orElse(null));
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                 Optional.of(platformFacts.withPolicyInstall(policyInstall)),
                 new InventoryResult.ObservedIdentity(Optional.empty(), version.model(), version.swVersion()), notCollected,
                 Optional.ofNullable(panZones));
-    }
-
-    /**
-     * Lifecycle reads, group B (PO 2026-11-10, D2): {@code request license info} and {@code request support info}, sent to a
-     * firewall whose PAN-OS major version, observed by the {@code type=version} read of THIS run, is known and below 12
-     * (the rule of {@code PanFirewallCommandSwitches.Mode.BELOW_12}: an unknown or unparseable version is treated like 12 or
-     * later). A firewall on PAN-OS 12 or later, or of unknown version, gets them only when the extended-scope setting
-     * lists it (amendment C, PO 2026-11-10, "Evet, aç"). 60 s, no retry, outside any job transcript; the answer is reduced
-     * to an XML shape and logged.
-     */
-    private void lifecyclePaloAltoFirewallReads(ApiTarget target, Map<String, String> headers, String deviceId, String swVersion) {
-        LifecycleReadSwitch.Kind license = LifecycleReadSwitch.Kind.PAN_LICENSE_INFO;
-        LifecycleReadSwitch.Kind support = LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO;
-        if (!lifecycleReads.allows(license, deviceId) && !lifecycleReads.allows(support, deviceId)) {
-            return;
-        }
-        boolean belowTwelve;
-        try {
-            belowTwelve = com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
-                    com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Mode.BELOW_12, swVersion).send();
-        } catch (RuntimeException e) {
-            belowTwelve = false;
-        }
-        if (!belowTwelve && !lifecycleReads.allowsPanExtended(deviceId)) {
-            lifecycleSkip(license, deviceId, "pan_os_12_or_unknown");
-            lifecycleSkip(support, deviceId, "pan_os_12_or_unknown");
-            return;
-        }
-        lifecyclePanXmlRead(target, headers, license, deviceId, InventoryReadPlan.PAN_REQUEST_LICENSE_INFO);
-        lifecyclePanXmlRead(target, headers, support, deviceId, InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO);
-    }
-
-    private void lifecyclePanXmlRead(ApiTarget target, Map<String, String> headers, LifecycleReadSwitch.Kind kind, String deviceId,
-            String cmd) {
-        if (!lifecycleReads.allows(kind, deviceId)) {
-            return;
-        }
-        String line;
-        try {
-            XmlApiResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
-                    () -> transport.xmlApiCall(target,
-                            new XmlApiSpec("GET", "op", "", "direct_firewall", Map.of("cmd", cmd), headers),
-                            InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
-            line = switch (result) {
-                case XmlApiResult.Completed completed -> {
-                    lifecycleResults.answer(kind, deviceId, null, completed.body());
-                    yield LifecycleReadShape.xmlLine(kind, deviceId, completed.body());
-                }
-                case XmlApiResult.Failed failed -> {
-                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "XmlApiFailed");
-                    yield LifecycleReadShape.errorLine(kind, deviceId, "XmlApiFailed");
-                }
-            };
-        } catch (RuntimeException e) {
-            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
-            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
-            line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
-        }
-        emitLifecycle(line);
     }
 
     /** The configured interfaces (null when none could be derived) and the run token naming the outcome. */

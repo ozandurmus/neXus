@@ -15,6 +15,7 @@ import java.math.BigInteger;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
@@ -83,10 +84,11 @@ public final class ZoneMatrixService {
     private final DeviceRepository devices;
     private final TopologyNamePseudonymizer nameMasker;
     private final SubnetPreservingIpMasker ipMasker;
+    private final Consumer<String> onVersionPublished;
 
     public ZoneMatrixService(ZoneMatrixRepository repository, Principals principals, ObjectMapper mapper, Clock clock) {
         this(repository, principals, mapper, clock, (PolicyCatalog) null, null,
-                new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
+                new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]), null);
     }
 
     public ZoneMatrixService(
@@ -98,7 +100,21 @@ public final class ZoneMatrixService {
             DeviceRepository devices,
             TopologyNamePseudonymizer nameMasker,
             SubnetPreservingIpMasker ipMasker) {
-        this(repository, principals, mapper, clock, wrapCatalog(policies), devices, nameMasker, ipMasker);
+        this(repository, principals, mapper, clock, wrapCatalog(policies), devices, nameMasker, ipMasker, null);
+    }
+
+    public ZoneMatrixService(
+            ZoneMatrixRepository repository,
+            Principals principals,
+            ObjectMapper mapper,
+            Clock clock,
+            PolicyQueryService policies,
+            DeviceRepository devices,
+            TopologyNamePseudonymizer nameMasker,
+            SubnetPreservingIpMasker ipMasker,
+            Consumer<String> onVersionPublished) {
+        this(repository, principals, mapper, clock, wrapCatalog(policies), devices, nameMasker, ipMasker,
+                onVersionPublished);
     }
 
     public ZoneMatrixService(
@@ -110,6 +126,19 @@ public final class ZoneMatrixService {
             DeviceRepository devices,
             TopologyNamePseudonymizer nameMasker,
             SubnetPreservingIpMasker ipMasker) {
+        this(repository, principals, mapper, clock, policyCatalog, devices, nameMasker, ipMasker, null);
+    }
+
+    public ZoneMatrixService(
+            ZoneMatrixRepository repository,
+            Principals principals,
+            ObjectMapper mapper,
+            Clock clock,
+            PolicyCatalog policyCatalog,
+            DeviceRepository devices,
+            TopologyNamePseudonymizer nameMasker,
+            SubnetPreservingIpMasker ipMasker,
+            Consumer<String> onVersionPublished) {
         this.repository = repository;
         this.principals = principals;
         this.mapper = mapper;
@@ -118,6 +147,7 @@ public final class ZoneMatrixService {
         this.devices = devices;
         this.nameMasker = nameMasker != null ? nameMasker : new TopologyNamePseudonymizer(new byte[32]);
         this.ipMasker = ipMasker != null ? ipMasker : new SubnetPreservingIpMasker(new byte[32]);
+        this.onVersionPublished = onVersionPublished;
     }
 
     private static PolicyCatalog wrapCatalog(PolicyQueryService policies) {
@@ -463,7 +493,7 @@ public final class ZoneMatrixService {
         String rationale = request.rationale() == null || request.rationale().isBlank() ? null : request.rationale().strip();
         if (rationale != null && rationale.length() > 2000) throw new Refused(400, "INVALID_RATIONALE", "rationale is at most 2000 characters");
         Instant now = clock.instant();
-        return repository.locked(tx -> {
+        Map<String, Object> published = repository.locked(tx -> {
             Version draft = tx.draft().orElseThrow(() -> new Refused(404, "NO_DRAFT", "there is no draft"));
             if (draft.revision() != request.revision() || !draft.contentSha256().equals(request.content_sha256())) throw changed();
             Set<String> participants = tx.participants(draft.versionId());
@@ -488,6 +518,16 @@ public final class ZoneMatrixService {
             out.put("content_sha256", draft.contentSha256());
             return out;
         });
+        if (onVersionPublished != null) {
+            String publishedVersionId = (String) published.get("version_id");
+            try {
+                onVersionPublished.accept(publishedVersionId);
+            } catch (RuntimeException e) {
+                LOG.warn("zone_matrix_publish_trigger_failed version_id={} error_class={}",
+                        publishedVersionId, e.getClass().getSimpleName());
+            }
+        }
+        return published;
     }
 
     /** The four-eyes refusal code for this publisher, or null. Principals are compared in canonical form. */
