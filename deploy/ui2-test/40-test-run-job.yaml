@@ -168,6 +168,11 @@ spec:
           value: /gradle-home
         - name: GRADLE_RO_DEP_CACHE
           value: /opt/gradle-ro-cache
+        # What GitHub CI (ubuntu) has: UTC and C.UTF-8 (2026-11-25, HOST-A-only vitest failures).
+        - name: TZ
+          value: UTC
+        - name: LANG
+          value: C.UTF-8
         - name: TEST_JAVA
           value: none
         - name: TEST_GRADLE_TASKS
@@ -180,6 +185,10 @@ spec:
           value: jdbc:postgresql://127.0.0.1:5432/postgres
         - name: UI2_TEST_DB_PASSWORD_FILE
           value: /run/test-db/password
+        # The aiview sweep's per-request timeout (30 s on the Mac and in CI): three pods, each running java, integration
+        # and vitest side by side on a 1-CPU request, pushed one GET past 30 s (HttpTimeoutException, 2026-11-25).
+        - name: UI2_TEST_HTTP_TIMEOUT_S
+          value: "180"
         resources:
           requests:
             cpu: "1"
