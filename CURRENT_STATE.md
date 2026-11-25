@@ -1,6 +1,6 @@
 # neXus — Current State
 
-Checkpoint of 2026-11-25 against `origin/main` at `85a28224`; ships through 2026-11-25 are merged.
+Checkpoint of 2026-11-25 against `origin/main` at `89acac24`; ships through 2026-11-25 are merged.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
@@ -20,14 +20,14 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0417` — **AUTOMATED_VALIDATED** (2026-11-25): zone matrix IPv4 per-family resolution and unwired evidence report builder, HOST-A test namespace built offline only. `0416` log detection P1 in shadow (V272), zone matrix lifecycle wiring, MC device health read gated and off (V271), parser UNKNOWN pins. `NXS-LOCAL-0412` — **AUTOMATED_VALIDATED** (2026-11-24): Policy Insights design frozen (Check Point first, phase P1 next), unused helpers removed;
+`NXS-LOCAL-0418` — **AUTOMATED_VALIDATED** (2026-11-25): zone matrix stored-summary route, recertification council packet (DRAFT), HOST-A runner image fixes. `NXS-LOCAL-0417` — zone matrix IPv4 per-family resolution and unwired evidence report builder, HOST-A test namespace built offline only. `0416` log detection P1 in shadow (V272), zone matrix lifecycle wiring, MC device health read gated and off (V271), parser UNKNOWN pins. `NXS-LOCAL-0412` — **AUTOMATED_VALIDATED** (2026-11-24): Policy Insights design frozen (Check Point first, phase P1 next), unused helpers removed;
 earlier `0406`-`0411`: zone matrix runs (V267), HA divergence, CP sync warning;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0417`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0418`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
 
-Since 2026-11-18: Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), the HA & failover screen redesign, a CP sync warning, ASA/FortiGate cutover lookup, platform backup keeps 7 archives. The Estate view is read-only and paused. Backup cutover prepared, not performed. Not live-validated.
+Since 2026-11-18: Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), the HA & failover screen redesign, a CP sync warning, ASA/FortiGate cutover lookup, platform backup keeps 7 archives. The Estate view is read-only and paused. Backup cutover prepared, not performed.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
 
