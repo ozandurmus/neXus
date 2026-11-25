@@ -64,7 +64,9 @@ public final class ZoneMatrixPolicyBridge {
      *       {@code networks} bound for proving {@code VIOLATION + IDENTITY_IGNORED}).</li>
      *   <li>{@code explicitIpv4}: sorted, merged non-{@code any} IPv4 ranges explicitly named by objects in the cell,
      *       used for §3.3 unassigned RFC 1918 gap detection.</li>
-     *   <li>{@code hasIpv6}: true when the upper bound includes IPv6 ({@code any}, dynamic object, access role).</li>
+     *   <li>{@code hasIpv6}: true when the upper bound includes IPv6 ({@code any}, dynamic object, access role) or a
+     *       referenced address object carries an IPv6 value; such an object's IPv4 values are still resolved
+     *       (per-family resolution, §5.7 step 2) while its IPv6 part stays not evaluated.</li>
      *   <li>{@code notEvaluableReason}: non-null when the cell cannot be decided cleanly as static IPv4.</li>
      * </ul>
      */
@@ -754,9 +756,7 @@ public final class ZoneMatrixPolicyBridge {
             budget.spend();
             AddressPart part = resolveAddressObject(snapshot.objects(), id, allowAccessRole, new HashSet<>(), budget);
             if (part.problem != null) {
-                if (hardProblem == null || "IPv6 not evaluated".equals(part.problem)) {
-                    hardProblem = part.problem;
-                }
+                if (hardProblem == null) hardProblem = part.problem;
                 continue;
             }
             upper.addAll(part.upper);
@@ -769,7 +769,7 @@ public final class ZoneMatrixPolicyBridge {
 
         if (hardProblem != null) {
             return new AddressBound(List.of(), List.of(), mergeIpRanges(explicit, budget), List.copyOf(ulaRanges),
-                    "IPv6 not evaluated".equals(hardProblem), false, false, hardProblem);
+                    false, false, false, hardProblem);
         }
 
         String candidateReason = accessRole ? "depends on user identity"
@@ -871,9 +871,7 @@ public final class ZoneMatrixPolicyBridge {
                 for (String member : o.members()) {
                     AddressPart child = resolveAddressObject(objects, member, allowAccessRole, path, budget);
                     if (child.problem != null) {
-                        if (groupProblem == null || "IPv6 not evaluated".equals(child.problem)) {
-                            groupProblem = child.problem;
-                        }
+                        if (groupProblem == null) groupProblem = child.problem;
                     } else {
                         upper.addAll(child.upper);
                         lower.addAll(child.lower);
@@ -897,21 +895,24 @@ public final class ZoneMatrixPolicyBridge {
                             true,
                             null);
                 }
-                if (hasIpv6Value(o)) {
-                    // Step 3 (§5.7 step 2, ZM-19): any IPv6 value in an address object yields "IPv6 not evaluated";
-                    // per-family resolution for mixed objects is delivery step 7 (§10.1 item 7).
-                    return AddressPart.fail("IPv6 not evaluated");
+                // §5.7 step 2, ZM-19, §10.1 item 7: per-family resolution. The IPv4 values are resolved and kept; the
+                // IPv6 values are not evaluated and only raise hasIpv6, so a mixed object keeps its IPv4 verdict while
+                // the rule can never read as COMPLIANT. An IPv6-only object has no IPv4 range and only the flag. An
+                // IPv4 value that cannot be resolved is a real failure and keeps its own reason.
+                boolean ipv6 = hasIpv6Value(o);
+                PolicyObject cleaned = ipv6 ? ipv4OnlyObject(o) : stripCosmeticObject(o);
+                if (ipv6 && cleaned.values().isEmpty()) {
+                    return new AddressPart(List.of(), List.of(), List.of(), true, false, false, null);
                 }
-                PolicyObject cleaned = stripCosmeticObject(o);
                 Resolver plain = new Resolver(Map.of(o.id(), cleaned), budget);
                 Selector sel = plain.address(cleaned);
                 List<IpRange> ranges = toIpRanges(sel.ranges().getOrDefault("ipv4", List.of()));
-                return new AddressPart(ranges, ranges, ranges, false, false, false, null);
+                return new AddressPart(ranges, ranges, ranges, ipv6, false, false, null);
             }
             return AddressPart.fail("dynamic or unsupported object type");
         } catch (Unknown u) {
             if ("analysis budget".equals(u.getMessage())) throw u;
-            return AddressPart.fail(hasIpv6Value(o) ? "IPv6 not evaluated" : mapReason(u.getMessage()));
+            return AddressPart.fail(mapReason(u.getMessage()));
         } finally {
             path.remove(id);
         }
@@ -954,20 +955,32 @@ public final class ZoneMatrixPolicyBridge {
     private static boolean hasIpv6Value(PolicyObject o) {
         if (o == null) return false;
         for (String v : o.values()) {
-            if (v.startsWith("color: ")) continue;
-            if (v.startsWith("ipv6-address: ") || v.startsWith("subnet6: ") || v.startsWith("mask-length6: ")
-                    || v.startsWith("ipv6-address-first: ") || v.startsWith("ipv6-address-last: ")) {
-                return true;
-            }
-            int split = v.indexOf(": ");
-            String key = split < 0 ? "literal" : v.substring(0, split);
-            String val = split < 0 ? v : v.substring(split + 2);
-            if (Set.of("ip-netmask", "ip-range", "literal", "ip-address-first", "ip-address-last").contains(key)
-                    && val.indexOf(':') >= 0) {
-                return true;
-            }
+            if (isIpv6Value(v)) return true;
         }
         return false;
+    }
+
+    /** One stored object value that names an IPv6 part (cosmetic {@code color:} values are never IPv6). */
+    private static boolean isIpv6Value(String v) {
+        if (v.startsWith("color: ")) return false;
+        if (v.startsWith("ipv6-address: ") || v.startsWith("subnet6: ") || v.startsWith("mask-length6: ")
+                || v.startsWith("ipv6-address-first: ") || v.startsWith("ipv6-address-last: ")) {
+            return true;
+        }
+        int split = v.indexOf(": ");
+        String key = split < 0 ? "literal" : v.substring(0, split);
+        String val = split < 0 ? v : v.substring(split + 2);
+        return Set.of("ip-netmask", "ip-range", "literal", "ip-address-first", "ip-address-last").contains(key)
+                && val.indexOf(':') >= 0;
+    }
+
+    /** The object without its cosmetic and IPv6 values: the part per-family resolution evaluates as IPv4. */
+    private static PolicyObject ipv4OnlyObject(PolicyObject o) {
+        List<String> kept = new ArrayList<>(o.values().size());
+        for (String v : stripCosmeticValues(o.values())) {
+            if (!isIpv6Value(v)) kept.add(v);
+        }
+        return new PolicyObject(o.id(), o.name(), o.type(), o.members(), kept, o.status(), o.schedule());
     }
 
     private static void collectUlaRanges(

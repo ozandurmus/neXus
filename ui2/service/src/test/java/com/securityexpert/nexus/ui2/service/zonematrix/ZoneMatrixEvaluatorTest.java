@@ -614,7 +614,7 @@ class ZoneMatrixEvaluatorTest {
         Rule rV6 = rule("r-v6", 1, "PureIpv6", true,
                 new Cell(List.of("v6-only"), false), new Cell(List.of("dmz1"), false),
                 new Cell(List.of("https"), false), ANY_CELL, "allow", Map.of());
-        // 2) Mixed IPv4/IPv6 object -> NOT_EVALUABLE "IPv6 not evaluated" in step 3 (ZM-19)
+        // 2) Mixed IPv4/IPv6 object -> the IPv4 part is evaluated per family (step 7a, ZM-19); the IPv6 part stays unevaluated
         Rule rMixed = rule("r-mixed", 2, "MixedDualStack", true,
                 new Cell(List.of("mixed-v4-v6"), false), new Cell(List.of("dmz1"), false),
                 new Cell(List.of("https"), false), ANY_CELL, "allow", Map.of());
@@ -634,8 +634,20 @@ class ZoneMatrixEvaluatorTest {
         EvaluationResult res = ZoneMatrixEvaluator.evaluate(snap, fx.versionId(), fx.versionNumber(), fx.content(), NOW);
         assertEquals(OUTCOME_NOT_EVALUABLE, res.rules().get(0).outcome());
         assertEquals("IPv6 not evaluated", res.rules().get(0).reason());
-        assertEquals(OUTCOME_NOT_EVALUABLE, res.rules().get(1).outcome());
-        assertEquals("IPv6 not evaluated", res.rules().get(1).reason());
+        // Step 7a: the mixed rule gets the outcome of the same rule written with only its IPv4 address; its IPv4 part
+        // (user zone -> DMZ, ALLOW_ANY) is compliant, so the unevaluated IPv6 part makes it NOT_EVALUABLE, never COMPLIANT.
+        Rule rIpv4Only = rule("r-mixed", 2, "MixedDualStack", true,
+                new Cell(List.of("u1"), false), new Cell(List.of("dmz1"), false),
+                new Cell(List.of("https"), false), ANY_CELL, "allow", Map.of());
+        PolicySnapshot snapIpv4Only = new PolicySnapshot(meta("pol-v6", "PAN", "PAN-IPv6"),
+                List.of(panSection("pol-v6", "pre-rulebase", "Pre rules", List.of(rIpv4Only))), objects);
+        RuleEvaluation ipv4OnlyEval = ZoneMatrixEvaluator
+                .evaluate(snapIpv4Only, fx.versionId(), fx.versionNumber(), fx.content(), NOW).rules().get(0);
+        RuleEvaluation mixedEval = res.rules().get(1);
+        assertEquals(OUTCOME_COMPLIANT, ipv4OnlyEval.outcome());
+        assertEquals(OUTCOME_NOT_EVALUABLE, mixedEval.outcome());
+        assertEquals("IPv6 not evaluated", mixedEval.reason());
+        assertEquals(ipv4OnlyEval.touchedPairs(), mixedEval.touchedPairs());
 
         RuleEvaluation anyEval = res.rules().get(2);
         assertEquals(OUTCOME_VIOLATION, anyEval.outcome());
