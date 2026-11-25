@@ -5,6 +5,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 /**
  * The line shapes of the system-log template census, over <em>masked</em> lines only: the per-source header parse
  * (what is the message, what is the level field), the severity class, the closed hardware/kernel marker set and the
@@ -14,8 +17,9 @@ import java.util.regex.Pattern;
  * <p>Source shapes are the measured ones of {@code LineTimes} (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 4.7):
  * {@code cp_messages} {@code <Mon> <DD> <HH:MM:SS> [<YYYY>] <host> <prog>[pid]: <text>}; the elg sources
  * {@code [<proc> <pid> <tid>]@<host>[<DD> <Mon> <HH:MM:SS>] <text>}; {@code cp_fwk_elg}
- * {@code [<time>][fw4_<n>];[cpu_<n>];[<conn>] [<level>]: <text>}; {@code pan_system} key=value with
- * {@code severity=}, {@code subtype=}, {@code eventid=} and a quoted {@code opaque=} text. A line that does not match
+ * {@code [<time>][fw4_<n>];[cpu_<n>];[<conn>] [<level>]: <text>}; {@code pan_system} one JSON object per line, as the
+ * collector stores it (fields {@code receive_time}, {@code severity}, {@code subtype}, {@code eventid}, {@code opaque}),
+ * or the older key=value form with {@code severity=}, {@code subtype=}, {@code eventid=} and a quoted {@code opaque=} text. A line that does not match
  * its source's header is <em>unparsed</em> (a continuation line): it is counted and not mined. The level is read only
  * where the family carries one, never inferred from message words.</p>
  */
@@ -161,16 +165,44 @@ public final class CensusLineShapes {
         return m.find() ? LEVEL_WORDS.getOrDefault(m.group(1).toLowerCase(Locale.ROOT), Severity.UNKNOWN) : Severity.UNKNOWN;
     }
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private static Parsed parsePanSystem(String line) {
+        String t = line.stripLeading();
+        if (t.startsWith("{")) return parsePanSystemJson(t);
         Matcher sev = PAN_SEVERITY.matcher(line);
         Matcher sub = PAN_SUBTYPE.matcher(line);
         Matcher eid = PAN_EVENTID.matcher(line);
         if (!sev.find() || !sub.find() || !eid.find()) return null;
         Matcher opaque = PAN_OPAQUE.matcher(line);
-        String text = opaque.find() ? opaque.group(1).strip() : "";
-        String head = sub.group(1) + "/" + eid.group(1) + ":";
-        Severity severity = PAN_LEVELS.getOrDefault(sev.group(1).toLowerCase(Locale.ROOT), Severity.UNKNOWN);
-        return new Parsed(text.isEmpty() ? head : head + " " + text, severity);
+        return panParsed(sev.group(1), sub.group(1), eid.group(1), opaque.find() ? opaque.group(1) : "");
+    }
+
+    /** The stored shape: one JSON object of the entry's fields. A line that is not an object with the three header fields is unparsed. */
+    private static Parsed parsePanSystemJson(String line) {
+        JsonNode n;
+        try {
+            n = JSON.readTree(line);
+        } catch (java.io.IOException notJson) {
+            return null;
+        }
+        if (n == null || !n.isObject()) return null;
+        String sev = text(n, "severity"), sub = text(n, "subtype"), eid = text(n, "eventid");
+        if (sev == null || sub == null || eid == null) return null;
+        String opaque = text(n, "opaque");
+        return panParsed(sev, sub, eid, opaque == null ? "" : opaque);
+    }
+
+    private static String text(JsonNode n, String field) {
+        JsonNode v = n.get(field);
+        return v != null && v.isValueNode() && !v.isNull() ? v.asText().strip() : null;
+    }
+
+    private static Parsed panParsed(String severity, String subtype, String eventId, String opaque) {
+        String text = opaque.strip();
+        String head = subtype + "/" + eventId + ":";
+        return new Parsed(text.isEmpty() ? head : head + " " + text,
+                PAN_LEVELS.getOrDefault(severity.toLowerCase(Locale.ROOT), Severity.UNKNOWN));
     }
 
     // ------------------------------------------------------------------ markers

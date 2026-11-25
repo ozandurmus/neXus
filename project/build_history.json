@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0416",
+      "status": "automated_validated",
+      "title": "Log detection engine P1 shadow (V272), zone matrix lifecycle wiring, parser UNKNOWN pins, MC device health gated read (V271), delivery orchestration record",
+      "summary": "Log detection engine phase P1 shipped in shadow: masked indexer, severity and hardware markers, findings, coverage, acknowledgement, CLI and a findings panel, with UNKNOWN coverage never shown healthy (842ff7cb, migration V272). Zone matrix finding lifecycle, run triggers and staleness reads were wired into durable runs (85a28224); a gated, switched-off Management Center device health read was merged with V271 (645776c8, no gate row, every device UNKNOWN until approved); Check Point lifecycle, license, live-patch, Infoblox and telemetry parsers got test-only UNKNOWN pins (85a28224, 9c3579a7); the delivery orchestration redesign was recorded as a PO decision (b90c3449).",
+      "started": "2026-11-24",
+      "completed": "2026-11-25",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0415",
       "status": "automated_validated",
       "title": "RPT-17 Lifecycle and licensing report (V270), log detection engine DRAFT design, Management Center health read proposal, review fixes, NAT builder split",

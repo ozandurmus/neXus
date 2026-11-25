@@ -62,6 +62,28 @@ class CensusLineShapesTest {
     }
 
     @Test
+    void panJsonLineInTheCollectorShapeIsParsed() {
+        String base = "{\"receive_time\":\"2026/11/24 03:22:10\",\"seqno\":\"101\",\"type\":\"SYSTEM\",\"subtype\":\"hw\","
+                + "\"eventid\":\"fan-failed\",\"severity\":\"%s\",\"opaque\":\"Fan tray 2: fan 3 failed (\\\"0\\\" RPM)\"}";
+        var p = CensusLineShapes.parse("pan_system", base.formatted("critical"));
+        assertNotNull(p);
+        assertEquals("hw/fan-failed: Fan tray 2: fan 3 failed (\"0\" RPM)", p.message());
+        assertEquals(Severity.CRITICAL, p.severity());
+        assertEquals(Severity.ERROR, CensusLineShapes.parse("pan_system", base.formatted("high")).severity());
+        assertEquals(Severity.WARNING, CensusLineShapes.parse("pan_system", base.formatted("medium")).severity());
+        assertEquals(Severity.INFO, CensusLineShapes.parse("pan_system", base.formatted("low")).severity());
+        assertEquals(Severity.INFO, CensusLineShapes.parse("pan_system", base.formatted("informational")).severity());
+    }
+
+    @Test
+    void panJsonWithoutHeaderFieldsOrBrokenJsonStaysUnparsed() {
+        assertNull(CensusLineShapes.parse("pan_system", "{\"subtype\":\"hw\",\"severity\":\"high\"}"));
+        assertNull(CensusLineShapes.parse("pan_system", "{\"subtype\":\"hw\",\"eventid\":\"x\",\"severity\":\"hi"));
+        assertNull(CensusLineShapes.parse("pan_system", "[1,2,3]"));
+        assertNull(CensusLineShapes.parse("pan_system", "    continuation text"));
+    }
+
+    @Test
     void panSeverityMapsToTheClasses() {
         String base = "receive_time=2026/11/24 03:22:10 severity=%s type=system subtype=hw eventid=fan-failed module=general "
                 + "object=fan-tray-2 opaque=\"Fan tray 2: fan 3 failed (0 RPM)\"";
