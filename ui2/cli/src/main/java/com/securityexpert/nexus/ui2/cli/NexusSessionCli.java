@@ -143,6 +143,10 @@ final class NexusSessionCli {
         System.out.println("  syslog-spike-data <deviceId>                   Spike Detective directories: time, member classes, sizes");
         System.out.println("  syslog-settings                                collection settings: retention, caps, the management-server and spike-data switches");
         System.out.println("  syslog-settings-set <key>=<value> ...          security_admin; e.g. spike_data_enabled=true raw_retention_days=45 (audited)");
+        System.out.println("  log-findings [deviceId] [severity=..] [state=..] [days=..] [limit=..]   log detection findings (layer A), worst first; counts and pointers only");
+        System.out.println("  log-finding <id> | log-coverage <deviceId> | log-chips | log-budget   one finding; coverage per source and window; the devices-list chip data; the alert-budget counters");
+        System.out.println("  log-finding-ack <id> [note]                    operation_admin and above: acknowledge a finding (audited; raised again on a rise or later evidence)");
+        System.out.println("  log-detection | log-detection-set enabled=true|false [shadow_days=N]   the P1 switch and shadow period (security_admin, audited)");
         System.out.println("  snmp-polling                                   Administration > SNMP polling: switch, interval, credentials, scope, last outcomes");
         System.out.println("  snmp-polling-set <key>=<value> ...             security_admin (audited); enabled=true interval_s=300 scope_mode=VENDORS|DEVICES");
         System.out.println("                                                 default_credential_reference_id=<ref>|null; vendor=<vendor>:on|off[:<ref>] (repeat: the");
@@ -342,6 +346,28 @@ final class NexusSessionCli {
                 case "schedule-set" -> {
                     require(args, 4, "schedule-set <family> on|off <reason>");
                     yield print(call("PUT", SCHEDULES + "/" + scheduleFamily(args[1]), scheduleBody(args[2], args[3])));
+                }
+                case "log-findings" -> print(call("GET", LOG_FINDINGS + queryString(logFindingFilters(args), 0), null));
+                case "log-finding" -> {
+                    require(args, 2, "log-finding <id>");
+                    yield print(call("GET", LOG_FINDINGS + "/" + opaque(args[1]), null));
+                }
+                case "log-finding-ack" -> {
+                    require(args, 2, "log-finding-ack <id> [note]");
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    if (args.length > 2) body.put("note", String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
+                    yield print(call("POST", LOG_FINDINGS + "/" + opaque(args[1]) + "/acknowledge", json(body)));
+                }
+                case "log-coverage" -> {
+                    require(args, 2, "log-coverage <deviceId>");
+                    yield print(call("GET", LOG_FINDINGS + "/coverage?device_id=" + java.net.URLEncoder.encode(opaque(args[1]), StandardCharsets.UTF_8), null));
+                }
+                case "log-chips" -> print(call("GET", LOG_FINDINGS + "/chips", null));
+                case "log-budget" -> print(call("GET", LOG_FINDINGS + "/budget", null));
+                case "log-detection" -> print(call("GET", LOG_DETECTION_SETTINGS, null));
+                case "log-detection-set" -> {
+                    require(args, 2, "log-detection-set enabled=true|false [shadow_days=N]");
+                    yield print(call("PUT", LOG_DETECTION_SETTINGS, json(settingsBody(args))));
                 }
                 case "syslog-settings" -> print(call("GET", SYSLOG_SETTINGS, null));
                 case "snmp-polling" -> print(call("GET", SNMP_POLLING, null));
@@ -893,6 +919,9 @@ final class NexusSessionCli {
     static final String SYSLOG = "/api/v2/system-logs";
     /** The settings row (section 14, {@code syslog-settings} / {@code syslog-settings-set}; security_admin). */
     static final String SYSLOG_SETTINGS = "/api/v2/config/system-logs";
+    /** Log detection engine P1 (design section 9 CLI parity): findings, coverage, chips, budget and the switch. */
+    static final String LOG_FINDINGS = "/api/v2/log-findings";
+    static final String LOG_DETECTION_SETTINGS = "/api/v2/config/log-detection";
     private static final Pattern OPAQUE_TOKEN = Pattern.compile("[A-Za-z0-9_.:-]{1,128}");
     private static final Pattern DAY = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
     /** {@code syslog-view ... all} stops after this many pages (256 KiB each at most): a runaway guard, not a limit of the route. */
@@ -1044,6 +1073,21 @@ final class NexusSessionCli {
                 filters.add("device_id=" + args[i]);
             } else {
                 throw new UsageException("syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..], got: " + args[i]);
+            }
+        }
+        return filters.toArray(new String[0]);
+    }
+
+    /** {@code log-findings [deviceId] [severity=..] [state=..] [days=..] [limit=..]}: a bare word is the device id. */
+    static String[] logFindingFilters(String[] args) {
+        List<String> filters = new ArrayList<>();
+        for (int i = 1; i < args.length; i++) {
+            if (args[i].indexOf('=') > 0) {
+                filters.add(args[i]);
+            } else if (filters.stream().noneMatch(f -> f.startsWith("device_id="))) {
+                filters.add("device_id=" + opaque(args[i]));
+            } else {
+                throw new UsageException("log-findings [deviceId] [severity=..] [state=..] [days=..] [limit=..], got: " + args[i]);
             }
         }
         return filters.toArray(new String[0]);

@@ -36,6 +36,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState, isArchiveManifestComplete } from "./backupWords";
 import { DeviceLogsPanel } from "./DeviceLogsPanel";
+import { LogFindingsPanel } from "./LogFindingsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
 import { PLATFORM_IDENTITY_OPEN_KEY, PlatformIdentityPanel, PlatformIdentityPanelContext, identityTiles, platformFactsNote } from "./PlatformIdentity";
@@ -1455,7 +1456,12 @@ export function DeviceInventoryPanels({
           // management server of those vendors gets the tab too, with the "collection disabled" state.
           ...((device.vendor_hint === "check_point" || device.vendor_hint === "palo_alto") ? [{
             label: "Logs",
-            panel: <DeviceLogsPanel key={device.device_id} deviceId={device.device_id} vendorHint={device.vendor_hint} />,
+            panel: (
+              <Stack spacing={2}>
+                <LogFindingsPanel key={`findings-${device.device_id}`} deviceId={device.device_id} />
+                <DeviceLogsPanel key={device.device_id} deviceId={device.device_id} vendorHint={device.vendor_hint} />
+              </Stack>
+            ),
           }] : []),
           // The Identity tab is gone (PO 2026-11-06): its three cards are the header's Platform identity panel above.
         ]}

@@ -415,6 +415,136 @@ public final class SystemLogReadService {
                 window.eof, countLines(window.bytes), chunk.bytes(), limit, ruleSet, maskedCompanion), null);
     }
 
+    // ---------------------------------------------------------------- masked scan (log detection engine, design 8.2)
+
+    /** How a masked scan of one chunk ended. {@code OK} is the only state in which every line reached the sink. */
+    public enum ScanStatus {
+        OK, NOT_FOUND, NOT_APPLICABLE, PRUNED, STORE_UNAVAILABLE, ARTEFACT_MISSING, MASKING_UNAVAILABLE, UNREADABLE,
+        LINE_TOO_LONG, LINE_COUNT_MISMATCH
+    }
+
+    /** The result of {@link #scanMasked}: how it ended and how many lines reached the sink. */
+    public record ScanResult(ScanStatus status, long lines) {
+    }
+
+    /** Receives one masked line with the stored-byte position of its raw form (offset and length without terminator). */
+    @FunctionalInterface
+    public interface MaskedLineSink {
+        void line(long rawOffset, int rawLength, String maskedLine);
+    }
+
+    /**
+     * Decrypts one chunk in memory and hands its lines to {@code sink} <b>masked</b> ({@link LogMasking}, one session for
+     * the chunk), each with the byte position of its raw form so a finding can point at it. The raw bytes never leave this
+     * method and nothing is written anywhere; a failure ends the scan with a status and never falls back to unmasked
+     * text. A batch whose masked form has a different line count than its raw form is refused (the pairing of position and
+     * text would be a guess).
+     */
+    public ScanResult scanMasked(String chunkId, MaskedLineSink sink) {
+        Objects.requireNonNull(sink, "sink");
+        if (chunkId == null || !CHUNK_ID.matcher(chunkId).matches()) return new ScanResult(ScanStatus.NOT_FOUND, 0);
+        Optional<ChunkRef> found = repository.findChunk(chunkId);
+        if (found.isEmpty()) return new ScanResult(ScanStatus.NOT_FOUND, 0);
+        ChunkRef chunk = found.get();
+        Optional<DeviceRecord> device = devices.find(chunk.deviceId());
+        if (device.isPresent() && notApplicable(device.get()).isPresent()) return new ScanResult(ScanStatus.NOT_APPLICABLE, 0);
+        if (chunk.prunedAt() != null) return new ScanResult(ScanStatus.PRUNED, 0);
+        if (store == null) return new ScanResult(ScanStatus.STORE_UNAVAILABLE, 0);
+        if (chunk.artefactRef() == null || chunk.wrappedDataKey() == null) return new ScanResult(ScanStatus.ARTEFACT_MISSING, 0);
+        LogMasking.Session session;
+        try {
+            session = masking.session();
+        } catch (LogMasking.MaskingUnavailableException e) {
+            return new ScanResult(ScanStatus.MASKING_UNAVAILABLE, 0);
+        }
+        long lines = 0;
+        try (InputStream in = new BufferedInputStream(
+                store.retrieve(new ArtefactRef(chunk.artefactRef()), chunk.wrappedDataKey(), true), 64 * 1024)) {
+            // Batches end on an LF only (a CRLF pair is never split); one line may not outgrow two pages.
+            ByteArrayOutputStream batch = new ByteArrayOutputStream(MAX_PAGE_BYTES);
+            long batchStart = 0;
+            long position = 0;
+            int b;
+            while ((b = in.read()) >= 0) {
+                batch.write(b);
+                position++;
+                if (b == '\n' && batch.size() >= MAX_PAGE_BYTES) {
+                    lines += flushBatch(batch.toByteArray(), batchStart, session, sink);
+                    batchStart = position;
+                    batch.reset();
+                } else if (batch.size() > 2 * MAX_PAGE_BYTES) {
+                    return new ScanResult(ScanStatus.LINE_TOO_LONG, lines);
+                }
+            }
+            if (batch.size() > 0) lines += flushBatch(batch.toByteArray(), batchStart, session, sink);
+        } catch (BatchMismatch e) {
+            return new ScanResult(ScanStatus.LINE_COUNT_MISMATCH, lines);
+        } catch (NoSuchFileException e) {
+            return new ScanResult(ScanStatus.ARTEFACT_MISSING, lines);
+        } catch (IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "system-log chunk scan failed chunk={0} cause={1}", chunk.chunkId(),
+                    e.getClass().getSimpleName());
+            return new ScanResult(ScanStatus.UNREADABLE, lines);
+        }
+        return new ScanResult(ScanStatus.OK, lines);
+    }
+
+    private static final class BatchMismatch extends RuntimeException {
+        BatchMismatch() {
+            super("masked and raw line counts differ", null, false, false);
+        }
+    }
+
+    /** Masks one batch of whole lines and passes each masked line to the sink; returns the number of lines. */
+    private static long flushBatch(byte[] raw, long batchStart, LogMasking.Session session, MaskedLineSink sink) {
+        List<int[]> rawLines = splitLines(raw);
+        byte[] maskedBytes = session.maskChunk(raw);
+        String maskedText = new String(toUtf8(maskedBytes), StandardCharsets.UTF_8);
+        List<String> maskedLines = splitLines(maskedText);
+        if (rawLines.size() != maskedLines.size()) throw new BatchMismatch();
+        for (int i = 0; i < rawLines.size(); i++) {
+            int[] span = rawLines.get(i); // start, length without terminator
+            sink.line(batchStart + span[0], span[1], maskedLines.get(i));
+        }
+        return rawLines.size();
+    }
+
+    /** Line spans {start, length without terminator} of {@code bytes}; terminators are LF, CRLF and CR. */
+    static List<int[]> splitLines(byte[] bytes) {
+        List<int[]> out = new ArrayList<>();
+        int start = 0;
+        int i = 0;
+        while (i < bytes.length) {
+            byte c = bytes[i];
+            if (c == '\n' || c == '\r') {
+                out.add(new int[] {start, i - start});
+                if (c == '\r' && i + 1 < bytes.length && bytes[i + 1] == '\n') i++;
+                start = i + 1;
+            }
+            i++;
+        }
+        if (start < bytes.length) out.add(new int[] {start, bytes.length - start});
+        return out;
+    }
+
+    /** The lines of {@code text}, split on the same terminators as {@link #splitLines(byte[])}. */
+    static List<String> splitLines(String text) {
+        List<String> out = new ArrayList<>();
+        int start = 0;
+        int i = 0;
+        while (i < text.length()) {
+            char c = text.charAt(i);
+            if (c == '\n' || c == '\r') {
+                out.add(text.substring(start, i));
+                if (c == '\r' && i + 1 < text.length() && text.charAt(i + 1) == '\n') i++;
+                start = i + 1;
+            }
+            i++;
+        }
+        if (start < text.length()) out.add(text.substring(start));
+        return out;
+    }
+
     private static Text refusedText(int status, String code, String message) {
         return new Text(null, new Refusal(status, code, message));
     }

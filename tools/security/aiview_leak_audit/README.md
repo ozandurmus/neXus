@@ -8,7 +8,10 @@ Files:
 
 - `export_reference.sql` -- read-only SQL, run inside `ui2-db-0`; prints salted sha256 hashes of normalized raw
   identifiers (device hostnames, management/interface/discovery addresses and each IPv4 in them, serials and recorded
-  identities, cluster references, policy-change authors and credential user names, Check Point server/domain names).
+  identities, cluster references, policy-change authors and credential user names, Check Point server/domain names)
+  and of the P1 planes where their tables exist (ACI cutover segment names, blocks, peer blocks and assessment flow
+  addresses; Zone Matrix zone names and blocks from the version content; static-route preview destinations, next hops,
+  representative hosts, requesters and units; segment, assessment and zone-matrix actors).
 - `probe.mjs` + `core.mjs` -- zero-dependency Node probe; opens a machine session as aiview, walks `routes.json`,
   hashes every token of every response body and header with the same salt and normalization, counts matches.
 - `routes.json` -- the 157 GET routes the golden decision table lets replay_viewer call (PERMIT), static/health/SAML
@@ -71,12 +74,33 @@ Covered: every token of the response body and of all response headers (except Se
 route in the decision table, for hostnames (full name, dot prefixes, host before :port), IPv4 addresses anywhere in
 the text, serials/recorded identities, cluster references, user names, and 4+ character words of user and cluster names.
 
+Source columns (`export_reference.sql`, each guarded by `information_schema.columns`, so a schema without a table is
+skipped and shows as absent in the `#src` lines):
+
+| Category | Columns |
+| --- | --- |
+| HOST | `devices.observed_hostname`, `discovery_candidate.display_name`, `cp_domain_server_placement.*_name`, `cutover_segment.name`, `zone_matrix_version.content` `zones[].name` |
+| ADDR | endpoint, interface, discovery and trust-store addresses; `cutover_segment.blocks[]` and `peer_blocks[]`; `cutover_assessment_flow.flow` `flowSource`, `flowDestination`, `flowSources[]`, `sourceRange`; `zone_matrix_version.content` `zones[].blocks[]`; `static_route_preview.destination_cidr`, `nexthop_ip`, `representative_host` |
+| SERIAL | platform serials, recorded and presented identities, discovery stable identifiers, Panorama serials, `ha_pair_identity` unit serials |
+| CLUSTER | `devices.cluster_member_ref`, `devices.ha_pair_claim`, `discovery_candidate.cluster_reference`, `static_route_preview.unit_id` |
+| USER | `policy_rule_history.changed_by`, `credentials.username`, `cutover_segment.created_by`/`updated_by`, `cutover_assessment.actor`, `zone_matrix_version.created_by`/`updated_by`/`published_by`, `zone_matrix_revision.actor`, `static_route_preview.requested_by` |
+
+The ACI cutover plane is stored as `cutover_segment` (name, `blocks`, `peer_blocks`) and `cutover_assessment_flow.flow`
+(JSONB); there is no `aci_segment` table and no flow address column. The zone-matrix version content is TEXT holding
+canonical JSON and is parsed per row (`pg_input_is_valid`, PostgreSQL 16); a value that is not valid JSON or not of the
+expected shape contributes nothing. A block `a/n` is also exported as its address part `a` (ADDR, with trailing
+separators removed as the probe tokenizes), so a block printed as text is found by its network address (IPv4 also by
+the IPv4 scan, an IPv6 block by its `2001:db8:a` style prefix token).
+
 Not covered: values shorter than 4 characters and the placeholders localhost/unknown/none/null/true/false/default/
-system/test; loopback and 0.0.0.0; IPv6 addresses; values split, encoded or transformed in the response (base64, URL
+system/test; loopback and 0.0.0.0; IPv6 addresses other than a whole stored value or the prefix of a stored IPv6
+block (an IPv6 address printed in another spelling, or a host inside an IPv6 block); values split, encoded or transformed in the response (base64, URL
 encoding, HTML entities, JSON unicode escapes, split across fields, digits inserted); non-GET routes (aiview POSTs for
 diagnostics, readiness, policy collection and Packet Analysis are not exercised); detail ids the walk could not discover
 from list responses; request parameters (default parameters only, so filtered/paged views and `?device=` style
 variants are not walked); masked-but-reversible values (a pseudonym that encodes the raw value) -- this audit finds raw
 values, not weak masking; raw values that are not in the source columns listed in `export_reference.sql` (for example
-policy rule/object/zone names, which the system-log catalog covers separately) and binary payloads (scanned as text).
+policy rule/object names, Zone Matrix finding rule/section names and witness tuples in `zone_matrix_finding`, zone
+descriptions, cell rationale and regulation references, which the system-log catalog and the in-process sweep
+`AiviewRawVersusMaskedSweepTest` cover separately) and binary payloads (scanned as text).
 Multi-word user names are matched word by word (NAME_WORD), not as a phrase.

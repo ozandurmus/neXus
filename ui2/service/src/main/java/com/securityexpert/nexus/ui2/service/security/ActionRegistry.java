@@ -72,6 +72,12 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_SETTINGS_READ = "system_log_settings_read";
     /** Phase B section 14: writes the settings row ({@code PUT /api/v2/config/system-logs}); security_admin, never aiview. */
     public static final String SYSTEM_LOG_SETTINGS_WRITE = "system_log_settings_write";
+    /** Log detection engine P1: the engine's switch row ({@code GET /api/v2/config/log-detection}); security_admin, never aiview. */
+    public static final String LOG_DETECTION_SETTINGS_READ = "log_detection_settings_read";
+    /** Log detection engine P1: writes the switch row ({@code PUT /api/v2/config/log-detection}); security_admin, never aiview. */
+    public static final String LOG_DETECTION_SETTINGS_WRITE = "log_detection_settings_write";
+    /** Log detection engine P1 (design section 7.3): acknowledges one log finding; operation_admin and security_admin, audited, never aiview. */
+    public static final String LOG_FINDING_ACKNOWLEDGE = "log_finding_acknowledge";
     /** Administration > SNMP polling ({@code GET /api/v2/config/snmp-polling}); security_admin; aiview masked read-only via UI2_AIVIEW_READONLY_ADMIN. */
     public static final String SNMP_POLLING_SETTINGS_READ = "snmp_polling_settings_read";
     /** Writes SNMP polling settings ({@code PUT /api/v2/config/snmp-polling}); security_admin, never aiview. */
@@ -448,6 +454,10 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SYSTEM_LOG_READ_UNMASKED, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         // Settings read and write are security_admin only (contract section 14), like the notification settings.
+        register(new ActionDescriptor(LOG_DETECTION_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOG_DETECTION_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOG_FINDING_ACKNOWLEDGE, true, Optional.of(RoleToken.OPERATION_ADMIN),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // SNMP polling settings (SNMP_DEVICE_METRICS_DESIGN_2026_11_24.md section 11): security_admin, like the credentials.

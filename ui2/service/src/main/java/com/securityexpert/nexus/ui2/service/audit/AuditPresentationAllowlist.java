@@ -362,6 +362,10 @@ public final class AuditPresentationAllowlist {
                     "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
                     "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",
                     "spike_data_retention_days", "updated_at", "updated_by")),
+            // V272 (log detection engine P1): the switch row holds a boolean, a shadow-period end and the writer's opaque
+            // fingerprint; an acknowledgement event holds ids and a closed action word (note and actor are tier-2 redacted).
+            Map.entry("log_detection_settings", Set.of("enabled", "settings_id", "shadow_until", "updated_at", "updated_by")),
+            Map.entry("log_finding_action", Set.of("action", "action_id", "created_at", "finding_id")),
             // V151: summaries are counts, field names, formats and enum-like values only -- nothing to redact.
             Map.entry("system_log_measurement", Set.of(
                     "device_id", "job_id", "measured_at", "measurement_id", "source", "summary",

@@ -51,6 +51,8 @@ import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration;
 import com.securityexpert.nexus.ui2.service.boot.Ui2Application;
 import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneBlock;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
 
 /**
  * The raw-versus-masked sweep of backlog {@code aiview_masking_leak_audit} (AGENTS.md "Mandatory AIView inspection &
@@ -60,8 +62,12 @@ import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
  * {@link AiviewReachableRoutes} -- plus every ungated GET, and every seeded raw value is counted in every response body.
  *
  * <p>Seeded values are synthetic and built at runtime: hostnames in the FW-TANGO style plus look-alike real-shaped
- * names, addresses in 192.0.2.0/24, 198.51.100.0/24 and 2001:db8::/32, random serials, an administrator principal,
- * rule, object and policy names. Output names the route, the HTTP status and the value <em>class</em> with a count --
+ * names, addresses in 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 and 2001:db8::/32, random serials, an administrator principal,
+ * rule, object and policy names. The P1 planes are seeded too: a Zone Matrix ACTIVE and DRAFT version (raw zone names,
+ * IPv4 and IPv6 blocks, cell rationale and regulation reference, the administrator as author and publisher), an ACI
+ * cutover segment with one assessment and its flow rows (raw segment name, blocks, flow addresses, the seeded rule), and a
+ * Cisco ASA failover pair (raw cluster reference, unit serials, stored running configurations in the test store).
+ * Output names the route, the HTTP status and the value <em>class</em> with a count --
  * never a value. A surviving raw value fails the test unless the route and class are on {@link #KNOWN_LEAKS}, which
  * must match the findings exactly (an entry that stops leaking fails too, so the list only shrinks on purpose).</p>
  *
@@ -75,7 +81,7 @@ class AiviewRawVersusMaskedSweepTest {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /** What a seeded value is; the only thing about a value this test ever prints. */
-    enum ValueClass { HOSTNAME, CLUSTER_NAME, ADDRESS, SERIAL, PRINCIPAL, RULE_NAME, OBJECT_NAME, POLICY_NAME }
+    enum ValueClass { HOSTNAME, CLUSTER_NAME, ADDRESS, SERIAL, PRINCIPAL, RULE_NAME, OBJECT_NAME, POLICY_NAME, ZONE_OR_SEGMENT_NAME }
 
     /**
      * Surviving raw values found by this sweep and left for a follow-up lane: {@code "GET <route> <CLASS>"}. Must equal
@@ -111,10 +117,23 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/policy/policies/*/rules", Set.of("rule")),
             Map.entry("GET /api/v2/policy/policies/*/history", Set.of("rule")),
             Map.entry("GET /api/v2/policy/changes", Set.of("rule")),
-            Map.entry("GET /api/v2/policy/devices", Set.of("policy")),
+            Map.entry("GET /api/v2/policy/devices", Set.of("policy", "asa-unit")),
             Map.entry("GET /api/v2/system-logs/*/chunks", Set.of("log-chunk")),
             Map.entry("GET /api/v2/system-logs/chunks/*/text", Set.of("log-line")),
-            Map.entry("GET /api/v2/operations/static-route/preview", Set.of("device", "static-route-preview")));
+            Map.entry("GET /api/v2/operations/static-route/preview", Set.of("device", "static-route-preview")),
+            Map.entry("GET /api/v2/zone-matrix/versions", Set.of("zone-matrix-version")),
+            Map.entry("GET /api/v2/zone-matrix/versions/*", Set.of("zone-matrix-version", "zone")),
+            Map.entry("GET /api/v2/zone-matrix/draft", Set.of("zone-matrix-version")),
+            Map.entry("GET /api/v2/zone-matrix/policies", Set.of("policy")),
+            Map.entry("GET /api/v2/cutover/segments", Set.of("cutover-segment")),
+            Map.entry("GET /api/v2/cutover/segments/*", Set.of("cutover-segment", "cutover-assessment")),
+            Map.entry("GET /api/v2/cutover/assessments/*", Set.of("cutover-segment", "cutover-assessment")),
+            Map.entry("GET /api/v2/cutover/assessments/*/flows", Set.of("cutover-assessment", "cutover-flow")),
+            Map.entry("GET /api/v2/policy/ha-pairs", Set.of("asa-unit")),
+            Map.entry("GET /api/v2/jobs/export.csv", Set.of("failed-job")),
+            Map.entry("GET /api/v2/policy/changes.csv", Set.of("device")),
+            Map.entry("GET /api/v2/policy/policies/*/hygiene", Set.of("hygiene-finding")),
+            Map.entry("GET /api/v2/policy/policies/*/hygiene.csv", Set.of("hygiene-finding")));
 
     private static Ui2PostgresFixture fixture;
     private static ConfigurableApplicationContext context;
@@ -209,11 +228,78 @@ class AiviewRawVersusMaskedSweepTest {
             String interfaceAddress, String cluster) {
     }
 
+    /** One unit of the Cisco ASA failover pair: an enrolled gateway with its own management address and serial. */
+    record AsaUnit(String id, String hostname, String serial, String managementAddress, String haRole) {
+    }
+
+    /**
+     * The P1 planes of the estate: a zone model (Zone Matrix), an ACI cutover segment with one assessment, and a Cisco
+     * ASA failover pair with stored running configurations. Blocks are written as CIDR text; the network address of
+     * each block is what the sweep counts (it occurs in every spelling of the block).
+     */
+    record P1(String zoneNameA, String zoneNameB, String zoneDescription, String zoneV4A, String zoneV4B, String zoneV6A,
+            String zoneV6B, String cellRationale, String regulationReference, String segmentName, String segmentV4,
+            String segmentV6, String peerV4, String flowSource, String flowDestination, String missingRuleSource,
+            String flowFirstSeen, String asaCluster, AsaUnit asaA, AsaUnit asaB, String asaNameif, String asaInterfaceAddress,
+            String asaObjectName, String asaObjectAddress, String asaAclName, String disabledRuleName) {
+
+        static P1 generate(String principal, String hostname, int base, Map<String, ValueClass> raw) {
+            int zoneA = 16 + 4 * RANDOM.nextInt(8);    // 203.0.113.16 .. .44, /30
+            int zoneB = 64 + 4 * RANDOM.nextInt(8);    // 203.0.113.64 .. .92, /30
+            int segment = 128 + 8 * RANDOM.nextInt(7); // 203.0.113.128 .. .176, /29
+            int peer = 192 + 8 * RANDOM.nextInt(7);    // 203.0.113.192 .. .240, /29
+            String v6a = "2001:db8:" + hex16() + ":" + hex16() + "::";
+            String v6b = "2001:db8:" + hex16() + ":" + hex16() + "::";
+            String v6segment = "2001:db8:" + hex16() + "::";
+            AsaUnit a = new AsaUnit(Ui2Rows.opaqueId("dev"), "asa" + tag() + "-edge-a", "JAD" + hex(4).toUpperCase(Locale.ROOT),
+                    "192.0.2." + (base + 4), "active");
+            AsaUnit b = new AsaUnit(Ui2Rows.opaqueId("dev"), "asa" + tag() + "-edge-b", "JAD" + hex(4).toUpperCase(Locale.ROOT),
+                    "192.0.2." + (base + 5), "standby");
+            P1 p = new P1("zn-" + tag() + "-cardholder", "zn-" + tag() + "-corebank",
+                    "kept by " + principal + " on " + hostname,
+                    "203.0.113." + zoneA, "203.0.113." + zoneB, v6a, v6b,
+                    "requested by " + principal + " for " + hostname, "REG-" + tag() + " signed by " + principal,
+                    "seg-" + tag() + "-swift", "203.0.113." + segment, v6segment, "203.0.113." + peer,
+                    "203.0.113." + (segment + 2), "203.0.113." + (peer + 3), "203.0.113." + (segment + 5),
+                    String.format(Locale.ROOT, "2026-11-19T%02d:%02d:%02dZ", RANDOM.nextInt(24), RANDOM.nextInt(60),
+                            1 + RANDOM.nextInt(59)),
+                    "asa-ha-" + tag() + "-dc", a, b, "nif" + tag() + "-outside", "198.51.100." + (base + 7),
+                    "obj-" + tag() + "-paysrv", "198.51.100." + (base + 8), "ACL-" + tag() + "-EXT",
+                    "deny-" + tag() + "-legacy");
+            raw.put(p.zoneNameA(), ValueClass.ZONE_OR_SEGMENT_NAME);
+            raw.put(p.zoneNameB(), ValueClass.ZONE_OR_SEGMENT_NAME);
+            raw.put(p.segmentName(), ValueClass.ZONE_OR_SEGMENT_NAME);
+            for (String address : List.of(p.zoneV4A(), p.zoneV4B(), p.zoneV6A(), p.zoneV6B(), p.segmentV4(), p.segmentV6(),
+                    p.peerV4(), p.flowSource(), p.flowDestination(), p.missingRuleSource(), a.managementAddress(),
+                    b.managementAddress(), p.asaInterfaceAddress(), p.asaObjectAddress())) {
+                raw.put(address, ValueClass.ADDRESS);
+            }
+            raw.put(p.asaCluster(), ValueClass.CLUSTER_NAME);
+            for (AsaUnit u : List.of(a, b)) {
+                raw.put(u.hostname(), ValueClass.HOSTNAME);
+                raw.put(u.serial(), ValueClass.SERIAL);
+            }
+            raw.put(p.asaNameif(), ValueClass.OBJECT_NAME);
+            raw.put(p.asaObjectName(), ValueClass.OBJECT_NAME);
+            raw.put(p.asaAclName(), ValueClass.RULE_NAME);
+            raw.put(p.disabledRuleName(), ValueClass.RULE_NAME);
+            return p;
+        }
+
+        List<AsaUnit> asaUnits() {
+            return List.of(asaA, asaB);
+        }
+    }
+
+    private static String hex16() {
+        return Integer.toHexString(0x1000 + RANDOM.nextInt(0xefff));
+    }
+
     /** Every raw value the sweep looks for, generated per run. */
     record Estate(Device cpMemberA, Device cpMemberB, Device panFirewall, Device management, String cluster,
             String ipv6Management, String principal, String ruleName, String sectionName, String objectName,
             String objectAddress, String policyName, String policyId, String domainId, String objectId, String ruleId,
-            Map<String, ValueClass> raw) {
+            P1 p1, Map<String, ValueClass> raw) {
 
         static Estate generate() {
             String cluster = "CLX-ROMEO-" + tag().toUpperCase(Locale.ROOT);
@@ -256,9 +342,10 @@ class AiviewRawVersusMaskedSweepTest {
             // the static-route preview's typed destination and its representative host (documentation range)
             raw.put("203.0.113.0", ValueClass.ADDRESS);
             raw.put("203.0.113.10", ValueClass.ADDRESS);
+            P1 p1 = P1.generate(principal, pan.hostname(), base, raw);
             return new Estate(a, b, pan, mgmt, cluster, v6, principal, ruleName, sectionName, objectName, objectAddress,
                     policyName, "policy-" + UUID.randomUUID(), "domain-" + UUID.randomUUID(),
-                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), Map.copyOf(raw));
+                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, Map.copyOf(raw));
         }
 
         List<Device> devices() {
@@ -391,8 +478,14 @@ class AiviewRawVersusMaskedSweepTest {
                         e.domainId(), "SMC User", e.policyName(), "2026-11-20T10:00:00Z", null,
                         List.of(new PolicySnapshot.Target(e.cpMemberA().id(), e.cpMemberA().hostname(), "", "IN_SYNC"),
                                 new PolicySnapshot.Target(e.cpMemberB().id(), e.cpMemberB().hostname(), "", "IN_SYNC")));
+                // A disabled second rule: a hygiene finding ("disabled") for the hygiene views and their CSV export.
+                var disabled = new PolicySnapshot.Rule("rule-" + UUID.randomUUID(), UUID.randomUUID().toString(), 2,
+                        e.p1().disabledRuleName(), false, new PolicySnapshot.Cell(List.of(e.objectId()), false),
+                        new PolicySnapshot.Cell(List.of(), false), new PolicySnapshot.Cell(List.of(), false),
+                        new PolicySnapshot.Cell(List.of(), false), "Drop", "None", "disabled by " + e.principal(),
+                        Map.of("last-modifier", List.of(e.principal())));
                 var snapshot = new PolicySnapshot(metadata,
-                        List.of(new PolicySnapshot.Section("section-1", e.sectionName(), "Network", null, List.of(rule))),
+                        List.of(new PolicySnapshot.Section("section-1", e.sectionName(), "Network", null, List.of(rule, disabled))),
                         Map.of(e.objectId(), object), List.of());
                 exec(c, "insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) "
                         + "values (?, '2026-11-20T10:00:00Z'::timestamptz, ?::jsonb, ?::jsonb)",
@@ -416,7 +509,196 @@ class AiviewRawVersusMaskedSweepTest {
                         "for " + e.principal());
                 ids.put("previewId", preview);
             });
+            seedZoneMatrix(c, e);
+            seedCutover(c, e);
+            seedAsaPair(c, e, credential);
         }
+    }
+
+    /**
+     * Zone Matrix (V216/V220/V267): one ACTIVE version and one DRAFT based on it, with their revision rows. The canonical
+     * content holds two zones with raw names, IPv4 and IPv6 blocks and a description, and one cell whose rationale,
+     * regulation reference and confirmation name the administrator and a hostname. The administrator created,
+     * published and edited both versions.
+     */
+    private static void seedZoneMatrix(Connection c, Estate e) throws Exception {
+        P1 p = e.p1();
+        String zoneA = UUID.randomUUID().toString();
+        String zoneB = UUID.randomUUID().toString();
+        var zones = List.of(
+                new ZoneMatrixContent.Zone(zoneA, p.zoneNameA(), p.zoneDescription(), "DATABASE",
+                        List.of(ZoneBlock.parse(p.zoneV4A() + "/30"), ZoneBlock.parse(p.zoneV6A() + "/64"))),
+                new ZoneMatrixContent.Zone(zoneB, p.zoneNameB(), p.zoneDescription(), "APPLICATION",
+                        List.of(ZoneBlock.parse(p.zoneV4B() + "/30"), ZoneBlock.parse(p.zoneV6B() + "/64"))));
+        var cell = new ZoneMatrixContent.Cell(zoneB, zoneA, "DENY_ALL", List.of(), "HIGH", p.cellRationale(),
+                p.regulationReference(), "CONFIRMED", e.principal(), "2026-11-20T10:00:00Z");
+        var active = new ZoneMatrixContent(zones, ZoneMatrixContent.Matrix.initial().withCells(List.of(cell)));
+        active.validate();
+        var draft = new ZoneMatrixContent(List.of(zones.get(0), new ZoneMatrixContent.Zone(zoneB, p.zoneNameB(),
+                "moved by " + e.principal(), "APPLICATION", List.of(ZoneBlock.parse(p.zoneV4B() + "/30")))),
+                active.matrix());
+        draft.validate();
+        String activeId = UUID.randomUUID().toString();
+        String draftId = UUID.randomUUID().toString();
+        audited(c, () -> {
+            exec(c, "insert into zone_matrix_version(version_id, number, state, revision, content, content_sha256, "
+                    + "created_by, updated_by, published_by, published_at) values (?, 1, 'ACTIVE', 2, ?, ?, ?, ?, ?, now())",
+                    activeId, active.canonicalJson(), active.sha256(), e.principal(), e.principal(), e.principal());
+            exec(c, "insert into zone_matrix_revision(version_id, revision, actor, change_kind, zone_id, content_sha256, "
+                    + "content, rationale) values (?, 1, ?, 'ZONE_CREATE', ?, ?, ?, ?)",
+                    activeId, e.principal(), zoneA, active.sha256(), active.canonicalJson(), p.cellRationale());
+            exec(c, "insert into zone_matrix_revision(version_id, revision, actor, change_kind, content_sha256, content, "
+                    + "rationale) values (?, 2, ?, 'PUBLISH', ?, ?, ?)",
+                    activeId, e.principal(), active.sha256(), active.canonicalJson(), p.regulationReference());
+            exec(c, "insert into zone_matrix_version(version_id, state, revision, content, content_sha256, "
+                    + "based_on_version_id, created_by, updated_by) values (?, 'DRAFT', 1, ?, ?, ?, ?, ?)",
+                    draftId, draft.canonicalJson(), draft.sha256(), activeId, e.principal(), e.principal());
+            exec(c, "insert into zone_matrix_revision(version_id, revision, actor, change_kind, zone_id, content_sha256, "
+                    + "content, rationale) values (?, 1, ?, 'ZONE_UPDATE', ?, ?, ?, ?)",
+                    draftId, e.principal(), zoneB, draft.sha256(), draft.canonicalJson(), p.zoneDescription());
+        });
+        ids.put("zoneMatrixActive", activeId);
+        ids.put("zoneMatrixDraft", draftId);
+        ids.put("zoneA", zoneA);
+    }
+
+    /**
+     * ACI cutover (V217): one segment (raw name, IPv4 and IPv6 blocks, a peer block, written by the administrator), one
+     * operator-override assessment on the first Check Point member citing the seeded policy, and its flow rows: a
+     * dropped flow between raw addresses decided by the seeded rule, and a missing-rule group with its raw sources.
+     */
+    private static void seedCutover(Connection c, Estate e) throws Exception {
+        P1 p = e.p1();
+        String segment = UUID.randomUUID().toString();
+        String assessment = UUID.randomUUID().toString();
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("ruleId", e.ruleId());
+        rule.put("number", 1);
+        rule.put("name", e.ruleName());
+        rule.put("sectionId", "section-1");
+        rule.put("sectionName", e.sectionName());
+        rule.put("action", "Drop");
+        Map<String, Object> flow = new LinkedHashMap<>();
+        flow.put("direction", "SEGMENT_TO_PEER");
+        flow.put("flowSource", p.flowSource());
+        flow.put("flowDestination", p.flowDestination());
+        flow.put("protocol", "tcp");
+        flow.put("port", 443);
+        flow.put("flowCount", 7);
+        flow.put("firstSeen", p.flowFirstSeen());
+        flow.put("lastSeen", "2026-11-20T08:00:00Z");
+        flow.put("decision", "WOULD_DROP");
+        flow.put("decisionReason", "rule match");
+        flow.put("decidingRule", rule);
+        flow.put("targetSource", "OPERATOR_OVERRIDE");
+        flow.put("flags", List.of());
+        Map<String, Object> missing = new LinkedHashMap<>();
+        missing.put("direction", "SEGMENT_TO_PEER");
+        missing.put("flowDestination", p.flowDestination());
+        missing.put("protocol", "tcp");
+        missing.put("port", 1433);
+        missing.put("sourceCount", 2);
+        missing.put("flowSources", List.of(p.flowSource(), p.missingRuleSource()));
+        missing.put("flowCount", 3);
+        missing.put("firstSeen", p.flowFirstSeen());
+        missing.put("lastSeen", "2026-11-20T08:00:00Z");
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("engineVersion", "synthetic-engine");
+        summary.put("status", "COMPLETE");
+        summary.put("readiness", "BLOCKERS_FOUND");
+        summary.put("headline", "1 of 1 evaluated flows would be dropped by the target policy.");
+        summary.put("targetSource", "OPERATOR_OVERRIDE");
+        summary.put("counts", Map.of("tuples", 1, "flows", 7, "blockingTuples", 1, "missingRuleGroups", 1));
+        summary.put("coverage", List.of(Map.of("code", "LOG_PERIOD")));
+        summary.put("uploads", List.of(Map.of("index", 0, "rowCount", 10, "invalidRows", 0, "inScopeFlows", 10,
+                "periodStart", p.flowFirstSeen(), "periodEnd", "2026-11-20T08:00:00Z")));
+        try {
+            c.setAutoCommit(false);
+            Ui2Rows.setAuditContext(c, e.principal(), "cutover_assessment_write");
+            exec(c, "insert into cutover_segment(segment_id, name, revision, blocks, peer_blocks, created_by, updated_by) "
+                    + "values (?, ?, 1, ?::jsonb, ?::jsonb, ?, ?)",
+                    segment, p.segmentName(), JSON.writeValueAsString(List.of(p.segmentV4() + "/29", p.segmentV6() + "/48")),
+                    JSON.writeValueAsString(List.of(p.peerV4() + "/29")), e.principal(), e.principal());
+            exec(c, "insert into cutover_assessment(assessment_id, segment_id, segment_revision, actor, target_source, "
+                    + "target_device_id, target_policy_id, target_collected_at, engine_version, status, readiness, summary) "
+                    + "values (?, ?, 1, ?, 'OPERATOR_OVERRIDE', ?, ?, '2026-11-20T10:00:00Z', 'synthetic-engine', 'COMPLETE', "
+                    + "'BLOCKERS_FOUND', ?::jsonb)",
+                    assessment, segment, e.principal(), e.cpMemberA().id(), e.policyId(), JSON.writeValueAsString(summary));
+            exec(c, "insert into cutover_assessment_flow(assessment_id, kind, ordinal, decision, flow) "
+                    + "values (?, 'FLOW', 0, 'WOULD_DROP', ?::jsonb), (?, 'MISSING_RULE', 0, 'MISSING_RULE', ?::jsonb)",
+                    assessment, JSON.writeValueAsString(flow), assessment, JSON.writeValueAsString(missing));
+            c.commit();
+        } catch (Exception failure) {
+            c.rollback();
+            throw failure;
+        } finally {
+            c.setAutoCommit(true);
+        }
+        ids.put("segmentId", segment);
+        ids.put("assessmentId", assessment);
+    }
+
+    /**
+     * A Cisco ASA failover pair: two enrolled gateways sharing a raw cluster reference, the pair's recorded unit serials
+     * (MATCH), and one stored running configuration per unit (encrypted in the test store) with a raw interface name
+     * and address, a network object and an access list.
+     */
+    private static void seedAsaPair(Connection c, Estate e, String credential) throws Exception {
+        P1 p = e.p1();
+        List<String> serials = new ArrayList<>(List.of(p.asaA().serial(), p.asaB().serial()));
+        java.util.Collections.sort(serials);
+        audited(c, () -> {
+            for (AsaUnit u : p.asaUnits()) {
+                exec(c, "insert into devices(device_id, vendor_hint, registration_source, is_test_target, enrollment_state, "
+                        + "disabled, credential_reference_id, role, identity_mismatch_state, peer_follow_outcome, "
+                        + "observed_hostname, observed_model, observed_software_version, observed_ha_role, "
+                        + "recorded_identity_primary, recorded_identity_recorded_at, cluster_member_ref, backup_target, "
+                        + "discovery_match_key) values (?, 'cisco_asa', 'manual', true, 'ENROLLED', false, ?, 'gateway', 'NONE', "
+                        + "'CORROBORATED', ?, 'synthetic-model', '9.18(4)22', ?, ?, now(), ?, true, ?)",
+                        u.id(), credential, u.hostname(), u.haRole(), u.serial(), p.asaCluster(), "cisco_asa|" + u.serial());
+                exec(c, "insert into endpoints(endpoint_id, device_id, transport_kind, address_ref) values (?, ?, 'ssh_exec', ?)",
+                        Ui2Rows.opaqueId("ep"), u.id(), u.managementAddress());
+                exec(c, "insert into device_platform_facts(device_id, serial_number, platform_family, source_read) "
+                        + "values (?, ?, 'synthetic', 'synthetic_seed')", u.id(), u.serial());
+                String config = "ASA Version 9.18(4)22\n"
+                        + "hostname " + u.hostname() + "\n"
+                        + "interface GigabitEthernet0/0\n nameif " + p.asaNameif() + "\n security-level 0\n"
+                        + " ip address " + p.asaInterfaceAddress() + " 255.255.255.0\n"
+                        + "interface GigabitEthernet0/1\n nameif inside\n security-level 100\n"
+                        + "object network " + p.asaObjectName() + "\n host " + p.asaObjectAddress() + "\n"
+                        + "access-list " + p.asaAclName() + " extended permit tcp any object " + p.asaObjectName() + " eq 443\n"
+                        + "access-list " + p.asaAclName() + " extended deny ip host " + p.flowSource() + " any\n"
+                        + "access-group " + p.asaAclName() + " in interface " + p.asaNameif() + "\n";
+                String job = job(c, u.id(), "configuration_collect", "COMPLETED", null, "device", null);
+                var handle = store.open(u.id(), job, "cisco_asa", false);
+                byte[] plain = config.getBytes(StandardCharsets.UTF_8);
+                handle.sink().write(plain);
+                var meta = handle.finish();
+                String ref = meta.ref().value();
+                exec(c, "insert into backup_artefact(artefact_id, device_id, artefact_class, vendor, software_version, "
+                        + "hostname_fingerprint, plaintext_sha256, plaintext_bytes, ciphertext_sha256, ciphertext_bytes, key_id, "
+                        + "wrapped_data_key, validation, retention_tier, recovery_volume_path) values (?, ?, 'configuration', "
+                        + "'cisco_asa', '9.18(4)22', ?, ?, ?, ?, ?, ?, ?, "
+                        + "'{\"level_reached\":\"V1\",\"v3_status\":\"NOT_APPLICABLE\",\"restore_proven\":false}'::jsonb, "
+                        + "'standard', ?)",
+                        ref, u.id(), sha256(u.hostname()), meta.plaintextSha256(), meta.plaintextBytes(),
+                        meta.ciphertextSha256(), meta.ciphertextBytes(), meta.keyId(), meta.wrappedDataKey(), ref);
+                exec(c, "insert into configuration_artefact(artefact_ref, device_id, job_id, vendor, plaintext_sha256, "
+                        + "plaintext_bytes, ciphertext_sha256, ciphertext_bytes, compression, key_id) "
+                        + "values (?, ?, ?, 'cisco_asa', ?, ?, ?, ?, 'none', ?)",
+                        ref, u.id(), job, meta.plaintextSha256(), meta.plaintextBytes(), meta.ciphertextSha256(),
+                        meta.ciphertextBytes(), meta.keyId());
+                exec(c, "insert into device_configuration_run(run_id, device_id, job_id, collected_at, vendor, read_kind, "
+                        + "is_primary, canonical_hash, raw_hash, raw_bytes, artefact_ref, change_state) "
+                        + "values (?, ?, ?, '2026-11-20T09:30:00Z'::timestamptz, 'cisco_asa', 'show_configuration', true, ?, ?, ?, ?, "
+                        + "'first_run')",
+                        Ui2Rows.opaqueId("cfg"), u.id(), job, meta.plaintextSha256(), meta.plaintextSha256(),
+                        meta.plaintextBytes(), ref);
+            }
+            exec(c, "insert into ha_pair_identity(cluster_member_ref, vendor, unit_serial_low, unit_serial_high, recorded_by, "
+                    + "last_state) values (?, 'cisco_asa', ?, ?, 'synthetic_seed', 'MATCH')",
+                    p.asaCluster(), serials.get(0), serials.get(1));
+        });
     }
 
     private static String job(Connection c, String deviceId, String type, String state, String reason, String targetKind,
@@ -533,6 +815,9 @@ class AiviewRawVersusMaskedSweepTest {
         if (template.startsWith("/api/v2/policy/domains/")) byName.put("id", e.domainId());
         if (template.startsWith("/api/v2/policy/objects/")) byName.put("id", e.objectId());
         if (template.startsWith("/devices/{id}")) byName.put("id", e.cpMemberA().id());
+        if (template.startsWith("/api/v2/zone-matrix/versions/")) byName.put("id", ids.get("zoneMatrixActive"));
+        if (template.startsWith("/api/v2/cutover/segments/")) byName.put("id", ids.get("segmentId"));
+        if (template.startsWith("/api/v2/cutover/assessments/")) byName.put("id", ids.get("assessmentId"));
         Matcher m = Pattern.compile("\\{([^}/:]+)(?::[^}]*)?}").matcher(path);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
@@ -644,6 +929,13 @@ class AiviewRawVersusMaskedSweepTest {
         markers.put(ids.get("runId:discovery"), "discovery-run");
         markers.put(ids.get("jobId"), "failed-job");
         markers.put(ids.get("previewId"), "static-route-preview");
+        markers.put(ids.get("zoneMatrixActive"), "zone-matrix-version");
+        markers.put(ids.get("zoneA"), "zone");
+        markers.put(ids.get("segmentId"), "cutover-segment");
+        markers.put(ids.get("assessmentId"), "cutover-assessment");
+        markers.put(estate.p1().flowFirstSeen(), "cutover-flow");
+        markers.put("Rule is disabled.", "hygiene-finding");
+        for (AsaUnit u : estate.p1().asaUnits()) markers.put(u.id(), "asa-unit");
         Map<String, Set<String>> seen = new TreeMap<>();
 
         Map<String, Map<ValueClass, Integer>> leaks = new TreeMap<>();

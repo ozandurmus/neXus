@@ -3,6 +3,16 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0415",
+      "status": "automated_validated",
+      "title": "RPT-17 Lifecycle and licensing report (V270), log detection engine DRAFT design, Management Center health read proposal, review fixes, NAT builder split",
+      "summary": "The Reports catalogue gained RPT-17 (Lifecycle and licensing) reading stored evidence only, with UNKNOWN never shown as OK (b4387d47, migration V270); a DRAFT data-driven system-log detection engine design and a DRAFT Management Center device-health read proposal were committed, approving nothing (4015bd4c, b4387d47). Cluster configuration dead code, cutover wording parity, nightly full regression CI and the NAT rule-bound builder split were also merged (d23af9ea, 744037e0, 8ec46955).",
+      "started": "2026-11-24",
+      "completed": "2026-11-24",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0414",
       "status": "automated_validated",
       "title": "System-log template census tool (detection engine P0), deterministic PolicyHygieneQueryTest, CI comment",
