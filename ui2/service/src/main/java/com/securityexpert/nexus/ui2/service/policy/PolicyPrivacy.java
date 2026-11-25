@@ -131,6 +131,8 @@ public final class PolicyPrivacy {
         if (key.equals("insightType")) return PolicyInsights.TYPES.contains(text) ? text : "UNKNOWN";
         if (key.equals("evidenceGrade")) return PolicyInsights.GRADES.contains(text) ? text : "NOT_EVALUABLE";
         if (key.equals("insightNeeds")) return PolicyInsights.NEEDS.contains(text) ? text : "NOT_RESOLVABLE";
+        if (key.equals("coverAction")) return PolicyUnionCover.COVER_ACTIONS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("unionReason")) return PolicyUnionCover.BUDGET.equals(text) || PolicyUnionCover.NOT_EVALUABLE_REASONS.contains(text) ? text : "UNKNOWN";
         if (key.equals("insightCaveats")) return PolicyInsights.INSTALL_STATE_NOT_VERIFIED.equals(text) ? text : "UNKNOWN";
         if (key.equals("insightScope")) return Set.of("package", "domain").contains(text) ? text : "UNKNOWN";
         if (key.equals("insightRole")) return Set.of("subject", "covering").contains(text) ? text : "UNKNOWN";
@@ -140,7 +142,7 @@ public final class PolicyPrivacy {
         if (key.equals("hitSource")) return Set.of("device", "mds").contains(text) ? text : "UNKNOWN";
         if (key.equals("counterWindow")) return text.equals("Counter window unknown; first hit is not a counter start.")
             || text.matches("Counter window unknown; bounded above by rule age: [0-9]+ days\\.") ? text : "Counter window unknown.";
-        if (key.equals("evidence")) return HYGIENE_EVIDENCE.contains(text) || HYGIENE_REASONS.stream().anyMatch(r -> text.equals("Shadowing: " + r + "."))
+        if (key.equals("evidence")) return HYGIENE_EVIDENCE.contains(text) || PolicyInsights.EVIDENCE.contains(text) || HYGIENE_REASONS.stream().anyMatch(r -> text.equals("Shadowing: " + r + "."))
             ? text : "Evidence withheld in AIView.";
 
         if (OPAQUE.contains(key) || key.equals("refs") || key.equals("members") || key.equals("collectedAt")) return text;

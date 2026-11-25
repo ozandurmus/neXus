@@ -2506,7 +2506,7 @@ export interface PolicyHygienePage {
     split?: { class: string; cell: string; status: string; type: string; nativeType: string; partialPrior: boolean | "UNKNOWN"; blockers: number; blockedRules: number }[] };
 }
 /** Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the closed vocabularies the service sends. */
-export type InsightType = "I1" | "I2" | "I8" | "I9" | "I10" | "I11" | "I12";
+export type InsightType = "I1" | "I2" | "I3" | "I8" | "I9" | "I10" | "I11" | "I12";
 export type InsightGrade = "PROVEN" | "SUPPORTED" | "INDICATED" | "NOT_ESTABLISHED" | "NOT_EVALUABLE";
 export type InsightNeeds = "NONE" | "TRAFFIC_LOGS" | "COUNTER_SAMPLES" | "NEW_COLLECTION" | "VENDOR_REPORT" | "NOT_RESOLVABLE";
 export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "UNKNOWN" }
@@ -2515,7 +2515,10 @@ export interface PolicyInsight {
   rules: InsightRuleRef[]; objectIds: string[];
   raiseTo: { evidenceGrade: InsightGrade; insightNeeds: InsightNeeds };
   insightCaveats: string[]; evidence: string[];
-  /** I10: the counter evidence (hits, first/last hit, source, collection time, window); I11/I12: counts. */
+  /**
+   * I10: the counter evidence (hits, first/last hit, source, collection time, window); I11/I12: counts; I3: coveringRules
+   * and coverAction (SAME | DIFFERENT | INLINE_LAYER), or unionReason when the work budget ran out.
+   */
   counter: Record<string, string | number | boolean | string[] | null>;
 }
 export interface PolicyInsightCounts {
@@ -2529,6 +2532,8 @@ export interface PolicyInsightsPage {
   supported: boolean;
   insights?: PolicyInsight[]; counts?: PolicyInsightCounts;
   byType?: Record<string, number>; byGrade?: Record<string, number>;
+  /** Phase P2a: the I3 union-cover pass in numbers. Absent from an older service. */
+  unionCover?: { evaluated: number; covered: number; notProven: number; notEvaluable: { unionReason: string; rules: number }[] };
   total?: number; page?: number; pageSize?: number; days?: number; collectedAt?: string; complete?: boolean;
 }
 export interface PolicyInsightDetail {

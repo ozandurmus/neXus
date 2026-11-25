@@ -877,6 +877,7 @@ public final class PolicyQueryService {
         body.put("supported", true); body.put("days", days); body.put("page", page); body.put("pageSize", 200); body.put("total", rows.size());
         body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
         body.put("counts", map(report.counts())); body.put("byType", report.byType()); body.put("byGrade", report.byGrade());
+        body.put("unionCover", map(report.unionCover()));
         body.put("insights", rows.stream().skip((long) page * 200).limit(200).map(this::insightRow).toList());
         return new PolicyResponse(body);
     }
@@ -900,7 +901,31 @@ public final class PolicyQueryService {
         return Optional.of(new PolicyResponse(body));
     }
     private PolicyInsights.Report insightReport(PolicySnapshot snapshot, int days) {
-        return PolicyInsights.analyze(snapshot, analysis(snapshot, days), inventoryIndex(snapshot), Map.of(), days);
+        var hygiene = analysis(snapshot, days);
+        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, unionCover(snapshot, hygiene));
+    }
+    private record CachedUnionCover(PolicySnapshot snapshot, PolicyUnionCover.Result result) {}
+    private final Map<String, CachedUnionCover> unionCoverCache = new LinkedHashMap<>(8, 0.75f, true);
+    /**
+     * The I3 pass ({@link PolicyUnionCover}) of one snapshot instance, kept for the same four snapshots the hygiene cache
+     * holds. It reads only which rules the shadow engine found REDUNDANT or CONFLICT, which does not depend on the unused
+     * threshold or the clock, so the snapshot instance (its version, see {@link #analysis}) is the whole key. Computed in
+     * one of the analysis slots: it is CPU bound like the hygiene analysis.
+     */
+    private PolicyUnionCover.Result unionCover(PolicySnapshot snapshot, PolicyHygiene.Result hygiene) {
+        String id = snapshot.metadata().id();
+        synchronized (unionCoverCache) {
+            var cached = unionCoverCache.get(id);
+            if (cached != null && cached.snapshot() == snapshot) return cached.result();
+        }
+        PolicyUnionCover.Result result;
+        hygieneSlots.acquireUninterruptibly();
+        try { result = PolicyUnionCover.analyze(snapshot, hygiene); } finally { hygieneSlots.release(); }
+        synchronized (unionCoverCache) {
+            unionCoverCache.put(id, new CachedUnionCover(snapshot, result));
+            if (unionCoverCache.size() > 4) unionCoverCache.remove(unionCoverCache.keySet().iterator().next());
+        }
+        return result;
     }
     private Map<String, Object> insightRow(PolicyInsights.Insight i) {
         Map<String, Object> row = new LinkedHashMap<>();

@@ -5,20 +5,21 @@ import { policyFailureText } from "./PolicyRuleViewer";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 
-/** Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
+/** Policy Insights phases P1 and P2a (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
 const n = (value: number) => value.toLocaleString("en-US");
-export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I8", "I9", "I10", "I11", "I12"];
+export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I8", "I9", "I10", "I11", "I12"];
 export const INSIGHT_GRADES: readonly InsightGrade[] = ["PROVEN", "SUPPORTED", "INDICATED", "NOT_ESTABLISHED", "NOT_EVALUABLE"];
 export const INSTALL_CAVEAT = "Proven for the stored management policy, not for what is installed on a gateway (INSTALL_STATE_NOT_VERIFIED).";
 
 export const TYPE_LABEL: Readonly<Record<InsightType, string>> = {
-  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I8: "Disabled rule", I9: "Expired or expiring schedule",
+  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I8: "Disabled rule", I9: "Expired or expiring schedule",
   I10: "Zero or old hits", I11: "Unused object", I12: "Duplicate objects",
 };
 /** What the user does, one sentence per type; a grade other than PROVEN adds its own limit below the sentence. */
 export const TYPE_SUGGESTION: Readonly<Record<InsightType, string>> = {
   I1: "Remove: an earlier rule already decides every packet this rule matches, with the same action.",
   I2: "Decide which rule is right: an earlier rule with a different action decides every packet this rule matches. Never removed automatically.",
+  I3: "Remove: earlier rules of this layer together decide every packet this rule matches; the covering set is listed. If one of them has another action, decide which rule is right first.",
   I8: "Remove after your team's holding period.",
   I9: "Remove or renew the rule.",
   I10: "Review: the stored counters show no recent use. This does not prove the rule is unused.",
@@ -42,6 +43,12 @@ export const raiseText = (insight: PolicyInsight) => {
 };
 const gradeColor = (grade: InsightGrade): "success" | "info" | "warning" | "default" =>
   grade === "PROVEN" ? "success" : grade === "SUPPORTED" ? "info" : grade === "INDICATED" ? "warning" : "default";
+/** I3: how the covering rules' actions relate to the rule's own (the I1/I2 split, for a set). */
+export const COVER_ACTION_WORDS: Readonly<Record<string, string>> = {
+  SAME: "Every covering rule has this rule's action.",
+  DIFFERENT: "At least one covering rule has another action: which rule is right is a question of intent.",
+  INLINE_LAYER: "At least one covering rule is an Apply Layer rule; its inline layer's verdict is not analysed.",
+};
 const reasonClassWords = { LOGS: "traffic logs could decide", COLLECTION: "a new collection could decide", NOT_RESOLVABLE: "nothing in this design can decide" } as const;
 
 export interface PackageNumbers {
@@ -115,6 +122,10 @@ export function PolicyInsightsTab({ policy, openRule }: { policy: string; openRu
       Insights are available for Check Point packages in this phase. This package is not Check Point, so there is nothing to show; this is not a result of "nothing found".</Typography>}
     {data && data.supported && data.counts && <>
       <PackageOverview counts={data.counts} complete={data.complete} collectedAt={data.collectedAt} />
+      {data.unionCover && <Typography variant="caption" display="block" aria-label="Union cover analysis" sx={{ color: m3.onSurfaceVar }}>
+        I3 union cover: {n(data.unionCover.evaluated)} rules checked against the earlier rules of their layer · {n(data.unionCover.covered)} covered
+        · {n(data.unionCover.notProven)} not proven (work budget){data.unionCover.notEvaluable.length > 0
+          ? ` · not evaluated: ${data.unionCover.notEvaluable.map(r => `${n(r.rules)} ${r.unionReason}`).join(", ")}` : ""}</Typography>}
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }} aria-label="Insights by type">
         {INSIGHT_TYPES.map(t => <Chip key={t} label={`${t} ${TYPE_LABEL[t]}: ${data.byType?.[t] ?? 0}`} color={type === t ? "primary" : "default"} onClick={() => { setType(type === t ? "" : t); setPage(0); }} />)}
       </Stack>
@@ -184,6 +195,10 @@ export function InsightDetail({ policy, insightId, days, openRule, close }: { po
       <Typography variant="body2">Hits: {counter.hits ?? "UNKNOWN"} · First hit: {formatStamp(counter.firstHit as string | null)} · Last hit: {formatStamp(counter.lastHit as string | null)}</Typography>
       <Typography variant="body2">Source: {String(counter.hitSource ?? "UNKNOWN")} · Collected: {formatStamp(counter.hitsCollectedAt as string | null)}</Typography>
       <Typography variant="body2">{String(counter.counterWindow ?? "Counter window unknown.")}{counter.windowKnown === true ? ` Measured window: ${counter.windowDays} days.` : " No measured window; hit counters carry no window start."}</Typography>
+    </Box>}
+    {insight.insightType === "I3" && <Box aria-label="Union cover evidence" sx={{ mt: 1 }}>
+      {typeof counter.coveringRules === "number" && <Typography variant="body2">Covered together by {counter.coveringRules} earlier rules of the same layer. {COVER_ACTION_WORDS[String(counter.coverAction)] ?? "Action relation UNKNOWN."}</Typography>}
+      {counter.unionReason !== undefined && <Typography variant="body2">Not proven: {String(counter.unionReason)}. The rule may or may not be covered; nothing is claimed.</Typography>}
     </Box>}
     {detail.objects.length > 0 && <Box aria-label="Objects involved" sx={{ mt: 1 }}>
       <Typography variant="subtitle2">Objects (domain-wide)</Typography>

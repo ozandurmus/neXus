@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { INSTALL_CAVEAT, PolicyInsightsTab, packageNumbers, raiseText } from "../src/screens/PolicyInsightsTab";
+import { COVER_ACTION_WORDS, INSIGHT_TYPES, INSTALL_CAVEAT, PolicyInsightsTab, packageNumbers, raiseText } from "../src/screens/PolicyInsightsTab";
 import { POLICY_TAB_GROUPS, policyTabFromSlug } from "../src/screens/PolicyScreen";
 import type { PolicyInsight, PolicyInsightCounts, PolicyInsightDetail, PolicyInsightsPage } from "../src/auth/adminApi";
 
@@ -22,7 +22,7 @@ const zero: PolicyInsight = { insightId: "22222222-2222-2222-2222-222222222222",
   evidence: ["Zero collected hits; counter reset/window is unknown."],
   counter: { hits: 0, firstHit: null, lastHit: null, hitSource: "mds", hitsCollectedAt: "2026-11-23T08:00:00Z", level: "zero", counterWindow: "Counter window unknown.", windowDays: null, windowKnown: false } };
 const page: PolicyInsightsPage = { vendor: "CP", supported: true, insights: [shadow, zero], counts, total: 2, page: 0, pageSize: 200, days: 90, complete: true,
-  collectedAt: "2026-11-23T08:00:00Z", byType: { I1: 1, I2: 0, I8: 0, I9: 0, I10: 1, I11: 0, I12: 0 }, byGrade: { PROVEN: 1, SUPPORTED: 0, INDICATED: 1, NOT_ESTABLISHED: 0, NOT_EVALUABLE: 0 } };
+  collectedAt: "2026-11-23T08:00:00Z", byType: { I1: 1, I2: 0, I3: 0, I8: 0, I9: 0, I10: 1, I11: 0, I12: 0 }, byGrade: { PROVEN: 1, SUPPORTED: 0, INDICATED: 1, NOT_ESTABLISHED: 0, NOT_EVALUABLE: 0 } };
 const rule = (id: string, number: number, name: string) => ({ id, uuid: id, number, name, enabled: true, action: "Accept", log: "Log", comment: "", extras: {}, source: { refs: [], negated: false },
   destination: { refs: [], negated: false }, service: { refs: [], negated: false }, application: { refs: [], negated: false } });
 const detail: PolicyInsightDetail = { insight: shadow, rules: [rule("r2", 2, "RULE-ALPHA-02"), rule("r1", 1, "RULE-ALPHA-01")] as never, objects: [], days: 90 };
@@ -113,4 +113,41 @@ it("is the second tab of the Judge group and has its own address slug", () => {
   expect(POLICY_TAB_GROUPS.find(g => g.group === "Judge")?.tabs).toEqual(["Hygiene", "Insights"]);
   expect(policyTabFromSlug("insights")).toBe("Insights");
   expect(policyTabFromSlug("hygiene")).toBe("Hygiene");
+});
+
+const union: PolicyInsight = { insightId: "33333333-3333-3333-3333-333333333333", insightType: "I3", evidenceGrade: "PROVEN", insightScope: "package",
+  rules: [{ ruleId: "r5", number: 5, name: "RULE-ALPHA-05", insightRole: "subject" }, { ruleId: "r1", number: 1, name: "RULE-ALPHA-01", insightRole: "covering" },
+    { ruleId: "r4", number: 4, name: "RULE-ALPHA-04", insightRole: "covering" }], objectIds: [],
+  raiseTo: { evidenceGrade: "PROVEN", insightNeeds: "NONE" }, insightCaveats: ["INSTALL_STATE_NOT_VERIFIED"],
+  evidence: ["Earlier enabled rules together cover this match; at least one has a different action."], counter: { coveringRules: 2, coverAction: "DIFFERENT" } };
+const unionPage: PolicyInsightsPage = { ...page, insights: [union], total: 1, byType: { ...page.byType, I3: 1 },
+  unionCover: { evaluated: 9, covered: 1, notProven: 0, notEvaluable: [{ unionReason: "rule not resolved", rules: 2 }] } };
+it("lists I3 with its covering set, offers it as a type filter and states the union-cover numbers", async () => {
+  expect(INSIGHT_TYPES).toContain("I3");
+  mount({ list: unionPage });
+  const table = await screen.findByRole("table", { name: "Policy insights" });
+  const row = within(table).getAllByRole("row")[1];
+  expect(row).toHaveTextContent("I3 · Shadowed by several rules together");
+  expect(row).toHaveTextContent("#5 RULE-ALPHA-05 · #1 RULE-ALPHA-01 · #4 RULE-ALPHA-04");
+  expect(row).toHaveTextContent("the covering set is listed");
+  expect(screen.getByLabelText("Insights by type")).toHaveTextContent("I3 Shadowed by several rules together: 1");
+  expect(screen.getByLabelText("Union cover analysis")).toHaveTextContent("9 rules checked against the earlier rules of their layer · 1 covered · 0 not proven (work budget) · not evaluated: 2 rule not resolved");
+});
+it("shows the I3 detail with every covering rule and the action relation", async () => {
+  mount({ list: unionPage, detail: { insight: union, rules: [rule("r5", 5, "RULE-ALPHA-05"), rule("r1", 1, "RULE-ALPHA-01"), rule("r4", 4, "RULE-ALPHA-04")] as never, objects: [], days: 90 } });
+  fireEvent.click(await screen.findByRole("button", { name: "Open I3 detail" }));
+  const region = await screen.findByRole("region", { name: "Insight detail" });
+  expect(within(region).getAllByText("Covering rule")).toHaveLength(2);
+  expect(within(region).getByLabelText("Union cover evidence")).toHaveTextContent(`Covered together by 2 earlier rules of the same layer. ${COVER_ACTION_WORDS.DIFFERENT}`);
+  expect(within(region).getByRole("note")).toHaveTextContent(INSTALL_CAVEAT);
+});
+it("says an I3 whose budget ran out is not proven and claims nothing", async () => {
+  const budget: PolicyInsight = { ...union, evidenceGrade: "NOT_EVALUABLE", rules: [union.rules[0]], insightCaveats: [],
+    raiseTo: { evidenceGrade: "PROVEN", insightNeeds: "NOT_RESOLVABLE" }, evidence: ["Union cover analysis ran out of its work budget; whether earlier rules together cover this match is not proven."],
+    counter: { unionReason: "analysis budget" } };
+  mount({ list: { ...unionPage, insights: [budget] }, detail: { insight: budget, rules: [rule("r5", 5, "RULE-ALPHA-05")] as never, objects: [], days: 90 } });
+  fireEvent.click(await screen.findByRole("button", { name: "Open I3 detail" }));
+  const region = await screen.findByRole("region", { name: "Insight detail" });
+  expect(within(region).getByLabelText("Union cover evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not be covered; nothing is claimed.");
+  expect(within(region).queryByRole("note")).toBeNull();
 });

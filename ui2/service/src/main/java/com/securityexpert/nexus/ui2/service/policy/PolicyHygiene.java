@@ -749,10 +749,10 @@ public final class PolicyHygiene {
      * same inline layer (same opaque reference); other rules carry no inline-layer reference, so this is action equality.
      */
     /** A resolved coverage candidate with action "Apply Layer" is a Check Point rule naming exactly one inline layer. */
-    private static boolean applyLayer(Rule rule) {
+    static boolean applyLayer(Rule rule) {
         return rule.action().equals("Apply Layer") && rule.extras().getOrDefault("inline-layer", List.of()).size() == 1;
     }
-    private static boolean sameAction(Rule covering, Rule covered) {
+    static boolean sameAction(Rule covering, Rule covered) {
         return covering.action().equals(covered.action())
             && covering.extras().getOrDefault("inline-layer", List.of()).equals(covered.extras().getOrDefault("inline-layer", List.of()));
     }
