@@ -66,6 +66,14 @@ count (descending), then newest evidence first.
 | 13 | `live-patch-missing` | lifecycle `live_patch.missing` | Check Point device reports no Live Patch package | Watch | Live Patch read | Lifecycle and security |
 | 14 | `ha-unknown` | failover summary | cluster readiness `UNKNOWN` | Watch | newest evaluation | Operations › HA, `readiness=UNKNOWN` |
 | 15 | `change-unknown-actor` | change feed (user changes, 7 days) | change with no known actor | Watch | newest such change | Changes › Timeline |
+| 16 | `zone-matrix-violations` | stored zone matrix summary, `GET /api/v2/zone-matrix/summary` (plane Policy; skipped without it) | one row, never split: the server's headline sentence ("N rules violate the zone matrix (vK) ..." or "at least N"), the outside-the-headline split, NOT_EVALUABLE / UNKNOWN / STALE / INCOMPLETE / not-evaluated / older-version counts and findings resolved by a version change in the last 7 days; no active version: no row; no row when everything is evaluated, current, complete and clean | Act now (a critical rule violates); Review (rules violate, or a version change resolved findings); UNKNOWN (nothing proven, something undecided); never Watch, never "OK" | oldest policy snapshot | Zone matrix |
+
+Rule 16 (zone matrix, `docs/design/ZONE_MATRIX_CONTRACT.md` section 7.2, FROZEN): the sentence, "at least N" and the
+`exact` flag are the server's and are never recomputed in the browser; a staleness threshold shown in the row is labelled
+interim (PO 2026-11-23, `PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` answer 1). **Its severity mapping and rank
+are an engineering default awaiting the Product Owner's word, not a Product Owner decision** (the Product Owner approved
+only the three points of section 7 below). An unreadable summary is the UNKNOWN row "The zone matrix summary could not be
+read" (source rank 24); a refused or skipped read gives nothing.
 
 Thresholds are constants beside the rules (`BACKUP_STALE_DAYS = 7`, `LICENSE_SOON_DAYS = 30`,
 `LICENSE_WATCH_DAYS = 60`, `CHANGE_WINDOW_DAYS = 7`); the read-age edges are the product's one freshness scale

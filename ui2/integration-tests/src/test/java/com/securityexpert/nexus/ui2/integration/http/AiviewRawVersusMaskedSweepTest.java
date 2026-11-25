@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.integration.http;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,12 +45,14 @@ import org.springframework.context.ConfigurableApplicationContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactClass;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration;
 import com.securityexpert.nexus.ui2.service.boot.Ui2Application;
+import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneBlock;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
@@ -81,7 +84,11 @@ class AiviewRawVersusMaskedSweepTest {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /** What a seeded value is; the only thing about a value this test ever prints. */
-    enum ValueClass { HOSTNAME, CLUSTER_NAME, ADDRESS, SERIAL, PRINCIPAL, RULE_NAME, OBJECT_NAME, POLICY_NAME, ZONE_OR_SEGMENT_NAME }
+    enum ValueClass {
+        HOSTNAME, CLUSTER_NAME, ADDRESS, SERIAL, PRINCIPAL, RULE_NAME, OBJECT_NAME, POLICY_NAME, ZONE_OR_SEGMENT_NAME,
+        /** Round 2 (2026-11-25): a whole script name, credential reference, script run output line, case title, file name. */
+        SCRIPT_NAME, CREDENTIAL_ALIAS, SCRIPT_OUTPUT, CASE_TITLE, FILE_NAME
+    }
 
     /**
      * Surviving raw values found by this sweep and left for a follow-up lane: {@code "GET <route> <CLASS>"}. Must equal
@@ -134,7 +141,20 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/jobs/export.csv", Set.of("failed-job")),
             Map.entry("GET /api/v2/policy/changes.csv", Set.of("device")),
             Map.entry("GET /api/v2/policy/policies/*/hygiene", Set.of("hygiene-finding")),
-            Map.entry("GET /api/v2/policy/policies/*/hygiene.csv", Set.of("hygiene-finding")));
+            Map.entry("GET /api/v2/policy/policies/*/hygiene.csv", Set.of("hygiene-finding")),
+            // round 2 (2026-11-25)
+            Map.entry("GET /api/v2/scripts", Set.of("script")),
+            Map.entry("GET /api/v2/scripts/*", Set.of("script")),
+            Map.entry("GET /api/v2/scripts/*/runs", Set.of("script", "script-run")),
+            Map.entry("GET /api/v2/scripts/runs/*", Set.of("script", "script-run")),
+            Map.entry("GET /api/v2/log-findings", Set.of("log-finding", "device", "log-chunk")),
+            Map.entry("GET /api/v2/log-findings/*", Set.of("log-finding", "device", "log-chunk")),
+            Map.entry("GET /api/v2/log-findings/chips", Set.of("device")),
+            Map.entry("GET /api/v2/log-findings/coverage", Set.of("device", "log-window")),
+            Map.entry("GET /api/v2/packet-analysis/cases", Set.of("pa-case", "pa-run")),
+            Map.entry("GET /api/v2/packet-analysis/cases/*", Set.of("pa-case", "pa-capture", "pa-run")),
+            Map.entry("GET /api/v2/packet-analysis/runs/*", Set.of("pa-case", "pa-run")),
+            Map.entry("GET /api/v2/packet-analysis/runs/*/report", Set.of("pa-case", "pa-run")));
 
     private static Ui2PostgresFixture fixture;
     private static ConfigurableApplicationContext context;
@@ -292,6 +312,34 @@ class AiviewRawVersusMaskedSweepTest {
         }
     }
 
+    /**
+     * Round 2 of the sweep (2026-11-25): the planes the first round read empty. A Script Execution script (raw name, egress
+     * host, credential reference, the administrator as author) with one finished run (raw output tail and failure
+     * reason, encrypted output in the test store); log-detection findings whose key token is a raw serial or address and
+     * whose pointer is the seeded log line; a Packet Analysis case (raw title), capture (raw file name) and a completed
+     * run whose stored summary reasons name raw addresses, hostnames, a serial and the administrator.
+     */
+    record R2(String scriptName, String egressHost, String credentialRef, String runOutput, String runFailure,
+            String caseTitle, String captureName) {
+
+        static R2 generate(String principal, Device pan, Device peer, Map<String, ValueClass> raw) {
+            R2 r = new R2("chk-" + tag() + "-" + pan.hostname(), "relay" + tag() + "-syslog01", "cred-" + tag() + "-" + principal,
+                    "connected to " + peer.hostname() + " (" + peer.managementAddress() + ") serial " + peer.serial()
+                            + " as " + principal,
+                    "exit 2: " + pan.hostname() + " at " + pan.managementAddress() + " refused " + principal,
+                    "slow login " + pan.hostname() + " for " + principal,
+                    "cap-" + peer.managementAddress() + "-" + peer.hostname() + ".pcapng");
+            raw.put(r.scriptName(), ValueClass.SCRIPT_NAME);
+            raw.put(r.egressHost(), ValueClass.HOSTNAME);
+            raw.put(r.credentialRef(), ValueClass.CREDENTIAL_ALIAS);
+            raw.put(r.runOutput(), ValueClass.SCRIPT_OUTPUT);
+            raw.put(r.runFailure(), ValueClass.SCRIPT_OUTPUT);
+            raw.put(r.caseTitle(), ValueClass.CASE_TITLE);
+            raw.put(r.captureName(), ValueClass.FILE_NAME);
+            return r;
+        }
+    }
+
     private static String hex16() {
         return Integer.toHexString(0x1000 + RANDOM.nextInt(0xefff));
     }
@@ -300,7 +348,7 @@ class AiviewRawVersusMaskedSweepTest {
     record Estate(Device cpMemberA, Device cpMemberB, Device panFirewall, Device management, String cluster,
             String ipv6Management, String principal, String ruleName, String sectionName, String objectName,
             String objectAddress, String policyName, String policyId, String domainId, String objectId, String ruleId,
-            P1 p1, Map<String, ValueClass> raw) {
+            P1 p1, R2 r2, Map<String, ValueClass> raw) {
 
         static Estate generate() {
             String cluster = "CLX-ROMEO-" + tag().toUpperCase(Locale.ROOT);
@@ -344,9 +392,10 @@ class AiviewRawVersusMaskedSweepTest {
             raw.put("203.0.113.0", ValueClass.ADDRESS);
             raw.put("203.0.113.10", ValueClass.ADDRESS);
             P1 p1 = P1.generate(principal, pan.hostname(), base, raw);
+            R2 r2 = R2.generate(principal, pan, b, raw);
             return new Estate(a, b, pan, mgmt, cluster, v6, principal, ruleName, sectionName, objectName, objectAddress,
                     policyName, "policy-" + UUID.randomUUID(), "domain-" + UUID.randomUUID(),
-                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, Map.copyOf(raw));
+                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), p1, r2, Map.copyOf(raw));
         }
 
         List<Device> devices() {
@@ -465,6 +514,8 @@ class AiviewRawVersusMaskedSweepTest {
                         chunk, e.cpMemberA().id(), logJob, "2".repeat(64), (long) plain.length, (long) plain.length,
                         meta.ref().value(), meta.wrappedDataKey(), "3".repeat(64), meta.ciphertextBytes());
                 ids.put("chunkId", chunk);
+                ids.put("logJob", logJob);
+                ids.put("logLineBytes", Long.toString(plain.length));
 
                 // A Check Point policy of the management server: rule, section, object and package names, the
                 // administrator as last modifier, the gateways as install targets.
@@ -513,7 +564,148 @@ class AiviewRawVersusMaskedSweepTest {
             seedZoneMatrix(c, e);
             seedCutover(c, e);
             seedAsaPair(c, e, credential);
+            seedScripts(c, e);
+            seedLogFindings(c, e);
+            seedPacketAnalysis(c, e);
         }
+    }
+
+    /**
+     * Script Execution (V251/V258/V266): one script whose name, egress host and credential reference carry raw values,
+     * its version 1 (body encrypted in the test store, the administrator as author), and one finished, failed manual run
+     * with an encrypted output artefact, a raw inline output tail and a raw failure reason.
+     */
+    private static void seedScripts(Connection c, Estate e) throws Exception {
+        R2 r = e.r2();
+        String scriptId = UUID.randomUUID().toString();
+        String jobId = Ui2Rows.opaqueId("job");
+        String[] egress = {e.panFirewall().managementAddress() + ":22", r.egressHost() + ":514"};
+        String[] targets = {e.panFirewall().id()};
+        String[] refs = {r.credentialRef()};
+        byte[] body = ("#!/bin/sh\nssh " + e.principal() + "@" + e.panFirewall().managementAddress() + " # "
+                + e.panFirewall().hostname() + "\n").getBytes(StandardCharsets.UTF_8);
+        var bodyHandle = store.open(scriptId, scriptId + "@v1", ArtefactClass.SCRIPT_BODY, false);
+        bodyHandle.sink().write(body);
+        var bodyMeta = bodyHandle.finish();
+        byte[] output = (r.runOutput() + "\n").getBytes(StandardCharsets.UTF_8);
+        var outHandle = store.open(scriptId, jobId, ArtefactClass.SCRIPT_OUTPUT, false);
+        outHandle.sink().write(output);
+        var outMeta = outHandle.finish();
+        audited(c, () -> {
+            exec(c, "insert into credential_references(credential_reference_id, purpose, backend_pointer) "
+                    + "values (?, 'harness', 'vault://harness/opaque')", r.credentialRef());
+            exec(c, "insert into script(script_id, name, kind, current_version, enabled, timeout_s, egress, "
+                    + "egress_device_targets, credential_refs, notify, run_as, created_by_actor_fingerprint) "
+                    + "values (?, ?, 'sh', 1, false, 300, ?, ?, ?, 'none', 'role:operator', ?)",
+                    scriptId, r.scriptName(), c.createArrayOf("text", egress), c.createArrayOf("text", targets),
+                    c.createArrayOf("text", refs), e.principal());
+            exec(c, "insert into script_version(script_id, version, sha256, size_bytes, artefact_ref, key_id, "
+                    + "wrapped_data_key, credential_refs, egress_device_targets, created_by) values (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    scriptId, bodyMeta.plaintextSha256(), bodyMeta.plaintextBytes(), bodyMeta.ref().value(),
+                    bodyMeta.keyId(), bodyMeta.wrappedDataKey(), c.createArrayOf("text", refs),
+                    c.createArrayOf("text", targets), e.principal());
+            exec(c, "insert into jobs(job_id, job_type, capability_id, target_kind, target_ref, "
+                    + "submitted_by_actor_fingerprint, idempotency_key, action_class, state, finished_at) "
+                    + "values (?, 'script_run', 'script_run', 'script', ?, ?, ?, 'read', 'COMPLETED', now())",
+                    jobId, scriptId + "@1", Ui2Rows.ACTOR, "script_run:" + jobId);
+            exec(c, "insert into script_run(job_id, script_id, version, state, outcome, trigger_kind, run_as, requested_by, "
+                    + "started_at, finished_at, duration_ms, exit_code, stdout_bytes, output_artefact_ref, output_key_id, "
+                    + "output_wrapped_data_key, output_sha256, output_size_bytes, output_tail, egress_declared, "
+                    + "egress_device_targets, credential_refs_used, failure_reason) values (?, ?, 1, 'COMPLETED', 'FAILURE', "
+                    + "'MANUAL', 'role:operator', ?, now() - interval '1 minute', now(), 60000, 2, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    jobId, scriptId, e.principal(), output.length, outMeta.ref().value(), outMeta.keyId(),
+                    outMeta.wrappedDataKey(), outMeta.plaintextSha256(), outMeta.plaintextBytes(), r.runOutput(),
+                    c.createArrayOf("text", egress), c.createArrayOf("text", targets), c.createArrayOf("text", refs),
+                    r.runFailure());
+        });
+        ids.put("scriptId", scriptId);
+        ids.put("scriptRun", jobId);
+    }
+
+    /**
+     * Log detection (V272): two open ATTENTION findings on the first Check Point member, one whose key token is the
+     * peer's raw serial and one whose key token is the peer's raw management address, both pointing at the seeded log
+     * line; the member's coverage window; and an acknowledgement-style action whose note names the administrator.
+     */
+    private static void seedLogFindings(Connection c, Estate e) throws Exception {
+        String pointers = JSON.writeValueAsString(List.of(Map.of("chunk_id", ids.get("chunkId"), "offset", 0,
+                "length", Long.parseLong(ids.get("logLineBytes")))));
+        List<String> findings = new ArrayList<>();
+        audited(c, () -> {
+            String[][] rows = {{"cp.sync_peer_lost", e.cpMemberB().serial()},
+                    {"cp.sync_peer_addr", e.cpMemberB().managementAddress()}};
+            for (String[] row : rows) {
+                String finding = hex(16);
+                findings.add(finding);
+                exec(c, "insert into log_finding(finding_id, device_id, source_key, layer, rule_id, rule_version, kind, "
+                        + "marker_id, key_token, window_day, window_start, window_end, severity, severity_rule, "
+                        + "severity_weight, provenance, event_count, peak_bucket_count, incident_group, coverage_state, "
+                        + "pointers, masking_rule_set, marker_list_version, config_version, review_by) values (?, ?, "
+                        + "'cp_messages', 'A', 'cp.sync.peer', 'v1', 'MARKER', ?, ?, current_date, "
+                        + "current_date + time '10:00', current_date + time '10:10', 'ATTENTION', 'MARKER_ATTENTION', 0.5, "
+                        + "'PROVISIONAL', 3, 2, ?, 'EVALUATED', ?::jsonb, 'r1', 'm1', 'c1', ?)",
+                        finding, e.cpMemberA().id(), row[0], row[1], hex(8), pointers, e.principal());
+            }
+            exec(c, "insert into log_coverage(device_id, source_key, job_id, window_day, state, reason, history_days) "
+                    + "values (?, 'cp_messages', ?, current_date, 'EVALUATED', 'ALL_EVALUATED', 7)",
+                    e.cpMemberA().id(), ids.get("logJob"));
+            exec(c, "insert into log_finding_action(action_id, finding_id, action, actor, note) values (?, ?, 'REOPEN', ?, ?)",
+                    hex(16), findings.get(0), e.principal(), "seen on " + e.cpMemberB().hostname() + " by " + e.principal());
+        });
+        ids.put("logFinding", findings.get(0));
+    }
+
+    /**
+     * Packet Analysis (V154/V158): one ANALYZED case created by the administrator (raw title), one capture (raw uploaded
+     * file name), and one completed run whose stored summary (the engine's shape) names raw addresses, hostnames, a
+     * serial and the administrator in its reason texts. The case DuckDB is not created: the detail views that read it
+     * (state, flows, charts, ladder ...) need a real engine run and answer 409 here.
+     */
+    private static void seedPacketAnalysis(Connection c, Estate e) throws Exception {
+        R2 r = e.r2();
+        String caseId = UUID.randomUUID().toString();
+        String captureId = UUID.randomUUID().toString();
+        String jobId = UUID.randomUUID().toString();
+        // The engine's own summary shape (RealPacketAnalysisEngine): a constant verdict, counts, and engine reason text
+        // per stage; the raw values sit in the free-text reasons, the only place a run summary can carry text.
+        Map<String, Object> stage = new LinkedHashMap<>();
+        stage.put("stage", "loss");
+        stage.put("verdict", "degraded");
+        stage.put("reason", "retransmissions towards " + e.cpMemberB().interfaceAddress() + " on "
+                + e.cpMemberB().hostname() + " serial " + e.cpMemberB().serial());
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("verdict", "Inconclusive");
+        summary.put("reason", "no answer from " + e.panFirewall().hostname() + " at " + e.panFirewall().managementAddress()
+                + " for " + e.principal());
+        summary.put("stages", List.of(stage));
+        summary.put("capture_count", 1);
+        summary.put("total_bytes", 2048);
+        summary.put("finding_count", 0);
+        summary.put("flow_count", 3);
+        summary.put("schema_version", 11);
+        audited(c, () -> {
+            exec(c, "insert into packet_analysis_case(case_id, title, created_by, created_at, expires_at, state, total_bytes) "
+                    + "values (?, ?, ?, now(), now() + interval '7 days', 'ANALYZED', 2048)",
+                    caseId, r.caseTitle(), e.principal());
+            exec(c, "insert into packet_analysis_capture(capture_id, case_id, display_name, capture_format, size_bytes, "
+                    + "sha256, storage_key, uploaded_by) values (?, ?, ?, 'pcapng', 2048, ?, ?, ?)",
+                    captureId, caseId, r.captureName(), "5".repeat(64), UUID.randomUUID() + ".pcapng", e.principal());
+            exec(c, "insert into jobs(job_id, job_type, capability_id, target_ref, target_kind, "
+                    + "submitted_by_actor_fingerprint, idempotency_key, action_class, state, finished_at) "
+                    + "values (?, 'packet_analysis_run', 'packet_analysis_run', ?, 'packet_analysis_case', ?, ?, 'read', "
+                    + "'COMPLETED', now())",
+                    jobId, caseId, Ui2Rows.ACTOR, "packet-analysis:" + jobId);
+            exec(c, "insert into packet_analysis_run(job_id, case_id, state, requested_by, started_at, finished_at, "
+                    + "engine_version, masked_summary) values (?, ?, 'COMPLETED', ?, now() - interval '1 minute', now(), "
+                    + "'synthetic-1', ?::jsonb)",
+                    jobId, caseId, e.principal(), JSON.writeValueAsString(summary));
+            exec(c, "insert into packet_analysis_ledger(ledger_id, case_id, capture_id, event, actor_fingerprint, bytes) "
+                    + "values (?, ?, ?, 'CAPTURE_UPLOADED', ?, 2048)", UUID.randomUUID().toString(), caseId, captureId,
+                    e.principal());
+        });
+        ids.put("paCase", caseId);
+        ids.put("paCapture", captureId);
+        ids.put("paRun", jobId);
     }
 
     /**
@@ -819,6 +1011,14 @@ class AiviewRawVersusMaskedSweepTest {
         if (template.startsWith("/api/v2/zone-matrix/versions/")) byName.put("id", ids.get("zoneMatrixActive"));
         if (template.startsWith("/api/v2/cutover/segments/")) byName.put("id", ids.get("segmentId"));
         if (template.startsWith("/api/v2/cutover/assessments/")) byName.put("id", ids.get("assessmentId"));
+        if (template.startsWith("/api/v2/scripts/")) byName.put("id", ids.get("scriptId"));
+        if (template.startsWith("/api/v2/scripts/runs/")) byName.put("runId", ids.get("scriptRun"));
+        if (template.startsWith("/api/v2/log-findings/")) byName.put("findingId", ids.get("logFinding"));
+        if (template.startsWith("/api/v2/packet-analysis/")) {
+            byName.put("caseId", ids.get("paCase"));
+            byName.put("captureId", ids.get("paCapture"));
+            byName.put("jobId", ids.get("paRun"));
+        }
         Matcher m = Pattern.compile("\\{([^}/:]+)(?::[^}]*)?}").matcher(path);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
@@ -847,6 +1047,7 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("/api/v2/policy/domains/{id}/gateways", "source={source}"),
             Map.entry("/api/v2/policy/domains/{id}/hits", "source={source}"),
             Map.entry("/api/v2/system-logs/gaps", "deviceId={device}"),
+            Map.entry("/api/v2/log-findings/coverage", "device_id={device}"),
             Map.entry("/api/v2/cp-failover/runs", "clusterId={cluster}"),
             Map.entry("/api/v2/cp-failover/approvals", "clusterId={cluster}"),
             Map.entry("/api/v2/pan-failover/runs", "clusterId={cluster}"),
@@ -876,7 +1077,15 @@ class AiviewRawVersusMaskedSweepTest {
                 new String(response.body(), StandardCharsets.UTF_8));
     }
 
-    private static String loginAsAiview() throws Exception {
+    private static String session;
+
+    /** One aiview session for the whole class: a second concurrent login of the same user is refused (409). */
+    private static synchronized String loginAsAiview() throws Exception {
+        if (session == null) session = login();
+        return session;
+    }
+
+    private static String login() throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/login"))
                 .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(Map.of("username", "aiview", "password", "aiview"))))
@@ -937,6 +1146,13 @@ class AiviewRawVersusMaskedSweepTest {
         markers.put(estate.p1().flowFirstSeen(), "cutover-flow");
         markers.put("Rule is disabled.", "hygiene-finding");
         for (AsaUnit u : estate.p1().asaUnits()) markers.put(u.id(), "asa-unit");
+        markers.put(ids.get("scriptId"), "script");
+        markers.put(ids.get("scriptRun"), "script-run");
+        markers.put(ids.get("logFinding"), "log-finding");
+        markers.put(ids.get("logJob"), "log-window");
+        markers.put(ids.get("paCase"), "pa-case");
+        markers.put(ids.get("paCapture"), "pa-capture");
+        markers.put(ids.get("paRun"), "pa-run");
         Map<String, Set<String>> seen = new TreeMap<>();
 
         Map<String, Map<ValueClass, Integer>> leaks = new TreeMap<>();
@@ -994,6 +1210,28 @@ class AiviewRawVersusMaskedSweepTest {
                 "GET routes the static audit says aiview may not call, answered with something other than 401/403");
         assertEquals(new TreeSet<>(KNOWN_LEAKS), observedLeaks,
                 "seeded raw values surviving in aiview GET bodies (route + value class); KNOWN_LEAKS must match exactly");
+    }
+
+    /**
+     * PO decision 2026-10-18: the masked Packet Analysis view is the only view aiview gets. The raw-view action is not
+     * aiview's, the seeded case says so in its permissions, the run report is the masked projection and the capture
+     * download is refused.
+     */
+    @Test
+    void packetAnalysisRawViewStaysOutOfAiviewReach() throws Exception {
+        assertFalse(AiviewReachableRoutes.aiviewMayCall(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW),
+                "aiview may never hold " + ActionRegistry.PACKET_ANALYSIS_RAW_VIEW);
+        String cookie = loginAsAiview();
+        Resp read = get("/api/v2/packet-analysis/cases/" + ids.get("paCase"), cookie);
+        assertEquals(200, read.status(), "aiview reads the seeded case");
+        var permissions = JSON.readTree(read.body()).path("permissions");
+        assertFalse(permissions.path("raw_view").asBoolean(true), "case permissions offer aiview no raw view");
+        assertTrue(permissions.path("masked").asBoolean(false), "case permissions say the view is masked");
+        Resp report = get("/api/v2/packet-analysis/runs/" + ids.get("paRun") + "/report", cookie);
+        assertEquals(200, report.status(), "aiview reads the seeded run report");
+        assertEquals("masked", JSON.readTree(report.body()).path("projection").asText(), "aiview's report projection");
+        Resp download = get("/api/v2/packet-analysis/captures/" + ids.get("paCapture") + "/download", cookie);
+        assertEquals(403, download.status(), "aiview downloads no raw capture");
     }
 
     /** The counter itself: every spelling it claims to catch is caught, and a longer address is not a match. */

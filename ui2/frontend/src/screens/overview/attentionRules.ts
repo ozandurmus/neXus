@@ -5,6 +5,7 @@ import { planeGranted } from "../../shell/actionAccess";
 import { AGEING_UNTIL_MS, FRESH_UNDER_MS } from "../../shell/freshness";
 import { plural } from "../../shell/plural";
 import { groupClusters, haReadinessItems } from "../HaReadinessList";
+import { parseZoneMatrixAttention, type ZoneMatrixAttentionSummary } from "./zoneMatrixAttention";
 
 /**
  * The Overview attention list: "what should I look at today" (PO direction 2026-11-13). Every rule, threshold,
@@ -45,9 +46,9 @@ const LIFECYCLE_HREF = q({ screen: "inventory", view: "lifecycle" });
 export type RuleKey =
   | "ha-not-ready" | "backup-missing" | "advisory-exploited" | "compliance-critical" | "advisory-critical-high"
   | "backup-stale" | "failed-jobs" | "not-read" | "license-expired" | "license-30" | "license-60" | "read-ageing"
-  | "live-patch-missing" | "ha-unknown" | "change-unknown-actor";
+  | "live-patch-missing" | "ha-unknown" | "change-unknown-actor" | "zone-matrix-violations";
 
-export type SourceKey = "overview" | "failover" | "lifecycle" | "changes" | "compliance";
+export type SourceKey = "overview" | "failover" | "lifecycle" | "changes" | "compliance" | "zonematrix";
 
 interface RuleSpec {
   readonly rank: number;
@@ -75,6 +76,9 @@ export const RULES: Readonly<Record<RuleKey, RuleSpec>> = {
   "live-patch-missing": { rank: 13, severity: "warning", plane: PLANE_DEVICES, href: LIFECYCLE_HREF, linkLabel: "Open Lifecycle" },
   "ha-unknown": { rank: 14, severity: "warning", plane: null, href: q({ screen: "operations", readiness: "UNKNOWN" }), linkLabel: "Open HA readiness" },
   "change-unknown-actor": { rank: 15, severity: "warning", plane: PLANE_POLICY, href: q({ screen: "changes", view: "feed" }), linkLabel: "Open Changes" },
+  // Zone matrix (contract 7.2). The severity here is the default; `zoneMatrixRows` sets critical / serious / unknown from the
+  // stored headline. The mapping is an engineering default awaiting the Product Owner (design note section 3), never a warning.
+  "zone-matrix-violations": { rank: 16, severity: "serious", plane: PLANE_POLICY, href: q({ screen: "zone_matrix" }), linkLabel: "Open Zone matrix" },
 };
 
 /** One UNKNOWN row per source that could not be read; same shape as a rule, ranked by source. */
@@ -89,6 +93,8 @@ const UNKNOWN_SOURCE: Readonly<Record<SourceKey, RuleSpec & { readonly label: st
     label: "Lifecycle", what: "Lifecycle facts could not be read", detail: "license, Live Patch and advisory rows are missing from this list" },
   changes: { rank: 23, severity: "unknown", plane: PLANE_POLICY, href: q({ screen: "changes", view: "feed" }), linkLabel: "Open Changes",
     label: "Changes", what: "The change feed could not be read", detail: "changes without a known actor are missing from this list" },
+  zonematrix: { rank: 24, severity: "unknown", plane: PLANE_POLICY, href: q({ screen: "zone_matrix" }), linkLabel: "Open Zone matrix",
+    label: "Zone matrix", what: "The zone matrix summary could not be read", detail: "rules that violate the zone matrix are missing from this list" },
 };
 
 /** What a read gave: its value, a refusal for this role, a failure, or "not read" (its target plane is not granted). */
@@ -104,6 +110,8 @@ export interface AttentionInputs {
   readonly failover: SourceRead<{ readonly devices: readonly DeviceSummary[]; readonly rows: readonly CpFailoverSummary[] }>;
   readonly lifecycle: SourceRead<LifecycleFleet>;
   readonly changes: SourceRead<ChangeFeedPage>;
+  /** The stored zone matrix summary body (`GET /api/v2/zone-matrix/summary`), checked here; absent for a caller that does not read it. */
+  readonly zoneMatrix?: SourceRead<unknown>;
   /** The compliance control list, for the compliance row's detail line (most widespread failing critical control). */
   readonly controls?: readonly ComplianceControlItem[] | null;
 }
@@ -173,7 +181,7 @@ const CHECK_NAME: Readonly<Record<RuleKey, string>> = {
   "failed-jobs": "jobs failed in the last 24 h", "not-read": "devices not read for over 72 h", "license-expired": "expired licenses",
   "license-30": "licenses expiring within 30 days", "license-60": "licenses expiring in 31–60 days", "read-ageing": "devices last read 24–72 h ago",
   "live-patch-missing": "Check Point devices without a Live Patch package", "ha-unknown": "HA clusters with UNKNOWN readiness",
-  "change-unknown-actor": "changes without a known actor",
+  "change-unknown-actor": "changes without a known actor", "zone-matrix-violations": "rules that violate the zone matrix",
 };
 
 /** The one row a rule that threw leaves behind: UNKNOWN, never the silence of "nothing found". */
@@ -415,6 +423,58 @@ function changeRows(page: ChangeFeedPage): AttentionRow[] {
   });
 }
 
+/** The detail line parts, each saying what it counts; a zero count is left out, never printed as a reassurance. */
+function zoneMatrixDetail(s: ZoneMatrixAttentionSummary, staleCount: number): string[] {
+  const h = s.headline!;
+  const parts: string[] = [];
+  if (h.outside_headline_text) parts.push(h.outside_headline_text);
+  if (s.state !== "READY" && s.state_text) parts.push(s.state_text);
+  if (h.not_evaluable_findings > 0) parts.push(`${plural(h.not_evaluable_findings, "finding is", "findings are")} NOT_EVALUABLE`);
+  if (h.unknown_findings > 0) parts.push(`${plural(h.unknown_findings, "finding is", "findings are")} UNKNOWN`);
+  if (h.became_undecided_findings > 0) {
+    parts.push(`${plural(h.became_undecided_findings, "open finding", "open findings")} became undecided (were violations, now NOT_EVALUABLE or UNKNOWN)`);
+  }
+  if (staleCount > 0) {
+    const t = s.staleness_threshold;
+    const limit = t ? `${t.hours !== null ? `${t.hours} h` : `${t.seconds} s`}${t.interim ? " (interim value set by the Product Owner, not the bank's)" : ""}` : "the staleness threshold";
+    parts.push(`${plural(staleCount, "policy is", "policies are")} STALE (snapshot older than ${limit}, last run failed, or not on the active version)`);
+  }
+  if (h.incomplete_policies > 0) parts.push(`${plural(h.incomplete_policies, "policy is", "policies are")} INCOMPLETE (collection incomplete)`);
+  if (h.not_evaluated_policies > 0) parts.push(`${plural(h.not_evaluated_policies, "policy is", "policies are")} not evaluated`);
+  if (h.older_version_policies > 0) parts.push(`${plural(h.older_version_policies, "policy is", "policies are")} still on an older matrix version`);
+  if (h.resolved_by_version_change_last_7_days > 0) {
+    parts.push(`${plural(h.resolved_by_version_change_last_7_days, "finding", "findings")} resolved by a version change in the last 7 days`);
+  }
+  return parts;
+}
+
+/**
+ * The zone matrix row (contract 7.2, ZM-26, ZM-35): one row, never split. Silent when there is no active version, and
+ * when everything is evaluated, current, complete and clean with nothing resolved by a version change; otherwise the
+ * server's headline sentence ("at least N" unless every covered policy is CURRENT and COMPLETE) plus what is undecided.
+ * Severity is an engineering default awaiting the Product Owner: critical when a critical rule violates, serious when
+ * rules violate (or a version change resolved findings), UNKNOWN when nothing is proven but something is undecided.
+ */
+function zoneMatrixRows(s: ZoneMatrixAttentionSummary): AttentionRow[] {
+  const h = s.headline;
+  if (s.state === "NO_ACTIVE_VERSION" || !h) return [];
+  const spec = RULES["zone-matrix-violations"];
+  const staleCount = Math.max(h.stale_policies, s.policies.filter((p) => p.staleness_verdict !== "CURRENT").length);
+  const undecided = h.not_evaluable_findings + h.unknown_findings + h.became_undecided_findings + h.outside_headline_ordered_layer
+    + staleCount + h.incomplete_policies + h.not_evaluated_policies + h.older_version_policies;
+  const proven = h.distinct_violating_rules > 0;
+  const resolved = h.resolved_by_version_change_last_7_days > 0;
+  if (!proven && !resolved && undecided === 0 && h.exact) return [];
+  const severity: AttentionSeverity = h.critical_rules > 0 ? "critical" : proven || resolved ? "serious" : "unknown";
+  // The server's text decides "at least N"; a "0" it would print for a count that is not exact is never shown.
+  const what = !h.exact && /^\s*0\b/.test(h.text) ? "no proven violations in evaluated rules" : h.text;
+  const detail = zoneMatrixDetail(s, staleCount);
+  const at = oldest(s.policies.map((p) => p.collected_at));
+  return [{ key: "zone-matrix-violations", severity, rank: spec.rank, what, names: [], more: 0, count: h.distinct_violating_rules,
+    detail: detail.length ? detail.join("; ") : null, at, atKind: "age", atLabel: at ? "oldest policy snapshot" : "policy snapshot age",
+    href: spec.href, linkLabel: spec.linkLabel }];
+}
+
 function unknownRow(source: SourceKey, what?: string): AttentionRow {
   const s = UNKNOWN_SOURCE[source];
   return { key: `unknown-${source}`, severity: "unknown", rank: s.rank, what: what ?? s.what, names: [], more: 0, count: 0, detail: s.detail,
@@ -434,9 +494,12 @@ export function rowAllowed(r: AttentionRow, permissions: readonly string[] | und
   return !plane || planeGranted(permissions, plane);
 }
 
-/** Whether a source is worth reading for this session: the change feed only with the Policy plane (its endpoint needs POLICY_READ). */
-export function sourceWanted(source: "lifecycle" | "changes", permissions: readonly string[] | undefined): boolean {
-  return planeGranted(permissions, source === "changes" ? PLANE_POLICY : PLANE_DEVICES);
+/**
+ * Whether a source is worth reading for this session: the change feed (its endpoint needs POLICY_READ) and the zone matrix
+ * summary (the Zone matrix screen's plane) only with the Policy plane. A read that would be refused is not issued.
+ */
+export function sourceWanted(source: "lifecycle" | "changes" | "zonematrix", permissions: readonly string[] | undefined): boolean {
+  return planeGranted(permissions, source === "changes" || source === "zonematrix" ? PLANE_POLICY : PLANE_DEVICES);
 }
 
 /** The attention list: every rule over the reads given, filtered to what this session may open, most severe first. */
@@ -463,6 +526,19 @@ export function buildAttention(x: AttentionInputs, permissions: readonly string[
     sources.push({ key, label: UNKNOWN_SOURCE[key].label, state });
     if (state === "ok") rows.push(...build());
     else if (state === "failed") rows.push(unknownRow(key));
+  }
+  if (x.zoneMatrix) {
+    const read = x.zoneMatrix;
+    let state: SourceRead<unknown>["state"] = read.state;
+    if (read.state === "ok") {
+      const summary = parseZoneMatrixAttention(read.value);
+      if (!summary) {
+        // A body without its headline or counts is unreadable, not "nothing to report".
+        state = "failed";
+        rows.push(unknownRow("zonematrix"));
+      } else rows.push(...guarded(["zone-matrix-violations"], () => zoneMatrixRows(summary)));
+    } else if (read.state === "failed") rows.push(unknownRow("zonematrix"));
+    sources.push({ key: "zonematrix", label: UNKNOWN_SOURCE.zonematrix.label, state });
   }
   return { rows: rows.filter((r) => rowAllowed(r, permissions)).sort(compareRows), sources, evaluatedAt: x.now.toISOString() };
 }

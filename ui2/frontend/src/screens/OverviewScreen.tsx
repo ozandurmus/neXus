@@ -22,6 +22,7 @@ import { planeGranted } from "../shell/actionAccess";
 import { EXEC } from "./overview/EstateMap";
 import { AttentionList } from "./overview/AttentionList";
 import { buildAttention, CHANGE_WINDOW_DAYS, sourceWanted, type SourceRead } from "./overview/attentionRules";
+import { getZoneMatrixSummaryForOverview } from "./overview/zoneMatrixAttention";
 import { RankedBars, majorVersionVerdict, rankRows, reportedVersionVerdict } from "./overview/RankedBars";
 import { vendorDisplayName } from "../shell/States";
 import { jobTypeLabel } from "../shell/presenters";
@@ -531,6 +532,7 @@ export function OverviewScreen() {
   const [failover, setFailover] = useState<SourceRead<{ devices: readonly DeviceSummary[]; rows: readonly CpFailoverSummary[] }> | null>(null);
   const [lifecycle, setLifecycle] = useState<SourceRead<LifecycleFleet> | null>(null);
   const [changes, setChanges] = useState<SourceRead<ChangeFeedPage> | null>(null);
+  const [zoneMatrix, setZoneMatrix] = useState<SourceRead<unknown> | null>(null);
   useEffect(() => {
     let active = true;
     const settle = <T,>(p: Promise<T>): Promise<SourceRead<T>> => p.then(
@@ -565,6 +567,9 @@ export function OverviewScreen() {
         if (active) setChanges(r.state === "ok" && !Array.isArray(r.value?.events) ? { state: "failed" } : r);
       });
     } else setChanges({ state: "skipped" });
+    // The stored zone matrix summary (contract 7.2): read only for a session with the Policy plane, so no refused request is made.
+    if (sourceWanted("zonematrix", grants)) settle(getZoneMatrixSummaryForOverview()).then((r) => { if (active) setZoneMatrix(r); });
+    else setZoneMatrix({ state: "skipped" });
     return () => { active = false; };
   }, [planesKey]);
 
@@ -586,9 +591,9 @@ export function OverviewScreen() {
   }, [load]);
 
   // The attention list (design note §3), once every source has answered; recomputed when any read changes.
-  const attention = useMemo(() => (data && failover && lifecycle && changes
-    ? buildAttention({ now: new Date(), overview: data, failover, lifecycle, changes, controls }, planesKey ? planesKey.split(",") : undefined)
-    : null), [data, failover, lifecycle, changes, controls, planesKey]);
+  const attention = useMemo(() => (data && failover && lifecycle && changes && zoneMatrix
+    ? buildAttention({ now: new Date(), overview: data, failover, lifecycle, changes, zoneMatrix, controls }, planesKey ? planesKey.split(",") : undefined)
+    : null), [data, failover, lifecycle, changes, zoneMatrix, controls, planesKey]);
 
   if (error) {
     return (
