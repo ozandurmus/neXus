@@ -85,15 +85,24 @@ public final class HaPolicyPairService {
         return out;
     }
 
-    /** The response body: every pair's rows; masking for the replay viewer is applied by {@link PolicyPrivacy}. */
-    public PolicyResponse view() {
-        List<InventoryPair> pairs = pairs();
+    /** Structured pair/context evaluations over the current inventory pairs and stored ASA/FortiGate snapshots. */
+    public List<HaPolicyPairing.Result> evaluatePairs() {
+        return evaluate(pairs());
+    }
+
+    private List<HaPolicyPairing.Result> evaluate(List<InventoryPair> pairs) {
         List<PolicySnapshot> stored = new ArrayList<>();
         if (pairs.stream().anyMatch(p -> p.pair().vendor().equals("ASA"))) stored.addAll(snapshots.asaSnapshots());
         if (pairs.stream().anyMatch(p -> p.pair().vendor().equals("FGT"))) stored.addAll(snapshots.fgtSnapshots());
+        return HaPolicyPairing.evaluate(pairs.stream().map(InventoryPair::pair).toList(), stored);
+    }
+
+    /** The response body: every pair's rows; masking for the replay viewer is applied by {@link PolicyPrivacy}. */
+    public PolicyResponse view() {
+        List<InventoryPair> pairs = pairs();
+        List<HaPolicyPairing.Result> results = evaluate(pairs);
         Map<String, Map<String, String>> names = new LinkedHashMap<>();
         for (InventoryPair p : pairs) names.put(p.pair().pairRef(), p.names());
-        List<HaPolicyPairing.Result> results = HaPolicyPairing.evaluate(pairs.stream().map(InventoryPair::pair).toList(), stored);
         Instant now = clock.instant();
         List<Map<String, Object>> rows = new ArrayList<>();
         Map<String, Integer> counts = new LinkedHashMap<>();

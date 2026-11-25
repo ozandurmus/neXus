@@ -1,13 +1,59 @@
-import { Box, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import { Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 
-import type { PolicyHygieneSummary } from "../auth/adminApi";
+import type { PolicyHygieneSummary, PolicyHygieneSummaryRow } from "../auth/adminApi";
 import { formatStamp } from "../shell/time";
 import { plural } from "../shell/plural";
+import { m3 } from "../theme/m3Theme";
+
+export type HaPairOutcome = "SAME" | "HA_POLICY_DIVERGENT" | "UNKNOWN";
+
+export type PolicyHygieneSummaryRowWithHa = PolicyHygieneSummaryRow & {
+  readonly pairRef?: string;
+  readonly haContext?: string;
+  readonly haOutcome?: HaPairOutcome;
+  readonly haReason?: string | null;
+};
+
+export type PolicyHygieneSummaryWithHa = Omit<PolicyHygieneSummary, "containers"> & {
+  readonly containers: readonly PolicyHygieneSummaryRowWithHa[];
+  readonly haPairsCountedOnce?: number;
+  readonly haPairsDivergent?: number;
+  readonly haPairsUnknown?: number;
+};
 
 /** The counted classes in display order; UNKNOWN is its own column and is never folded into a clean count. */
 export const HYGIENE_SUMMARY_COLUMNS: readonly (readonly [string, string])[] = [
   ["shadowed", "Shadowed"], ["conflict", "Conflicting"], ["disabled", "Disabled"], ["unused", "Unused"], ["expired", "Expired"], ["broad", "Broad"], ["unknown", "UNKNOWN"],
 ];
+
+function haPairChip(row: PolicyHygieneSummaryRowWithHa) {
+  if (row.haOutcome === "SAME") {
+    return (
+      <Box sx={{ mt: 0.25 }}>
+        <Chip size="small" variant="outlined" label="HA pair · content counted once, hit counters per member"
+          sx={{ height: 20, fontSize: "0.7rem", color: m3.onSurfaceVar, borderColor: m3.outlineVar }} />
+      </Box>
+    );
+  }
+  if (row.haOutcome === "HA_POLICY_DIVERGENT") {
+    return (
+      <Box sx={{ mt: 0.25 }}>
+        <Chip size="small" color="warning" label="HA_POLICY_DIVERGENT · members differ"
+          sx={{ height: 20, fontSize: "0.7rem", bgcolor: m3.warningContainer, color: m3.onWarningContainer, fontWeight: 600 }} />
+      </Box>
+    );
+  }
+  if (row.haOutcome === "UNKNOWN") {
+    const label = row.haReason ? `HA pair · comparison UNKNOWN (${row.haReason})` : "HA pair · comparison UNKNOWN";
+    return (
+      <Box sx={{ mt: 0.25 }}>
+        <Chip size="small" variant="outlined" label={label}
+          sx={{ height: 20, fontSize: "0.7rem", color: m3.warningInk, borderColor: m3.outlineVar }} />
+      </Box>
+    );
+  }
+  return null;
+}
 
 /**
  * Fleet hygiene table (Policy > Hygiene, no container open): one row per stored container with the number of rules carrying
@@ -15,7 +61,7 @@ export const HYGIENE_SUMMARY_COLUMNS: readonly (readonly [string, string])[] = [
  * whose analysis has not finished is shown as "not analysed yet", never as zeros. Counts are rules per class (a rule with two
  * findings counts once in each column), so the columns are not additive per rule.
  */
-export function PolicyHygieneSummaryTable({ summary, open }: { readonly summary: PolicyHygieneSummary; readonly open?: (containerId: string, sourceId: string) => void }) {
+export function PolicyHygieneSummaryTable({ summary, open }: { readonly summary: PolicyHygieneSummaryWithHa; readonly open?: (containerId: string, sourceId: string) => void }) {
   const cell = { px: 1, py: 0.75 } as const;
   return (
     <Box component="section" aria-label="Hygiene by container" sx={{ overflowX: "auto" }}>
@@ -29,7 +75,11 @@ export function PolicyHygieneSummaryTable({ summary, open }: { readonly summary:
         <TableBody>
           {summary.containers.map(row => (
             <TableRow key={`${row.sourceId}/${row.containerId}`} hover={!!open} onClick={open ? () => open(row.containerId, row.sourceId) : undefined} sx={open ? { cursor: "pointer" } : undefined}>
-              <TableCell sx={cell}>{row.containerName}<Typography component="span" variant="caption" sx={{ display: "block", color: "text.secondary" }}>{row.sourceName}</Typography></TableCell>
+              <TableCell sx={cell}>
+                {row.containerName}
+                <Typography component="span" variant="caption" sx={{ display: "block", color: "text.secondary" }}>{row.sourceName}</Typography>
+                {haPairChip(row)}
+              </TableCell>
               <TableCell sx={cell}>{formatStamp(row.snapshotAt)}</TableCell>
               {row.state === "READY" && row.counts
                 ? <>

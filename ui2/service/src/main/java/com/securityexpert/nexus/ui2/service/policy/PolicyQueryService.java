@@ -753,7 +753,12 @@ public final class PolicyQueryService {
      * and how many rules sit behind a named blocker per the blocker's own reason. Keys are the engine's fixed reason
      * literals ({@link PolicyHygiene#REASONS}) or {@link #NO_REASON}, never rule, object or address names.
      */
-    record HygieneReport(Map<String, Integer> classes, Map<String, Integer> unknownReasons, Map<String, Integer> blockerReasons) {}
+    record HygieneReport(Map<String, Integer> classes, Map<String, Integer> unknownReasons, Map<String, Integer> blockerReasons,
+            int hitUnused, int hitOnlyUnknown) {
+        HygieneReport(Map<String, Integer> classes, Map<String, Integer> unknownReasons, Map<String, Integer> blockerReasons) {
+            this(classes, unknownReasons, blockerReasons, 0, 0);
+        }
+    }
     /** {@link #hygieneCounts} plus the UNKNOWN reasons, from the same single analysis (one slot, no second pass over the snapshot). */
     HygieneReport hygieneReport(PolicySnapshot snapshot, int days) {
         hygieneSlots.acquireUninterruptibly();
@@ -762,7 +767,12 @@ public final class PolicyQueryService {
         finally { hygieneSlots.release(); }
         Map<String, Integer> counts = new TreeMap<>(); PolicyHygiene.CLASSES.forEach(c -> counts.put(c, 0));
         Map<String, Integer> unknown = new TreeMap<>(), blockers = new TreeMap<>();
+        int hitUnused = 0, hitOnlyUnknown = 0;
         for (var a : result.rules().values()) {
+            // Member-specific (hit counter) evidence, kept apart so an HA pair never presents one member's counters as the pair's.
+            if (a.findings().stream().anyMatch(f -> "unused".equals(f.findingClass()) && PolicyHygiene.HIT_EVIDENCE.contains(f.evidence()))) hitUnused++;
+            // A rule with any hit-counter UNKNOWN finding is member-specific for that evidence, even if it also has a content UNKNOWN.
+            if (a.findings().stream().anyMatch(f -> "unknown".equals(f.findingClass()) && PolicyHygiene.HIT_EVIDENCE.contains(f.evidence()))) hitOnlyUnknown++;
             a.findings().stream().map(PolicyHygiene.Finding::findingClass).distinct().forEach(c -> counts.merge(c, 1, Integer::sum));
             if (!"UNKNOWN".equals(a.shadowStatus())) continue;
             unknown.merge(reasonKey(a.shadowReason()), 1, Integer::sum);
@@ -771,7 +781,7 @@ public final class PolicyQueryService {
                 blockers.merge(reasonKey(blocker == null ? null : blocker.shadowReason()), 1, Integer::sum);
             }
         }
-        return new HygieneReport(counts, unknown, blockers);
+        return new HygieneReport(counts, unknown, blockers, hitUnused, hitOnlyUnknown);
     }
     private static String reasonKey(String reason) { return reason == null || reason.isBlank() ? NO_REASON : reason; }
     private Map<String, Object> ruleView(Rule r, PolicySnapshot snapshot, PolicyHygiene.Result analysis) {
