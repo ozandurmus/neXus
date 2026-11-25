@@ -202,6 +202,8 @@ steps:
     timeout_s: 3000
     gradle_args: ["-PfrontendPrebuilt=true", ":integration-tests:test"]
     # Hand-off to the HOST-A runner when `--integration hosta` is given (exit 0 pass, 1 test failure, 2 setup failure).
-    hosta_cmd: ["bash", "tools/delivery/hosta_integration.sh"]
+    # PO 2026-11-25: the ui2-test namespace (docs/design/HOSTA_TEST_NAMESPACE_2026_11_24.md) carries the integration
+    # suite off the Mac; exit 0 PASS, 1 FAIL, 2 ERROR, 3 NOT_CONFIGURED/IMAGE_STALE.
+    hosta_cmd: ["python3", "tools/delivery/hosta_test_run.py", "--repo", ".", "--java", "none", "--integration"]
   # 10. The brief's own acceptance commands (`accept=` lines of the lane meta).
   - {id: accept, builtin: accept, timeout_s: 1800}

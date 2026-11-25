@@ -182,6 +182,10 @@ def test_scan_shell_runs_only_its_half(tmp_path, mode, expected):
 TARGETS = ("service", "worker", "configuration", "compliance", "policy", "script-runner", "packet-analysis")
 
 
+# Synchronisation rule for the fake commands below: every ordering the tests rely on (snapshot running -> failure or
+# signal -> drain -> start skipped) is forced by a marker file or by the removal of the job file, never by elapsed
+# time. The deadlines inside the fakes and the timeouts in the tests are hang guards only (far above any load-induced
+# delay); a normal run never waits for them, so CPU load can slow a test but cannot reorder it.
 def _prepare_build_script_env(tmp_path, mode, extra_env=None):
     home, tools = tmp_path / "home", tmp_path / "bin"
     (home / "nexus/project").mkdir(parents=True)
@@ -239,13 +243,13 @@ elif name == 'python3':
         if os.environ.get('TEST_SNAPSHOT_STARTED'):
             Path(os.environ['TEST_SNAPSHOT_STARTED']).touch()
         if os.environ.get('TEST_SNAPSHOT_WAIT_UNTIL_NO_JOB_FILE') == '1':
-            deadline = time.monotonic() + 5.0
+            deadline = time.monotonic() + 60.0  # hang guard only: the event is the job file's removal
             tmpdir = Path(os.environ['TMPDIR'])
             while time.monotonic() < deadline and any(tmpdir.glob('nexus-security-job.*')):
                 time.sleep(0.02)
         if os.environ.get('TEST_SNAPSHOT_RELEASE'):
             release = Path(os.environ['TEST_SNAPSHOT_RELEASE'])
-            deadline = time.monotonic() + 15.0
+            deadline = time.monotonic() + 180.0  # hang guard only: the event is the test's release marker
             while time.monotonic() < deadline and not release.exists():
                 time.sleep(0.02)
         if os.environ.get('TEST_SNAPSHOT_FINISHED'):
@@ -258,7 +262,7 @@ elif name == 'python3':
         assert set(args[8:]) <= {'--packet-analysis', '--script-exec'} and args[8:], args
         if os.environ.get('TEST_SIDE_WAIT_FOR_SNAPSHOT'):
             marker = Path(os.environ['TEST_SIDE_WAIT_FOR_SNAPSHOT'])
-            deadline = time.monotonic() + 10.0
+            deadline = time.monotonic() + 60.0  # hang guard only: the event is the snapshot's started marker
             while time.monotonic() < deadline and not marker.exists():
                 time.sleep(0.02)
             assert marker.exists(), 'background security snapshot did not start alongside the build'
@@ -318,7 +322,7 @@ def _read_executed(calls, home):
     return executed
 
 
-def _wait_until(predicate, timeout=10.0, step=0.02):
+def _wait_until(predicate, timeout=120.0, step=0.02):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():
@@ -431,7 +435,7 @@ def test_build_script_early_failure_during_slow_snapshot_drains_snapshot_and_ski
         "TEST_SIDE_WAIT_FOR_SNAPSHOT": str(started),
     })
     result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
-                            text=True, timeout=30, env=env)
+                            text=True, timeout=150, env=env)
     assert result.returncode == 1, result.stderr
     assert started.exists() and finished.exists()
     assert list(scratch.iterdir()) == []
@@ -467,7 +471,7 @@ def test_build_script_signal_during_slow_snapshot_drains_snapshot_skips_start_an
         preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
     )
     try:
-        assert _wait_until(lambda: started.exists() and build_done.exists(), timeout=10.0), \
+        assert _wait_until(lambda: started.exists() and build_done.exists(), timeout=120.0), \
             f"build did not reach security join (rc={proc.poll()})"
         assert proc.poll() is None
         assert len(list(scratch.glob("nexus-security-job.*"))) == 1
@@ -475,16 +479,16 @@ def test_build_script_signal_during_slow_snapshot_drains_snapshot_skips_start_an
         proc.send_signal(sig)
         # report_failure must run on the signal, delete SECURITY_JOB_FILE to cancel `start`, and stay alive
         # waiting for `snapshot` instead of exiting immediately and orphaning it.
-        assert _wait_until(lambda: list(scratch.iterdir()) == [], timeout=10.0), \
+        assert _wait_until(lambda: list(scratch.iterdir()) == [], timeout=120.0), \
             f"SECURITY_JOB_FILE was not removed on signal (rc={proc.poll()})"
         assert proc.poll() is None, "run_build.sh exited before draining the background security snapshot"
         release.touch()
-        stdout, stderr = proc.communicate(timeout=10)
+        stdout, stderr = proc.communicate(timeout=120)
     finally:
         release.touch()
         if proc.poll() is None:
             proc.kill()
-            proc.wait(timeout=5)
+            proc.wait(timeout=30)
     assert proc.returncode == expected_rc, stderr
     assert finished.exists()
     assert list(scratch.iterdir()) == []
