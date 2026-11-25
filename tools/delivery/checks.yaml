@@ -66,6 +66,13 @@ forbidden_tokens_skip_suffixes: [.md]
 # class lands here only through a reviewed change, and names that look security-relevant are refused regardless.
 flaky_allowlist: []
 
+# `--carrier hosta` (PO 2026-11-25, option A): java_scoped, integration and frontend_vitest run in ONE ui2-test pod on
+# HOST-A (docs/design/HOSTA_TEST_NAMESPACE_2026_11_24.md). The harness appends --commit --base --java scoped|full|none
+# [--integration] [--vitest] --timeout; exit 0 PASS, 1 FAIL (failed tests named per phase), 2/3 runner error -> the same
+# steps run on the Mac and the report says carrier=mac-fallback.
+hosta_carrier_cmd: ["{python}", "tools/delivery/hosta_test_run.py", "--repo", "{worktree}"]
+hosta_carrier_timeout_s: 2700
+
 # validate-job steps that have no local twin by design.
 ci_exempt:
   - "Fetch origin/main for the privacy-gate baseline"

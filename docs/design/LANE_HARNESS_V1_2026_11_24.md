@@ -90,9 +90,24 @@ order; the harness only reports it.
   (`io.zonky.test.postgres`), unpacked once under `~/.cache/nexus-lane-harness`, on a free loopback port with trust
   authentication and the workflow container's server settings. `UI2_TEST_JDBC_URL` carries it into the existing
   `Ui2PostgresFixture`; no Docker and no test change. Missing binaries is exit 50, never a pass.
-* `--integration hosta`: runs `tools/delivery/hosta_integration.sh` (the in-cluster job, `ui2-build` namespace). Exit 2
-  of that script (setup failure) is exit 50, not a test result.
+* `--integration hosta`: runs the manifest's `hosta_cmd` (`tools/delivery/hosta_test_run.py --java none --integration`,
+  the `ui2-test` namespace). Exit 2 or 3 (runner error, no image, stale image) is exit 50, not a test result.
 * `--integration skip`: recorded as skipped and the report says `complete: false`; such a report never satisfies a reuse.
+
+### Test carrier (`--carrier mac|hosta`, PO 2026-11-25 option A)
+
+* `mac` (default): every step runs on the Mac, as above.
+* `hosta`: `java_scoped`, `integration` and `frontend_vitest` are satisfied by ONE `hosta_test_run.py` call (manifest
+  `hosta_carrier_cmd`, `hosta_carrier_timeout_s`) made by whichever of them runs first; the others wait for the same
+  result. Scope is the Mac's: `--java scoped|full` from `pretest_scope.py` (the host recomputes the same tasks from the
+  same `--base`), `--integration` when the step's path rule selects it and `--integration` is `auto`/`hosta`, `--vitest`
+  only when the frontend changed. A step that is not selected or is reused from a report is not asked for. Each step
+  keeps its own status and its phase's `duration_s` (the time it waited is `extra.waited_s`). Exit 0 pass, exit 1 the
+  failing phase's step fails with the failed test names in its detail; the other phases keep their own verdict.
+* Fallback: exit 2/3, no answer, a contradicting answer, a timeout or a runner that cannot start runs the same steps on
+  the Mac exactly as `mac` would; the report says `carrier: mac-fallback` with the reason under `hosta_run` and in
+  `notes`. Everything else (tools tests, tsc, the production bundle, privacy, derived files) stays on the Mac.
+* Not carried: the allowlisted flaky re-run of the local Java step; a HOST-A failure is a failure.
 
 ## 3. Exit codes
 

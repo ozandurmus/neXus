@@ -624,6 +624,187 @@ def test_the_manifest_hands_integration_to_the_ui2_test_namespace_runner():
     assert "--integration" in step["hosta_cmd"] and step["hosta_cmd"][step["hosta_cmd"].index("--java") + 1] == "none"
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# --carrier hosta: java_scoped, integration and frontend_vitest in one stubbed hosta_test_run.py call
+
+CARRIER_STUB = """
+import json, sys
+from pathlib import Path
+state = Path(sys.argv[1])
+with open(state / "calls", "a") as handle:
+    handle.write(json.dumps(sys.argv[2:]) + "\\n")
+spec = json.loads((state / "spec.json").read_text())
+print("ssh banner noise")
+if spec.get("json") is not None:
+    print(json.dumps(spec["json"]))
+sys.exit(spec["exit"])
+"""
+
+
+def real_step(step_id: str) -> dict:
+    return dict(next(s for s in REAL_MANIFEST["steps"] if s["id"] == step_id))
+
+
+CARRIED_STEPS = [real_step("java_scoped"), real_step("frontend_vitest"), real_step("integration")]
+FULL_SCOPE = {"scope": "full", "gradle_tasks": [], "frontend": True, "modules": [], "why": "test: full"}
+
+
+def phase(name, status="PASS", tests=5, failed=(), duration=10):
+    bad = len(failed) if status == "FAIL" else 0
+    return {"name": name, "status": status, "reason": "ok" if status == "PASS" else "tests_failed",
+            "exit_code": 0 if status == "PASS" else 1, "duration_s": duration, "tests": tests, "failures": bad,
+            "errors": 0, "skipped": 0, "failed": list(failed)}
+
+
+def host_answer(status, phases, scope=None):
+    return {"status": status, "reason": "ok", "run": "ui2-test-run-0123456789ab", "commit": "c" * 40, "tree": "t" * 40,
+            "summary": {"status": status, "reason": "ok", "phases": phases}, "scope": scope or {}, "wall_s": 400}
+
+
+@pytest.fixture
+def carrier(repo, tmp_path, monkeypatch):
+    """A repository with a (fake, always passing) ui2/gradlew and a frontend on main, a stub runner and a fixed scope."""
+    write(repo, "ui2/gradlew", "#!/bin/sh\nexit 0\n")
+    (repo / "ui2/gradlew").chmod(FAKE_BIN_MODE)
+    write(repo, "ui2/frontend/package.json", "{}\n")
+    write(repo, "ui2/frontend/node_modules/.keep", "")
+    write(repo, ".gitignore", "node_modules/\n")
+    commit(repo, "Carrier base")
+    git(repo, "branch", "-f", "main", "HEAD")
+    state = tmp_path / "stub-state"
+    state.mkdir()
+    stub = tmp_path / "hosta_stub.py"
+    stub.write_text(CARRIER_STUB, encoding="utf-8")
+    scope = dict(FULL_SCOPE)
+    monkeypatch.setattr(lh, "get_scope", lambda ctx: scope)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_npx(bin_dir, "printf ' Test Files  2 passed (2)\\n      Tests  4 passed (4)\\n'; exit 0")
+    monkeypatch.setenv("PATH", "%s%s%s" % (bin_dir, os.pathsep, os.environ["PATH"]))
+
+    def run(exit_code, answer, *args, steps=None, cmd=None):
+        (state / "spec.json").write_text(json.dumps({"exit": exit_code, "json": answer}), encoding="utf-8")
+        (state / "calls").unlink(missing_ok=True)
+        code, report = run_harness(repo, tmp_path, PRE + (steps or CARRIED_STEPS), "--carrier", "hosta", *args,
+                                   hosta_carrier_cmd=cmd or ["{python}", str(stub), str(state)])
+        calls = (state / "calls").read_text().splitlines() if (state / "calls").exists() else []
+        return code, report, [json.loads(line) for line in calls]
+
+    return {"repo": repo, "scope": scope, "run": run}
+
+
+def checks_by_id(report: dict) -> dict:
+    return {check["id"]: check for check in report["checks"]}
+
+
+def test_carrier_hosta_runs_java_integration_and_vitest_in_one_call_with_phase_durations(carrier):
+    repo = carrier["repo"]
+    write(repo, "ui2/service/src/main/java/A.java", "class A {}\n")
+    write(repo, "ui2/frontend/src/a.ts", "export const a = 1;\n")
+    commit(repo)
+    answer = host_answer("PASS", [phase("java", duration=300, tests=6769), phase("integration", duration=200, tests=390),
+                                  phase("vitest", duration=40)])
+    code, report, calls = carrier["run"](0, answer)
+    checks = checks_by_id(report)
+    assert code == 0 and report["carrier"] == "hosta"
+    assert len(calls) == 1, "the three steps must share ONE HOST-A run"
+    for step_id, seconds in (("java_scoped", 300), ("integration", 200), ("frontend_vitest", 40)):
+        assert checks[step_id]["status"] == "pass" and checks[step_id]["duration_s"] == seconds
+        assert checks[step_id]["extra"]["carrier"] == "hosta"
+    assert "6769 tests" in checks["java_scoped"]["detail"] and "390 tests" in checks["integration"]["detail"]
+    argv = calls[0]
+    assert argv[argv.index("--commit") + 1] == git(repo, "rev-parse", "HEAD")
+    assert argv[argv.index("--base") + 1] == git(repo, "rev-parse", "main")
+    assert argv[argv.index("--java") + 1] == "full" and "--integration" in argv and "--vitest" in argv
+    assert report["hosta_run"]["used"] == "hosta" and report["hosta_run"]["asked"] == ["java", "integration", "vitest"]
+
+
+def test_carrier_hosta_test_failure_names_the_failed_tests_in_the_step(carrier):
+    repo = carrier["repo"]
+    write(repo, "ui2/service/src/main/java/A.java", "class A {}\n")
+    write(repo, "ui2/frontend/src/a.ts", "export const a = 1;\n")
+    commit(repo)
+    failed = ["com.example.FooTest > rejectsStaleLease()", "com.example.BarTest > parses()"]
+    answer = host_answer("FAIL", [phase("java", "FAIL", tests=50, failed=failed), phase("integration"),
+                                  phase("vitest")])
+    code, report, calls = carrier["run"](1, answer, "--keep-going")
+    checks = checks_by_id(report)
+    assert code == 10 and len(calls) == 1 and report["carrier"] == "hosta"
+    java = checks["java_scoped"]
+    assert java["status"] == "fail" and java["extra"]["failed"] == failed
+    assert "FooTest > rejectsStaleLease()" in java["detail"] and "BarTest > parses()" in java["detail"]
+    assert "FAIL com.example.FooTest > rejectsStaleLease()" in java["output_tail"]
+    assert checks["integration"]["status"] == "pass" and checks["frontend_vitest"]["status"] == "pass"
+    assert "java_scoped" in report["repair_hint"]
+
+
+@pytest.mark.parametrize("exit_code,answer", [
+    (2, {"status": "ERROR", "reason": "runner"}),
+    (3, {"status": "IMAGE_STALE", "reason": "image_stale"}),
+    (255, None),                                                     # ssh: no connection, no answer at all
+    (0, {"status": "FAIL", "reason": "ok"}),                         # an answer that contradicts its exit code
+])
+def test_carrier_hosta_runner_error_falls_back_to_the_mac(carrier, exit_code, answer):
+    repo = carrier["repo"]
+    write(repo, "ui2/frontend/src/a.ts", "export const a = 1;\n")      # frontend only: no integration step
+    commit(repo)
+    code, report, calls = carrier["run"](exit_code, answer, "--jobs", "1")
+    checks = checks_by_id(report)
+    assert code == 0 and len(calls) == 1
+    assert report["carrier"] == "mac-fallback" and report["hosta_run"]["used"] == "mac-fallback"
+    assert any(note.startswith("carrier=mac-fallback") for note in report["notes"])
+    for step_id in ("java_scoped", "frontend_vitest"):
+        assert checks[step_id]["status"] == "pass"
+        assert checks[step_id]["detail"].startswith("carrier=mac-fallback")
+        assert checks[step_id]["extra"]["carrier"] == "mac-fallback"
+    assert "Test Files  2 passed" in checks["frontend_vitest"]["detail"]       # the Mac's own vitest ran
+    assert statuses(report)["integration"] == "skipped"
+
+
+def test_carrier_hosta_runner_that_cannot_start_falls_back(carrier, tmp_path):
+    repo = carrier["repo"]
+    write(repo, "ui2/frontend/src/a.ts", "export const a = 1;\n")
+    commit(repo)
+    code, report, _ = carrier["run"](0, None, "--jobs", "1", cmd=[str(tmp_path / "no-such-runner")])
+    assert code == 0 and report["carrier"] == "mac-fallback" and "exit 127" in report["hosta_run"]["reason"]
+
+
+def test_carrier_hosta_passes_the_mac_scope(carrier):
+    repo = carrier["repo"]
+    write(repo, "ui2/worker/src/main/java/W.java", "class W {}\n")
+    commit(repo)
+    tasks = [":worker:test", ":architecture-tests:test"]
+    carrier["scope"].update({"scope": "scoped", "gradle_tasks": tasks, "frontend": False, "why": "1 changed module"})
+    scope = {"java": "scoped", "tasks": tasks, "integration": True, "vitest": False}
+    answer = host_answer("PASS", [phase("java"), phase("integration")], scope)
+    code, report, calls = carrier["run"](0, answer)
+    argv = calls[0]
+    checks = checks_by_id(report)
+    assert code == 0 and argv[argv.index("--java") + 1] == "scoped"
+    assert "--integration" in argv and "--vitest" not in argv
+    assert checks["java_scoped"]["extra"]["scope_tasks_match"] is True and "scoped scope" in checks["java_scoped"]["detail"]
+    assert checks["frontend_vitest"]["status"] == "skipped"
+    # `--integration skip` keeps the integration phase out of the HOST-A run
+    code, report, calls = carrier["run"](0, host_answer("PASS", [phase("java")], scope), "--integration", "skip")
+    assert code == 0 and "--integration" not in calls[0] and statuses(report)["integration"] == "skipped"
+
+
+def test_carrier_mac_is_the_default_and_never_calls_the_runner(carrier, tmp_path):
+    repo = carrier["repo"]
+    write(repo, "ui2/frontend/src/a.ts", "export const a = 1;\n")
+    commit(repo)
+    state = tmp_path / "stub-state"
+    code, report = run_harness(repo, tmp_path, PRE + CARRIED_STEPS, "--jobs", "1",
+                               hosta_carrier_cmd=["{python}", str(tmp_path / "hosta_stub.py"), str(state)])
+    assert code == 0 and report["carrier"] == "mac" and not (state / "calls").exists()
+    assert "carrier" not in checks_by_id(report)["java_scoped"].get("extra", {})
+
+
+def test_the_manifest_names_the_hosta_test_runner_as_the_carrier():
+    assert REAL_MANIFEST["hosta_carrier_cmd"][1] == "tools/delivery/hosta_test_run.py"
+    assert 300 <= REAL_MANIFEST["hosta_carrier_timeout_s"] <= 3600 - 120
+
+
 def test_integration_skip_flag_is_visible_and_marks_the_report_incomplete(repo, tmp_path):
     write(repo, "ui2/service/src/main/java/A.java", "x\n")
     commit(repo)
