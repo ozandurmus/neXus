@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OverviewScreen, estateDevicesLabel, relativeAge } from "../src/screens/OverviewScreen";
 import type { OverviewView } from "../src/auth/adminApi";
+import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -44,11 +45,14 @@ function overview(partial: Partial<OverviewView> = {}): OverviewView {
   };
 }
 
+/** A stored summary with no active zone matrix version: no row (contract 7.2). */
+const NO_ACTIVE_VERSION = { state: "NO_ACTIVE_VERSION", state_text: "no active zone matrix version: nothing is evaluated yet", headline: null, staleness_threshold: null, policies: [] };
+
 function stub(body: OverviewView) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 })));
 }
 
-function stubWithControls(body: OverviewView, controls: unknown[] = [], extra: { lifecycle?: unknown; changes?: unknown; devices?: unknown; failover?: unknown } = {}) {
+function stubWithControls(body: OverviewView, controls: unknown[] = [], extra: { lifecycle?: unknown; changes?: unknown; devices?: unknown; failover?: unknown; zoneMatrix?: unknown } = {}) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
     const payload = url.includes("/compliance/controls") ? { total_controls: controls.length, controls }
@@ -56,6 +60,7 @@ function stubWithControls(body: OverviewView, controls: unknown[] = [], extra: {
       : url.includes("/cp-failover/summary") ? (extra.failover ?? [])
       : url.startsWith("/api/v2/lifecycle") ? (extra.lifecycle ?? { as_of: NOW, devices: [], summary: {} })
       : url.startsWith("/api/v2/changes/feed") ? (extra.changes ?? { events: [] })
+      : url.startsWith("/api/v2/zone-matrix/summary") ? (extra.zoneMatrix ?? NO_ACTIVE_VERSION)
       : body;
     return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
   }));
@@ -215,7 +220,7 @@ describe("Overview stale data and empty state", () => {
     stubWithControls(overview({ estate: clean, exceptions: { ...overview().exceptions, failed_jobs: { total: 0, rows: [], reasons: [] } } } as Partial<OverviewView>));
     render(<OverviewScreen />);
     const empty = await screen.findByTestId("attention-empty");
-    expect(empty.textContent).toMatch(/^Nothing needs attention\.Evaluated \d\d:\d\d GMT\+3 from 5 sources\.$/);
+    expect(empty.textContent).toMatch(/^Nothing needs attention\.Evaluated \d\d:\d\d GMT\+3 from 6 sources\.$/);
     expect(screen.queryByRole("status", { name: "Data freshness warning" })).toBeNull();
   });
 
@@ -228,5 +233,41 @@ describe("Overview stale data and empty state", () => {
     expect(row.getAttribute("data-attention")).toBe("unknown-lifecycle");
     expect(within(row).getByText("UNKNOWN")).toBeInTheDocument();
     expect(screen.queryByTestId("attention-empty")).toBeNull();
+  });
+
+  describe("zone matrix row (ZONE_MATRIX_CONTRACT.md 7.2)", () => {
+    const clean = { ...ESTATE, devices: ESTATE.devices.map((x) => ({ ...x, critical_fail: 0, no_archive: false, last_read_at: NOW })) };
+    const quiet = () => overview({ estate: clean, exceptions: { ...overview().exceptions, failed_jobs: { total: 0, rows: [], reasons: [] } } } as Partial<OverviewView>);
+    const as = (permissions: readonly string[]): SessionInfo => ({ displayName: "TEST-USER-01", roleTokens: [], permissions, onSignOut: () => {} });
+    const summaryRequests = () => (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([u]) => String(u).includes("/zone-matrix/"));
+
+    it("makes no summary request for a session without the Policy plane, and the list still renders", async () => {
+      stubWithControls(quiet());
+      render(<SessionContext.Provider value={as(["Devices", "Compliance"])}><OverviewScreen /></SessionContext.Provider>);
+      const empty = await screen.findByTestId("attention-empty");
+      expect(summaryRequests()).toHaveLength(0);
+      expect(empty.textContent).toMatch(/Not shown for your role: .*Zone matrix/);
+    });
+
+    it("reads the summary once with limit=1 for a session with the Policy plane and shows the server's headline", async () => {
+      stubWithControls(quiet(), [], { zoneMatrix: { state: "READY", state_text: "x", staleness_threshold: { seconds: 86400, hours: 24, interim: true }, policies: [],
+        headline: { version_number: 4, distinct_violating_rules: 2, violated_zone_pairs: 2, critical_rules: 0, outside_headline_ordered_layer: 0, not_evaluable_findings: 0,
+          unknown_findings: 0, became_undecided_findings: 0, stale_policies: 0, incomplete_policies: 0, older_version_policies: 0, not_evaluated_policies: 0,
+          resolved_by_version_change_last_7_days: 0, exact: false, text: "at least 2 rules violate the zone matrix (v4) across 2 zone pairs", outside_headline_text: null } } });
+      render(<SessionContext.Provider value={as(["Policy"])}><OverviewScreen /></SessionContext.Provider>);
+      const row = (await screen.findByText(/^at least 2 rules violate the zone matrix/)).closest("[data-attention]") as HTMLElement;
+      expect(row.getAttribute("data-attention")).toBe("zone-matrix-violations");
+      expect(within(row).getByRole("link", { name: /Open Zone matrix/ })).toHaveAttribute("href", "?screen=zone_matrix");
+      expect(summaryRequests().map(([u]) => String(u))).toEqual(["/api/v2/zone-matrix/summary?limit=1"]);
+    });
+
+    it("shows an UNKNOWN row, not a crash, for a summary body without its headline", async () => {
+      stubWithControls(quiet(), [], { zoneMatrix: { state: "READY", policies: [] } });
+      render(<SessionContext.Provider value={as(["Policy"])}><OverviewScreen /></SessionContext.Provider>);
+      const row = (await screen.findByText("The zone matrix summary could not be read")).closest("[data-attention]") as HTMLElement;
+      expect(row.getAttribute("data-attention")).toBe("unknown-zonematrix");
+      expect(within(row).getByText("UNKNOWN")).toBeInTheDocument();
+      expect(screen.queryByTestId("attention-empty")).toBeNull();
+    });
   });
 });
