@@ -1296,6 +1296,15 @@
       "priority": "P2",
       "target": "PO_DECISION_RECORD_2026_11_24_POLICY_INSIGHTS.md",
       "note": ""
+    },
+    {
+      "id": "asa_port_operator_a0_asa_14_defect",
+      "category": "policy",
+      "title": "ASA lt/gt/neq port operators contradict A0-ASA-14: fix the mapper and enable the disabled DEFECT test",
+      "status": "done",
+      "priority": "P2",
+      "target": "b2aec1f5: lt/gt/neq decided as ranges, DEFECT test enabled",
+      "note": ""
     }
   ]
 }

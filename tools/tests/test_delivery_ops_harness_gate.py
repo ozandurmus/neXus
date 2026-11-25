@@ -117,6 +117,13 @@ def test_the_carrier_off_switch_keeps_java_and_vitest_on_the_mac(ops):
     assert "--carrier" not in harness_calls(ops)[0] and "--integration hosta" in harness_calls(ops)[0]
 
 
+def test_the_quick_switch_runs_the_quick_profile(ops):
+    done_lane(ops)
+    (ops.state / "GATE_QUICK").write_text("full gate slowed delivery\n")
+    gate(ops)
+    assert "--profile quick" in harness_calls(ops)[0]
+
+
 def test_an_older_base_without_the_carrier_keeps_the_mac_run(ops):
     done_lane(ops)
     gate(ops)

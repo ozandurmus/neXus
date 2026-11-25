@@ -53,6 +53,9 @@ gate_integration() { if grep -q 'hosta_test_run.py' "$1/tools/delivery/checks.ya
 # lane's harness knows the carrier, else nothing (older bases keep the Mac run).
 # $OPS_STATE/GATE_CARRIER_OFF (a file; its first line says why) turns the carrier off without a ship, e.g. while a
 # HOST-A-only test difference is fixed (2026-11-25: vitest 54 Backup* failures and an aiview sweep timeout on HOST-A only).
+# $OPS_STATE/GATE_QUICK (a file; first line = why) runs the harness's quick profile: every check except the heavy test
+# steps, which the ship pretest still runs (PO 2026-11-25: the full gate slowed delivery while HOST-A was not ready).
+gate_profile() { [ -e "$OPS_STATE/GATE_QUICK" ] && echo "--profile quick"; return 0; }
 gate_carrier() {
   [ -e "$OPS_STATE/GATE_CARRIER_OFF" ] && return 0
   if grep -q '^hosta_carrier_cmd:' "$1/tools/delivery/checks.yaml" 2>/dev/null; then echo "--carrier hosta"; fi
@@ -64,7 +67,7 @@ gate_run_harness() {
   harness=${NEXUS_LANE_HARNESS:-$wt/tools/delivery/lane_harness.py}
   grep -q '^allow_paths=1' "$meta" 2>/dev/null && allow=--allow-paths
   python3 "$harness" --worktree "$wt" --fetch --meta "$meta" --lane-name "$n" --queue-dir "$SQ" --report "$report" \
-    --log-dir "$L/harness-$n" --jobs 3 --integration "$(gate_integration "$wt")" $(gate_carrier "$wt") --keep-going $allow > "$L/harness-$n.out" 2>&1
+    --log-dir "$L/harness-$n" --jobs 3 --integration "$(gate_integration "$wt")" $(gate_carrier "$wt") $(gate_profile) --keep-going $allow > "$L/harness-$n.out" 2>&1
   echo $?
 }
 

@@ -84,6 +84,18 @@ def test_two_infrastructure_failures_in_a_row_pause_the_runner(ops):
     assert (ops.sq / f"{LANE}-a.ship").exists() and (ops.sq / f"{LANE}-b.ship").exists()   # stay queued
 
 
+@pytest.mark.parametrize("line", [
+    "could not open the pull request: pull request create failed: HTTP 502: 502 Bad Gateway (https://api.example/graphql)",
+    "Could not GET 'https://repo.example/x.pom'. Received status code 429 from server: Too Many Requests",
+])
+def test_github_5xx_and_registry_429_are_infrastructure_not_the_lanes_fault(ops, line):
+    # 2026-11-25: the PR-create 502 line was not in the failure reason, so the runner blamed the lane whose file path
+    # the ship_path line named and queued a useless fix lane.
+    inflight(ops, "B6", [LANE], ['{"ship_path": "full", "why": "backend change: tools/x.py"}', line])
+    run_finish(ops, "B6")
+    assert (ops.sq / f"{LANE}.ship").exists() and list(ops.lq.glob("*-fix-*.brief")) == []
+
+
 # ---- b-review: a BLOCK goes back to the author once ----------------------------------------------------------------
 
 def ship_entry(ops, extra=""):
