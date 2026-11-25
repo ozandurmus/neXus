@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "reviewed_at": "2026-11-25",
-  "reviewed_current_build": "NXS-LOCAL-0416",
+  "reviewed_current_build": "NXS-LOCAL-0417",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -405,7 +405,11 @@
     "mc_device_health_read_decision": "java_feature",
     "log_detection_engine_design_open_questions": "java_feature",
     "log_detection_p1_shadow_validation": "java_feature",
-    "sar_parser_nonnumeric_cpu_row_lost": "java_debt"
+    "sar_parser_nonnumeric_cpu_row_lost": "java_debt",
+    "zone_matrix_step_6b_evidence_report_wiring": "java_feature",
+    "zone_matrix_step_7_remaining": "java_feature",
+    "policy_gaps_engine_attribution_harness_run": "java_feature",
+    "hosta_test_namespace_apply": "agent_operations"
   },
   "converted_lessons": [
     {

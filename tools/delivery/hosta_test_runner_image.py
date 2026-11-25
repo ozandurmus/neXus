@@ -12,6 +12,7 @@ one file hosta_test_run_remote.py reads. Not part of any deploy: the PO session 
   hosta_test_runner_image.py build --commit <sha of the loaded build context> [--record]
 """
 import argparse
+import io
 import json
 from pathlib import Path
 import re
@@ -27,6 +28,12 @@ REGISTRY = "registry.kube-system.svc.cluster.local"
 REPOSITORY = REGISTRY + "/nexus-ui2-test-runner"
 CONTAINERFILE = "/workspace/ui2/Containerfile.test-runner"
 RECORD = Path.home() / ".config" / "nexus" / "test-runner-image"
+# The deploy's context loader carries only ui2/, project/ and docs/ (deploy/ui2-image-build/run_build.sh). The
+# Containerfile also copies these two files, so they are streamed in from this checkout (2026-11-25: first build failed
+# with "lstat /workspace/tools/delivery/test_runner_seed.init.gradle.kts").
+REPO = Path(__file__).resolve().parents[2]
+RUNNER_FILES = ("tools/delivery/test_runner_seed.init.gradle.kts", "tools/delivery/test_runner_pod.sh")
+LOADER = "ui2-build-context-loader"
 CACHE_REPO = REGISTRY + "/nexus-ui2-build-cache"
 # The seed resolves every dependency and runs npm ci: more memory than the side images.
 RESOURCES = {"requests": {"cpu": "500m", "memory": "2Gi"}, "limits": {"cpu": "3", "memory": "6Gi"}}
@@ -74,10 +81,37 @@ def job_for(template, commit):
     return job
 
 
-def build(commit, sleep=time.sleep, monotonic=time.monotonic):
+def runner_files_tar(root=REPO, names=RUNNER_FILES):
+    """The two non-ui2 files the Containerfile copies, as a tar stream with their repository paths."""
+    import tarfile
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as tar:
+        for name in names:
+            tar.add(str(root / name), arcname=name, recursive=False)
+    return buffer.getvalue()
+
+
+def checkout_commit(root=REPO):
+    return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          timeout=30, check=True).stdout.strip()
+
+
+def load_runner_files(commit, root=REPO, run=subprocess.run):
+    """Put the runner files into the loaded context, from a checkout at the same commit only."""
+    if checkout_commit(root) != commit:
+        raise ValueError("this checkout is another commit than the loaded build context")
+    result = run(["kubectl", "-n", "ui2-build", "exec", "-i", LOADER, "--", "sh", "-c",
+                  "mkdir -p /workspace/tools/delivery && tar -xf - -C /workspace && chmod -R a+rX /workspace/tools"],
+                 input=runner_files_tar(root), capture_output=True, timeout=120)
+    if result.returncode:
+        raise RuntimeError("could not load the runner files into the build context")
+
+
+def build(commit, sleep=time.sleep, monotonic=time.monotonic, load=load_runner_files):
     context = json.loads(builds.kubectl("get", "configmap", "ui2-build-config", "-o", "json"))["data"]
     if context.get("commit") != commit:
         raise ValueError("the loaded build context is another commit")
+    load(commit)
     template = json.loads(builds.kubectl("create", "--dry-run=client", "-f", str(Path.home() / "build-job-proxy.yaml"),
                                          "-o", "json"))
     builds.kubectl("delete", "job", NAME, "--ignore-not-found", "--wait=true")
