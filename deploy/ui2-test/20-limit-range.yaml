@@ -18,11 +18,11 @@ spec:
       memory: 512Mi
       ephemeral-storage: 1Gi
     max:
-      cpu: "2"
+      cpu: "8"
       memory: 7Gi
       ephemeral-storage: 10Gi
   - type: Pod
     max:
-      cpu: 2600m
+      cpu: "9"
       memory: 8Gi
       ephemeral-storage: 10Gi
