@@ -13,7 +13,7 @@
 #   30 NO_CHANGE     -> nothing to ship
 #   50 harness error -> retried once, then queued with harness=ERROR (the ship pretest still runs; never blocks on us)
 #   other            -> queued with harness=ERROR (same: the pretest gates it)
-# Harness runs are serialized (one at a time, mkdir lock) so three finishing lanes do not load the Mac at once.
+# Harness runs that test on the Mac are serialized (one mkdir lock); runs carried to HOST-A use up to three slots.
 # Versioned copy (tools/delivery/ops) of the live 2026-11-25 script; paths come from ops_lib.sh. Differences: the ship
 # entry keeps review_returned=1 (a returned review is reviewed again), and the file only defines functions when sourced.
 # Test seams: NEXUS_LANE_HARNESS (the harness script; default: the lane worktree's own tools/delivery/lane_harness.py),
@@ -23,14 +23,28 @@ Q=$OPS_STATE/lane-queue; SQ=$OPS_STATE/ship-queue; L=$OPS_STATE/logs; REPO=$OPS_
 GATE_LOCK=$OPS_STATE/.harness-lock
 glog() { mkdir -p "$L"; ops_log "$@" >> "$L/lane-runner.log"; }
 
-# gate_lock / gate_unlock: one harness run at a time; a lock older than 40 minutes belongs to a dead run.
+# gate_lock <worktree> / gate_unlock: a run whose heavy tests stay on the Mac takes the one local slot ($GATE_LOCK); a run
+# that carries them to HOST-A (--carrier hosta, PO 2026-11-25 option A) takes one of NEXUS_HARNESS_HOSTA_SLOTS (default 3,
+# the ui2-test quota's pod count) so HOST-A-carried gates do not queue behind each other on the Mac. A slot older than
+# 40 minutes belongs to a dead run.
+GATE_HELD=""
+gate_try_slot() {
+  local slot=$1
+  [ -d "$slot" ] && [ $(( $(date +%s) - $(file_mtime "$slot") )) -gt 2400 ] && rmdir "$slot" 2>/dev/null
+  mkdir "$slot" 2>/dev/null && GATE_HELD=$slot
+}
 gate_lock() {
-  until mkdir "$GATE_LOCK" 2>/dev/null; do
-    [ $(( $(date +%s) - $(file_mtime "$GATE_LOCK") )) -gt 2400 ] && [ -d "$GATE_LOCK" ] && rmdir "$GATE_LOCK" 2>/dev/null
+  local wt=${1:-} i slots=${NEXUS_HARNESS_HOSTA_SLOTS:-3}
+  while :; do
+    if [ -n "$wt" ] && [ -n "$(gate_carrier "$wt")" ]; then
+      for i in $(seq 1 "$slots"); do gate_try_slot "$GATE_LOCK.hosta.$i" && return 0; done
+    else
+      gate_try_slot "$GATE_LOCK" && return 0
+    fi
     sleep "${NEXUS_HARNESS_LOCK_WAIT_S:-15}"
   done
 }
-gate_unlock() { rmdir "$GATE_LOCK" 2>/dev/null; return 0; }
+gate_unlock() { [ -n "$GATE_HELD" ] && rmdir "$GATE_HELD" 2>/dev/null; GATE_HELD=""; return 0; }
 
 # gate_integration <worktree>: hosta when the lane's own manifest hands integration to the ui2-test runner on HOST-A
 # (PO 2026-11-25); older bases keep the harness's auto choice (local PostgreSQL).
@@ -96,7 +110,7 @@ gate_main() {
   local n=$1 wt meta report t0 rc secs tag fails
   wt=$OPS_CODO/nexus-q-$n; meta=$Q/done/$n.meta; [ -e "$meta" ] || meta=$Q/started/$n.meta
   mkdir -p "$L" "$SQ"
-  gate_lock; trap gate_unlock EXIT
+  gate_lock "$wt"; trap gate_unlock EXIT
   report=$L/harness-$n.json; t0=$(date +%s)
   rc=$(gate_run_harness "$n" "$wt" "$meta" "$report")
   [ "$rc" = 50 ] && { glog "HARNESS $n error 50, retrying once"; rc=$(gate_run_harness "$n" "$wt" "$meta" "$report"); }
