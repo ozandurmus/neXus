@@ -137,8 +137,8 @@ describe("Zone matrix: Zones tab", () => {
     expect(within(app).getByText("about 7.92 x 10^28")).toBeInTheDocument();
     expect(within(table).getByText("Z-DB")).toBeInTheDocument();
     expect(screen.getByTestId("unassigned-space")).toHaveTextContent("IPv4 4,294,966,784");
-    // Blocks are an audited read: never fetched by default.
-    expect(gets(sent)).toEqual(["/api/v2/zone-matrix/draft?blocks=0", "/api/v2/zone-matrix/versions/v-active?blocks=0", "/api/v2/zone-matrix/versions"]);
+    // Blocks are an audited read: never fetched by default. The Matrix tab of the active version reads the stored summary once.
+    expect(gets(sent)).toEqual(["/api/v2/zone-matrix/draft?blocks=0", "/api/v2/zone-matrix/versions/v-active?blocks=0", "/api/v2/zone-matrix/versions", "/api/v2/zone-matrix/summary"]);
     expect(screen.queryByText("192.0.2.0/24")).not.toBeInTheDocument();
     // can.edit false, can.view_blocks false: no editor, no blocks toggle, no lookup.
     for (const name of ["Add zone", "Edit", "Delete", "Show blocks"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();

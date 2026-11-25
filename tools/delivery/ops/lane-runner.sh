@@ -81,8 +81,11 @@ finish_lane() {
   age=$(( $(date +%s) - $(file_mtime "$s") ))
   case "$out" in
     QUOTA)
-      if [ ! -e "$Q/ENGINE_CLAUDE" ]; then
-        touch "$Q/ENGINE_CLAUDE"; log "agy quota hit in $n -> switching new lanes to Claude; re-queueing $n"
+      # Every lane that hit the quota goes back to the queue once (2026-11-25: the second lane of the same agy quota window
+      # was archived FAILED and lost); a second quota hit on the same lane is FAILED, so a Claude quota cannot loop.
+      if [ ! -e "$Q/.quota-$n" ]; then
+        [ -e "$Q/ENGINE_CLAUDE" ] || { touch "$Q/ENGINE_CLAUDE"; log "agy quota hit in $n -> switching new lanes to Claude"; }
+        touch "$Q/.quota-$n"; log "quota hit in $n -> re-queueing it once"
         requeue_lane "$n" "$s"; archive_lane "$n" "$s" "QUOTA_REQUEUED"; return 0
       fi
       out=FAILED;;
@@ -201,7 +204,9 @@ maybe_refill() {
     prev=$(cat "$Q/.last-refill-kind" 2>/dev/null); case "$prev" in p1) kind=debt;; debt) kind=backlog;; backlog) kind=review;; *) kind=p1;; esac
     [ "$pd" = 1 ] && kind=p1
     rn=$(bash "$OPS_DIR/lanename.sh" "refill-$kind")  # standard name at queue time (PO 2026-11-24)
-    printf 'base=origin/main\nengine=claude\nship=no\nadddir=%s\n' "$OPS_STATE" > "$Q/$rn.meta"
+    # pin_claude=1: the planner reads the ops state outside its worktree, which headless agy refuses (read_file auto-denied,
+    # 2026-11-25 G706); it is short, so it always runs on Claude.
+    printf 'base=origin/main\nengine=claude\npin_claude=1\nship=no\nadddir=%s\n' "$OPS_STATE" > "$Q/$rn.meta"
     cp "$OPS_STATE/refill-${kind%b}.template" "$Q/$rn.brief.tmp" || { rm -f "$Q/$rn.meta" "$Q/$rn.brief.tmp"; log "ALERT refill template refill-${kind%b}.template missing"; return 0; }
     if [ "$pd" = 1 ]; then
       # The planner writes exactly as many briefs as the lane cap (PO 2026-11-24), whatever the template says.
@@ -302,6 +307,12 @@ lane_main() {
     finish_pass
     # PAUSED: no new lane starts (2026-11-20: agy quota exhausted and headless claude auth expired drained the queue).
     if [ -e "$Q/PAUSED" ]; then sleep 60; continue; fi
+    # An EMPTY ENGINE_CLAUDE is the runner's own quota switch (a person's switch carries a reason line): agy quotas reset
+    # within minutes ("Resets in 10m"), so after NEXUS_AGY_QUOTA_BACKOFF_S (default 20 min) agy takes lanes again.
+    if [ -e "$Q/ENGINE_CLAUDE" ] && [ ! -s "$Q/ENGINE_CLAUDE" ] \
+       && [ $(( $(date +%s) - $(file_mtime "$Q/ENGINE_CLAUDE") )) -gt "${NEXUS_AGY_QUOTA_BACKOFF_S:-1200}" ]; then
+      rm -f "$Q/ENGINE_CLAUDE"; log "agy quota back-off over -> agy takes lanes again"
+    fi
     maybe_refill
     start_next_lane
     sleep 60

@@ -190,4 +190,32 @@ class SubnetPreservingIpMaskerTest {
         // IPv4 keeps its relationship-preserving pseudonym next to an IPv6 literal
         assertThat(masker.maskText("v4 192.0.2.9 v6 2001:db8::9")).matches("v4 (?:24\\d|25[0-5])\\.\\d+\\.\\d+\\.\\d+ v6 \\[REDACTED_IP]");
     }
+
+    @Test
+    void redactsEmbeddedIpv6AddressesInComplianceAndReportProseWhileKeepingTimestampsMacsAndScopes() {
+        String text = "Mismatch on (2001:db8:4a1f::3c2 / 2001:0db8:0000:0000:0000:0000:0000:0009/64) at 2026-11-25T12:00:00Z "
+                + "clock 10:15:00 mac 00:11:22:33:44:55 scopes :: ::1.";
+        String masked = masker.maskText(text);
+
+        assertThat(masked).doesNotContain("2001:db8").doesNotContain("2001:0db8").doesNotContain("4a1f");
+        assertThat(masked).contains("([REDACTED_IP] / [REDACTED_IP]/64)");
+        assertThat(masked).contains("2026-11-25T12:00:00Z").contains("10:15:00").contains("00:11:22:33:44:55");
+        assertThat(masked).contains("scopes :: ::1.");
+    }
+
+    @Test
+    void ipv6ScanStaysLinearOnLongColonDotAndHexRuns() {
+        String[] hostile = {
+            ":".repeat(200_000),
+            "1:".repeat(100_000) + "x",
+            "a.".repeat(100_000) + ":",
+            ("2001:db8::1" + ".").repeat(20_000),
+            "f".repeat(200_000) + "::",
+        };
+        for (String text : hostile) {
+            long start = System.nanoTime();
+            masker.maskText(text);
+            assertThat((System.nanoTime() - start) / 1_000_000L).isLessThan(2_000L);
+        }
+    }
 }

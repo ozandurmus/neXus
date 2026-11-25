@@ -125,6 +125,18 @@ def test_a_quota_hit_switches_to_claude_and_requeues(ops):
     assert (ops.lq / "ENGINE_CLAUDE").exists() and (ops.lq / f"{LANE}.brief").exists() and "quota hit" in out
 
 
+def test_a_second_lane_hitting_the_same_quota_is_requeued_too_but_only_once(ops):
+    (ops.lq / "ENGINE_CLAUDE").touch()        # the first lane of this quota window already switched
+    ops.write_lane(LANE, "[argon] exit=3 head=abc x", report="RESOURCE_EXHAUSTED (code 429): Individual quota reached", age_s=900)
+    finish(ops)
+    assert (ops.lq / f"{LANE}.brief").exists()
+    (ops.lq / f"{LANE}.brief").unlink()
+    ops.write_lane(LANE, "[argon] exit=3 head=abc x", report="RESOURCE_EXHAUSTED (code 429): Individual quota reached", age_s=900)
+    finish(ops)
+    assert not (ops.lq / f"{LANE}.brief").exists()
+    assert (ops.lq / "done" / f"{LANE}.outcome").read_text().strip() == "FAILED"
+
+
 def test_a_running_lane_is_left_alone(ops):
     ops.write_lane(LANE, None, report="working")
     assert finish(ops) == ""

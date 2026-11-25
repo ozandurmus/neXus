@@ -677,6 +677,18 @@ export interface SummaryResolvedByVersion {
   readonly by_version: readonly { readonly version_id: string; readonly version_number: number | null; readonly count: number }[];
 }
 
+/** One zone pair with open violations on the active version (contract 7.1 Matrix tab; `ZoneMatrixSummaryView`). */
+export interface SummaryCellCount {
+  readonly source_zone_id: string;
+  readonly destination_zone_id: string;
+  readonly source_name: string;
+  readonly destination_name: string;
+  /** Rules counted by the headline; a lower bound unless `cell_counts_exact`. */
+  readonly headline_rules: number;
+  readonly outside_headline_rules: number;
+  readonly highest_severity: MatrixSeverity | null;
+}
+
 export interface ZoneMatrixSummaryResponse {
   readonly evaluated_at: string | null;
   readonly state: SummaryState | string;
@@ -700,6 +712,17 @@ export interface ZoneMatrixSummaryResponse {
   readonly capped: boolean;
   readonly findings: readonly SummaryFinding[];
   readonly resolved_by_version_change: SummaryResolvedByVersion;
+  /**
+   * Per-cell open-violation counts of the active version, capped by the request limit. All six keys are `null` (or absent)
+   * when there is no active version or no stored counts: that is never zero.
+   */
+  readonly cell_counts?: readonly SummaryCellCount[] | null;
+  /** The headline's `exact`: when false every count is a lower bound ("at least"). */
+  readonly cell_counts_exact?: boolean | null;
+  readonly cell_counts_total?: number | null;
+  readonly cell_counts_returned?: number | null;
+  readonly cell_counts_more?: number | null;
+  readonly cell_counts_capped?: boolean | null;
 }
 
 /** The query the summary route accepts; anything else is a 400. */

@@ -14,12 +14,13 @@ import { actorLabel } from "../../shell/presenters";
 import { m3 } from "../../theme/m3Theme";
 import { TYPE } from "../../theme/tokens";
 import type { ZoneNotice } from "./ZoneMatrixScreen";
+import { headlineProven } from "./ViolationsTab";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
   MATRIX_SEVERITIES, MATRIX_STATEMENTS, clearMatrixCell, confirmCellReference, getZoneMatrixTemplate,
   importMatrixTemplate, referenceStatusWord, setMatrixCell, severityWord, statementWord, zoneErrorCode,
   zoneErrorLines, type MatrixCellView, type MatrixSeverity, type MatrixStatement, type TemplateRow,
-  type ZoneMatrixTemplateResponse, type ZoneMatrixView,
+  type ZoneMatrixSummaryResponse, type ZoneMatrixTemplateResponse, type ZoneMatrixView,
 } from "./zoneMatrixApi";
 
 export const RESET_CONFIRMATION_NOTE =
@@ -41,6 +42,47 @@ export function StatementShape({ statement }: { readonly statement: MatrixStatem
 const trimLines = (text: string): string[] =>
   text.split("\n").map((line) => line.trim()).filter((line) => line !== "");
 
+/** One cell's open-violation line for the active version: what it says and whether it is a count that is bad. */
+export interface OpenViolationsLine {
+  readonly text: string;
+  /** `bad` only for a positive count; every unproven or unknown statement is `neutral`, never green. */
+  readonly tone: "bad" | "neutral";
+}
+
+/**
+ * The open-violation count of one pair of the version being viewed, from the stored summary (contract 7.1, 7.2). A count
+ * is a lower bound unless the server says it is exact; zero is printed only when the headline is proven and the list is not
+ * capped; a pair missing from a capped list is "not in top N cells", never 0.
+ */
+export function openViolationsLine(
+  data: ZoneMatrixSummaryResponse | null, viewedVersionId: string, sourceId: string, destinationId: string,
+): OpenViolationsLine {
+  if (data === null || data.state !== "READY" || data.active_version?.version_id !== viewedVersionId) {
+    return { text: "Open violations: UNKNOWN (stored summary not available for this version)", tone: "neutral" };
+  }
+  const counts = data.cell_counts;
+  if (!counts) return { text: "Open violations: UNKNOWN (no per-cell counts stored)", tone: "neutral" };
+  const exact = data.cell_counts_exact === true;
+  const entry = counts.find((c) => c.source_zone_id === sourceId && c.destination_zone_id === destinationId);
+  if (entry && (entry.headline_rules > 0 || entry.outside_headline_rules > 0)) {
+    const n = entry.headline_rules;
+    const base = `${exact ? `${n}` : `at least ${n}`} open violation${n === 1 ? "" : "s"}`;
+    const outside = entry.outside_headline_rules > 0 ? ` +${entry.outside_headline_rules} outside headline` : "";
+    return { text: `${base}${outside}`, tone: "bad" };
+  }
+  if (data.cell_counts_capped === true) {
+    return { text: `not in top ${data.cell_counts_returned ?? counts.length} cells`, tone: "neutral" };
+  }
+  if (exact && data.headline !== null && headlineProven(data, data.headline)) return { text: "0 open violations", tone: "neutral" };
+  return { text: "at least 0 open violations (coverage incomplete)", tone: "neutral" };
+}
+
+/** Said above the active grid when the per-cell list is capped. */
+export function cellCountsCapNote(data: ZoneMatrixSummaryResponse | null): string | null {
+  if (data === null || data.cell_counts_capped !== true) return null;
+  return `Per-cell counts capped at ${data.cell_counts_returned ?? 0} of ${data.cell_counts_total ?? 0} violating cells (+${data.cell_counts_more ?? 0} more).`;
+}
+
 export interface SelectedPair {
   readonly sourceId: string;
   readonly sourceName: string;
@@ -50,6 +92,7 @@ export interface SelectedPair {
 
 export function CellDetailPanel({
   pair, explicitCell, matrix, isMasked, editable, canConfirm, revision, onRefresh, onChanged, notify,
+  openViolations = null, onOpenViolations = null,
 }: {
   readonly pair: SelectedPair;
   readonly explicitCell: MatrixCellView | null;
@@ -61,6 +104,10 @@ export function CellDetailPanel({
   readonly onRefresh: () => void;
   readonly onChanged: () => void;
   readonly notify: (notice: ZoneNotice | null) => void;
+  /** The pair's open-violation line; `null` unless the active version is shown. */
+  readonly openViolations?: OpenViolationsLine | null;
+  /** Opens the Violations tab filtered to this pair; `null` unless the active version is shown. */
+  readonly onOpenViolations?: (() => void) | null;
 }) {
   const isUnassignedSelf = pair.sourceId === "UNASSIGNED" && pair.destinationId === "UNASSIGNED";
   const effectiveStatement: MatrixStatement = explicitCell
@@ -161,6 +208,15 @@ export function CellDetailPanel({
         <Typography variant="body2">Severity: <strong>{severityWord(effectiveSeverity)}</strong> ({effectiveSeverity})</Typography>
         <Typography variant="body2">Cell mode: <strong>{explicitCell ? "Explicit" : "Default"}</strong></Typography>
       </Stack>
+
+      {openViolations ? (
+        <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap" data-testid="cell-open-violations">
+          <Typography variant="body2" sx={{ color: openViolations.tone === "bad" ? m3.error : m3.onSurfaceVar, fontWeight: 600 }}>
+            {openViolations.text}
+          </Typography>
+          {onOpenViolations ? <M3Button emphasis="outlined" onClick={onOpenViolations}>Open violations for this pair</M3Button> : null}
+        </Stack>
+      ) : null}
 
       <Box>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>Services</Typography>

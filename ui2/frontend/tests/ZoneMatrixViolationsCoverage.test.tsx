@@ -86,12 +86,13 @@ const summaryGets = (s: Served) => s.gets.filter((u) => u.startsWith("/api/v2/zo
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
 
 describe("Zone matrix: tab list and lazy read", () => {
-  it("orders the tabs Matrix, Violations, Zones, Versions, Evaluate, Coverage and reads the summary only on first use", async () => {
+  it("orders the tabs Matrix, Violations, Zones, Versions, Evaluate, Coverage and reads the stored summary once", async () => {
     const s = serve();
     render(<ZoneMatrixScreen />);
     await screen.findByRole("tab", { name: "Coverage" });
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Violations", "Zones", "Versions", "Evaluate", "Coverage"]);
-    expect(summaryGets(s)).toEqual([]);
+    // The Matrix tab of the active version starts the one read (open-violation counts); no other tab adds a second.
+    await waitFor(() => expect(summaryGets(s)).toEqual(["/api/v2/zone-matrix/summary"]));
     fireEvent.click(screen.getByRole("tab", { name: "Violations" }));
     await screen.findByRole("table", { name: "Violation findings" });
     expect(summaryGets(s)).toEqual(["/api/v2/zone-matrix/summary"]);
