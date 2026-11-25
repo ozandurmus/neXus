@@ -125,8 +125,7 @@ public final class ZoneMatrixSummaryView {
         Objects.requireNonNull(labels, "labels");
         Objects.requireNonNull(query, "query");
 
-        Map<String, String> policyNames = new HashMap<>();
-        for (PolicyCoverage p : summary.policies()) policyNames.put(p.policyId(), labels.policyName(p.policyName()));
+        Map<String, String> policyNames = policyNames(summary, labels);
         if (query.policyId() != null && !policyNames.containsKey(query.policyId())
                 && summary.notEvaluated().stream().noneMatch(p -> p.id().equals(query.policyId()))) {
             throw bad("UNKNOWN_POLICY", "policy_id names no policy in the zone matrix coverage");
@@ -199,13 +198,29 @@ public final class ZoneMatrixSummaryView {
     }
 
     private static Map<String, Object> threshold(StalenessThreshold t) {
-        boolean interim = ZoneMatrixStaleness.INTERIM_PO_2026_11_23.equals(t);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("seconds", t.value().toSeconds());
         out.put("hours", t.value().toSeconds() % 3600 == 0 ? t.value().toHours() : null);
-        out.put("interim", interim);
+        out.put("interim", interim(t));
         out.put("source", t.source());
-        out.put("label", interim ? INTERIM_THRESHOLD_LABEL : "source: " + t.source());
+        out.put("label", thresholdLabel(t));
+        return out;
+    }
+
+    /** {@code true} while the threshold is the interim value of the 2026-11-23 amendment. */
+    static boolean interim(StalenessThreshold t) {
+        return ZoneMatrixStaleness.INTERIM_PO_2026_11_23.equals(t);
+    }
+
+    /** The label shown with the threshold: {@link #INTERIM_THRESHOLD_LABEL} while interim, else its stated source. */
+    static String thresholdLabel(StalenessThreshold t) {
+        return interim(t) ? INTERIM_THRESHOLD_LABEL : "source: " + t.source();
+    }
+
+    /** Policy id to its name as the caller may see it; findings of a policy outside the coverage list show UNKNOWN. */
+    static Map<String, String> policyNames(StoredSummary summary, Labels labels) {
+        Map<String, String> out = new HashMap<>();
+        for (PolicyCoverage p : summary.policies()) out.put(p.policyId(), labels.policyName(p.policyName()));
         return out;
     }
 
@@ -387,7 +402,8 @@ public final class ZoneMatrixSummaryView {
         return row;
     }
 
-    private static String zone(String zoneId, String versionId, Labels labels) {
+    /** A zone id as the caller may see it in {@code versionId}'s content; UNASSIGNED stays, a missing id is UNKNOWN. */
+    static String zone(String zoneId, String versionId, Labels labels) {
         if (zoneId == null) return "UNKNOWN";
         if (ZoneMatrixContent.UNASSIGNED.equals(zoneId)) return ZoneMatrixContent.UNASSIGNED;
         return labels.zoneName(versionId, zoneId);
