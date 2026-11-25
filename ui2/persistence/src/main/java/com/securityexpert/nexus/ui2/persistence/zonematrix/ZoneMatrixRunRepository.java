@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Durable zone-matrix evaluation runs and their findings (ZONE_MATRIX_CONTRACT.md sections 5.1, 5.9 and 8.1, FROZEN
@@ -22,9 +23,9 @@ public interface ZoneMatrixRunRepository {
     /** Fixed failure codes; never free text (section 8.2). */
     enum FailureReason { TIME_LIMIT, INTERRUPTED_AT_STARTUP, ENGINE_ERROR, SNAPSHOT_MISSING, POOL_SATURATED, STORE_ERROR }
 
-    /** What a new {@code RUNNING} row records about the version it evaluates against. */
+    /** What a new {@code RUNNING} row records about the version and snapshot it evaluates against. */
     record NewRun(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,
-            String engineVersion, Instant startedAt) {
+            String engineVersion, Instant startedAt, Instant snapshotCollectedAt) {
         public NewRun {
             Objects.requireNonNull(runId, "runId");
             Objects.requireNonNull(versionId, "versionId");
@@ -32,6 +33,11 @@ public interface ZoneMatrixRunRepository {
             Objects.requireNonNull(policySourceId, "policySourceId");
             Objects.requireNonNull(engineVersion, "engineVersion");
             Objects.requireNonNull(startedAt, "startedAt");
+        }
+
+        public NewRun(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,
+                String engineVersion, Instant startedAt) {
+            this(runId, versionId, versionNumber, contentSha256, policySourceId, engineVersion, startedAt, null);
         }
     }
 
@@ -97,6 +103,52 @@ public interface ZoneMatrixRunRepository {
         }
     }
 
+    /** A stored finding from an earlier {@code COMPLETE} run of the policy source, paired with its run context. */
+    record PriorFinding(long findingId, String runId, String versionId, int versionNumber, Instant runFinishedAt,
+            boolean runCompleteScope, Finding finding) {
+        public PriorFinding {
+            Objects.requireNonNull(runId, "runId");
+            Objects.requireNonNull(versionId, "versionId");
+            Objects.requireNonNull(finding, "finding");
+        }
+    }
+
+    /** Chronological {@code COMPLETE}-run finding history of one policy source, plus its newest {@code COMPLETE} run id. */
+    record PriorHistory(String latestCompleteRunId, List<PriorFinding> findings) {
+        public PriorHistory { findings = List.copyOf(findings); }
+    }
+
+    /** Marks prior open finding row(s) of an exact identity resolved within the completing transaction. */
+    record ResolutionUpdate(String ruleUid, List<String> inlineParentPath, List<String> violatedPairs,
+            Instant resolvedAt, String resolutionReason) {
+        public ResolutionUpdate {
+            Objects.requireNonNull(ruleUid, "ruleUid");
+            Objects.requireNonNull(resolvedAt, "resolvedAt");
+            Objects.requireNonNull(resolutionReason, "resolutionReason");
+            inlineParentPath = List.copyOf(inlineParentPath);
+            violatedPairs = List.copyOf(violatedPairs);
+        }
+    }
+
+    /** Lifecycle transition output applied atomically when completing a run. */
+    record CompletionPlan(Counts counts, List<Finding> findingsToInsert, List<ResolutionUpdate> resolutions) {
+        public CompletionPlan {
+            Objects.requireNonNull(counts, "counts");
+            findingsToInsert = List.copyOf(findingsToInsert);
+            resolutions = List.copyOf(resolutions);
+        }
+    }
+
+    /** A finding resolved with {@code MATRIX_VERSION_CHANGED}, citing both the opening and resolving versions (ZM-36). */
+    record ResolvedByVersionFinding(String resolvedFromVersionId, int resolvedFromVersionNumber,
+            String resolvedInVersionId, Integer resolvedInVersionNumber, Instant resolvedAt, Finding finding) {
+        public ResolvedByVersionFinding {
+            Objects.requireNonNull(resolvedFromVersionId, "resolvedFromVersionId");
+            Objects.requireNonNull(resolvedAt, "resolvedAt");
+            Objects.requireNonNull(finding, "finding");
+        }
+    }
+
     /** A run row: ids, state, counts and coverage; never zone names, blocks, addresses or rule names. */
     record Run(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,
             String engineVersion, String state, String failureReason, Instant startedAt, Instant finishedAt,
@@ -131,8 +183,24 @@ public interface ZoneMatrixRunRepository {
     boolean complete(String runId, Instant finishedAt, long durationMillis, Counts counts, Coverage coverage,
             List<Finding> findings);
 
+    /**
+     * Loads prior {@code COMPLETE}-run finding history for the run's policy source inside the {@code FOR UPDATE}
+     * transaction, computes the {@link CompletionPlan}, updates resolved prior open rows (lifecycle columns only),
+     * inserts this run's findings, and flips the run to {@code COMPLETE} atomically.
+     */
+    default boolean complete(String runId, Instant finishedAt, long durationMillis, Coverage coverage,
+            Function<PriorHistory, CompletionPlan> planner) {
+        CompletionPlan plan = planner.apply(new PriorHistory(null, List.of()));
+        return complete(runId, finishedAt, durationMillis, plan.counts(), coverage, plan.findingsToInsert());
+    }
+
     /** Ends a {@code RUNNING} run {@code FAILED}; {@code false} when it was already finished. */
     boolean fail(String runId, FailureReason reason, Instant finishedAt);
+
+    /** Ends a {@code RUNNING} run {@code FAILED}, recording the evaluated snapshot's {@code collected_at} when known. */
+    default boolean fail(String runId, FailureReason reason, Instant finishedAt, Instant snapshotCollectedAt) {
+        return fail(runId, reason, finishedAt);
+    }
 
     /** Sets every {@code RUNNING} run {@code FAILED} with {@link FailureReason#INTERRUPTED_AT_STARTUP}; returns the count. */
     int failInterrupted(Instant finishedAt);
@@ -140,8 +208,30 @@ public interface ZoneMatrixRunRepository {
     /** The newest {@code COMPLETE} run of a policy source. */
     Optional<Run> latestComplete(String policySourceId);
 
+    /** The newest run of a policy source in any state ({@code RUNNING}, {@code COMPLETE} or {@code FAILED}). */
+    default Optional<Run> latestRun(String policySourceId) {
+        return runs(500).stream().filter(r -> r.policySourceId().equals(policySourceId)).findFirst();
+    }
+
+    /** The newest finished ({@code COMPLETE} or {@code FAILED}) run of a policy source against {@code versionId}. */
+    default Optional<Run> latestFinishedForVersion(String policySourceId, String versionId) {
+        return runs(500).stream()
+                .filter(r -> r.policySourceId().equals(policySourceId)
+                        && r.versionId().equals(versionId)
+                        && (STATE_COMPLETE.equals(r.state()) || STATE_FAILED.equals(r.state())))
+                .findFirst();
+    }
+
     /** The findings of a {@code COMPLETE} run in insertion order; empty for a run in any other state. */
     List<Finding> findingsOf(String completeRunId);
+
+    /**
+     * Findings resolved with {@code resolution_reason = 'MATRIX_VERSION_CHANGED'} (at or after {@code since} when
+     * non-null), newest resolution first.
+     */
+    default List<ResolvedByVersionFinding> resolvedByVersionChange(Instant since) {
+        return List.of();
+    }
 
     /** The newest runs in any state, newest first: state and counts only (at most {@code limit}, capped at 500). */
     List<Run> runs(int limit);

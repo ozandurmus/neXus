@@ -18,15 +18,17 @@ import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 /**
- * Zone matrix delivery step 4b-1: durable runs on the own bounded pool (docs/design/ZONE_MATRIX_CONTRACT.md sections
- * 5.1, 8.1, 8.2 and 9; acceptance criteria ZM-10 and the parts of ZM-39 this step owns: the separate pool, the time
- * limit ends a run FAILED, a pod kill or a failed write never leaves partial findings visible). The heap ceiling of
- * ZM-39 is not enforced in this step. Synthetic zone names and RFC 5737 documentation blocks only.
+ * Zone matrix delivery step 4b-1 & 4b-2a: durable runs on the own bounded pool (docs/design/ZONE_MATRIX_CONTRACT.md
+ * sections 5.1, 8.1, 8.2 and 9; acceptance criteria ZM-10 and the parts of ZM-39 this step owns: the separate pool,
+ * the time limit ends a run FAILED, a pod kill or a failed write never leaves partial findings visible). Synthetic zone
+ * names and RFC 5737 documentation blocks only.
  */
 class ZoneMatrixRunServiceTest {
     private static final Instant NOW = Instant.parse("2026-11-23T09:00:00Z");
@@ -317,14 +319,19 @@ class ZoneMatrixRunServiceTest {
         assertEquals(List.of("tcp/22"), violation.violatedCells().get(0).notAllowedServices());
         assertNotNull(violation.violatedCells().get(0).witness(), "the witness tuple is stored as the engine returns it");
         assertEquals(1, violation.violatedPairs().size());
-        for (var f : findings) {
-            assertEquals(NOW, f.firstObservedAt());
-            assertEquals(NOW, f.lastObservedAt());
-            assertNull(f.firstObservedAnyVersion());
-            assertNull(f.resolvedAt());
-            assertNull(f.resolutionReason());
-        }
-        assertNotNull(findings.get(1).reason());
+        assertEquals(NOW, violation.firstObservedAt());
+        assertEquals(NOW, violation.firstObservedAnyVersion());
+        assertEquals(NOW, violation.lastObservedAt());
+        assertNull(violation.resolvedAt());
+        assertNull(violation.resolutionReason());
+
+        var undecided = findings.get(1);
+        assertEquals(NOW, undecided.firstObservedAt());
+        assertNull(undecided.firstObservedAnyVersion());
+        assertEquals(NOW, undecided.lastObservedAt());
+        assertNull(undecided.resolvedAt());
+        assertNull(undecided.resolutionReason());
+        assertNotNull(undecided.reason());
     }
 
     @Test
@@ -415,15 +422,31 @@ class ZoneMatrixRunServiceTest {
     static final class HoldingExecutor extends DirectExecutor {
         final List<Runnable> tasks = new ArrayList<>();
         @Override public void execute(Runnable command) { tasks.add(command); }
-        void runAll() { tasks.forEach(Runnable::run); tasks.clear(); }
+        void runAll() {
+            List<Runnable> batch = new ArrayList<>(tasks);
+            tasks.clear();
+            batch.forEach(Runnable::run);
+        }
     }
 
-    /** In-memory runs with the database's guarantees: one RUNNING per policy, all-or-nothing completion. */
+    /** In-memory runs with V267's guarantees: one RUNNING per policy, atomic lifecycle completion and column updates. */
     static final class FakeRuns implements ZoneMatrixRunRepository {
+        static final class StoredRow {
+            final long findingId;
+            final String runId;
+            Finding finding;
+
+            StoredRow(long findingId, String runId, Finding finding) {
+                this.findingId = findingId;
+                this.runId = runId;
+                this.finding = finding;
+            }
+        }
+
         static final class Row {
             String runId, policy, versionId, contentSha256, engineVersion, state, failureReason;
             int versionNumber;
-            Instant startedAt, finishedAt;
+            Instant startedAt, finishedAt, snapshotCollectedAt;
             Counts counts;
             Coverage coverage;
             long duration;
@@ -436,8 +459,11 @@ class ZoneMatrixRunServiceTest {
             }
 
             Run toRun() {
+                Instant snapAt = coverage != null && coverage.snapshotCollectedAt() != null
+                        ? coverage.snapshotCollectedAt()
+                        : snapshotCollectedAt;
                 return new Run(runId, versionId, versionNumber, contentSha256, policy, engineVersion, state, failureReason,
-                        startedAt, finishedAt, coverage == null ? null : coverage.snapshotCollectedAt(),
+                        startedAt, finishedAt, snapAt,
                         coverage == null ? null : coverage.snapshotRuleCount(), coverage == null ? null : coverage.vendor(),
                         coverage == null ? null : coverage.evaluated(), coverage == null ? null : coverage.coverage(),
                         coverage == null ? List.of() : coverage.itemCodes(),
@@ -447,6 +473,8 @@ class ZoneMatrixRunServiceTest {
 
         final Map<String, Row> rows = new LinkedHashMap<>();
         final Map<String, List<Finding>> findings = new LinkedHashMap<>();
+        final List<StoredRow> storedRows = new ArrayList<>();
+        final AtomicLong nextFindingId = new AtomicLong();
         final AtomicInteger completeCalls = new AtomicInteger();
         volatile boolean failNextComplete;
 
@@ -457,6 +485,7 @@ class ZoneMatrixRunServiceTest {
             r.runId = run.runId(); r.policy = run.policySourceId(); r.versionId = run.versionId();
             r.versionNumber = run.versionNumber(); r.contentSha256 = run.contentSha256();
             r.engineVersion = run.engineVersion(); r.state = STATE_RUNNING; r.startedAt = run.startedAt();
+            r.snapshotCollectedAt = run.snapshotCollectedAt();
             rows.put(r.runId, r);
         }
 
@@ -467,28 +496,99 @@ class ZoneMatrixRunServiceTest {
 
         @Override public synchronized boolean complete(String runId, Instant finishedAt, long durationMillis,
                 Counts counts, Coverage coverage, List<Finding> list) {
+            return complete(runId, finishedAt, durationMillis, coverage,
+                    ignored -> new CompletionPlan(counts, list, List.of()));
+        }
+
+        @Override public synchronized boolean complete(String runId, Instant finishedAt, long durationMillis,
+                Coverage coverage, Function<PriorHistory, CompletionPlan> planner) {
             completeCalls.incrementAndGet();
             Row r = rows.get(runId);
             if (r == null || !STATE_RUNNING.equals(r.state)) return false;
+
+            String latestCompleteId = latestComplete(r.policy).map(Run::runId).orElse(null);
+            List<PriorFinding> priors = new ArrayList<>();
+            for (StoredRow sr : storedRows) {
+                Row owner = rows.get(sr.runId);
+                if (owner == null || !STATE_COMPLETE.equals(owner.state) || !owner.policy.equals(r.policy)) continue;
+                boolean completeScope = owner.coverage != null
+                        && owner.coverage.evaluated()
+                        && "COMPLETE".equals(owner.coverage.coverage())
+                        && owner.coverage.collectionFailures() == 0;
+                priors.add(new PriorFinding(sr.findingId, sr.runId, owner.versionId, owner.versionNumber,
+                        owner.finishedAt, completeScope, sr.finding));
+            }
+
+            CompletionPlan plan = planner.apply(new PriorHistory(latestCompleteId, priors));
+
             List<Finding> staged = new ArrayList<>();
-            for (Finding f : list) {
+            for (Finding f : plan.findingsToInsert()) {
                 staged.add(f);
                 if (failNextComplete && staged.size() == 1) {
                     failNextComplete = false;
-                    // The transaction rolls back: the staged rows are dropped and the run stays RUNNING.
                     throw new IllegalStateException("injected write failure");
                 }
             }
-            findings.put(runId, List.copyOf(staged));
-            r.state = STATE_COMPLETE; r.finishedAt = finishedAt; r.counts = counts; r.coverage = coverage;
+            if (failNextComplete) {
+                failNextComplete = false;
+                throw new IllegalStateException("injected write failure");
+            }
+
+            for (ResolutionUpdate res : plan.resolutions()) {
+                Set<String> pairs = Set.copyOf(res.violatedPairs());
+                for (StoredRow sr : storedRows) {
+                    Row owner = rows.get(sr.runId);
+                    if (owner == null || !STATE_COMPLETE.equals(owner.state) || !owner.policy.equals(r.policy)) continue;
+                    Finding f = sr.finding;
+                    if (f.resolvedAt() == null
+                            && f.policySourceId().equals(r.policy)
+                            && f.ruleUid().equals(res.ruleUid())
+                            && f.inlineParentPath().equals(res.inlineParentPath())
+                            && Set.copyOf(f.violatedPairs()).equals(pairs)) {
+                        sr.finding = new Finding(f.policySourceId(), f.ruleUid(), f.inlineParentPath(),
+                                f.violatedPairs(), f.ruleId(), f.ruleNumber(), f.ruleName(), f.sectionId(),
+                                f.sectionName(), f.targetDeviceIds(), f.outcome(), f.reason(), f.highestSeverity(),
+                                f.flags(), f.coveringRuleId(), f.violatedCells(), f.undecidedParts(), f.natView(),
+                                f.firstObservedAt(), f.firstObservedAnyVersion(), f.lastObservedAt(),
+                                res.resolvedAt(), res.resolutionReason());
+                    }
+                }
+                syncFindingsView();
+            }
+
+            for (Finding f : staged) {
+                storedRows.add(new StoredRow(nextFindingId.incrementAndGet(), runId, f));
+            }
+            r.state = STATE_COMPLETE;
+            r.finishedAt = finishedAt;
+            r.counts = plan.counts();
+            r.coverage = coverage;
+            if (coverage.snapshotCollectedAt() != null) r.snapshotCollectedAt = coverage.snapshotCollectedAt();
             r.duration = durationMillis;
+            syncFindingsView();
             return true;
         }
 
+        private void syncFindingsView() {
+            findings.clear();
+            for (StoredRow sr : storedRows) {
+                findings.computeIfAbsent(sr.runId, k -> new ArrayList<>()).add(sr.finding);
+            }
+            findings.replaceAll((k, v) -> List.copyOf(v));
+        }
+
         @Override public synchronized boolean fail(String runId, FailureReason reason, Instant finishedAt) {
+            return fail(runId, reason, finishedAt, null);
+        }
+
+        @Override public synchronized boolean fail(String runId, FailureReason reason, Instant finishedAt,
+                Instant snapshotCollectedAt) {
             Row r = rows.get(runId);
             if (r == null || !STATE_RUNNING.equals(r.state)) return false;
-            r.state = STATE_FAILED; r.failureReason = reason.name(); r.finishedAt = finishedAt;
+            r.state = STATE_FAILED;
+            r.failureReason = reason.name();
+            r.finishedAt = finishedAt;
+            if (snapshotCollectedAt != null) r.snapshotCollectedAt = snapshotCollectedAt;
             return true;
         }
 
@@ -507,7 +607,32 @@ class ZoneMatrixRunServiceTest {
         @Override public synchronized Optional<Run> latestComplete(String policySourceId) {
             Row latest = null;
             for (Row r : rows.values()) {
-                if (r.policy.equals(policySourceId) && STATE_COMPLETE.equals(r.state)) latest = r;
+                if (r.policy.equals(policySourceId) && STATE_COMPLETE.equals(r.state)) {
+                    if (latest == null || !r.finishedAt.isBefore(latest.finishedAt)) latest = r;
+                }
+            }
+            return Optional.ofNullable(latest).map(Row::toRun);
+        }
+
+        @Override public synchronized Optional<Run> latestRun(String policySourceId) {
+            Row latest = null;
+            for (Row r : rows.values()) {
+                if (r.policy.equals(policySourceId)) {
+                    Instant rTime = r.finishedAt != null ? r.finishedAt : r.startedAt;
+                    Instant lTime = latest == null ? null : (latest.finishedAt != null ? latest.finishedAt : latest.startedAt);
+                    if (latest == null || !rTime.isBefore(lTime)) latest = r;
+                }
+            }
+            return Optional.ofNullable(latest).map(Row::toRun);
+        }
+
+        @Override public synchronized Optional<Run> latestFinishedForVersion(String policySourceId, String versionId) {
+            Row latest = null;
+            for (Row r : rows.values()) {
+                if (r.policy.equals(policySourceId) && r.versionId.equals(versionId)
+                        && (STATE_COMPLETE.equals(r.state) || STATE_FAILED.equals(r.state))) {
+                    if (latest == null || !r.finishedAt.isBefore(latest.finishedAt)) latest = r;
+                }
             }
             return Optional.ofNullable(latest).map(Row::toRun);
         }
@@ -518,8 +643,58 @@ class ZoneMatrixRunServiceTest {
             return findings.getOrDefault(completeRunId, List.of());
         }
 
+        @Override public synchronized List<ResolvedByVersionFinding> resolvedByVersionChange(Instant since) {
+            record DedupKey(String policy, String uid, List<String> path, Set<String> pairs,
+                    Instant firstAt, Instant resolvedAt) {}
+            List<StoredRow> matching = new ArrayList<>();
+            for (StoredRow sr : storedRows) {
+                Row owner = rows.get(sr.runId);
+                Finding f = sr.finding;
+                if (owner == null || !STATE_COMPLETE.equals(owner.state)) continue;
+                if (!"MATRIX_VERSION_CHANGED".equals(f.resolutionReason()) || f.resolvedAt() == null) continue;
+                if (since != null && f.resolvedAt().isBefore(since)) continue;
+                matching.add(sr);
+            }
+            matching.sort(Comparator.comparing((StoredRow sr) -> sr.finding.resolvedAt()).reversed()
+                    .thenComparing(Comparator.comparingLong((StoredRow sr) -> sr.findingId).reversed()));
+
+            Map<DedupKey, ResolvedByVersionFinding> out = new LinkedHashMap<>();
+            for (StoredRow sr : matching) {
+                Finding f = sr.finding;
+                Row fromRun = rows.get(sr.runId);
+                Row resRun = null;
+                for (Row cand : rows.values()) {
+                    if (!cand.policy.equals(f.policySourceId()) || !STATE_COMPLETE.equals(cand.state)) continue;
+                    if (cand.runId.equals(sr.runId) || !f.resolvedAt().equals(cand.finishedAt)) continue;
+                    if (resRun == null || (!cand.versionId.equals(fromRun.versionId)
+                            && resRun.versionId.equals(fromRun.versionId))) {
+                        resRun = cand;
+                    }
+                }
+                DedupKey key = new DedupKey(f.policySourceId(), f.ruleUid(), f.inlineParentPath(),
+                        Set.copyOf(f.violatedPairs()), f.firstObservedAt(), f.resolvedAt());
+                ResolvedByVersionFinding existing = out.get(key);
+                if (existing == null) {
+                    out.put(key, new ResolvedByVersionFinding(
+                            fromRun.versionId, fromRun.versionNumber,
+                            resRun == null ? null : resRun.versionId,
+                            resRun == null ? null : resRun.versionNumber,
+                            f.resolvedAt(), f));
+                } else if (resRun != null && !fromRun.versionId.equals(resRun.versionId)
+                        && existing.resolvedFromVersionId().equals(existing.resolvedInVersionId())) {
+                    out.put(key, new ResolvedByVersionFinding(
+                            fromRun.versionId, fromRun.versionNumber,
+                            existing.resolvedInVersionId(), existing.resolvedInVersionNumber(),
+                            existing.resolvedAt(), existing.finding()));
+                }
+            }
+            return List.copyOf(out.values());
+        }
+
         @Override public synchronized List<Run> runs(int limit) {
-            return rows.values().stream().map(Row::toRun).limit(Math.max(0, limit)).toList();
+            List<Row> copy = new ArrayList<>(rows.values());
+            Collections.reverse(copy);
+            return copy.stream().map(Row::toRun).limit(Math.max(0, limit)).toList();
         }
     }
 }

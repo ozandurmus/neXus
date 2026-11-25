@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -26,11 +27,12 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * Zone matrix wiring (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13): steps 1-3, and step 4b-1's durable runs
- * (run repository, the run service on its own bounded pool, shut down with the context, and the startup recovery of
- * runs a pod kill left RUNNING). No route and no trigger submits a run yet (step 4b-2).
+ * Zone matrix wiring (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13): steps 1-3, step 4b-1's durable runs
+ * (run repository, the run service on its own bounded pool, shut down with the context, and startup recovery), and
+ * step 4b-2a's post-publish and completed-collection triggers.
  */
 @Configuration
 public class ZoneMatrixConfiguration {
@@ -48,7 +50,10 @@ public class ZoneMatrixConfiguration {
             ObjectProvider<PolicyQueryService> policies,
             ObjectProvider<DeviceRepository> devices,
             ObjectProvider<TopologyNamePseudonymizer> nameMasker,
-            ObjectProvider<SubnetPreservingIpMasker> ipMasker) {
+            ObjectProvider<SubnetPreservingIpMasker> ipMasker,
+            ObjectProvider<ZoneMatrixRunService> runService) {
+        ZoneMatrixRunService runs = runService.getIfAvailable();
+        Consumer<String> onPublished = runs == null ? null : runs::submitPublishedVersion;
         return new ZoneMatrixService(
                 repository,
                 principals(rbac),
@@ -57,7 +62,8 @@ public class ZoneMatrixConfiguration {
                 policies.getIfAvailable(),
                 devices.getIfAvailable(),
                 nameMasker.getIfAvailable(() -> new TopologyNamePseudonymizer(new byte[32])),
-                ipMasker.getIfAvailable(() -> new SubnetPreservingIpMasker(new byte[32])));
+                ipMasker.getIfAvailable(() -> new SubnetPreservingIpMasker(new byte[32])),
+                onPublished);
     }
 
     @Bean
@@ -86,6 +92,44 @@ public class ZoneMatrixConfiguration {
                 LOG.warn("zone_matrix_runs_startup_recovery_failed error_class={}", e.getClass().getSimpleName());
             }
         };
+    }
+
+    /**
+     * Completed-collection trigger (section 5.1, ZM-8): polls stored {@code policy_snapshot} metadata and submits runs
+     * only when scheduling and the zone-matrix collection trigger are both enabled.
+     */
+    @Bean
+    public CollectionPollTrigger zoneMatrixCollectionPollTrigger(
+            ZoneMatrixRunService runs,
+            @Value("${ui2.scheduling.enabled:false}") boolean schedulingEnabled,
+            @Value("${ui2.zone-matrix.collection-trigger-enabled:true}") boolean collectionTriggerEnabled) {
+        return new CollectionPollTrigger(runs, schedulingEnabled && collectionTriggerEnabled);
+    }
+
+    public static final class CollectionPollTrigger {
+        private final ZoneMatrixRunService runs;
+        private final boolean enabled;
+
+        CollectionPollTrigger(ZoneMatrixRunService runs, boolean enabled) {
+            this.runs = runs;
+            this.enabled = enabled;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        @Scheduled(
+                fixedDelayString = "${ui2.zone-matrix.collection-poll-ms:60000}",
+                initialDelayString = "${ui2.zone-matrix.collection-poll-initial-ms:30000}")
+        public void pollCompletedCollections() {
+            if (!enabled) return;
+            try {
+                runs.submitCompletedCollections();
+            } catch (RuntimeException e) {
+                LOG.warn("zone_matrix_collection_poll_failed error_class={}", e.getClass().getSimpleName());
+            }
+        }
     }
 
     /** compliance_admin through a real binding (the root identity never counts as holding it); root by its authority. */

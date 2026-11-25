@@ -27,7 +27,9 @@ import org.junit.jupiter.api.Test;
  */
 class ZoneMatrixRunStorageTest {
     private static final String VERSION = "00000000-0000-4000-8000-0000000000a1";
+    private static final String VERSION_TWO = "00000000-0000-4000-8000-0000000000a2";
     private static final String SHA = "a".repeat(64);
+    private static final String SHA_TWO = "b".repeat(64);
     private static final Instant STARTED = Instant.parse("2026-11-23T09:00:00Z");
     private static final Instant FINISHED = Instant.parse("2026-11-23T09:00:05Z");
     private static Ui2PostgresFixture fixture;
@@ -38,6 +40,9 @@ class ZoneMatrixRunStorageTest {
             s.execute("INSERT INTO zone_matrix_version (version_id, number, state, revision, content, content_sha256, "
                     + "created_by, updated_by, published_by, published_at) VALUES ('" + VERSION + "', 1, 'ACTIVE', 1, "
                     + "'{}', '" + SHA + "', 'security-1', 'security-1', 'compliance-1', now())");
+            s.execute("INSERT INTO zone_matrix_version (version_id, number, state, revision, content, content_sha256, "
+                    + "created_by, updated_by, published_by, published_at) VALUES ('" + VERSION_TWO + "', 2, 'RETIRED', 1, "
+                    + "'{}', '" + SHA_TWO + "', 'security-1', 'security-1', 'compliance-1', now())");
         }
     }
 
@@ -205,6 +210,96 @@ class ZoneMatrixRunStorageTest {
                     + "' AND (rule_uid = '1abc' OR policy_source_id = '" + policy.toLowerCase(java.util.Locale.ROOT) + "')"));
             assertEquals(policy, repository.latestComplete(policy).orElseThrow().policySourceId());
             assertTrue(repository.latestComplete(policy.toLowerCase(java.util.Locale.ROOT)).isEmpty());
+        }
+    }
+
+    @Test void twoRunLifecycleUpdatesGrantedColumnsOnlyAndResolvesAtomically() throws Exception {
+        try (Connection db = fixture.appConnection(); Statement s = db.createStatement()) {
+            ZoneMatrixRunRepository repository = new JooqZoneMatrixRunRepository(
+                    new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            String policy = "pol-lifecycle-" + UUID.randomUUID();
+            Instant t1Start = Instant.parse("2026-11-23T10:00:00Z");
+            Instant t1End = Instant.parse("2026-11-23T10:00:05Z");
+            Instant snap1 = Instant.parse("2026-11-23T09:50:00Z");
+
+            // Run 1 under VERSION (v1): uid-keep (VIOLATION) and uid-resolve (VIOLATION).
+            String run1 = UUID.randomUUID().toString();
+            repository.start(new NewRun(run1, VERSION, 1, SHA, policy, "step3-v1", t1Start, snap1));
+            Finding keepV1 = new Finding(policy, "uid-keep", List.of("00Parent", "parent-B"), List.of("ZONE-A->ZONE-B"),
+                    "r-1", 1, "RULE-KEEP", "sec-1", "Local rules", List.of("FW-TANGO-04"), "VIOLATION", null, "HIGH",
+                    List.of(), null, List.of(), List.of(), "original", t1End, t1End, t1End, null, null);
+            Finding resolveV1 = new Finding(policy, "uid-resolve", List.of(), List.of("ZONE-C->ZONE-D"),
+                    "r-2", 2, "RULE-RESOLVE", "sec-1", "Local rules", List.of("FW-TANGO-04"), "VIOLATION", null,
+                    "CRITICAL", List.of(), null, List.of(), List.of(), "original", t1End, t1End, t1End, null, null);
+            Coverage completeCov1 = new Coverage("COMPLETE", List.of(), 0, true, "PAN", snap1, 2);
+            assertTrue(repository.complete(run1, t1End, 5_000L, completeCov1,
+                    history -> new CompletionPlan(new Counts(2, 0, 0, 0, 0, 2), List.of(keepV1, resolveV1), List.of())));
+
+            // Mid-transaction failure in a subsequent run rolls back resolved_at updates on prior rows too!
+            String failedRun = UUID.randomUUID().toString();
+            Instant tFail = Instant.parse("2026-11-23T10:05:00Z");
+            repository.start(new NewRun(failedRun, VERSION_TWO, 2, SHA_TWO, policy, "step3-v1", tFail, snap1));
+            Finding invalidOutcome = new Finding(policy, "uid-bad", List.of(), List.of(), "r-9", 9, "BAD", "sec-1",
+                    "Local rules", List.of(), "COMPLIANT", null, null, List.of(), null, List.of(), List.of(), null,
+                    tFail, null, tFail, null, null);
+            assertThrows(RuntimeException.class, () -> repository.complete(failedRun, tFail, 100L, completeCov1,
+                    history -> new CompletionPlan(new Counts(0, 1, 0, 0, 0, 1), List.of(invalidOutcome),
+                            List.of(new ResolutionUpdate("uid-resolve", List.of(), List.of("ZONE-C->ZONE-D"),
+                                    tFail, "MATRIX_VERSION_CHANGED")))));
+            assertTrue(repository.fail(failedRun, FailureReason.STORE_ERROR, tFail, snap1));
+            assertEquals(snap1, repository.latestFinishedForVersion(policy, VERSION_TWO).orElseThrow().snapshotCollectedAt());
+            assertTrue(repository.findingsOf(run1).stream().allMatch(f -> f.resolvedAt() == null),
+                    "rolled-back complete() leaves prior open rows untouched");
+
+            // Run 2 under VERSION_TWO (v2) as ui2_app: resolves uid-resolve with MATRIX_VERSION_CHANGED (updating only
+            // V267 granted lifecycle columns) and reproduces uid-keep in one transaction.
+            Instant t2Start = Instant.parse("2026-11-23T11:00:00Z");
+            Instant t2End = Instant.parse("2026-11-23T11:00:04Z");
+            Instant snap2 = Instant.parse("2026-11-23T10:55:00Z");
+            String run2 = UUID.randomUUID().toString();
+            repository.start(new NewRun(run2, VERSION_TWO, 2, SHA_TWO, policy, "step3-v1", t2Start, snap2));
+            Coverage completeCov2 = new Coverage("COMPLETE", List.of(), 0, true, "PAN", snap2, 2);
+
+            assertTrue(repository.complete(run2, t2End, 4_000L, completeCov2, history -> {
+                assertEquals(run1, history.latestCompleteRunId());
+                assertEquals(2, history.findings().size());
+                assertTrue(history.findings().get(0).runCompleteScope());
+                Finding reproducedKeep = new Finding(policy, "uid-keep", List.of("00Parent", "parent-B"),
+                        List.of("ZONE-A->ZONE-B"), "r-1", 1, "RULE-KEEP", "sec-1", "Local rules",
+                        List.of("FW-TANGO-04"), "VIOLATION", null, "HIGH", List.of("COVERED_BY_EARLIER_DENY"),
+                        "r-deny", List.of(), List.of(), "original", t1End, t1End, t2End, null, null);
+                return new CompletionPlan(
+                        new Counts(1, 1, 0, 0, 0, 1),
+                        List.of(reproducedKeep),
+                        List.of(new ResolutionUpdate("uid-resolve", List.of(), List.of("ZONE-C->ZONE-D"),
+                                t2End, "MATRIX_VERSION_CHANGED")));
+            }));
+
+            assertEquals(run2, repository.latestComplete(policy).orElseThrow().runId());
+            assertEquals(run2, repository.latestRun(policy).orElseThrow().runId());
+            assertEquals(snap2, repository.latestFinishedForVersion(policy, VERSION_TWO).orElseThrow().snapshotCollectedAt());
+
+            List<Finding> run1After = repository.findingsOf(run1);
+            Finding keepAfter = run1After.stream().filter(f -> "uid-keep".equals(f.ruleUid())).findFirst().orElseThrow();
+            Finding resolvedAfter = run1After.stream().filter(f -> "uid-resolve".equals(f.ruleUid())).findFirst().orElseThrow();
+            assertNull(keepAfter.resolvedAt());
+            assertEquals(t2End, resolvedAfter.resolvedAt());
+            assertEquals("MATRIX_VERSION_CHANGED", resolvedAfter.resolutionReason());
+
+            List<Finding> run2Findings = repository.findingsOf(run2);
+            assertEquals(1, run2Findings.size());
+            assertEquals(t1End, run2Findings.get(0).firstObservedAt());
+            assertEquals(t1End, run2Findings.get(0).firstObservedAnyVersion());
+            assertEquals(t2End, run2Findings.get(0).lastObservedAt());
+
+            List<ResolvedByVersionFinding> resolvedByVer = repository.resolvedByVersionChange(t2End.minusSeconds(60))
+                    .stream().filter(r -> policy.equals(r.finding().policySourceId())).toList();
+            assertEquals(1, resolvedByVer.size());
+            assertEquals(VERSION, resolvedByVer.get(0).resolvedFromVersionId());
+            assertEquals(1, resolvedByVer.get(0).resolvedFromVersionNumber());
+            assertEquals(VERSION_TWO, resolvedByVer.get(0).resolvedInVersionId());
+            assertEquals(2, resolvedByVer.get(0).resolvedInVersionNumber());
+            assertEquals(t2End, resolvedByVer.get(0).resolvedAt());
         }
     }
 
