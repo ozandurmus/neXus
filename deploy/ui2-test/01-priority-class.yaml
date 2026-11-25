@@ -1,0 +1,14 @@
+# Lower than every production class (deploy/ui2/01-priority-classes.yaml: ui2-db 1000000, ui2-core 900000, ui2-worker
+# 800000, ui2-low -100) and than the default (0) every other pod on HOST-A runs at: under pressure a test pod waits or
+# is evicted first, and it never preempts anything (preemptionPolicy Never). Production always wins.
+# Cluster-scoped; `value` is immutable (delete and re-create the class to change it).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-test
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: -1000
+globalDefault: false
+preemptionPolicy: Never
+description: "neXus HOST-A test runs: below every production class and the default; never preempts."

@@ -170,6 +170,10 @@ _KNOWN_DRAFT_AUTHORITY_CITATIONS: dict[tuple[str, str, str], str] = {
      "UI2_0_ARCHITECTURE_DESIGN.md",
      "3f0dd77fedaa4a91d52f2355adc88c5e8485d942104a5ecd5410b684fac68fd3"):
         "DETECTOR FALSE POSITIVE — §7's 'Documents checked while writing this' read list",
+    ("POLICY_INSIGHTS_DESIGN_2026_11_24.md",
+     "ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md",
+     "7fa76e1cb91b49c760b0989ca54ca917cbd20d71d0b4455f676901bc86268893"):
+        "DETECTOR FALSE POSITIVE — §1 'Verified repository facts' row F11 cites the draft as the source of a fact (hit counts not collected), next to the PO decision record; surfaced 2026-11-25 by the 'Status:' label fix",
 }
 
 
@@ -218,7 +222,10 @@ def _classify(status_line: str) -> str:
     # frozen contract, so every citation *of* that document went unchecked.
     # The declared status is the leading token, before the first dash or
     # comma; the whole line is only a fallback when that prefix names none.
-    prefix = re.split(r"[—–\-,:.]", upper.lstrip("*# "), maxsplit=1)[0]
+    # A leading "Status:" label is not the token (2026-11-25: "Status: FROZEN (PO ...) ... unaltered draft" read as
+    # the label "STATUS", fell back to the whole line and classified DRAFT on the word "draft").
+    head = re.sub(r"^STATUS\s*:\s*", "", upper.lstrip("*# ")).lstrip("*# ")
+    prefix = re.split(r"[—–\-,:.(]", head, maxsplit=1)[0]
     for scope in (prefix, upper):
         if any(marker in scope for marker in _RETIRED_MARKERS):
             return "retired"

@@ -1,0 +1,15 @@
+# HOST-A test namespace (docs/design/HOSTA_TEST_NAMESPACE_2026_11_24.md, DRAFT; PO 2026-11-24).
+#
+# Test equipment, not part of the deploy/ui2/ manifest set that runs the product: lane test runs (scoped Java,
+# :integration-tests:test against a throwaway PostgreSQL 16 sidecar, optional vitest) started from the Mac by
+# tools/delivery/hosta_test_run.py. Nothing here reaches namespace ui2, the product database, a device or the
+# internet (30-network-policy.yaml); production always wins CPU and memory (01-priority-class.yaml, 10-resource-quota.yaml).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ui2-test
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: test-runner
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

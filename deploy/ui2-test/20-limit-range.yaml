@@ -1,0 +1,28 @@
+# Every container has requests and limits (the quota requires them); a pod can never take more than one third of the
+# namespace quota, so three runs always fit beside each other. The pod maximum leaves room for the short init
+# container on top of the runner and the database sidecar, however the admission counts it.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ui2-test
+  namespace: ui2-test
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+      ephemeral-storage: 256Mi
+    default:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
+    max:
+      cpu: "2"
+      memory: 7Gi
+      ephemeral-storage: 10Gi
+  - type: Pod
+    max:
+      cpu: 2600m
+      memory: 8Gi
+      ephemeral-storage: 10Gi

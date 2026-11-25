@@ -1,0 +1,45 @@
+# Default deny, both directions, for every pod in the namespace. The only egress allowed is
+#   - to the in-namespace PostgreSQL test database (pods labelled nexus-test/role=postgres, TCP 5432); today it is a
+#     sidecar on 127.0.0.1, whose loopback traffic no NetworkPolicy sees, so this rule only keeps a future Service form
+#     working; and
+#   - to the cluster's own image registry (kube-system, TCP 5000).
+# No DNS, no build proxy, no namespace ui2 (service, database), no device, no internet. Image pulls are made by the
+# node's container runtime, not by the pod, and are not affected by this policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: ui2-test
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-egress
+  namespace: ui2-test
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          nexus-test/role: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: registry
+    ports:
+    - protocol: TCP
+      port: 5000

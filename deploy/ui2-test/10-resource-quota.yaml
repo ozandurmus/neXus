@@ -1,0 +1,24 @@
+# PO 2026-11-24: HOST-A has 16 cores (~30 % used) and 60 GiB (48 GiB free). The test namespace may take at most half
+# of the cores and 24 GiB, and at most three test pods at a time (a fourth Job's pod waits until one ends).
+# No Secret, Service, PersistentVolumeClaim or NodePort/LoadBalancer can exist here: the test database password is
+# generated inside the pod, PostgreSQL is a loopback sidecar, and the dependency cache is part of the image.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ui2-test
+  namespace: ui2-test
+spec:
+  hard:
+    requests.cpu: "8"
+    limits.cpu: "8"
+    requests.memory: 24Gi
+    limits.memory: 24Gi
+    requests.ephemeral-storage: 30Gi
+    limits.ephemeral-storage: 30Gi
+    pods: "3"
+    count/jobs.batch: "6"
+    secrets: "0"
+    services: "0"
+    services.nodeports: "0"
+    services.loadbalancers: "0"
+    persistentvolumeclaims: "0"
