@@ -51,7 +51,12 @@ gate_unlock() { [ -n "$GATE_HELD" ] && rmdir "$GATE_HELD" 2>/dev/null; GATE_HELD
 gate_integration() { if grep -q 'hosta_test_run.py' "$1/tools/delivery/checks.yaml" 2>/dev/null; then echo hosta; else echo auto; fi; }
 # gate_carrier <worktree>: --carrier hosta (Java, integration and vitest in one HOST-A pod; PO 2026-11-25 option A) when the
 # lane's harness knows the carrier, else nothing (older bases keep the Mac run).
-gate_carrier() { if grep -q '^hosta_carrier_cmd:' "$1/tools/delivery/checks.yaml" 2>/dev/null; then echo "--carrier hosta"; fi; }
+# $OPS_STATE/GATE_CARRIER_OFF (a file; its first line says why) turns the carrier off without a ship, e.g. while a
+# HOST-A-only test difference is fixed (2026-11-25: vitest 54 Backup* failures and an aiview sweep timeout on HOST-A only).
+gate_carrier() {
+  [ -e "$OPS_STATE/GATE_CARRIER_OFF" ] && return 0
+  if grep -q '^hosta_carrier_cmd:' "$1/tools/delivery/checks.yaml" 2>/dev/null; then echo "--carrier hosta"; fi
+}
 
 # gate_run_harness <name> <worktree> <meta> <report>: runs the harness once; prints its exit code.
 gate_run_harness() {
