@@ -195,6 +195,34 @@ def test_gate_runs_are_serialized_by_a_lock(ops):
     assert len(harness_calls(ops)) == 1 and not lock.exists()
 
 
+CARRIER_YAML = ('hosta_carrier_cmd: ["{python}", "tools/delivery/hosta_test_run.py"]\n'
+                "steps:\n  - id: integration\n    cmd: python3 tools/delivery/hosta_test_run.py\n")
+
+
+def test_a_hosta_carried_gate_does_not_wait_behind_the_local_lock(ops):
+    done_lane(ops, checks_yaml=CARRIER_YAML)
+    lock = ops.state / ".harness-lock"
+    lock.mkdir()
+    gate(ops)     # finishes although a Mac-side run holds the local slot
+    assert len(harness_calls(ops)) == 1 and "--carrier hosta" in harness_calls(ops)[0]
+    assert lock.exists() and not any(ops.state.glob(".harness-lock.hosta.*"))
+
+
+def test_hosta_carried_gates_wait_when_all_hosta_slots_are_taken(ops):
+    done_lane(ops, checks_yaml=CARRIER_YAML)
+    slots = [ops.state / f".harness-lock.hosta.{i}" for i in (1, 2, 3)]
+    for slot in slots:
+        slot.mkdir()
+    import subprocess
+    proc = subprocess.Popen(["bash", str(OPS / "harness-gate.sh"), LANE], env=dict(ops.env), stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    time.sleep(1.0)
+    assert harness_calls(ops) == [] and proc.poll() is None
+    slots[1].rmdir()
+    proc.wait(timeout=30)
+    assert len(harness_calls(ops)) == 1 and not slots[1].exists() and slots[0].exists() and slots[2].exists()
+
+
 def test_a_lock_older_than_40_minutes_is_taken_over(ops):
     done_lane(ops)
     lock = ops.state / ".harness-lock"
