@@ -1,0 +1,675 @@
+package com.securityexpert.nexus.ui2.integration.http;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.context.ConfigurableApplicationContext;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
+import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
+import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
+import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
+import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
+import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration;
+import com.securityexpert.nexus.ui2.service.boot.Ui2Application;
+import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
+
+/**
+ * Round 4 of the raw-versus-masked sweep of backlog {@code aiview_masking_leak_audit}: the planes that rounds 1-3
+ * ({@code AiviewRawVersusMaskedSweepTest}) left empty. A synthetic estate with planted raw values is seeded into a real
+ * PostgreSQL 16 database, the application is booted, the aiview persona ({@code role:replay_viewer}) logs in and GETs
+ * every route the shared {@link AiviewReachableRoutes} calls aiview-reachable, and every planted raw value is counted in
+ * every body. Output names route, status and value <em>class</em> with a count -- never a value.
+ *
+ * <p>Planes seeded: device lifecycle and licence facts (a member reference naming a host, a serial and an address, a
+ * catalog row whose note and importer name a host and the administrator, an upload row), SNMP metric samples (raw,
+ * hourly and poll state), configuration-override notifications (summary and paths in free text), backup size-anomaly
+ * records (free-text summary), and a Palo Alto policy whose rules name raw zones with the stored virtual-system zone set
+ * of its firewall. Notification settings and routes (syslog and mail hosts, recipients) and the audit rows (actor and
+ * target text) are seeded too, but their only routes are {@code security_admin} reads aiview cannot reach: for those the
+ * test asserts the refusal and that the refusal body carries no planted value.</p>
+ *
+ * <p>The class is self-contained on purpose (the other sweep is edited by other lanes): the boot, login, row-insert and
+ * body-scan helpers are copies of that sweep's.</p>
+ */
+class AiviewUnseededPlanesSweepTest {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    /** What a planted value is; the only thing about a value this test ever prints. */
+    enum ValueClass {
+        HOSTNAME, ADDRESS, SERIAL, PRINCIPAL, RULE_NAME, OBJECT_NAME, POLICY_NAME, ZONE_NAME, VSYS_NAME, MAIL_ADDRESS
+    }
+
+    /** Surviving raw values left for a follow-up lane: {@code "GET <route> <CLASS>"}. Must equal the findings exactly. */
+    static final Set<String> KNOWN_LEAKS = Set.of();
+
+    /**
+     * Routes of the seeded planes that only {@code security_admin} may read: aiview must be refused (401/403) and the
+     * refusal must not carry a planted value.
+     */
+    static final Set<String> MUST_BE_REFUSED = Set.of("GET /audit-logs", "GET /api/v2/config/notifications");
+
+    /** Views that must show seeded rows (by marker), so a zero count is a count over real data and not an empty page. */
+    static final Map<String, Set<String>> COVERAGE = Map.ofEntries(
+            Map.entry("GET /api/v2/lifecycle", Set.of("device", "license-item")),
+            Map.entry("GET /devices/*/lifecycle", Set.of("device", "license-item")),
+            Map.entry("GET /api/v2/lifecycle/catalog", Set.of("catalog-entry")),
+            Map.entry("GET /api/v2/lifecycle/catalog-sources", Set.of("catalog-upload")),
+            Map.entry("GET /notifications", Set.of("notification")),
+            Map.entry("GET /api/v2/backups/deviations", Set.of("size-anomaly")),
+            Map.entry("GET /api/v2/policy/policies/*", Set.of("pan-policy", "pan-rule")),
+            Map.entry("GET /api/v2/policy/policies/*/rules", Set.of("pan-rule")),
+            Map.entry("GET /api/v2/policy/policies/*/hygiene", Set.of("pan-zone-verdict")),
+            Map.entry("GET /api/v2/policy/devices", Set.of("pan-policy")),
+            Map.entry("GET /api/v2/system-logs/health", Set.of("device", "snmp-metrics")));
+
+    private static Ui2PostgresFixture fixture;
+    private static ConfigurableApplicationContext context;
+    private static int port;
+    private static Path work;
+    private static Estate estate;
+    private static final Map<String, String> ids = new TreeMap<>();
+
+    // ------------------------------------------------------------------ boot (copied from AiviewRawVersusMaskedSweepTest)
+
+    @BeforeAll
+    static void bootAndSeed() throws Exception {
+        fixture = Ui2PostgresFixture.createAndMigrate("aiview_unseeded");
+        work = Files.createTempDirectory("ui2-aiview-unseeded-");
+        byte[] storeKey = new byte[32];
+        RANDOM.nextBytes(storeKey);
+        Path storeRoot = Files.createDirectory(work.resolve("artefacts"));
+        var store = new FileArtefactStore(storeRoot,
+                ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(storeKey)));
+        estate = Estate.generate();
+        seed(estate);
+        context = new SpringApplicationBuilder(Ui2Application.class)
+                .initializers(ctx -> ctx.addBeanFactoryPostProcessor(bf -> useTestArtefactStore(bf, store)))
+                .run(
+                        "--server.port=0",
+                        "--spring.main.banner-mode=off",
+                        "--ui2.db.url=" + fixture.databaseJdbcUrl(),
+                        "--ui2.db.user-file=" + fixture.appUserSecretFile(),
+                        "--ui2.db.password-file=" + fixture.appPasswordSecretFile(),
+                        "--ui2.db.migrate-user-file=" + fixture.migrateUserSecretFile(),
+                        "--ui2.db.migrate-password-file=" + fixture.migratePasswordSecretFile(),
+                        "--ui2.role-binding.group-reference-key-file=" + keyFile("group_ref.key"),
+                        "--ui2.credential-store.key-file=" + keyFile("credential.key"),
+                        "--ui2.failover.master-key-file=" + work.resolve("failover.key"),
+                        "--ui2.packet-analysis.root=" + Files.createDirectory(work.resolve("pa")),
+                        "--ui2.sanitizer.work-dir=" + Files.createDirectory(work.resolve("sanitizer")),
+                        "--ui2.scheduling.enabled=false");
+        port = Integer.parseInt(context.getEnvironment().getRequiredProperty("local.server.port"));
+    }
+
+    /** The env-configured (here: absent) artefact store is replaced, and the fixed machine port is not opened. */
+    private static void useTestArtefactStore(ConfigurableListableBeanFactory beanFactory,
+            com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore store) {
+        BeanDefinitionRegistry registry = (BeanDefinitionRegistry) beanFactory;
+        registry.removeBeanDefinition("artefactStoreAccess");
+        beanFactory.registerSingleton("artefactStoreAccess", new DeviceCompositionConfiguration.ArtefactStoreAccess(store));
+        registry.removeBeanDefinition("machineConnector");
+    }
+
+    @AfterAll
+    static void shutDown() throws IOException {
+        if (context != null) context.close();
+        if (fixture != null) fixture.close();
+        if (work != null) {
+            try (var paths = Files.walk(work)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            }
+        }
+    }
+
+    private static Path keyFile(String name) throws IOException {
+        byte[] key = new byte[32];
+        RANDOM.nextBytes(key);
+        Path file = work.resolve(name);
+        Files.writeString(file, Base64.getEncoder().encodeToString(key));
+        return file;
+    }
+
+    // ------------------------------------------------------------------ the synthetic estate
+
+    private static String hex(int bytes) {
+        byte[] b = new byte[bytes];
+        RANDOM.nextBytes(b);
+        return HexFormat.of().formatHex(b);
+    }
+
+    /** A token with at least one letter, so it can never equal a digits-only pseudonym suffix. */
+    private static String tag() {
+        return "x" + hex(3);
+    }
+
+    record Device(String id, String vendor, String role, String hostname, String serial, String address, String cluster) {
+    }
+
+    /** Every planted raw value, generated per run. */
+    record Estate(Device cpA, Device cpB, Device pan, Device panorama, String principal, String objectName,
+            String objectAddress, String policyName, String policyId, String domainId, String objectId, String ruleId,
+            String ruleName, String shadowedRuleName, String zoneA, String zoneB, String vsys, String catalogProduct,
+            String syslogHost, String smtpHost, String smtpTo, String smtpFrom, String routeRecipients,
+            String auditTargetHost, String auditTargetAddress, Map<String, ValueClass> raw) {
+
+        static Estate generate() {
+            String cluster = "CLX-ROMEO-" + tag().toUpperCase(Locale.ROOT);
+            int base = 20 + RANDOM.nextInt(150);
+            Device a = new Device(Ui2Rows.opaqueId("dev"), "check_point", "gateway", "FW-TANGO-" + tag().toUpperCase(Locale.ROOT),
+                    "CP" + hex(5).toUpperCase(Locale.ROOT), "192.0.2." + base, cluster);
+            Device b = new Device(Ui2Rows.opaqueId("dev"), "check_point", "gateway", "ist" + tag() + "-fw-02",
+                    "CP" + hex(5).toUpperCase(Locale.ROOT), "192.0.2." + (base + 1), cluster);
+            Device pan = new Device(Ui2Rows.opaqueId("dev"), "palo_alto", "gateway", "dc" + tag() + "-edge-gw01",
+                    "0" + hex(6).replaceAll("[a-f]", "7"), "192.0.2." + (base + 2), null);
+            Device panorama = new Device(Ui2Rows.opaqueId("dev"), "palo_alto", "management_server", "core" + tag() + "-pano-a",
+                    "0" + hex(6).replaceAll("[a-f]", "3"), "192.0.2." + (base + 3), null);
+            String principal = "adm" + tag() + ".ops";
+            String t = tag();
+            Estate e = new Estate(a, b, pan, panorama, principal, "h-" + tag() + "-dbsrv", "198.51.100." + (base % 200),
+                    "pkg-" + tag() + "-pan", "policy-" + UUID.randomUUID(), "domain-" + UUID.randomUUID(),
+                    "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), "allow-" + tag() + "-payroll",
+                    "deny-" + tag() + "-legacy", "zn-" + tag() + "-cardholder", "zn-" + tag() + "-corebank",
+                    "vsys-" + tag(), "Synthetic-" + tag() + " 6600", "syslog" + t + "-collector01", "smtp" + t + "-relay01",
+                    principal + "@mail" + t + ".example.test", "noreply@mail" + t + ".example.test",
+                    "oncall" + t + "@mail" + t + ".example.test", "jump" + tag() + "-bastion02", "198.51.100." + (base % 200 + 1),
+                    null);
+            Map<String, ValueClass> raw = new LinkedHashMap<>();
+            for (Device d : e.devices()) {
+                raw.put(d.hostname(), ValueClass.HOSTNAME);
+                raw.put(d.serial(), ValueClass.SERIAL);
+                raw.put(d.address(), ValueClass.ADDRESS);
+            }
+            raw.put(cluster, ValueClass.HOSTNAME);
+            raw.put(principal, ValueClass.PRINCIPAL);
+            raw.put(e.objectName(), ValueClass.OBJECT_NAME);
+            raw.put(e.objectAddress(), ValueClass.ADDRESS);
+            raw.put(e.policyName(), ValueClass.POLICY_NAME);
+            raw.put(e.ruleName(), ValueClass.RULE_NAME);
+            raw.put(e.shadowedRuleName(), ValueClass.RULE_NAME);
+            raw.put(e.zoneA(), ValueClass.ZONE_NAME);
+            raw.put(e.zoneB(), ValueClass.ZONE_NAME);
+            raw.put(e.vsys(), ValueClass.VSYS_NAME);
+            raw.put(e.syslogHost(), ValueClass.HOSTNAME);
+            raw.put(e.smtpHost(), ValueClass.HOSTNAME);
+            raw.put(e.smtpTo(), ValueClass.MAIL_ADDRESS);
+            raw.put(e.smtpFrom(), ValueClass.MAIL_ADDRESS);
+            raw.put(e.routeRecipients(), ValueClass.MAIL_ADDRESS);
+            raw.put(e.auditTargetHost(), ValueClass.HOSTNAME);
+            raw.put(e.auditTargetAddress(), ValueClass.ADDRESS);
+            return new Estate(a, b, pan, panorama, principal, e.objectName(), e.objectAddress(), e.policyName(), e.policyId(),
+                    e.domainId(), e.objectId(), e.ruleId(), e.ruleName(), e.shadowedRuleName(), e.zoneA(), e.zoneB(), e.vsys(),
+                    e.catalogProduct(), e.syslogHost(), e.smtpHost(), e.smtpTo(), e.smtpFrom(), e.routeRecipients(),
+                    e.auditTargetHost(), e.auditTargetAddress(), Map.copyOf(raw));
+        }
+
+        List<Device> devices() {
+            return List.of(cpA, cpB, pan, panorama);
+        }
+    }
+
+    // ------------------------------------------------------------------ seeding
+
+    private static void seed(Estate e) throws Exception {
+        try (Connection c = fixture.migrateConnection()) {
+            String credential = Ui2Rows.insertCredentialReference(c);
+            audited(c, Ui2Rows.ACTOR, () -> {
+                for (Device d : e.devices()) {
+                    exec(c, "insert into devices(device_id, vendor_hint, registration_source, is_test_target, enrollment_state, "
+                            + "disabled, credential_reference_id, role, identity_mismatch_state, peer_follow_outcome, "
+                            + "observed_hostname, observed_model, observed_software_version, observed_ha_role, "
+                            + "recorded_identity_primary, recorded_identity_recorded_at, cluster_member_ref, backup_target, "
+                            + "discovery_match_key) values (?, ?, 'manual', true, 'ENROLLED', false, ?, ?, 'NONE', ?, ?, "
+                            + "'synthetic-model', 'R81.20', ?, ?, now(), ?, true, ?)",
+                            d.id(), d.vendor(), credential, d.role(), d.cluster() == null ? "NONE" : "CORROBORATED",
+                            d.hostname(), d.cluster() == null ? null : "active", d.serial(), d.cluster(),
+                            d.vendor() + "|" + d.serial());
+                    exec(c, "insert into endpoints(endpoint_id, device_id, transport_kind, address_ref) values (?, ?, 'ssh_exec', ?)",
+                            Ui2Rows.opaqueId("ep"), d.id(), d.address());
+                    exec(c, "insert into device_platform_facts(device_id, serial_number, platform_family, source_read) "
+                            + "values (?, ?, 'synthetic', 'synthetic_seed')", d.id(), d.serial());
+                }
+            });
+            seedLifecycle(c, e);
+            seedSnmpMetrics(c, e);
+            seedBackupDeviation(c, e);
+            seedPanPolicy(c, e);
+            seedNotifications(c, e);
+            seedAuditAndSettings(c, e);
+        }
+    }
+
+    /**
+     * Lifecycle and licence facts (V200, V144, V219): licence items whose member reference is a raw host name, a raw
+     * serial and a raw address, one successful read per device, a catalog row whose note and importer name raw values,
+     * and an operator page upload by the administrator.
+     */
+    private static void seedLifecycle(Connection c, Estate e) throws Exception {
+        audited(c, Ui2Rows.ACTOR, () -> {
+            String[][] members = {{e.cpA().id(), e.cpA().hostname()}, {e.cpB().id(), e.cpB().serial()},
+                    {e.pan().id(), e.pan().address()}};
+            for (String[] m : members) {
+                exec(c, "insert into device_lifecycle_read(device_id, read_kind, outcome, item_count) values (?, 'license', 'COLLECTED', 1)",
+                        m[0]);
+                exec(c, "insert into device_license_item(item_id, device_id, read_kind, category, label, state, expires_on, detail, "
+                        + "member_ref, evidence_grade) values (?, ?, 'license', 'LICENSE', ?, 'VALID', current_date + 40, "
+                        + "'synthetic detail', ?, 'DIRECT_DEVICE')",
+                        Ui2Rows.opaqueId("lic"), m[0], "Synthetic Blade " + ids.computeIfAbsent("licenseTag", k -> tag()), m[1]);
+            }
+            exec(c, "insert into lifecycle_catalog(catalog_id, vendor, kind, product, end_of_sale, end_of_support, source, note, "
+                    + "imported_by) values (?, 'CHECKPOINT', 'HARDWARE', ?, '2024-01-31', '2030-01-31', 'MANUAL', ?, ?)",
+                    "cat-" + UUID.randomUUID(), e.catalogProduct(),
+                    "checked by " + e.principal() + " against " + e.cpA().hostname() + " (" + e.cpA().address() + ")",
+                    e.principal());
+            String upload = "upl" + hex(6);
+            exec(c, "insert into lifecycle_catalog_upload(upload_id, page_form, vendor, content_sha256, entries_parsed, "
+                    + "entries_needing_review, rows_skipped, uploaded_by) values (?, 'checkpoint_lifecycle', 'CHECKPOINT', ?, 3, 1, 0, ?)",
+                    upload, "a".repeat(64), e.principal());
+            ids.put("uploadId", upload);
+        });
+        ids.put("licenseMarker", "Synthetic Blade " + ids.get("licenseTag"));
+    }
+
+    /** SNMP metrics (V268): poll state, 36 raw samples over three days and the hourly roll-up of each gateway. */
+    private static void seedSnmpMetrics(Connection c, Estate e) throws Exception {
+        audited(c, Ui2Rows.ACTOR, () -> {
+            for (Device d : List.of(e.cpA(), e.cpB(), e.pan())) {
+                exec(c, "insert into snmp_poll_state(device_id, last_outcome, last_poll_at, last_answer_at, next_poll_at, "
+                        + "last_sys_uptime_cs) values (?, 'OK', now(), now(), now() + interval '5 minutes', 123456789)", d.id());
+                for (int i = 0; i < 12; i++) {
+                    for (int day = 0; day < 3; day++) {
+                        exec(c, "insert into device_metric_sample(device_id, sampled_at, source, outcome, sys_uptime_cs, rebooted, "
+                                + "cpu_pct, cpu_dataplane_pct, mem_pct, sessions) values (?, now() - (? * interval '1 day') "
+                                + "- (? * interval '7 minutes') - interval '20 minutes', 'SNMP', 'OK', 1000000, false, ?, ?, ?, ?)",
+                                d.id(), day, i, 10 + RANDOM.nextInt(60), d.vendor().equals("palo_alto") ? 5 + RANDOM.nextInt(40) : null,
+                                30 + RANDOM.nextInt(50), 1000 + RANDOM.nextInt(9000));
+                    }
+                }
+                exec(c, "insert into device_metric_hourly(device_id, hour_start, samples, answered, cpu_p95, cpu_max, mem_p95, "
+                        + "mem_max, sessions_p95, sessions_max, rebooted) values (?, date_trunc('hour', now() - interval '2 hours'), "
+                        + "12, 12, 40, 55, 60, 70, 3000, 3500, false)", d.id());
+            }
+        });
+    }
+
+    /**
+     * Backup deviation records (V30, V180): two backups of the first member and one open size anomaly whose free-text
+     * summary names a host, an address, a serial and the administrator.
+     */
+    private static void seedBackupDeviation(Connection c, Estate e) throws Exception {
+        String previous = UUID.randomUUID().toString();
+        String latest = UUID.randomUUID().toString();
+        audited(c, Ui2Rows.ACTOR, () -> {
+            for (String artefact : List.of(previous, latest)) {
+                exec(c, "insert into backup_artefact(artefact_id, device_id, artefact_class, vendor, software_version, "
+                        + "hostname_fingerprint, plaintext_sha256, plaintext_bytes, ciphertext_sha256, ciphertext_bytes, key_id, "
+                        + "wrapped_data_key, validation, retention_tier, recovery_volume_path, deviation_state, backup_type) "
+                        + "values (?, ?, 'backup', 'check_point', 'R81.20', ?, ?, ?, ?, 10, 'k1', ?, "
+                        + "'{\"level_reached\":\"V2\",\"v3_status\":\"NOT_APPLICABLE\",\"restore_proven\":false}'::jsonb, "
+                        + "'standard', ?, 'first', 'standard')",
+                        artefact, e.cpA().id(), hex(16), "0".repeat(64), artefact.equals(latest) ? 9000L : 3000L, "1".repeat(64),
+                        new byte[32], artefact);
+            }
+            String deviation = UUID.randomUUID().toString();
+            exec(c, "insert into backup_deviation_record(deviation_id, artefact_id, previous_artefact_id, device_id, deviation_class, "
+                    + "summary, details) values (?, ?, ?, ?, 'size_anomaly', ?, "
+                    + "'{\"direction\":\"growth\",\"plaintext_bytes\":9000,\"median_bytes\":3000,\"ratio\":3.0}'::jsonb)",
+                    deviation, latest, previous, e.cpA().id(),
+                    "backup of " + e.cpA().hostname() + " (" + e.cpA().address() + ", serial " + e.cpA().serial()
+                            + ") grew threefold after a change by " + e.principal());
+            ids.put("deviationId", deviation);
+        });
+    }
+
+    /**
+     * Palo Alto policy and its stored virtual-system zone set (V229): rules whose from- and to-zones are raw zone names,
+     * a later rule on any zone (the stored set makes the analysis decide it), the firewall target with a raw vsys name.
+     */
+    private static void seedPanPolicy(Connection c, Estate e) throws Exception {
+        var object = new PolicySnapshot.PolicyObject(e.objectId(), e.objectName(), "host", List.of(), List.of(e.objectAddress()),
+                "RESOLVED");
+        Map<String, List<String>> named = Map.of("from", List.of(e.zoneA(), e.zoneB()), "to", List.of(e.zoneA(), e.zoneB()),
+                "last-modifier", List.of(e.principal()));
+        Map<String, List<String>> any = Map.of("from", List.of("any"), "to", List.of("any"), "last-modifier", List.of(e.principal()));
+        var first = new PolicySnapshot.Rule(e.ruleId(), UUID.randomUUID().toString(), 1, e.ruleName(), true,
+                new PolicySnapshot.Cell(List.of(e.objectId()), false), new PolicySnapshot.Cell(List.of(e.objectId()), false),
+                new PolicySnapshot.Cell(List.of("any-obj"), false), new PolicySnapshot.Cell(List.of("any-obj"), false), "Accept", "Log",
+                "requested by " + e.principal() + " for " + e.pan().hostname(), named);
+        var later = new PolicySnapshot.Rule("rule-" + UUID.randomUUID(), UUID.randomUUID().toString(), 2, e.shadowedRuleName(), true,
+                new PolicySnapshot.Cell(List.of(e.objectId()), false), new PolicySnapshot.Cell(List.of(e.objectId()), false),
+                new PolicySnapshot.Cell(List.of("any-obj"), false), new PolicySnapshot.Cell(List.of("any-obj"), false), "Accept", "Log",
+                "opened by " + e.principal(), any);
+        var metadata = new PolicySnapshot.Metadata(e.policyId(), e.panorama().id(), e.panorama().hostname(), "PAN", e.domainId(),
+                "shared", e.policyName(), java.time.Instant.now().toString(), null,
+                List.of(new PolicySnapshot.Target(e.pan().id(), e.pan().hostname(), e.vsys(), "IN_SYNC")));
+        var snapshot = new PolicySnapshot(metadata,
+                List.of(new PolicySnapshot.Section("section-1", "Pre Rules", "Network", null, List.of(first, later))),
+                Map.of(e.objectId(), object, "any-obj", new PolicySnapshot.PolicyObject("any-obj", "Any", "any", List.of(), List.of(), "RESOLVED")),
+                List.of());
+        audited(c, Ui2Rows.ACTOR, () -> {
+            exec(c, "insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) values (?, now(), ?::jsonb, ?::jsonb)",
+                    e.policyId(), JSON.writeValueAsString(metadata), JSON.writeValueAsString(snapshot));
+            exec(c, "insert into policy_rule_history(policy_id, rule_key, rule_id, identity_fallback, change_type, collected_at, "
+                    + "changed_on, changed_by, changes) values (?, ?, ?, false, 'modified', now(), '2026-11-20T09:00:00Z', ?, ?::jsonb)",
+                    e.policyId(), e.ruleId(), e.ruleId(), e.principal(),
+                    JSON.writeValueAsString(List.of(Map.of("field", "from", "before", e.zoneA(), "after", e.zoneB()))));
+            exec(c, "insert into pan_vsys_zone_set(device_id, vsys, zone_names, read_at) values (?, ?, ?, now())",
+                    e.pan().id(), e.vsys(), c.createArrayOf("text", new String[] {e.zoneA(), e.zoneB()}));
+        });
+    }
+
+    /** Configuration-override notifications (V16): the summary and the paths are free text naming raw values. */
+    private static void seedNotifications(Connection c, Estate e) throws Exception {
+        String job = Ui2Rows.opaqueId("job");
+        String artefactRef = Ui2Rows.opaqueId("cfgart");
+        String run = Ui2Rows.opaqueId("cfgrun");
+        String notification = Ui2Rows.opaqueId("note");
+        audited(c, Ui2Rows.ACTOR, () -> {
+            exec(c, "insert into jobs(job_id, job_type, target_kind, target_device_id, submitted_by_actor_fingerprint, "
+                    + "state, action_class, finished_at) values (?, 'configuration_collect', 'device', ?, ?, 'COMPLETED', 'read', now())",
+                    job, e.pan().id(), Ui2Rows.ACTOR);
+            exec(c, "insert into configuration_artefact(artefact_ref, device_id, job_id, vendor, plaintext_sha256, plaintext_bytes, "
+                    + "ciphertext_sha256, ciphertext_bytes, compression, key_id) values (?, ?, ?, 'palo_alto', ?, 10, ?, 10, 'none', 'k1')",
+                    artefactRef, e.pan().id(), job, "0".repeat(64), "1".repeat(64));
+            exec(c, "insert into device_configuration_run(run_id, device_id, job_id, collected_at, vendor, read_kind, is_primary, "
+                    + "canonical_hash, raw_hash, raw_bytes, artefact_ref, change_state) values (?, ?, ?, now(), 'palo_alto', "
+                    + "'effective_running', true, ?, ?, 10, ?, 'first_run')",
+                    run, e.pan().id(), job, "2".repeat(64), "3".repeat(64), artefactRef);
+            exec(c, "insert into configuration_notification(notification_id, device_id, run_id, kind, summary, override_paths) "
+                    + "values (?, ?, ?, 'configuration_override_detected', ?, ?)",
+                    notification, e.pan().id(), run,
+                    "override on " + e.pan().hostname() + " (" + e.pan().address() + ", serial " + e.pan().serial()
+                            + ") set by " + e.principal(),
+                    "address/address/" + e.objectName() + "\nzone/zone/" + e.zoneA() + "\nzone/zone/" + e.zoneB());
+        });
+        ids.put("notificationId", notification);
+    }
+
+    /**
+     * Notification settings and routes (V100 and later: syslog and mail hosts, sender, recipients) and audit rows whose
+     * actor is a raw principal and whose target text is a raw host and a raw address. Their routes are
+     * {@code security_admin} reads; the audit rows are written last so they stay inside the route's newest-100 window.
+     */
+    private static void seedAuditAndSettings(Connection c, Estate e) throws Exception {
+        audited(c, e.principal(), () -> {
+            exec(c, "update notification_settings set syslog_enabled = true, syslog_host = ?, smtp_enabled = true, smtp_host = ?, "
+                    + "smtp_from = ?, smtp_to = ?, updated_at = now(), updated_by = ? where settings_id = 'default'",
+                    e.syslogHost(), e.smtpHost(), e.smtpFrom(), e.smtpTo(), e.principal());
+            exec(c, "update notification_routes set enabled = true, recipients = ?, updated_at = now(), updated_by = ? "
+                    + "where type = 'admin_event'", e.routeRecipients(), e.principal());
+            // an audited table whose primary key text is the raw host / address: the audit row's target is that key
+            for (String key : List.of(e.auditTargetHost(), e.auditTargetAddress())) {
+                exec(c, "insert into credential_references(credential_reference_id, purpose, backend_pointer) "
+                        + "values (?, 'harness', 'vault://harness/opaque')", key);
+            }
+        });
+    }
+
+    @FunctionalInterface
+    private interface Work {
+        void run() throws Exception;
+    }
+
+    private static void audited(Connection c, String actor, Work work) throws Exception {
+        c.setAutoCommit(false);
+        try {
+            Ui2Rows.setAuditContext(c, actor, Ui2Rows.ACTION);
+            work.run();
+            c.commit();
+        } catch (Exception failure) {
+            c.rollback();
+            throw failure;
+        } finally {
+            c.setAutoCommit(true);
+        }
+    }
+
+    private static void exec(Connection c, String sql, Object... args) throws SQLException {
+        try (PreparedStatement st = c.prepareStatement(sql)) {
+            for (int i = 0; i < args.length; i++) st.setObject(i + 1, args[i]);
+            st.executeUpdate();
+        }
+    }
+
+    // ------------------------------------------------------------------ leak counting (copied from the other sweep)
+
+    static List<Pattern> forms(String value, ValueClass cls) {
+        List<Pattern> out = new ArrayList<>();
+        if (cls == ValueClass.ADDRESS) {
+            out.add(Pattern.compile("(?<![0-9.])" + Pattern.quote(value) + "(?![0-9])"));
+            out.add(Pattern.compile("(?<![0-9-])" + Pattern.quote(value.replace('.', '-')) + "(?![0-9])"));
+        } else {
+            out.add(Pattern.compile(Pattern.quote(value), Pattern.CASE_INSENSITIVE));
+        }
+        return out;
+    }
+
+    static Map<ValueClass, Integer> count(String body, Map<String, ValueClass> raw) {
+        Map<ValueClass, Integer> found = new TreeMap<>();
+        for (var entry : raw.entrySet()) {
+            int n = 0;
+            for (Pattern p : forms(entry.getKey(), entry.getValue())) {
+                Matcher m = p.matcher(body);
+                while (m.find()) n++;
+            }
+            if (n > 0) found.merge(entry.getValue(), n, Integer::sum);
+        }
+        return found;
+    }
+
+    // ------------------------------------------------------------------ path variables
+
+    private static final String UNKNOWN_ID = "00000000-0000-4000-8000-0000000000aa";
+
+    static String target(String template) {
+        Estate e = estate;
+        Map<String, String> byName = new LinkedHashMap<>();
+        byName.put("deviceId", e.cpA().id());
+        byName.put("clusterMemberRef", e.cpA().cluster());
+        byName.put("clusterRef", e.cpA().cluster());
+        byName.put("clusterId", e.cpA().cluster());
+        if (template.startsWith("/api/v2/policy/policies/")) byName.put("id", e.policyId());
+        if (template.startsWith("/api/v2/policy/devices/")) byName.put("id", e.panorama().id());
+        if (template.startsWith("/api/v2/policy/domains/")) byName.put("id", e.domainId());
+        if (template.startsWith("/api/v2/policy/objects/")) byName.put("id", e.objectId());
+        if (template.startsWith("/devices/{id}")) byName.put("id", e.cpA().id());
+        Matcher m = Pattern.compile("\\{([^}/:]+)(?::[^}]*)?}").matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            String value = byName.getOrDefault(m.group(1), UNKNOWN_ID);
+            m.appendReplacement(out, Matcher.quoteReplacement(java.net.URLEncoder.encode(value, StandardCharsets.UTF_8)));
+        }
+        m.appendTail(out);
+        String query = QUERY.get(template);
+        return query == null ? out.toString() : out + "?" + query.replace("{source}", e.panorama().id())
+                .replace("{rule}", e.ruleId()).replace("{object}", e.objectId()).replace("{device}", e.cpA().id())
+                .replace("{policy}", e.policyId())
+                .replace("{cluster}", java.net.URLEncoder.encode(e.cpA().cluster(), StandardCharsets.UTF_8));
+    }
+
+    private static final Map<String, String> QUERY = Map.ofEntries(
+            Map.entry("/api/v2/policy/policies/{id}/rules", "ruleId={rule}"),
+            Map.entry("/api/v2/policy/policies/{id}/history", "rule={rule}"),
+            Map.entry("/api/v2/policy/objects/{id}", "device={device}&policy={policy}"),
+            Map.entry("/api/v2/policy/domains/{id}/objects", "source={source}"),
+            Map.entry("/api/v2/policy/domains/{id}/object-usage", "source={source}&uid={object}"),
+            Map.entry("/api/v2/policy/domains/{id}/objects/duplicates", "source={source}"),
+            Map.entry("/api/v2/policy/domains/{id}/installation", "source={source}"),
+            Map.entry("/api/v2/policy/domains/{id}/unused", "source={source}"),
+            Map.entry("/api/v2/policy/domains/{id}/gateways", "source={source}"),
+            Map.entry("/api/v2/policy/domains/{id}/hits", "source={source}"),
+            Map.entry("/api/v2/system-logs/gaps", "deviceId={device}"),
+            Map.entry("/api/v2/log-findings/coverage", "device_id={device}"),
+            Map.entry("/api/v2/policy/changes/actor-candidates", "revision=1"),
+            Map.entry("/api/v2/diagnostics/ports", "device_id={device}"),
+            Map.entry("/api/v2/estate/as-of", "at=2026-11-23T00:00:00Z"),
+            Map.entry("/api/v2/system-logs/crash-files", "deviceId={device}"));
+
+    // ------------------------------------------------------------------ HTTP (copied from the other sweep)
+
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+
+    /** Per-request timeout: 30 s by default; the shared HOST-A runner sets UI2_TEST_HTTP_TIMEOUT_S (30..600). */
+    private static final Duration REQUEST_TIMEOUT = requestTimeout(System.getenv("UI2_TEST_HTTP_TIMEOUT_S"));
+
+    static Duration requestTimeout(String seconds) {
+        if (seconds == null || seconds.isBlank()) return Duration.ofSeconds(30);
+        int value = Integer.parseInt(seconds.strip());
+        if (value < 30 || value > 600) throw new IllegalArgumentException("UI2_TEST_HTTP_TIMEOUT_S outside 30..600");
+        return Duration.ofSeconds(value);
+    }
+
+    record Resp(int status, String body) {
+    }
+
+    private static Resp get(String target, String cookie) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + target))
+                .timeout(REQUEST_TIMEOUT).header("Accept", "application/json, text/plain, */*");
+        if (cookie != null) request.header("Cookie", "ui2_session=" + cookie);
+        HttpResponse<byte[]> response = HTTP.send(request.GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        return new Resp(response.statusCode(), new String(response.body(), StandardCharsets.UTF_8));
+    }
+
+    private static String login() throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/login"))
+                .timeout(REQUEST_TIMEOUT).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(Map.of("username", "aiview", "password", "aiview"))))
+                .build();
+        HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), "aiview login");
+        for (String cookie : response.headers().allValues("set-cookie")) {
+            if (cookie.startsWith("ui2_session=")) {
+                String value = cookie.substring("ui2_session=".length());
+                int end = value.indexOf(';');
+                return end < 0 ? value : value.substring(0, end);
+            }
+        }
+        throw new IllegalStateException("no session cookie on the aiview login");
+    }
+
+    // ------------------------------------------------------------------ the sweep
+
+    @Test
+    void noPlantedRawValueSurvivesInTheUnseededPlanes() throws Exception {
+        String cookie = login();
+        Estate e = estate;
+
+        Map<String, String> templates = new TreeMap<>();
+        Map<String, Boolean> reachable = new TreeMap<>();
+        for (var ep : AiviewReachableRoutes.all()) {
+            if (!ep.method().equals("GET")) continue;
+            templates.putIfAbsent(ep.key(), ep.pathTemplate());
+            boolean may = ep.actionId() != null && AiviewReachableRoutes.aiviewMayCall(ep.actionId());
+            reachable.merge(ep.key(), may, (a, b) -> a || b);
+        }
+        for (String refused : MUST_BE_REFUSED) {
+            assertTrue(templates.containsKey(refused), "the route exists: " + refused);
+            assertTrue(!reachable.get(refused), "the static audit says aiview cannot reach " + refused);
+        }
+
+        Map<String, String> markers = new LinkedHashMap<>();
+        for (Device d : e.devices()) markers.put(d.id(), "device");
+        markers.put(ids.get("licenseMarker"), "license-item");
+        markers.put(e.catalogProduct(), "catalog-entry");
+        markers.put(ids.get("uploadId"), "catalog-upload");
+        markers.put(ids.get("notificationId"), "notification");
+        markers.put(ids.get("deviationId"), "size-anomaly");
+        markers.put("\"source\":\"SNMP\"", "snmp-metrics");
+        markers.put(e.policyId(), "pan-policy");
+        markers.put(e.ruleId(), "pan-rule");
+        // the later any-zone rule is REDUNDANT only because the stored zone set of the firewall proves the earlier rule covers it
+        markers.put("\"shadowStatus\":\"REDUNDANT\"", "pan-zone-verdict");
+
+        Map<String, Map<ValueClass, Integer>> leaks = new TreeMap<>();
+        Map<String, Integer> status = new TreeMap<>();
+        Map<String, Set<String>> seen = new TreeMap<>();
+        List<String> report = new ArrayList<>();
+        int total = 0;
+        // The planes' own routes go first: free-text masking learns names as responses mask them, so a plane read later
+        // in a warm process proves less than the first read after the estate loaded (the cold case).
+        List<Map.Entry<String, String>> ordered = new ArrayList<>();
+        for (String first : List.of("GET /notifications", "GET /api/v2/operations/policy-install/status")) {
+            ordered.add(Map.entry(first, templates.get(first)));
+        }
+        templates.forEach((key, template) -> { if (!List.of("GET /notifications", "GET /api/v2/operations/policy-install/status").contains(key)) ordered.add(Map.entry(key, template)); });
+        for (var entry : ordered) {
+            Resp resp = get(target(entry.getValue()), cookie);
+            status.put(entry.getKey(), resp.status());
+            Map<ValueClass, Integer> found = count(resp.body(), e.raw());
+            if (!found.isEmpty()) leaks.put(entry.getKey(), found);
+            Set<String> kinds = new TreeSet<>();
+            markers.forEach((marker, what) -> { if (resp.body().contains(marker)) kinds.add(what); });
+            seen.put(entry.getKey(), kinds);
+            int sum = found.values().stream().mapToInt(Integer::intValue).sum();
+            total += sum;
+            report.add(String.format(Locale.ROOT, "AIVIEW_UNSEEDED %-10s %3d %-62s raw=%s seeded_rows_seen=%s",
+                    reachable.get(entry.getKey()) ? "reachable" : "gated", resp.status(), entry.getKey(),
+                    found.isEmpty() ? "0" : found.toString(), kinds));
+        }
+        report.forEach(System.out::println);
+        System.out.println("AIVIEW_UNSEEDED_SUMMARY routes=" + templates.size() + " planted_values=" + e.raw().size()
+                + " surviving_raw_occurrences=" + total);
+
+        List<String> uncovered = new ArrayList<>();
+        COVERAGE.forEach((route, expected) -> {
+            if (!seen.getOrDefault(route, Set.of()).containsAll(expected)) {
+                uncovered.add(route + " expected " + expected + " saw " + seen.get(route) + " status " + status.get(route));
+            }
+        });
+        assertEquals(List.of(), uncovered, "seeded rows must reach these views, or a zero count proves nothing");
+        for (String refused : MUST_BE_REFUSED) {
+            int code = status.get(refused);
+            assertTrue(code == 401 || code == 403, refused + " must refuse aiview, answered " + code);
+        }
+        Set<String> observed = new TreeSet<>();
+        leaks.forEach((route, classes) -> classes.keySet().forEach(cls -> observed.add(route + " " + cls)));
+        assertEquals(new TreeSet<>(KNOWN_LEAKS), observed,
+                "planted raw values surviving in aiview GET bodies (route + value class); KNOWN_LEAKS must match exactly");
+    }
+
+    /** The counter itself: an address is not matched as the prefix of a longer address, names match case-insensitively. */
+    @Test
+    void theCounterSeesSpellingsAndNoPrefixMatch() {
+        Map<String, ValueClass> raw = Map.of("192.0.2.15", ValueClass.ADDRESS, "zn-x0a0b0c-core", ValueClass.ZONE_NAME);
+        assertEquals(Map.of(ValueClass.ADDRESS, 2), count("[\"192.0.2.15\",\"192-0-2-15\",\"192.0.2.150\"]", raw));
+        assertEquals(Map.of(ValueClass.ZONE_NAME, 1), count("zone ZN-X0A0B0C-CORE", raw));
+        assertEquals(Map.of(), count("{\"zone\":\"zone-04\"}", raw));
+    }
+}
