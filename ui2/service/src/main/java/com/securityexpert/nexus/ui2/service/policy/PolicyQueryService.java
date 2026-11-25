@@ -379,7 +379,7 @@ public final class PolicyQueryService {
     }
     public Optional<PolicyResponse> objectDuplicates(String source, String domain, int page, String q, boolean masked) {
         var index = domainIndex(source, domain);
-        if (index.inventories.isEmpty()) return Optional.empty();
+        if (index.inventories.isEmpty() && index.snapshots.isEmpty()) return Optional.empty();
         var views = views(index, masked);
         String needle = q.toLowerCase(Locale.ROOT);
         var matchingIds = java.util.stream.IntStream.range(0, index.objects.size()).filter(i -> needle.isEmpty() || views.text()[i].contains(needle))
@@ -474,14 +474,61 @@ public final class PolicyQueryService {
             "hits", hits.stream().skip((long) page * 200).limit(200).toList(), "total", hits.size())));
     }
 
-    /** Match bounded batches from the streamed index using the shared SQL address semantics. */
+    record AddressScope(String source, String domain) {}
+    private static final Comparator<AddressScope> ADDRESS_SCOPE_ORDER = Comparator
+        .comparing(AddressScope::source, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(AddressScope::domain, Comparator.nullsLast(Comparator.naturalOrder()));
+
+    /** Scopes to search; {@code stored} are SQL-backed (failure is fatal), the rest are local-only; {@code localListFailed} if local.snapshots() threw. */
+    record AddressScopeSet(List<AddressScope> scopes, Set<AddressScope> stored, boolean localListFailed) {}
+
+    List<AddressScope> addressScopes() { return addressScopeSet().scopes(); }
+
+    AddressScopeSet addressScopeSet() {
+        var scopes = new TreeSet<>(ADDRESS_SCOPE_ORDER);
+        for (var row : repositoryAddressScopes()) {
+            scopes.add(new AddressScope(row.get("source_id", String.class), row.get("domain_ref", String.class)));
+        }
+        var stored = Set.copyOf(scopes);
+        boolean localListFailed = false;
+        if (local != null) {
+            try {
+                for (var snapshot : Objects.requireNonNullElse(local.snapshots(), List.<PolicySnapshot>of())) {
+                    var metadata = snapshot.metadata();
+                    if (metadata != null && metadata.sourceId() != null && metadata.containerId() != null) {
+                        scopes.add(new AddressScope(metadata.sourceId(), metadata.containerId()));
+                    }
+                }
+            } catch (RuntimeException unavailable) {
+                localListFailed = true;
+                System.getLogger(PolicyQueryService.class.getName()).log(System.Logger.Level.WARNING,
+                    "POLICY_LOCAL_ADDRESS_SCOPES_UNAVAILABLE " + unavailable.getClass().getSimpleName());
+            }
+        }
+        return new AddressScopeSet(List.copyOf(scopes), stored, localListFailed);
+    }
+
+    /**
+     * Match bounded batches from the streamed index using the shared SQL address semantics.
+     * A stored (SQL-backed) scope that cannot be read fails the whole search. An unreadable local snapshot scope is
+     * skipped, but the result says so: {@code partial=true} and {@code unavailableScopes} (a count, no identities),
+     * so a missing hit is never presented as "not present".
+     */
     public Map<String, Object> searchAddresses(String query, int limit, int offset, boolean masked) {
-        record Scope(String source, String domain) {}
-        var scopes = repositoryAddressScopes().stream().map(row -> new Scope(
-            row.get("source_id", String.class), row.get("domain_ref", String.class))).toList();
+        var scopeSet = addressScopeSet();
+        int unavailableScopes = scopeSet.localListFailed() ? 1 : 0;
         var hits = new ArrayList<Map<String, Object>>();
-        for (var scope : scopes) {
-            var index = domainIndex(scope.source(), scope.domain());
+        for (var scope : scopeSet.scopes()) {
+            PolicyDomainIndex index;
+            try {
+                index = domainIndex(scope.source(), scope.domain());
+            } catch (RuntimeException unavailable) {
+                if (scopeSet.stored().contains(scope)) throw unavailable;
+                unavailableScopes++;
+                System.getLogger(PolicyQueryService.class.getName()).log(System.Logger.Level.WARNING,
+                    "POLICY_ADDRESS_SCOPE_UNAVAILABLE " + unavailable.getClass().getSimpleName());
+                continue;
+            }
             var aliases = index.aliases;
             var objects = new LinkedHashMap<String, Map<String, Object>>();
             for (var object : index.objects) objects.put((String) object.get("uid"), object);
@@ -511,7 +558,8 @@ public final class PolicyQueryService {
                 hits.add(hit);
             }
         }
-        return Map.of("items", hits.stream().skip(offset).limit(limit).toList(), "total", hits.size());
+        return Map.of("items", hits.stream().skip(offset).limit(limit).toList(), "total", hits.size(),
+            "partial", unavailableScopes > 0, "unavailableScopes", unavailableScopes);
     }
     private static String searchUrl(String id) {
         return java.net.URLEncoder.encode(id, java.nio.charset.StandardCharsets.UTF_8);

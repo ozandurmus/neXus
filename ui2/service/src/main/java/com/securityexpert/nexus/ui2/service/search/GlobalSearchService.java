@@ -95,6 +95,10 @@ public final class GlobalSearchService {
                     var page = policies.searchAddresses(ip.value(), limit, offset, masked);
                     out.put(key, page.get("items"));
                     counts.put(key, ((Number) page.get("total")).longValue());
+                    if (Boolean.TRUE.equals(page.get("partial"))) {
+                        out.put("policy_objects_partial", true);
+                        out.put("policy_objects_unavailable_scopes", page.get("unavailableScopes"));
+                    }
                 } else {
                     var page = IpInventorySearch.search(transactions, ip, key.equals("routes"), limit, offset,
                         identityById, masking, masked);

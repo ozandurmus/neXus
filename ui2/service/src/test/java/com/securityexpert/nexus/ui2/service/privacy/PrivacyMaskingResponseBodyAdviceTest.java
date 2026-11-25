@@ -628,4 +628,60 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(((List<String>) fields.get(1).get("detail")).get(0)).contains("/");
         assertThat(fields.get(2).get("values")).isEqualTo(Map.of("dev-a", "9.18.4", "dev-b", "9.18.3"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksJacksonJsonNodeObjectsArraysAndTextNodesForReplayViewerAndFailsClosedOnNonPlainNodes() throws Exception {
+        byte[] key = "0123456789".repeat(4).substring(0, 32).getBytes(StandardCharsets.UTF_8);
+        SubnetPreservingIpMasker ipMasker = new SubnetPreservingIpMasker(key);
+        TopologyNamePseudonymizer topo = new TopologyNamePseudonymizer(key);
+        String rawHost = "FW-TANGO-04";
+        String rawIp = String.join(".", "192", "0", "2", "44");
+        String rawPeerIp = String.join(".", "192", "0", "2", "45");
+        String rawSerial = "CP" + Integer.toHexString(0x9a4b7c).toUpperCase(java.util.Locale.ROOT);
+
+        var mappers = new com.securityexpert.nexus.ui2.sanitizer.core.Mappers(
+                com.securityexpert.nexus.ui2.sanitizer.core.SanitizerKey.of(key),
+                com.securityexpert.nexus.ui2.sanitizer.core.KnownNames.NONE);
+        var dict = com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary.build(
+                List.of(com.securityexpert.nexus.ui2.sanitizer.core.EstateIdentity.serial(rawSerial)), mappers);
+        topo.useFreeTextEstate(new FreeTextEstate(() -> dict));
+        topo.maskDeviceName(rawHost, null);
+        PrivacyMaskingResponseBodyAdvice localAdvice = new PrivacyMaskingResponseBodyAdvice(ipMasker, topo);
+
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var prechecks = mapper.readTree(mapper.writeValueAsString(Map.of(
+                "cpu_max_core_pct", 28,
+                "disk_free_bytes", 15_032_385_536L,
+                "cpdata_collector_present", false,
+                "address", rawIp + "/24",
+                "host_note", "checked " + rawHost + " at " + rawPeerIp + " serial " + rawSerial,
+                "nested_array", List.of("peer " + rawHost, Map.of("serial_number", rawSerial)))));
+        var binaryNode = com.fasterxml.jackson.databind.node.BinaryNode.valueOf(new byte[] {1, 2, 3});
+        var textNode = com.fasterxml.jackson.databind.node.TextNode.valueOf("note for " + rawHost + " at " + rawIp);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", "bundle-1");
+        body.put("prechecks", prechecks);
+        body.put("text_node", textNode);
+        body.put("binary_node", binaryNode);
+
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> masked = (Map<String, Object>) localAdvice.beforeBodyWrite(
+                body, null, null, null, serverRequest, null);
+
+        String serialized = mapper.writeValueAsString(masked);
+        assertThat(serialized).doesNotContain(rawIp, rawPeerIp, rawSerial);
+        Map<String, Object> maskedPrechecks = (Map<String, Object>) masked.get("prechecks");
+        assertThat(maskedPrechecks.get("cpu_max_core_pct")).isEqualTo(28);
+        assertThat(maskedPrechecks.get("disk_free_bytes")).isEqualTo(15_032_385_536L);
+        assertThat(maskedPrechecks.get("cpdata_collector_present")).isEqualTo(false);
+        assertThat((String) maskedPrechecks.get("host_note")).contains("FW-", "SN-").doesNotContain(rawHost, rawPeerIp, rawSerial);
+        assertThat((String) masked.get("text_node")).doesNotContain(rawHost, rawIp);
+        assertThat(masked.get("binary_node")).isNull();
+
+        // Non-viewer role keeps original JsonNode body untouched
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
+        assertThat(localAdvice.beforeBodyWrite(body, null, null, null, serverRequest, null)).isSameAs(body);
+    }
 }

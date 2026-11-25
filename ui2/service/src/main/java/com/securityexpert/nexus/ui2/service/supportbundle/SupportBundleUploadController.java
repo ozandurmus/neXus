@@ -78,8 +78,10 @@ public final class SupportBundleUploadController {
         Optional<UUID> uuid = uuid(id);
         if (uuid.isEmpty()) return error(HttpStatus.BAD_REQUEST, "INVALID_ID", "Identifier must be a UUID");
         boolean viewer = isViewer(http);
+        com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.RequestRow bundle =
+                viewer && bundles != null ? bundles.find(uuid.get()).orElse(null) : null;
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (UploadRow r : uploads.list(uuid.get())) rows.add(row(r, viewer));
+        for (UploadRow r : uploads.list(uuid.get())) rows.add(row(r, viewer, bundle));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("uploads", rows);
         return ResponseEntity.ok(body);
@@ -121,7 +123,12 @@ public final class SupportBundleUploadController {
         };
     }
 
-    private static Map<String, Object> row(UploadRow r, boolean viewer) {
+    static Map<String, Object> row(UploadRow r, boolean viewer) {
+        return row(r, viewer, null);
+    }
+
+    private static Map<String, Object> row(UploadRow r, boolean viewer,
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.RequestRow bundle) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.id().toString());
         m.put("request_id", r.requestId().toString());
@@ -138,9 +145,12 @@ public final class SupportBundleUploadController {
         m.put("bytes_total", r.bytesTotal());
         m.put("bytes_sent", r.bytesSent());
         m.put("sha256", r.sha256());
-        m.put("remote_status", r.remoteStatus());
+        // For a generic (administrator-typed) or unrecognized destination, withhold remote_status and error_detail
+        // just like destination_host; for a fixed vendor destination, scrub any echoed withheld upload/bundle references
+        // and let PrivacyMaskingResponseBodyAdvice apply its free-text masking. error_code stays visible.
+        m.put("remote_status", viewer ? (fixedVendorHost ? scrubWithheld(r.remoteStatus(), r, bundle) : null) : r.remoteStatus());
         m.put("error_code", r.errorCode());
-        m.put("error_detail", r.errorDetail());
+        m.put("error_detail", viewer ? (fixedVendorHost ? scrubWithheld(r.errorDetail(), r, bundle) : null) : r.errorDetail());
         m.put("host_key_changed", r.hostKeyChanged());
         m.put("item_count", r.itemIds().size());
         if (!viewer) {
@@ -151,6 +161,56 @@ public final class SupportBundleUploadController {
             m.put("host_key_fingerprint", r.hostKeyFingerprint());
         }
         return m;
+    }
+
+    private static final java.util.Set<String> FIXED_PROTOCOL_WORDS = java.util.Set.of("http", "https", "sftp", "scp");
+
+    private static String scrubWithheld(String text, UploadRow r,
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.RequestRow bundle) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        List<String> candidates = new ArrayList<>(8);
+        addCandidate(candidates, r.remoteUser());
+        addCandidate(candidates, r.caseRef());
+        addCandidate(candidates, r.requestedBy());
+        addCandidate(candidates, r.reason());
+        if (bundle != null) {
+            addCandidate(candidates, bundle.caseRef());
+            addCandidate(candidates, bundle.requestedBy());
+            addCandidate(candidates, bundle.reason());
+            addCandidate(candidates, bundle.deletedBy());
+        }
+        if (candidates.isEmpty()) {
+            return text;
+        }
+        candidates.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        String result = text;
+        for (String token : candidates) {
+            String left = isAsciiAlnum(token.charAt(0)) ? "(?<![A-Za-z0-9])" : "";
+            String right = isAsciiAlnum(token.charAt(token.length() - 1)) ? "(?![A-Za-z0-9])" : "";
+            result = java.util.regex.Pattern.compile(
+                            left + java.util.regex.Pattern.quote(token) + right,
+                            java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(result)
+                    .replaceAll("[REDACTED]");
+        }
+        return result;
+    }
+
+    private static void addCandidate(List<String> out, String raw) {
+        if (raw == null) return;
+        String trimmed = raw.strip();
+        if (trimmed.length() < 2) return;
+        if (trimmed.length() == 2 && trimmed.chars().noneMatch(Character::isDigit)) return;
+        if (FIXED_PROTOCOL_WORDS.contains(trimmed.toLowerCase(java.util.Locale.ROOT))) return;
+        if (!out.contains(trimmed)) {
+            out.add(trimmed);
+        }
+    }
+
+    private static boolean isAsciiAlnum(char c) {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
     }
 
     private static ResponseEntity<Map<String, Object>> refuseViewerOrAnonymous(HttpServletRequest http) {
