@@ -66,7 +66,7 @@ class ZoneMatrixStepTwoTest {
         assertNull(ServiceEntry.parse("tcp/443").notEvaluableReason());
         assertNotNull(ServiceEntry.parse("icmp/8").notEvaluableReason());
         assertNotNull(ServiceEntry.parse("ipproto/50").notEvaluableReason());
-        assertNotNull(ServiceEntry.parse("app:pan:web-browsing").notEvaluableReason());
+        assertNull(ServiceEntry.parse("app:pan:web-browsing").notEvaluableReason()); // evaluable since step 7 (section 4.3)
         var coverage = ServiceEntry.Coverage.of(List.of(ServiceEntry.parse("tcp/80-90"), ServiceEntry.parse("tcp/91"), ServiceEntry.parse("icmp/8")));
         assertFalse(coverage.adds(ServiceEntry.parse("tcp/85-91")));
         assertTrue(coverage.adds(ServiceEntry.parse("tcp/85-92")));
