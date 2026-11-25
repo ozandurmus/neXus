@@ -57,6 +57,15 @@ public final class PolicyHygiene {
         "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
         "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
         "Last hit predates the threshold at counter collection time.", ASA_ACL_NOT_REFERENCED, ASA_ACL_USE_UNKNOWN);
+    /**
+     * The finding evidence derived from rule hit counters. Counters are per member (an HA standby reports zero), so a finding
+     * carrying one of these strings is member-specific runtime evidence, never proof about an HA pair.
+     */
+    public static final Set<String> HIT_EVIDENCE = Set.of(
+        "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
+        "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
+        "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
+        "Last hit predates the threshold at counter collection time.");
     public record Finding(String findingClass, String severity, String evidence) {}
     public record Assessment(String shadowStatus, String shadowReason, String coveringRuleId,
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,

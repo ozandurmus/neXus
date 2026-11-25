@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Box, Typography } from "@mui/material";
 
 import { getPolicyHygieneSummary, type PolicyHygieneSummary } from "../auth/adminApi";
-import { PolicyHygieneSummaryTable } from "./PolicyHygieneSummaryTable";
+import { PolicyHygieneSummaryTable, type PolicyHygieneSummaryWithHa } from "./PolicyHygieneSummaryTable";
 
 import { KpiCard, KpiRow } from "../shell/KpiCard";
 import { plural } from "../shell/plural";
 import { relativeAge } from "../shell/time";
+import { m3 } from "../theme/m3Theme";
 import type { ContainerSummary } from "./PolicyScreen";
 import { snapshotFreshness } from "./PolicyRuleViewer";
 
@@ -58,6 +59,9 @@ export function PolicyHygieneFleet({ rows, now, open }: { readonly rows: readonl
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [rows.length]);
   if (rows.length === 0) return null;
+  const haSummary = summary as PolicyHygieneSummaryWithHa | null;
+  const haPairsCountedOnce = typeof haSummary?.haPairsCountedOnce === "number" && haSummary.haPairsCountedOnce > 0 ? haSummary.haPairsCountedOnce : 0;
+  const haPairsDivergent = typeof haSummary?.haPairsDivergent === "number" && haSummary.haPairsDivergent > 0 ? haSummary.haPairsDivergent : 0;
   const analysed = summary ? summary.containers.length - summary.pending : 0;
   const packages = rows.reduce((sum, row) => sum + row.policyIds.length, 0);
   const stale = rows.filter((row) => { const state = snapshotFreshness(row.collectedAt, now).state; return state === "stale" || state === "old"; });
@@ -75,14 +79,19 @@ export function PolicyHygieneFleet({ rows, now, open }: { readonly rows: readonl
         <KpiCard label="Without a gateway" value={unassigned} sentence={`of ${rows.length} containers have no installation target`} />
         {summary && analysed > 0
           ? <KpiCard label="Findings" value={Object.entries(summary.totals).filter(([key]) => key !== "unknown").reduce((sum, [, n]) => sum + n, 0)}
-            sentence={`rule findings across ${plural(analysed, "analysed container")}${summary.totals.unknown ? ` · ${summary.totals.unknown} UNKNOWN counted separately` : ""}`} />
+            sentence={`rule findings across ${plural(analysed, "analysed container")}${haPairsCountedOnce > 0 ? ` (${plural(haPairsCountedOnce, "identical HA pair")} counted once)` : ""}${summary.totals.unknown ? ` · ${summary.totals.unknown} UNKNOWN counted separately` : ""}`} />
           : <KpiCard label="Findings" state="not_evaluated"
             reason="The fleet hygiene summary is computed in the background from the stored snapshots and has not produced a result yet."
             sentence="not evaluated yet" />}
       </KpiRow>
+      {haPairsDivergent > 0 && (
+        <Typography variant="body2" role="status" sx={{ color: m3.warningInk, fontWeight: 600, maxWidth: 820 }}>
+          {plural(haPairsDivergent, "HA pair context")} flagged HA_POLICY_DIVERGENT: member policies differ, so both members are counted separately and never merged.
+        </Typography>
+      )}
       {summary && summary.totals.unknown > 0 && <WhyUnknown summary={summary} />}
       <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 820 }}>
-        Counts are rules carrying a finding of each class, read from each container's stored snapshot (time shown); a finding the stored evidence cannot decide is counted as UNKNOWN, never as clean. Open a container below for the rules behind the numbers.
+        Counts are rules carrying a finding of each class, read from each container's stored snapshot (time shown); a finding the stored evidence cannot decide is counted as UNKNOWN, never as clean.{haPairsCountedOnce > 0 ? ` Identical HA pairs (${plural(haPairsCountedOnce, "pair")}) are counted once for policy-content findings; unused and hit-counter UNKNOWN findings are member-specific and counted per member.` : ""} Open a container below for the rules behind the numbers.
       </Typography>
       {summary && <PolicyHygieneSummaryTable summary={summary} open={open} />}
     </Box>
