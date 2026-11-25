@@ -78,3 +78,5 @@ No code contradicted the contract in this pass: no test was disabled and no prod
 2026-11-25: step 6a content builder (`ZoneMatrixEvidenceReport`, pure, pins ZM-11, ZM-30 title part, ZM-32), not wired: catalogue, rights, masking cell kind, stored file and ZM-28, ZM-31, ZM-38 remain for a later step.
 
 2026-11-25: DRAFT amendment proposal for Cisco ASA and FortiGate coverage written (`docs/design/ZONE_MATRIX_ASA_FORTIGATE_AMENDMENT_PROPOSAL_2026_11_25.md`, engineering default (a) of the 2026-11-23 midday record); it approves nothing, freezes nothing and changes no contract text. It reports the stale ASA/FortiGate sentence of contract 5.8 as a contradiction and lists 11 questions for the Product Owner.
+
+2026-11-25: CLI parity for the zone matrix routes: `ZonesMatrixCli` (named so because ZM-13 keeps `ZoneMatrix*` classes off the cli package) gives a named `zone-matrix-*` command to each of the 20 `ZoneMatrixController` mappings, pinned by `ZoneMatrixCliParityTest`; rows added to the `NEXUS_CLI.md` command table.
