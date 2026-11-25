@@ -137,6 +137,20 @@ def test_a_second_lane_hitting_the_same_quota_is_requeued_too_but_only_once(ops)
     assert (ops.lq / "done" / f"{LANE}.outcome").read_text().strip() == "FAILED"
 
 
+def test_an_agy_429_marks_the_model_and_does_not_switch_to_claude(ops):
+    ops.write_lane(LANE, "[argon] exit=3 head=abc x", age_s=900, meta="base=origin/main\nagy_model=gemini-4-carbon-high\n",
+                   report="RESOURCE_EXHAUSTED (code 429): Individual quota reached. Resets in 10m32s.")
+    out = finish(ops)
+    assert (ops.lq / ".agy-limited-gemini-4-carbon-high").exists() and not (ops.lq / "ENGINE_CLAUDE").exists()
+    assert (ops.lq / f"{LANE}.brief").exists() and "rate-limited" in out
+
+
+def test_routing_skips_a_rate_limited_model(ops):
+    (ops.lq / ".agy-limited-gemini-4-carbon-high").touch()
+    r = ops.source("lane-runner.sh", 'agy_limited gemini-4-carbon-high && echo LIMITED; agy_limited gemini-4-neon-high || echo FREE')
+    assert "LIMITED" in r.stdout and "FREE" in r.stdout
+
+
 def test_a_running_lane_is_left_alone(ops):
     ops.write_lane(LANE, None, report="working")
     assert finish(ops) == ""
