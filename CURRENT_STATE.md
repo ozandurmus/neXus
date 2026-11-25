@@ -20,9 +20,9 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0416` — **AUTOMATED_VALIDATED** (2026-11-25): log detection P1 in shadow (V272), zone matrix lifecycle wiring, MC device health read gated and off (V271), parser UNKNOWN pins. `0415` RPT-17 report (V270). `0414` log census tool, not yet run. `NXS-LOCAL-0412` — **AUTOMATED_VALIDATED** (2026-11-24): Policy Insights design frozen (Check Point first, phase P1 next), unused helpers removed;
+`NXS-LOCAL-0417` — **AUTOMATED_VALIDATED** (2026-11-25): zone matrix IPv4 per-family resolution and unwired evidence report builder, HOST-A test namespace built offline only. `0416` log detection P1 in shadow (V272), zone matrix lifecycle wiring, MC device health read gated and off (V271), parser UNKNOWN pins. `NXS-LOCAL-0412` — **AUTOMATED_VALIDATED** (2026-11-24): Policy Insights design frozen (Check Point first, phase P1 next), unused helpers removed;
 earlier `0406`-`0411`: zone matrix runs (V267), HA divergence, CP sync warning;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0416`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0417`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.

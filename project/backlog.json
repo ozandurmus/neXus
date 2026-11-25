@@ -313,7 +313,7 @@
       "title": "Zone matrix: freeze contract, then deliver in steps",
       "status": "in_progress",
       "priority": "P1",
-      "target": "Council 2026-11-13; bank inputs pending",
+      "target": "Council 2026-11-13; bank inputs pending; step 6a builder 287515a6, step 7a 0fd6a834",
       "note": ""
     },
     {
@@ -683,6 +683,42 @@
       "status": "planned",
       "priority": "P3",
       "target": "9c3579a7",
+      "note": ""
+    },
+    {
+      "id": "zone_matrix_step_6b_evidence_report_wiring",
+      "category": "policy",
+      "title": "Zone matrix step 6b: wire the evidence report (route, storage, rights, catalogue, masking cell kind; ZM-28, ZM-31, ZM-38 open)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "287515a6 (builder only, not wired)",
+      "note": ""
+    },
+    {
+      "id": "zone_matrix_step_7_remaining",
+      "category": "policy",
+      "title": "Zone matrix step 7 remainder: ZM-12, ZM-26, ZM-30, ZM-36, ZM-40 stay PARTIAL (ZM-19, ZM-25, ZM-37 proven)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0fd6a834",
+      "note": ""
+    },
+    {
+      "id": "policy_gaps_engine_attribution_harness_run",
+      "category": "collection",
+      "title": "Run the policy gaps engine attribution harness in-pod (counts only) and review its report; it has not run against any environment",
+      "status": "planned",
+      "priority": "P2",
+      "target": "0fd6a834: scripts/measurement/policy_collection_gaps/",
+      "note": ""
+    },
+    {
+      "id": "hosta_test_namespace_apply",
+      "category": "agent_operations",
+      "title": "HOST-A test namespace ui2-test: PO approval, one-time image build and apply (built and tested offline only; design DRAFT)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "287515a6: docs/design/HOSTA_TEST_NAMESPACE_2026_11_24.md",
       "note": ""
     }
   ]

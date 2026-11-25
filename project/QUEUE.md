@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0416 · Track: PCP.x · Generated: 2026-11-25T00:57:57Z
+Build: NXS-LOCAL-0417 · Track: PCP.x · Generated: 2026-11-25T04:48:49Z
 
 ## Now
-- NXS-LOCAL-0416 — Log detection engine P1 shadow (V272), zone matrix lifecycle wiring, parser UNKNOWN pins, MC device health gated read (V271), delivery orchestration record (automated_validated)
+- NXS-LOCAL-0417 — Zone matrix step 7a per-family resolution, ZM-25/ZM-37 pins, step 6a evidence report builder, HOST-A test namespace, policy gaps harness, contract gate fix (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -35,6 +35,7 @@ Build: NXS-LOCAL-0416 · Track: PCP.x · Generated: 2026-11-25T00:57:57Z
 - P2/planned deploy1_evidence_egress_policy
 - P2/planned fortigate_a0_fg_18_20_defects
 - P2/planned ha_policy_pair_merge_and_count
+- P2/planned hosta_test_namespace_apply
 - P2/planned https_configuration_collect
 - P2/planned log_detection_engine_design_open_questions
 - P2/planned log_detection_p1_shadow_validation
@@ -44,6 +45,7 @@ Build: NXS-LOCAL-0416 · Track: PCP.x · Generated: 2026-11-25T00:57:57Z
 - P2/planned pan_change_actor_submitted_join_gap
 - P2/planned path_analysis_phase_b
 - P2/planned platform_backup_step1_host_roll
+- P2/planned policy_gaps_engine_attribution_harness_run
 - P2/planned policy_insights_p1_checkpoint
 - P2/planned policy_install_p2_p4
 - P2/planned product_rename_identity
@@ -52,6 +54,8 @@ Build: NXS-LOCAL-0416 · Track: PCP.x · Generated: 2026-11-25T00:57:57Z
 - P2/planned system_log_template_census_run
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
+- P2/planned zone_matrix_step_6b_evidence_report_wiring
+- P2/planned zone_matrix_step_7_remaining
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
@@ -157,8 +161,8 @@ Build: NXS-LOCAL-0416 · Track: PCP.x · Generated: 2026-11-25T00:57:57Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0417 (automated_validated)
 - NXS-LOCAL-0416 (automated_validated)
 - NXS-LOCAL-0415 (automated_validated)
 - NXS-LOCAL-0414 (automated_validated)
 - NXS-LOCAL-0413 (automated_validated)
-- NXS-LOCAL-0412 (automated_validated)

@@ -586,3 +586,40 @@ def test_pod_tells_a_compile_failure_from_a_dependency_cache_miss(pod, mode, sta
     code, summary, _ = run_pod(pod, FAKE_GRADLE_MODE=mode, TEST_INTEGRATION="0")
     assert summary["status"] == status and summary["phases"][0]["reason"] == reason
     assert code == {"FAIL": 1, "ERROR": 2}[status]
+
+
+# --- The deploy's build context carries only ui2/, project/ and docs/ (2026-11-25 first image build failure) ---------
+
+def _image_tool():
+    sys.path.insert(0, str(ROOT / "tools" / "e2e"))
+    import hosta_test_runner_image as image
+    return image
+
+
+def test_every_containerfile_copy_source_outside_the_loaded_context_is_streamed_by_the_image_tool():
+    image = _image_tool()
+    loaded = ("ui2/", "project/", "docs/")
+    sources = []
+    for line in (ROOT / "ui2" / "Containerfile.test-runner").read_text().splitlines():
+        if line.startswith("COPY ") and "--from=" not in line:
+            sources += line.split()[1:-1]
+    outside = {s for s in sources if not s.startswith(loaded)}
+    assert outside and outside <= set(image.RUNNER_FILES)
+
+
+def test_runner_files_tar_keeps_repository_paths():
+    import tarfile
+    image = _image_tool()
+    with tarfile.open(fileobj=io.BytesIO(image.runner_files_tar()), mode="r") as tar:
+        assert sorted(tar.getnames()) == sorted(image.RUNNER_FILES)
+
+
+def test_runner_files_are_loaded_only_from_a_checkout_at_the_context_commit(monkeypatch):
+    image = _image_tool()
+    monkeypatch.setattr(image, "checkout_commit", lambda root=None: "a" * 40)
+    calls = []
+    with pytest.raises(ValueError):
+        image.load_runner_files("b" * 40, run=lambda *a, **k: calls.append(a))
+    assert not calls
+    image.load_runner_files("a" * 40, run=lambda *a, **k: calls.append(a) or subprocess.CompletedProcess(a, 0))
+    assert calls and calls[0][0][:5] == ["kubectl", "-n", "ui2-build", "exec", "-i"]
