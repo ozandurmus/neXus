@@ -84,7 +84,15 @@ finish_lane() {
       # Every lane that hit the quota goes back to the queue once (2026-11-25: the second lane of the same agy quota window
       # was archived FAILED and lost); a second quota hit on the same lane is FAILED, so a Claude quota cannot loop.
       if [ ! -e "$Q/.quota-$n" ]; then
-        [ -e "$Q/ENGINE_CLAUDE" ] || { touch "$Q/ENGINE_CLAUDE"; log "agy quota hit in $n -> switching new lanes to Claude"; }
+        # An agy 429 ("Individual quota reached ... Resets in 10m") is a short per-model limit, not an exhausted account
+        # (PO 2026-11-25 "antigravity'de kota sorunu yok"): mark that model for NEXUS_AGY_MODEL_REST_S and let routing pick
+        # the next Gemini model; only an unknown engine switch falls back to ENGINE_CLAUDE.
+        am=$(grep -E '^agy_model=' "$Q/started/$n.meta" 2>/dev/null | cut -d= -f2-)
+        if [ -n "$am" ] && grep -qiE 'Individual quota|RESOURCE_EXHAUSTED' "$L/q-$n.nohup" 2>/dev/null; then
+          touch "$Q/.agy-limited-$am"; log "agy $am rate-limited in $n -> other Gemini models first for a while"
+        else
+          [ -e "$Q/ENGINE_CLAUDE" ] || { touch "$Q/ENGINE_CLAUDE"; log "agy quota hit in $n -> switching new lanes to Claude"; }
+        fi
         touch "$Q/.quota-$n"; log "quota hit in $n -> re-queueing it once"
         requeue_lane "$n" "$s"; archive_lane "$n" "$s" "QUOTA_REQUEUED"; return 0
       fi
@@ -220,6 +228,12 @@ maybe_refill() {
   fi
 }
 
+# agy_limited <model>: a 429 on this Gemini model within NEXUS_AGY_MODEL_REST_S (default 15 min).
+agy_limited() {
+  local f="$Q/.agy-limited-$1"
+  [ -e "$f" ] && [ $(( $(date +%s) - $(file_mtime "$f") )) -lt "${NEXUS_AGY_MODEL_REST_S:-900}" ]
+}
+
 # Pick the lowest-numbered brief whose engine has a free slot (qwen: 1 own slot; others: MAX) and start it.
 start_next_lane() {
   local b next="" n meta base model adddir engine agy_now desc tot lbl n2 wt cmodel ceffort
@@ -253,6 +267,15 @@ start_next_lane() {
       *-port-*|*-fix-*|*refill-ui*) engine=agy; model=gemini-4-neon-medium;;  # PO 2026-11-24: medium is enough here
       *-p1-*|*refill-p1*) engine=agy; model=gemini-4-carbon-high;;
     esac
+    # A model marked rate-limited by a recent 429 is skipped: next in carbon -> neon -> hydrogen (high), else Claude.
+    if [ "$engine" = agy ] && agy_limited "$model"; then
+      local alt picked=""
+      for alt in gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high; do
+        [ "$alt" = "$model" ] && continue
+        agy_limited "$alt" || { picked=$alt; break; }
+      done
+      if [ -n "$picked" ]; then log "agy $model rate-limited -> $n on $picked"; model=$picked; else engine=claude; fi
+    fi
   fi
   # Antigravity cap (PO 2026-11-24: 3 parallel lanes there, Carbon/Neon/Hydrogen only): a lane that is not routed to a
   # Gemini model because the cap is full runs on Claude Sonnet instead of falling back to the Argon default.
@@ -290,6 +313,7 @@ start_next_lane() {
       ( nohup /bin/bash "$OPS_STATE/claude_task.sh" "$wt" "$Q/started/$n.brief" "$cmodel" "$adddir" "$ceffort" > "$L/q-$n.nohup" 2>&1 & )
       log "started $lbl #$tot $n (claude $cmodel effort $ceffort, base $base)"
     else
+      echo "agy_model=$model" >> "$Q/started/$n.meta"   # which Gemini model a 429 belongs to (agy_limited)
       ( cd "$REPO" && nohup python3 "$OPS_STATE/argon_task_neon.py" --worktree "$wt" --brief "$Q/started/$n.brief" \
           --model "$model" --effort "${model##*-}" ${adddir:+--add-dir "$adddir"} --log "$L/q-$n.log" > "$L/q-$n.nohup" 2>&1 & )
       log "started $lbl #$tot $n ($model, base $base)"
