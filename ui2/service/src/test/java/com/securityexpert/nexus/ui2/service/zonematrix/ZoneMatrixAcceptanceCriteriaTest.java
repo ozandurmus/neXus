@@ -505,6 +505,9 @@ class ZoneMatrixAcceptanceCriteriaTest {
         for (Method method : ZoneMatrixController.class.getDeclaredMethods()) {
             assertNull(method.getAnnotation(DeleteMapping.class), method.getName() + " is no DELETE route");
             for (String path : paths(method)) {
+                // step 4b-2 (section 5.1 on demand): the one run route only starts a new run; it is a POST without a run id
+                if (path.equals("/api/v2/zone-matrix/runs") && method.getAnnotation(PostMapping.class) != null
+                        && method.getAnnotation(PutMapping.class) == null) continue;
                 assertFalse(path.matches(".*(revision|finding|/runs?(/|$)).*"), "no route addresses revisions, runs or findings: " + path);
                 if (path.endsWith("/delete")) assertTrue(path.contains("/draft/"), "a delete-style route only edits the draft: " + path);
             }

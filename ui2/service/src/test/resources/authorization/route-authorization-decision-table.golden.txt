@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=664 rows=11952
+# route authorization decision table; kinds=18 routes=665 rows=11970
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -9900,6 +9900,24 @@ machine-replay-viewer | POST /api/v2/zone-matrix/lookup | REFUSE 403 application
 viewer-no-csrf | POST /api/v2/zone-matrix/lookup | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /api/v2/zone-matrix/lookup | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /api/v2/zone-matrix/lookup | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | POST /api/v2/zone-matrix/runs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | POST /api/v2/zone-matrix/runs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | POST /api/v2/zone-matrix/runs | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | POST /api/v2/zone-matrix/runs | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+role-viewer | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+role-operator | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+role-onboarding_admin | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+role-backup_admin | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+role-compliance_admin | POST /api/v2/zone-matrix/runs | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_evaluate:PERMITTED]
+role-security_admin | POST /api/v2/zone-matrix/runs | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_evaluate:PERMITTED]
+role-operation_admin | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+role-replay_viewer | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_evaluate","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_evaluate:DENIED]
+root | POST /api/v2/zone-matrix/runs | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_evaluate:PERMITTED]
+machine-replay-viewer | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /api/v2/zone-matrix/runs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+viewer-no-origin | POST /api/v2/zone-matrix/runs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
+must-change | POST /api/v2/zone-matrix/runs | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | POST /auth/login | PERMIT actor=- session=- replay-viewer=-
 unknown-cookie | POST /auth/login | PERMIT actor=- session=- replay-viewer=-
 expired | POST /auth/login | PERMIT actor=- session=- replay-viewer=-

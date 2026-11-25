@@ -24,6 +24,7 @@ class ZoneMatrixSecurityTest {
                 Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM),
                 Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
                 Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE),
+                Map.entry("POST /api/v2/zone-matrix/runs", ActionRegistry.ZONE_MATRIX_EVALUATE),
                 Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ));
         Map<String, String> stepOne = Map.of(
                 "GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ,
@@ -57,12 +58,25 @@ class ZoneMatrixSecurityTest {
         for (String role : new String[]{RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.BACKUP_ADMIN}) {
             assertFalse(summaryRoles.contains(role), role);
         }
+        // step 4b-2 (section 5.1): the on-demand durable run is the existing evaluate action; security and compliance
+        // administrators start it, replay_viewer (aiview) and every other role do not.
+        assertEquals(ActionRegistry.ZONE_MATRIX_EVALUATE, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/zone-matrix/runs"));
+        assertEquals(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/zone-matrix/evaluate"),
+                SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/zone-matrix/runs"), "the run route is gated exactly as /evaluate");
+        var runRoles = registry.find(ActionRegistry.ZONE_MATRIX_EVALUATE).orElseThrow().requiredRoleTokens();
+        for (String role : new String[]{RoleToken.REPLAY_VIEWER, RoleToken.VIEWER, RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN,
+                RoleToken.BACKUP_ADMIN, RoleToken.ONBOARDING_ADMIN}) {
+            assertFalse(runRoles.contains(role), role);
+        }
         // section 3.4: only compliance_admin confirms a reference (ZM-23)
         assertEquals(Set.of(RoleToken.COMPLIANCE_ADMIN),
                 registry.find(ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM).orElseThrow().requiredRoleTokens());
     }
 
-    /** ZM-37: the zone matrix route set has no route that deletes or changes a run or a finding. */
+    /**
+     * ZM-37: the zone matrix route set has no route that deletes or changes a run or a finding. The one non-GET run route is
+     * {@code POST /api/v2/zone-matrix/runs}, which only starts a new run (section 5.1 on demand) and has no path variable.
+     */
     @Test void zm37_noZoneMatrixRouteMutatesOrDeletesARunOrAFinding() {
         for (String route : SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.keySet()) {
             if (!route.contains(" /api/v2/zone-matrix/")) continue;
@@ -70,6 +84,7 @@ class ZoneMatrixSecurityTest {
             String path = route.substring(route.indexOf(' ') + 1);
             assertNotEquals("DELETE", method, route);
             assertNotEquals("PATCH", method, route);
+            if (route.equals("POST /api/v2/zone-matrix/runs")) continue;
             if (path.contains("/runs") || path.contains("/findings") || path.startsWith("/api/v2/zone-matrix/summary")) {
                 assertEquals("GET", method, route + " must be read-only");
             }

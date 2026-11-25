@@ -222,6 +222,8 @@ class ZoneMatrixSummaryControllerTest {
             assertNull(m.getAnnotation(DeleteMapping.class), m.getName());
             assertNull(m.getAnnotation(PatchMapping.class), m.getName());
             for (String path : paths(m)) {
+                // the one exception: POST /api/v2/zone-matrix/runs starts a new run (section 5.1) and changes no existing one
+                if (path.equals("/api/v2/zone-matrix/runs") && m.getAnnotation(PostMapping.class) != null) continue;
                 boolean touchesRunsOrFindings = path.contains("/runs") || path.contains("/findings") || path.contains("/summary");
                 if (touchesRunsOrFindings) assertNotNull(m.getAnnotation(GetMapping.class), path + " must be GET only");
             }

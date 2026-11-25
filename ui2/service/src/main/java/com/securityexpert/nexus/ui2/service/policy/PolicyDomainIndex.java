@@ -21,6 +21,8 @@ final class PolicyDomainIndex {
     static final String PAN_RULEBASES = "NAT, decryption and other non-security rulebases are not collected.";
     static final String PAN_OTHER_GROUPS = "References from other device groups are not counted.";
     static final String CP_OUTSIDE = "VPN, gateway topology and threat prevention references are not collected.";
+    static final String ASA_OUTSIDE = "NAT, VPN filter, class-map and non-access-group references are not collected.";
+    static final String FGT_OUTSIDE = "Local-in, multicast, proxy, DoS and non-IPv4-policy references are not collected.";
     static final String UNUSED_NOT_COLLECTED = "Management unused-object report is not collected.";
     static final String NOT_IN_INVENTORY = "Object is not in the collected management inventory.";
     static final String MANAGEMENT_IN_USE = "Management reports the object in use outside collected rules.";
@@ -28,7 +30,7 @@ final class PolicyDomainIndex {
     static final String TAG_REFERENCES = "Tag references are not counted.";
     /** Fixed vocabulary: the only reason texts that may pass the AIView projection. */
     static final Set<String> REASONS = Set.of(NO_RULES, RULES_INCOMPLETE, UNRESOLVED, DYNAMIC, PAN_RULEBASES, PAN_OTHER_GROUPS,
-        CP_OUTSIDE, UNUSED_NOT_COLLECTED, NOT_IN_INVENTORY, MANAGEMENT_IN_USE, CONTRADICTION, TAG_REFERENCES);
+        CP_OUTSIDE, ASA_OUTSIDE, FGT_OUTSIDE, UNUSED_NOT_COLLECTED, NOT_IN_INVENTORY, MANAGEMENT_IN_USE, CONTRADICTION, TAG_REFERENCES);
 
     final List<Map<String, Object>> objects = new ArrayList<>();
     final List<Map<String, Object>> duplicates = new ArrayList<>();
@@ -124,10 +126,14 @@ final class PolicyDomainIndex {
         if (unresolved[0]) gaps.add(UNRESOLVED);
         if (dynamic[0]) gaps.add(DYNAMIC);
         if (vendors.contains("PAN")) { gaps.add(PAN_RULEBASES); gaps.add(PAN_OTHER_GROUPS); }
+        if (vendors.contains("ASA")) gaps.add(ASA_OUTSIDE);
+        if (vendors.contains("FGT")) gaps.add(FGT_OUTSIDE);
         if (vendors.contains("CP") || (snapshots.isEmpty() && !inventoryUids.isEmpty())) gaps.add(CP_OUTSIDE);
         this.usageGaps = List.copyOf(gaps);
         var byValue = new LinkedHashMap<String, List<CpObjectInventory.Item>>();
         for (var object : items.values()) {
+            // Fail closed: only fully resolved objects can be value-equivalent.
+            if (!"RESOLVED".equals(statuses.getOrDefault(object.uid(), "RESOLVED"))) continue;
             String normalized = normalized(object);
             if (normalized != null) byValue.computeIfAbsent(normalized, k -> new ArrayList<>()).add(object);
         }
@@ -223,9 +229,15 @@ final class PolicyDomainIndex {
         }
         try {
             String type = object.type();
-            if (Set.of("group", "service-group", "time-group").contains(type)) {
+            if (Set.of("group", "address-group", "service-group", "time-group").contains(type)) {
+                if (object.members().isEmpty()) return null;
                 return type + ":" + ref(new TreeSet<>(object.members()).toArray(String[]::new));
             }
+            if (object.values().stream().anyMatch(v -> v.startsWith("ip-netmask: ") || v.startsWith("ip-range: "))) {
+                if (type.equals("host") || type.equals("network") || type.equals("address") || type.equals("address-range")) return snapshotAddress(type, object);
+                return null;
+            }
+            if (type.equals("service")) return snapshotService(object);
             if (type.equals("host") || type.equals("network")) {
                 String ip = values.get(type.equals("host") ? "ipv4-address" : "subnet4");
                 if (ip == null || values.keySet().stream().anyMatch(k -> k.contains("6"))) return null;
@@ -250,27 +262,96 @@ final class PolicyDomainIndex {
             }
             if (type.equals("service-tcp") || type.equals("service-udp") || type.equals("service-sctp")) {
                 String port = values.get("port");
-                if (port == null || !port.matches("[0-9, -]+")) return null;
-                // Sorted, merged intervals normalize ordering and adjacent port ranges without guessing expressions.
-                var ranges = new ArrayList<int[]>();
-                for (String part : port.split(",", -1)) {
-                    String[] endpoints = part.trim().split("-", -1);
-                    if (endpoints.length > 2) return null;
-                    int a = Integer.parseInt(endpoints[0].trim()), b = endpoints.length == 1 ? a : Integer.parseInt(endpoints[1].trim());
-                    if (a < 0 || a > b || b > 65535) return null;
-                    ranges.add(new int[]{a, b});
-                }
-                ranges.sort(Comparator.comparingInt(r -> r[0]));
-                var merged = new ArrayList<String>(); int start = -1, end = -1;
-                for (var range : ranges) {
-                    if (start < 0) { start = range[0]; end = range[1]; }
-                    else if (range[0] <= end + 1) end = Math.max(end, range[1]);
-                    else { merged.add(start + "-" + end); start = range[0]; end = range[1]; }
-                }
-                merged.add(start + "-" + end);
+                if (port == null) return null;
+                var merged = mergedPorts(port);
+                if (merged == null) return null;
                 return type + ":" + merged + ":" + values.getOrDefault("source-port", "");
             }
         } catch (IllegalArgumentException invalid) { return null; }
         return null;
+    }
+
+    /** Exactly one {@code key: value} entry per key; any entry without a separator, repeated key or IPv6-looking key is unfamiliar. */
+    private static Map<String, String> pureValues(List<String> raw) {
+        var out = new HashMap<String, String>();
+        for (String value : raw) {
+            int colon = value.indexOf(": ");
+            if (colon <= 0) return null;
+            String key = value.substring(0, colon);
+            if (key.contains("6") || out.put(key, value.substring(colon + 2).trim()) != null) return null;
+        }
+        return out;
+    }
+
+    /** Snapshot-object address shapes: a lone {@code ip-netmask} or a lone {@code ip-range}; any VIP/FQDN/ISDB/wildcard metadata is unfamiliar. */
+    private static String snapshotAddress(String type, CpObjectInventory.Item object) {
+        var values = pureValues(object.values());
+        if (values == null || values.size() != 1) return null;
+        try {
+            String netmask = values.get("ip-netmask");
+            if (netmask != null) {
+                if (type.equals("address-range") || netmask.contains("-")) return null;
+                long[] interval = PolicyRuleQuery.interval(netmask);
+                return (interval[0] == interval[1] ? "host:" : "network:") + interval[0] + ":" + interval[1];
+            }
+            String range = values.get("ip-range");
+            if (range == null || range.indexOf('-') <= 0 || type.equals("host") || type.equals("network")) return null;
+            long[] interval = PolicyRuleQuery.interval(range);
+            return "address-range:" + interval[0] + ":" + interval[1];
+        } catch (IllegalArgumentException invalid) { return null; }
+    }
+
+    /** Resolved TCP/UDP services only; ICMP, IP-protocol and any extra key cannot establish equivalence. */
+    private static String snapshotService(CpObjectInventory.Item object) {
+        var values = pureValues(object.values());
+        if (values == null || values.isEmpty()) return null;
+        String tcpDst = null, tcpSrc = null, udpDst = null, udpSrc = null;
+        if (values.keySet().stream().noneMatch(k -> k.startsWith("protocol/"))) {
+            if (!Set.of("protocol", "port", "source-port").containsAll(values.keySet())) return null;
+            String protocol = values.getOrDefault("protocol", "").toLowerCase(Locale.ROOT);
+            if (protocol.equals("tcp")) { tcpDst = values.get("port"); tcpSrc = values.get("source-port"); if (tcpDst == null) return null; }
+            else if (protocol.equals("udp")) { udpDst = values.get("port"); udpSrc = values.get("source-port"); if (udpDst == null) return null; }
+            else return null;
+        } else {
+            if (!Set.of("protocol/tcp/port", "protocol/tcp/source-port", "protocol/udp/port", "protocol/udp/source-port").containsAll(values.keySet())) return null;
+            tcpDst = values.get("protocol/tcp/port"); tcpSrc = values.get("protocol/tcp/source-port");
+            udpDst = values.get("protocol/udp/port"); udpSrc = values.get("protocol/udp/source-port");
+            if ((tcpDst == null && tcpSrc != null) || (udpDst == null && udpSrc != null)) return null;
+        }
+        String tcp = tcpDst == null ? null : portKey(tcpDst, tcpSrc), udp = udpDst == null ? null : portKey(udpDst, udpSrc);
+        if ((tcpDst != null && tcp == null) || (udpDst != null && udp == null)) return null;
+        if (tcp != null && udp != null) return "service-tcp-udp:" + tcp + "|" + udp;
+        return tcp != null ? "service-tcp:" + tcp : "service-udp:" + udp;
+    }
+
+    private static String portKey(String destination, String source) {
+        var dst = mergedPorts(destination);
+        var src = source == null ? List.<String>of() : mergedPorts(source);
+        if (dst == null || src == null) return null;
+        return dst + ":" + (source == null ? "" : src);
+    }
+
+    /** Sorted, merged intervals normalize ordering and adjacent port ranges without guessing expressions; null when not a plain bounded list. */
+    private static List<String> mergedPorts(String port) {
+        if (!port.matches("[0-9, -]+")) return null;
+        var ranges = new ArrayList<int[]>();
+        try {
+            for (String part : port.split(",", -1)) {
+                String[] endpoints = part.trim().split("-", -1);
+                if (endpoints.length > 2) return null;
+                int a = Integer.parseInt(endpoints[0].trim()), b = endpoints.length == 1 ? a : Integer.parseInt(endpoints[1].trim());
+                if (a < 0 || a > b || b > 65535) return null;
+                ranges.add(new int[]{a, b});
+            }
+        } catch (NumberFormatException invalid) { return null; }
+        ranges.sort(Comparator.comparingInt(r -> r[0]));
+        var merged = new ArrayList<String>(); int start = -1, end = -1;
+        for (var range : ranges) {
+            if (start < 0) { start = range[0]; end = range[1]; }
+            else if (range[0] <= end + 1) end = Math.max(end, range[1]);
+            else { merged.add(start + "-" + end); start = range[0]; end = range[1]; }
+        }
+        merged.add(start + "-" + end);
+        return merged;
     }
 }

@@ -62,6 +62,7 @@ class ZonesMatrixCliParityTest {
         table.put("GET /policies", new String[] {"zone-matrix-policies"});
         table.put("POST /evaluate", new String[] {"zone-matrix-evaluate"});
         table.put("GET /summary", new String[] {"zone-matrix-summary"});
+        table.put("POST /runs", new String[] {"zone-matrix-run", "POL-ALPHA"});
         return table;
     }
 
@@ -168,6 +169,10 @@ class ZonesMatrixCliParityTest {
                     one(cli, seen, "zone-matrix-evaluate", "POL-ALPHA", VERSION, "witnesses").body());
             assertEquals("{\"include_witnesses\":true}", one(cli, seen, "zone-matrix-evaluate", "-", "-", "witnesses").body());
             assertEquals(json, one(cli, seen, "zone-matrix-publish", json).body());
+            assertEquals("{\"policy_id\":\"POL-ALPHA\"}", one(cli, seen, "zone-matrix-run", "POL-ALPHA").body());
+            assertEquals("{\"policy_id\":\"POL-ALPHA\",\"version_id\":\"" + VERSION + "\"}",
+                    one(cli, seen, "zone-matrix-run", "POL-ALPHA", "--version", VERSION).body());
+            assertNull(one(cli, seen, "zone-matrix-run", "POL-ALPHA").query());
         });
     }
 
@@ -199,7 +204,13 @@ class ZonesMatrixCliParityTest {
                 new String[] {"zone-matrix-confirm-reference"},
                 new String[] {"zone-matrix-publish"},
                 new String[] {"zone-matrix-evaluate", "-", "not-an-id"},
-                new String[] {"zone-matrix-evaluate", "-", "-", "all"});
+                new String[] {"zone-matrix-evaluate", "-", "-", "all"},
+                new String[] {"zone-matrix-run"},
+                new String[] {"zone-matrix-run", "POL-ALPHA", "--version"},
+                new String[] {"zone-matrix-run", "POL-ALPHA", "--version", "not-an-id"},
+                new String[] {"zone-matrix-run", "POL-ALPHA", VERSION},
+                new String[] {"zone-matrix-run", "POL-ALPHA", "--versions", VERSION},
+                new String[] {"zone-matrix-run", "POL-ALPHA", "--version", VERSION, "extra"});
         PrintStream err = System.err;
         try {
             withServer(home, "{}", (cli, seen) -> {
@@ -226,7 +237,7 @@ class ZonesMatrixCliParityTest {
         try {
             withServer(home, masked, (cli, seen) -> {
                 for (String[] args : List.of(new String[] {"zone-matrix-versions"}, new String[] {"zone-matrix-summary", "-", "VIOLATION"},
-                        new String[] {"zone-matrix-draft"}, new String[] {"zone-matrix-evaluate"})) {
+                        new String[] {"zone-matrix-draft"}, new String[] {"zone-matrix-evaluate"}, new String[] {"zone-matrix-run", "POL-ALPHA"})) {
                     ByteArrayOutputStream stdout = new ByteArrayOutputStream();
                     System.setOut(new PrintStream(stdout, true, StandardCharsets.UTF_8));
                     int code = cli.run(args);
