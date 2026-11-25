@@ -95,7 +95,7 @@ class ZoneMatrixSummaryControllerTest {
                 NOW.minus(Duration.ofHours(1)).toString(), 10, staleness, "COMPLETE", List.of(), 0, null, null);
         var summary = new StoredSummary(NOW, ZoneMatrixStaleness.INTERIM_PO_2026_11_23, version, List.of(policy), List.of(),
                 List.of(new StoredFinding("run-1", versionId, 1, content.sha256(), staleness.verdict(), staleness.snapshotAge(), finding)),
-                null, List.of(), Map.of());
+                null, List.of(), Map.of(), List.of(new ZoneMatrixRunService.CellCount(zoneB, zoneA, 2, 1, "HIGH")));
         runs = mock(ZoneMatrixRunService.class);
         when(runs.storedSummary()).thenReturn(summary);
 
@@ -127,6 +127,27 @@ class ZoneMatrixSummaryControllerTest {
             assertFalse(body.contains(forbidden), "body carries " + forbidden);
         }
         assertNotNull(((Map<?, ?>) response.getBody()).get("can"), "the caller's affordances travel with the body");
+    }
+
+    @Test
+    void theCellCountsTravelOnTheWireWithNamesForAdministratorsAndPseudonymsForTheReplayViewer() throws Exception {
+        var body = (Map<?, ?>) controller.summary(null, null, null, request(false, RoleToken.SECURITY_ADMIN)).getBody();
+        for (String key : List.of("cell_counts", "cell_counts_exact", "cell_counts_total", "cell_counts_returned",
+                "cell_counts_more", "cell_counts_capped")) {
+            assertTrue(body.containsKey(key), "missing key " + key);
+        }
+        var row = (Map<?, ?>) ((List<?>) body.get("cell_counts")).get(0);
+        assertEquals(zoneB, row.get("source_zone_id"));
+        assertEquals("Z-PLANTED-BRANCH", row.get("source_name"));
+        assertEquals(ZONE_NAME, row.get("destination_name"));
+        assertEquals(2, row.get("headline_rules"));
+        assertEquals(1, row.get("outside_headline_rules"));
+        assertEquals("HIGH", row.get("highest_severity"));
+        assertEquals(1, body.get("cell_counts_total"));
+        assertEquals(false, body.get("cell_counts_capped"));
+        String masked = json(controller.summary(null, null, null, request(true, RoleToken.REPLAY_VIEWER)));
+        assertTrue(masked.contains("\"cell_counts\":[{"));
+        assertFalse(masked.contains("Z-PLANTED-BRANCH") || masked.contains(ZONE_NAME));
     }
 
     @Test

@@ -175,6 +175,7 @@ public final class ZoneMatrixSummaryView {
         out.put("capped", matching.size() > findings.size());
         out.put("findings", findings);
 
+        putCellCounts(out, summary, hasActive ? active.versionId() : null, labels, query.limit());
         out.put("resolved_by_version_change", resolvedByVersion(summary, query.limit(), policyNames, labels));
         return out;
     }
@@ -409,6 +410,40 @@ public final class ZoneMatrixSummaryView {
         return labels.zoneName(versionId, zoneId);
     }
 
+    /**
+     * Per-cell open-violation counts (section 7.1 Matrix tab, 7.2): always the fleet headline's population, never filtered by
+     * {@code policy_id} / {@code outcome}, capped by {@code limit} with the cap said. A count is a lower bound unless
+     * {@code cell_counts_exact} (the headline's {@code exact}). No active version: every key is {@code null}, never 0.
+     */
+    private static void putCellCounts(Map<String, Object> out, StoredSummary summary, String activeVersionId, Labels labels,
+            int limit) {
+        List<ZoneMatrixRunService.CellCount> counts = summary.cellCounts();
+        if (counts == null || activeVersionId == null) {
+            out.put("cell_counts", null);
+            out.put("cell_counts_exact", null);
+            out.put("cell_counts_total", null);
+            out.put("cell_counts_returned", null);
+            out.put("cell_counts_more", null);
+            out.put("cell_counts_capped", null);
+            return;
+        }
+        List<ZoneMatrixRunService.CellCount> sorted = counts.stream().sorted(CELL_ORDER).toList();
+        List<Map<String, Object>> rows = new ArrayList<>(Math.min(sorted.size(), limit));
+        for (ZoneMatrixRunService.CellCount c : sorted.subList(0, Math.min(sorted.size(), limit))) {
+            Map<String, Object> row = pair(c.sourceZoneId(), c.destinationZoneId(), activeVersionId, labels);
+            row.put("headline_rules", c.headlineRules());
+            row.put("outside_headline_rules", c.outsideHeadlineRules());
+            row.put("highest_severity", c.highestSeverity());
+            rows.add(row);
+        }
+        out.put("cell_counts", rows);
+        out.put("cell_counts_exact", summary.headline() == null ? null : summary.headline().exact());
+        out.put("cell_counts_total", sorted.size());
+        out.put("cell_counts_returned", rows.size());
+        out.put("cell_counts_more", sorted.size() - rows.size());
+        out.put("cell_counts_capped", sorted.size() > rows.size());
+    }
+
     private static Map<String, Object> resolvedByVersion(StoredSummary summary, int limit, Map<String, String> policyNames,
             Labels labels) {
         List<ResolvedByVersionFinding> recent = summary.resolvedByVersionChangeLast7Days().stream()
@@ -474,6 +509,12 @@ public final class ZoneMatrixSummaryView {
             .thenComparingInt(s -> outcomeRank(s.finding().outcome()))
             .thenComparing(StoredFinding::finding, FINDING_IDENTITY)
             .thenComparing(StoredFinding::runId);
+
+    /** Highest severity first (none last), then source and destination zone ids. */
+    private static final Comparator<ZoneMatrixRunService.CellCount> CELL_ORDER = Comparator
+            .comparingInt((ZoneMatrixRunService.CellCount c) -> severityRank(c.highestSeverity()))
+            .thenComparing(ZoneMatrixRunService.CellCount::sourceZoneId)
+            .thenComparing(ZoneMatrixRunService.CellCount::destinationZoneId, Comparator.nullsLast(Comparator.naturalOrder()));
 
     private static Long seconds(Duration d) { return d == null ? null : d.toSeconds(); }
 

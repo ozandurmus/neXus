@@ -391,7 +391,7 @@ class ZoneMatrixSummaryViewTest {
                 "MATRIX_VERSION_CHANGED");
         var resolved = new ResolvedByVersionFinding(activeId, 1, "v2-id", 2, NOW.minus(Duration.ofDays(1)), f);
         var summary = new StoredSummary(NOW, ZoneMatrixStaleness.INTERIM_PO_2026_11_23, versions.rows.get(activeId), List.of(),
-                List.of(), List.of(), null, List.of(resolved), Map.of("v2-id", List.of(resolved)));
+                List.of(), List.of(), null, List.of(resolved), Map.of("v2-id", List.of(resolved)), null);
         var body = ZoneMatrixSummaryView.project(summary, masked(), ZoneMatrixSummaryView.Query.defaults());
         Map<String, Object> r = get(body, "resolved_by_version_change");
         assertEquals(1, r.get("total_last_7_days"));
@@ -404,5 +404,229 @@ class ZoneMatrixSummaryViewTest {
         for (String planted : List.of(ZONE_A_NAME, ZONE_B_NAME, RULE_NAME, "192.0.2.", "198.51.100.")) {
             assertFalse(text.contains(planted), "resolved row carries a planted value");
         }
+    }
+
+    // ------------------------------------------------------------------ per-cell counts (step 4b-2)
+
+    private static final String OUTSIDE = "DENIED_BY_OTHER_ORDERED_LAYER";
+
+    /** A VIOLATION finding over the given {@code "src>dst"} cells (zone ids), with a per-cell severity. */
+    private Finding cellFinding(String policy, String uid, String severity, List<String> flags, Instant resolvedAt,
+            String... cellSpecs) {
+        List<Cell> cells = new ArrayList<>();
+        List<String> pairs = new ArrayList<>();
+        for (String spec : cellSpecs) {
+            String[] ends = spec.split(">");
+            cells.add(new Cell(ends[0], ends[1], "DENY_ALL", severity, List.of("tcp/22"), NAT_VIEW,
+                    new Witness(WITNESS_SOURCE, WITNESS_DESTINATION, "tcp/22", 3221225489L, 3325256727L)));
+            pairs.add(ends[0] + "->" + ends[1]);
+        }
+        return new Finding(policy, uid, List.of(), pairs, "rule-id-" + uid, 1, RULE_NAME, "sec-1", "Pre rules",
+                List.of("dev-" + policy), "VIOLATION", "statement DENY_ALL", severity, flags, null, cells, List.of(), NAT_VIEW,
+                NOW.minus(Duration.ofDays(2)), NOW.minus(Duration.ofDays(3)), NOW.minus(Duration.ofMinutes(5)), resolvedAt,
+                resolvedAt == null ? null : "MATRIX_VERSION_CHANGED");
+    }
+
+    private List<Map<String, Object>> cellRows(Map<String, Object> body) {
+        List<Map<String, Object>> rows = get(body, "cell_counts");
+        return rows;
+    }
+
+    private Map<String, Object> cellRow(Map<String, Object> body, String source, String destination) {
+        return cellRows(body).stream()
+                .filter(r -> source.equals(r.get("source_zone_id")) && destination.equals(r.get("destination_zone_id")))
+                .findFirst().orElseThrow(() -> new AssertionError("no cell row " + source + "->" + destination));
+    }
+
+    private Map<String, Object> projectNames(ZoneMatrixRunService service) {
+        return ZoneMatrixSummaryView.project(service.storedSummary(), namesWithPolicyRead(), ZoneMatrixSummaryView.Query.defaults());
+    }
+
+    @Test
+    void cellCountsCountDistinctRulesPerCellAndAgreeWithTheHeadline() {
+        activeVersion();
+        policy("P-ONE", "CP", hoursAgo(1));
+        policy("P-TWO", "PAN", hoursAgo(1));
+        String ab = zoneA + ">" + zoneB;
+        String ba = zoneB + ">" + zoneA;
+        completeRun("P-ONE", "COMPLETE", 0, List.of(
+                cellFinding("P-ONE", "u-1", "LOW", List.of(), null, ab),                // cell AB
+                cellFinding("P-ONE", "u-2", "HIGH", List.of(), null, ab, ba),           // cells AB and BA
+                cellFinding("P-ONE", "u-1", "CRITICAL", List.of(), null, ab),           // same rule again: counted once
+                cellFinding("P-ONE", "u-gone", "CRITICAL", List.of(), NOW.minusSeconds(60), ba))); // resolved: not counted
+        completeRun("P-TWO", "COMPLETE", 0, List.of(cellFinding("P-TWO", "u-1", "MEDIUM", List.of(), null, ab))); // same uid, other policy
+        var body = projectNames(runService());
+
+        assertEquals(2, cellRows(body).size());
+        var abRow = cellRow(body, zoneA, zoneB);
+        assertEquals(3, abRow.get("headline_rules"), "u-1 and u-2 of P-ONE and u-1 of P-TWO");
+        assertEquals(0, abRow.get("outside_headline_rules"));
+        assertEquals("CRITICAL", abRow.get("highest_severity"));
+        assertEquals(ZONE_A_NAME, abRow.get("source_name"));
+        assertEquals(ZONE_B_NAME, abRow.get("destination_name"));
+        var baRow = cellRow(body, zoneB, zoneA);
+        assertEquals(1, baRow.get("headline_rules"), "the resolved rule is not counted");
+        assertEquals("HIGH", baRow.get("highest_severity"));
+
+        Map<String, Object> headline = get(body, "headline");
+        assertEquals(3, headline.get("distinct_violating_rules"));
+        assertEquals(2, headline.get("violated_zone_pairs"));
+        assertEquals(headline.get("violated_zone_pairs"), body.get("cell_counts_total"));
+        assertEquals(headline.get("exact"), body.get("cell_counts_exact"));
+        assertEquals(true, body.get("cell_counts_exact"));
+        assertEquals(2, body.get("cell_counts_returned"));
+        assertEquals(0, body.get("cell_counts_more"));
+        assertEquals(false, body.get("cell_counts_capped"));
+    }
+
+    @Test
+    void anOutsideHeadlineOnlyRuleIsCountedApartAndNeverInTheHeadlineColumn() {
+        activeVersion();
+        policy("P-ONE", "CP", hoursAgo(1));
+        String ab = zoneA + ">" + zoneB;
+        String ba = zoneB + ">" + zoneA;
+        completeRun("P-ONE", "COMPLETE", 0, List.of(
+                cellFinding("P-ONE", "u-out", "HIGH", List.of(OUTSIDE), null, ab),
+                cellFinding("P-ONE", "u-in", "LOW", List.of(), null, ba),
+                // in both sets: counts only as a headline rule, as the headline does
+                cellFinding("P-ONE", "u-both", "LOW", List.of(), null, ba),
+                cellFinding("P-ONE", "u-both", "LOW", List.of("OTHER_ORDERED_LAYERS_UNKNOWN"), null, ab)));
+        var body = projectNames(runService());
+        Map<String, Object> headline = get(body, "headline");
+        assertEquals(2, headline.get("distinct_violating_rules"));
+        assertEquals(1, headline.get("outside_headline_ordered_layer"));
+
+        var abRow = cellRow(body, zoneA, zoneB);
+        assertEquals(0, abRow.get("headline_rules"));
+        assertEquals(1, abRow.get("outside_headline_rules"), "u-out only; u-both is a headline rule");
+        assertEquals("HIGH", abRow.get("highest_severity"));
+        var baRow = cellRow(body, zoneB, zoneA);
+        assertEquals(2, baRow.get("headline_rules"));
+        assertEquals(0, baRow.get("outside_headline_rules"));
+    }
+
+    @Test
+    void findingsOfAnOlderVersionRunAreNotCountedAndTheCountIsNoLongerExact() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        policy("P-OLD", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of(cellFinding("P-CUR", "u-1", "LOW", List.of(), null, zoneA + ">" + zoneB)));
+        String runId = UUID.randomUUID().toString();
+        runs.start(new NewRun(runId, "older-version-id", 0, "0".repeat(64), "P-OLD", "test", NOW.minus(Duration.ofMinutes(10)),
+                NOW.minus(Duration.ofHours(1))));
+        assertTrue(runs.complete(runId, NOW.minus(Duration.ofMinutes(5)), 100, new Counts(1, 0, 0, 0, 0, 1),
+                new Coverage("COMPLETE", List.of(), 0, true, "CP", NOW.minus(Duration.ofHours(1)), 12),
+                List.of(cellFinding("P-OLD", "u-old", "CRITICAL", List.of(), null, zoneB + ">" + zoneA))));
+        var body = projectNames(runService());
+
+        assertEquals(1, cellRows(body).size(), "the older-version run adds no cell");
+        assertEquals(1, cellRow(body, zoneA, zoneB).get("headline_rules"));
+        assertEquals(false, body.get("cell_counts_exact"), "a policy not on the active version makes the count a lower bound");
+        Map<String, Object> headline = get(body, "headline");
+        assertEquals(headline.get("exact"), body.get("cell_counts_exact"));
+        assertEquals(1, headline.get("distinct_violating_rules"));
+    }
+
+    @Test
+    void aPolicyWithoutACompleteRunContributesNothingAndTheCountIsNotExact() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        policy("P-NONE", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of(cellFinding("P-CUR", "u-1", "LOW", List.of(), null, zoneA + ">" + zoneB)));
+        failedRun("P-NONE");
+        var body = projectNames(runService());
+        assertEquals(1, cellRows(body).size());
+        assertEquals(false, body.get("cell_counts_exact"));
+    }
+
+    @Test
+    void noActiveVersionGivesNullCellCountsNotAnEmptyList() {
+        var body = ZoneMatrixSummaryView.project(runService().storedSummary(), masked(), ZoneMatrixSummaryView.Query.defaults());
+        assertTrue(body.containsKey("cell_counts"));
+        for (String key : List.of("cell_counts", "cell_counts_exact", "cell_counts_total", "cell_counts_returned",
+                "cell_counts_more", "cell_counts_capped")) {
+            assertNull(body.get(key), key);
+        }
+        assertNull(runService().storedSummary().cellCounts());
+    }
+
+    @Test
+    void anActiveVersionWithNoOpenViolationGivesAnEmptyListNotNull() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of());
+        var body = projectNames(runService());
+        assertEquals(List.of(), body.get("cell_counts"));
+        assertEquals(0, body.get("cell_counts_total"));
+        assertEquals(true, body.get("cell_counts_exact"));
+    }
+
+    @Test
+    void maskedCellCountsPseudonymiseZoneNamesAndLeakNoRawNameOrAddress() throws Exception {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of(cellFinding("P-CUR", "u-1", "HIGH", List.of(), null, zoneA + ">" + zoneB)));
+        var body = ZoneMatrixSummaryView.project(runService().storedSummary(), masked(), ZoneMatrixSummaryView.Query.defaults());
+        var row = cellRows(body).get(0);
+        assertTrue(String.valueOf(row.get("source_name")).startsWith("ZONE-"), "pseudonym, not the raw name");
+        assertTrue(String.valueOf(row.get("destination_name")).startsWith("ZONE-"));
+        String cellPart = json(body.get("cell_counts"));
+        for (String planted : List.of(ZONE_A_NAME, ZONE_B_NAME, "192.0.2.", "198.51.100.", "\"witness\"", "\"nat_view\"", "\"blocks\"")) {
+            assertFalse(cellPart.contains(planted), "cell counts carry " + planted);
+        }
+        assertFalse(json(body).contains(ZONE_A_NAME));
+        assertFalse(json(body).contains(ZONE_B_NAME));
+    }
+
+    @Test
+    void anUnreadableZoneNameStaysUnknownInACellCountRow() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        String ghost = UUID.randomUUID().toString();
+        completeRun("P-CUR", "COMPLETE", 0, List.of(cellFinding("P-CUR", "u-1", "LOW", List.of(), null, ghost + ">" + zoneB)));
+        var row = cellRows(projectNames(runService())).get(0);
+        assertEquals("UNKNOWN", row.get("source_name"));
+        assertEquals(ZONE_B_NAME, row.get("destination_name"));
+    }
+
+    @Test
+    void theCellCountListIsSortedBySeverityThenIdsAndCappedByTheLimitWithTheCapSaid() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of(
+                cellFinding("P-CUR", "u-1", "LOW", List.of(), null, zoneA + ">" + zoneA),
+                cellFinding("P-CUR", "u-2", "CRITICAL", List.of(), null, zoneB + ">" + zoneB),
+                cellFinding("P-CUR", "u-3", "HIGH", List.of(), null, zoneA + ">" + zoneB),
+                cellFinding("P-CUR", "u-4", "HIGH", List.of(), null, zoneB + ">" + zoneA)));
+        var service = runService();
+        var all = ZoneMatrixSummaryView.project(service.storedSummary(), namesWithPolicyRead(), ZoneMatrixSummaryView.Query.defaults());
+        List<String> order = cellRows(all).stream().map(r -> r.get("highest_severity") + ":" + r.get("source_zone_id")).toList();
+        String firstHigh = zoneA.compareTo(zoneB) < 0 ? zoneA : zoneB;
+        assertEquals("CRITICAL:" + zoneB, order.get(0));
+        assertEquals("HIGH:" + firstHigh, order.get(1));
+        assertEquals("LOW:" + zoneA, order.get(3));
+
+        var capped = ZoneMatrixSummaryView.project(service.storedSummary(), namesWithPolicyRead(),
+                new ZoneMatrixSummaryView.Query(null, null, 3));
+        assertEquals(3, cellRows(capped).size());
+        assertEquals(4, capped.get("cell_counts_total"));
+        assertEquals(3, capped.get("cell_counts_returned"));
+        assertEquals(1, capped.get("cell_counts_more"));
+        assertEquals(true, capped.get("cell_counts_capped"));
+        assertEquals(order.subList(0, 3), cellRows(capped).stream()
+                .map(r -> r.get("highest_severity") + ":" + r.get("source_zone_id")).toList(), "the cap keeps the head of the order");
+    }
+
+    @Test
+    void aPairOnlyFindingFallsBackToItsViolatedPairsAndHasNoSeverity() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        var f = new Finding("P-CUR", "u-pair", List.of(), List.of(zoneA + "->" + zoneB), "rule-id-pair", 1, RULE_NAME, "sec-1",
+                "Pre rules", List.of(), "VIOLATION", "statement DENY_ALL", null, List.of(), null, List.of(), List.of(), null,
+                NOW.minus(Duration.ofDays(2)), NOW.minus(Duration.ofDays(3)), NOW.minus(Duration.ofMinutes(5)), null, null);
+        completeRun("P-CUR", "COMPLETE", 0, List.of(f));
+        var row = cellRow(projectNames(runService()), zoneA, zoneB);
+        assertEquals(1, row.get("headline_rules"));
+        assertNull(row.get("highest_severity"), "an unknown severity is null, never a guessed value");
     }
 }
