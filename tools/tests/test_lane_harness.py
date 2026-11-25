@@ -611,6 +611,17 @@ def test_hosta_hand_off_maps_exit_codes(repo, tmp_path):
     assert code == 10 and report["checks"][1]["status"] == "fail"
     code, report = run_harness(repo, tmp_path, PRE + [integration_step(2)], "--integration", "hosta")
     assert code == 50 and "not a test result" in report["checks"][1]["detail"]
+    # 3 = the host cannot run this tree yet (no image or a stale image): a runner problem, never a test failure.
+    code, report = run_harness(repo, tmp_path, PRE + [integration_step(3)], "--integration", "hosta")
+    assert code == 50 and "not a test result" in report["checks"][1]["detail"]
+
+
+def test_the_manifest_hands_integration_to_the_ui2_test_namespace_runner():
+    import yaml
+    manifest = yaml.safe_load((ROOT / "tools" / "delivery" / "checks.yaml").read_text())
+    step, = [s for s in manifest["steps"] if s["id"] == "integration"]
+    assert step["hosta_cmd"][:2] == ["python3", "tools/delivery/hosta_test_run.py"]
+    assert "--integration" in step["hosta_cmd"] and step["hosta_cmd"][step["hosta_cmd"].index("--java") + 1] == "none"
 
 
 def test_integration_skip_flag_is_visible_and_marks_the_report_incomplete(repo, tmp_path):

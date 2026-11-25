@@ -1089,7 +1089,7 @@ def step_integration(ctx: Context, step: dict) -> Out:
         rc, tail, timed_out = ctx.run(argv, step_id="integration-hosta", timeout=step.get("timeout_s", 3000))
         if rc == 0:
             return Out("pass", "HOST-A integration job passed", extra={"carrier": "hosta"})
-        if rc == 2 or timed_out:
+        if rc in (2, 3) or timed_out:  # 3: the host cannot run this tree yet (no image, image stale)
             return Out("error", "HOST-A integration runner failed to run (exit %s); not a test result" % rc, tail)
         return Out("fail", "HOST-A integration job reported test failures", tail, {"carrier": "hosta"})
     front = _frontend(ctx)
