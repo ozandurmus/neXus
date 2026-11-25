@@ -6,7 +6,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { DataTable, type DataColumn } from "../../shell/DataTable";
-import { StatusChip } from "../../shell/M3Widgets";
+import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel, Ts, Unknown } from "../../shell/States";
 import type { Tone } from "../../shell/tone";
 import { m3 } from "../../theme/m3Theme";
@@ -17,7 +17,7 @@ import {
 } from "./zoneMatrixSummaryUi";
 import {
   severityWord, statementWord,
-  type SummaryFinding, type SummaryHeadline, type SummaryOutcome, type SummaryResolvedFinding, type ZoneMatrixSummaryResponse,
+  type SummaryCellCount, type SummaryFinding, type SummaryHeadline, type SummaryOutcome, type SummaryResolvedFinding, type ZoneMatrixSummaryResponse,
 } from "./zoneMatrixApi";
 
 const PAGE_SIZE = 50;
@@ -28,6 +28,14 @@ const OUTCOMES: readonly { readonly value: SummaryOutcome; readonly label: strin
   { value: "UNKNOWN", label: "Outcome unknown", tone: "unknown" },
   { value: "NOT_EVALUABLE", label: "Not evaluable", tone: "warn" },
 ];
+
+/** The zone pair the findings are narrowed to; either side may be `ALL_ZONES`. */
+export interface ZonePairFilter {
+  readonly sourceZoneId: string;
+  readonly destinationZoneId: string;
+}
+
+const ALL_ZONES = "ALL";
 
 const SEVERITY_TONE: Readonly<Record<string, Tone>> = { CRITICAL: "bad", HIGH: "warn", MEDIUM: "attn", LOW: "neutral" };
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
@@ -78,6 +86,49 @@ function HeadlinePanel({ data, h }: { readonly data: ZoneMatrixSummaryResponse; 
   );
 }
 
+/**
+ * Per-cell open violations (contract 7.1, 7.2): the rules the headline counts, per zone pair of the active version. A count
+ * is "at least" unless the server says the headline is exact; a capped list says how many cells it leaves out. Selecting a
+ * row narrows the findings below to that pair.
+ */
+function CellCountsPanel({ data, selected, onSelect }: {
+  readonly data: ZoneMatrixSummaryResponse;
+  readonly selected: ZonePairFilter | null;
+  readonly onSelect: (cell: SummaryCellCount) => void;
+}) {
+  const cells = data.cell_counts ?? [];
+  if (cells.length === 0) return null;
+  const exact = data.cell_counts_exact === true;
+  return (
+    <Box sx={panelSx} data-testid="violations-cell-counts">
+      <SectionTitle note="Rules of the headline per zone pair of the active matrix version; select a pair to narrow the findings.">
+        Per-cell open violation counts
+      </SectionTitle>
+      <Box component="ul" aria-label="Per-cell open violation counts" sx={{ m: 0, pl: 0, listStyle: "none" }}>
+        {cells.map((c) => {
+          const isSelected = selected?.sourceZoneId === c.source_zone_id && selected?.destinationZoneId === c.destination_zone_id;
+          return (
+            <li key={`${c.source_zone_id}>${c.destination_zone_id}`}>
+              <M3Button emphasis={isSelected ? "tonal" : "text"} onClick={() => onSelect(c)}>
+                {c.source_name} -&gt; {c.destination_name}
+                {" · "}{exact ? `${c.headline_rules}` : `at least ${c.headline_rules}`} rule{c.headline_rules === 1 ? "" : "s"}
+                {c.outside_headline_rules > 0 ? ` · +${c.outside_headline_rules} outside headline` : ""}
+                {" · "}{c.highest_severity ? severityWord(c.highest_severity) : "severity UNKNOWN"}
+              </M3Button>
+            </li>
+          );
+        })}
+      </Box>
+      {data.cell_counts_capped ? (
+        <Typography variant="body2" data-testid="cell-counts-more" sx={{ color: m3.onSurfaceVar }}>
+          +{data.cell_counts_more ?? 0} more cells not shown ({data.cell_counts_returned ?? cells.length} of {data.cell_counts_total ?? cells.length} listed).
+        </Typography>
+      ) : null}
+      {!exact ? <Hint>The headline is not exact, so every count is a lower bound.</Hint> : null}
+    </Box>
+  );
+}
+
 function ResolvedPanel({ data }: { readonly data: ZoneMatrixSummaryResponse }) {
   const r = data.resolved_by_version_change;
   return (
@@ -120,8 +171,20 @@ export function countsText(data: ZoneMatrixSummaryResponse, shown: number): stri
  * COMPLETE run of each policy, from the stored summary. Names are shown exactly as the server sent them; no witness, block
  * or address is read here.
  */
-export function ViolationsTab({ summary }: { readonly summary: ZoneSummaryHandle }) {
+export function ViolationsTab({ summary, pair = null, onPairChange }: {
+  readonly summary: ZoneSummaryHandle;
+  /** The pair the screen narrows the findings to (a drilldown from a Matrix cell); `null` is all pairs. */
+  readonly pair?: ZonePairFilter | null;
+  readonly onPairChange?: (pair: ZonePairFilter | null) => void;
+}) {
   useEnsureSummary(summary);
+  const [localPair, setLocalPair] = useState<ZonePairFilter | null>(null);
+  const shownPair = onPairChange ? pair : localPair;
+  const setPair = onPairChange ?? setLocalPair;
+  const sourceZone = shownPair?.sourceZoneId ?? ALL_ZONES;
+  const destinationZone = shownPair?.destinationZoneId ?? ALL_ZONES;
+  const changePair = (next: ZonePairFilter) =>
+    setPair(next.sourceZoneId === ALL_ZONES && next.destinationZoneId === ALL_ZONES ? null : next);
   const [severity, setSeverity] = useState("");
   const [flag, setFlag] = useState("");
   const [lifecycle, setLifecycle] = useState("");
@@ -132,10 +195,26 @@ export function ViolationsTab({ summary }: { readonly summary: ZoneSummaryHandle
     () => [...new Set((data?.findings ?? []).flatMap((f) => f.flags))].sort(),
     [data],
   );
+  const zoneOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const f of data?.findings ?? []) {
+      for (const p of f.violated_pairs) {
+        if (p.source_zone_id) byId.set(p.source_zone_id, p.source_name);
+        if (p.destination_zone_id) byId.set(p.destination_zone_id, p.destination_name);
+      }
+    }
+    for (const c of data?.cell_counts ?? []) { byId.set(c.source_zone_id, c.source_name); byId.set(c.destination_zone_id, c.destination_name); }
+    // A selected zone that no returned finding names stays selectable, so the control never shows a value it cannot list.
+    for (const id of [sourceZone, destinationZone]) if (id !== ALL_ZONES && !byId.has(id)) byId.set(id, id);
+    return [...byId.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [data, sourceZone, destinationZone]);
   const rows = useMemo(() => (data?.findings ?? []).filter((f) =>
-    (severity === "" || f.highest_severity === severity || f.violated_pairs.some((p) => p.severity === severity))
+    (sourceZone === ALL_ZONES && destinationZone === ALL_ZONES
+      || f.violated_pairs.some((p) => (sourceZone === ALL_ZONES || p.source_zone_id === sourceZone)
+        && (destinationZone === ALL_ZONES || p.destination_zone_id === destinationZone)))
+    && (severity === "" || f.highest_severity === severity || f.violated_pairs.some((p) => p.severity === severity))
     && (flag === "" || f.flags.includes(flag))
-    && (lifecycle === "" || (lifecycle === "undecided") === f.flags.includes(BECAME_UNDECIDED))), [data, severity, flag, lifecycle]);
+    && (lifecycle === "" || (lifecycle === "undecided") === f.flags.includes(BECAME_UNDECIDED))), [data, severity, flag, lifecycle, sourceZone, destinationZone]);
 
   const columns: readonly DataColumn<SummaryFinding>[] = useMemo(() => [
     {
@@ -237,6 +316,9 @@ export function ViolationsTab({ summary }: { readonly summary: ZoneSummaryHandle
         <StatePanel variant="empty" title={data.state_text}
           body="No finding list is shown: an empty list here would not mean there is nothing wrong." />
       ) : (
+        <>
+          <CellCountsPanel data={data} selected={shownPair}
+            onSelect={(c) => { setOffset(0); setPair({ sourceZoneId: c.source_zone_id, destinationZoneId: c.destination_zone_id }); }} />
         <Box sx={panelSx}>
           <SectionTitle note="Findings of the latest complete run of each policy; they show policy intent as defined in management, not observed traffic.">
             Findings
@@ -261,6 +343,19 @@ export function ViolationsTab({ summary }: { readonly summary: ZoneSummaryHandle
               <MenuItem value="">Any severity</MenuItem>
               {SEVERITIES.map((s) => <MenuItem key={s} value={s}>{severityWord(s)}</MenuItem>)}
             </TextField>
+            <TextField select size="small" label="Source zone" value={sourceZone} sx={{ minWidth: 170 }}
+              onChange={(e) => { setOffset(0); changePair({ sourceZoneId: e.target.value, destinationZoneId: destinationZone }); }}>
+              <MenuItem value={ALL_ZONES}>All source zones</MenuItem>
+              {zoneOptions.map((z) => <MenuItem key={z.id} value={z.id}>{z.name}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="Destination zone" value={destinationZone} sx={{ minWidth: 190 }}
+              onChange={(e) => { setOffset(0); changePair({ sourceZoneId: sourceZone, destinationZoneId: e.target.value }); }}>
+              <MenuItem value={ALL_ZONES}>All destination zones</MenuItem>
+              {zoneOptions.map((z) => <MenuItem key={z.id} value={z.id}>{z.name}</MenuItem>)}
+            </TextField>
+            {shownPair ? (
+              <M3Button emphasis="text" onClick={() => { setOffset(0); setPair(null); }}>Clear zone filters</M3Button>
+            ) : null}
             <TextField select size="small" label="Flag" value={flag} sx={{ minWidth: 190 }}
               onChange={(e) => { setOffset(0); setFlag(e.target.value); }}>
               <MenuItem value="">Any flag</MenuItem>
@@ -286,6 +381,7 @@ export function ViolationsTab({ summary }: { readonly summary: ZoneSummaryHandle
               : "No returned finding matches the filters on this page."}
           />
         </Box>
+        </>
       )}
 
       <ResolvedPanel data={data} />

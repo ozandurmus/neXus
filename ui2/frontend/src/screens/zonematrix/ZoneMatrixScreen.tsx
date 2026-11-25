@@ -13,13 +13,17 @@ import { MatrixTab } from "./MatrixTab";
 import { ZonesTab } from "./ZonesTab";
 import { VersionsTab } from "./VersionsTab";
 import { EvaluateTab } from "./EvaluateTab";
-import { ViolationsTab } from "./ViolationsTab";
+import { ViolationsTab, type ZonePairFilter } from "./ViolationsTab";
 import { CoverageTab } from "./CoverageTab";
 import { useZoneSummary } from "./zoneMatrixSummaryUi";
 import {
   getZoneDraft, getZoneVersion, listZoneVersions, zoneErrorLines,
   type ZoneDraftResponse, type ZoneVersionDetail, type ZoneVersionSummary,
 } from "./zoneMatrixApi";
+
+/** The tab indexes the screen switches to itself; the order is the `tabs` list below. */
+const TAB_MATRIX = 0;
+const TAB_VIOLATIONS = 1;
 
 /** What one load of the screen holds. `blocks` says whether this load asked for (and so shows) the raw blocks. */
 export interface ZoneMatrixData {
@@ -120,6 +124,9 @@ export function ZoneMatrixScreen() {
   const [wantBlocks, setWantBlocks] = useState(false);
   const [reading, setReading] = useState(false);
   const [notice, setNotice] = useState<ZoneNotice | null>(null);
+  const [activeTab, setActiveTab] = useState(TAB_MATRIX);
+  // The zone pair the Violations tab is narrowed to (a drilldown from a Matrix cell, or the filters there); `null` is all pairs.
+  const [pair, setPair] = useState<ZonePairFilter | null>(null);
   const { data, error, rawError, refresh } = useFetchOnMount<ZoneMatrixData>(
     () => {
       setReading(true);
@@ -130,6 +137,10 @@ export function ZoneMatrixScreen() {
     },
     (err) => zoneErrorLines(err).join(" "),
   );
+  const openCellViolations = (sourceZoneId: string, destinationZoneId: string) => {
+    setPair({ sourceZoneId, destinationZoneId });
+    setActiveTab(TAB_VIOLATIONS);
+  };
   const reload = (hideBlocks = false) => { if (hideBlocks) setWantBlocks(false); refresh(); };
   const showBlocks = (next: boolean) => { setNotice(null); setWantBlocks(next); refresh(); };
   // The stored summary is read when the Violations or Coverage tab is first opened, not with the screen.
@@ -150,11 +161,11 @@ export function ZoneMatrixScreen() {
           ) : null}
           {notice ? <Notice notice={notice} /> : null}
           <DraftBanner data={data} />
-          <M3Tabs ariaLabel="Zone matrix views" tabs={[
-            { label: "Matrix", panel: <MatrixTab {...common} /> },
-            { label: "Violations", panel: <ViolationsTab summary={summary} /> },
+          <M3Tabs ariaLabel="Zone matrix views" value={activeTab} onChange={setActiveTab} tabs={[
+            { label: "Matrix", panel: <MatrixTab {...common} summary={summary} onOpenCellViolations={openCellViolations} /> },
+            { label: "Violations", panel: <ViolationsTab summary={summary} pair={pair} onPairChange={setPair} /> },
             { label: "Zones", panel: <ZonesTab {...common} onShowBlocks={showBlocks} /> },
-            { label: "Versions", panel: <VersionsTab {...common} /> },
+            { label: "Versions", panel: <VersionsTab {...common} summary={summary} /> },
             { label: "Evaluate", panel: <EvaluateTab {...common} /> },
             { label: "Coverage", panel: <CoverageTab summary={summary} /> },
           ]} />

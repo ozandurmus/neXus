@@ -13,11 +13,13 @@ import type { Tone } from "../../shell/tone";
 import { m3 } from "../../theme/m3Theme";
 import type { ZoneNotice, ZoneTabProps } from "./ZoneMatrixScreen";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
+import { useEnsureSummary, type ZoneSummaryHandle } from "./zoneMatrixSummaryUi";
 import {
   PUBLISH_FINAL_TEXT, addressCount, discardZoneDraft, publishCheckText, publishZoneDraft, referenceStatusWord,
   severityWord, statementWord, zoneErrorLines, zoneRoleLabel,
   type CellDiffRow, type CellDiffSide, type FamilySizes, type LooseningRow, type PublishCheck, type ZoneDiff,
-  type ZoneDiffRow, type ZoneMove, type ZoneRevision, type ZoneVersionDetail, type ZoneVersionState, type ZoneVersionSummary,
+  type SummaryResolvedByVersion, type ZoneDiffRow, type ZoneMove, type ZoneRevision, type ZoneVersionDetail,
+  type ZoneVersionState, type ZoneVersionSummary,
 } from "./zoneMatrixApi";
 
 export const RATIONALE_LIMIT = 2000;
@@ -96,7 +98,10 @@ const sizesText = (sizes: FamilySizes | undefined) => `IPv4 ${addressCount(sizes
  * The Versions tab: first the draft for review (its changes, the publish panel, discard, its revisions) for the people
  * the server shows it to, then the history of published versions.
  */
-export function VersionsTab({ data, refresh, notify }: ZoneTabProps) {
+export function VersionsTab({ data, refresh, notify, summary }: ZoneTabProps & { readonly summary: ZoneSummaryHandle }) {
+  // The resolved-by-version counts come from the stored summary; it is read once, here or by another summary tab.
+  useEnsureSummary(summary);
+  const resolved = summary.data !== null && summary.data.state === "READY" ? summary.data.resolved_by_version_change : null;
   const { can, draft, diff, publish_check: publishCheck, draft_exists: exists } = data.draft;
   return (
     <Stack gap={3}>
@@ -118,12 +123,28 @@ export function VersionsTab({ data, refresh, notify }: ZoneTabProps) {
           <Revisions revisions={draft.revisions} />
         </Stack>
       )}
-      <History versions={data.versions} />
+      <History versions={data.versions} resolved={resolved} />
     </Stack>
   );
 }
 
-function History({ versions }: { readonly versions: readonly ZoneVersionSummary[] }) {
+/** The matrix versions that resolved findings (contract 3.5, ZM-36), as words: "version 4 (3), version 3 (1)". */
+export function resolvedByVersionNote(resolved: SummaryResolvedByVersion): string | null {
+  const parts = resolved.by_version.filter((v) => v.count > 0)
+    .map((v) => `version ${v.version_number ?? "UNKNOWN"} (${v.count})`);
+  if (parts.length === 0) return null;
+  const total = resolved.by_version.reduce((n, v) => n + (v.count > 0 ? v.count : 0), 0);
+  // by_version counts every time (no window), so the note says "in total" and never borrows the 7-day figure.
+  return `${total} finding${total === 1 ? " is" : "s are"}, in total (all time), counted as resolved by a matrix version change, by matrix ${parts.length === 1 ? "version" : "versions"}: ${parts.join(", ")}.`;
+}
+
+function History({ versions, resolved }: { readonly versions: readonly ZoneVersionSummary[]; readonly resolved: SummaryResolvedByVersion | null }) {
+  const resolvedCount = (v: ZoneVersionSummary): string => {
+    if (resolved === null) return "—";
+    const row = resolved.by_version.find((r) => r.version_id === v.version_id);
+    return row ? String(row.count) : "0";
+  };
+  const note = resolved === null ? null : resolvedByVersionNote(resolved);
   const columns: DataColumn<ZoneVersionSummary>[] = [
     { key: "number", header: "Version", width: 110, render: (v) => (v.number !== null ? String(v.number) : `Draft r${v.revision}`) },
     { key: "state", header: "State", width: 130, render: (v) => <StatusChip dense tone={STATE_WORD[v.state]?.tone ?? "neutral"} label={STATE_WORD[v.state]?.word ?? v.state} /> },
@@ -131,10 +152,14 @@ function History({ versions }: { readonly versions: readonly ZoneVersionSummary[
     { key: "by", header: "Published by", width: 220, title: (v) => (v.published_by ? actorLabel(v.published_by).raw ?? v.published_by : undefined),
       render: (v) => (v.published_by ? actorLabel(v.published_by).label : "Not published") },
     { key: "at", header: "Published at", title: () => undefined, render: (v) => (v.published_at ? <Ts at={v.published_at} /> : "Not published") },
+    { key: "resolved", header: "Resolved by this matrix version (all time)", width: 230, wrap: true,
+      title: () => "Findings that stopped being a finding because this matrix version replaced an earlier one",
+      render: (v) => <span data-testid={`resolved-by-${v.version_id}`}>{resolvedCount(v)}</span> },
   ];
   return (
     <Stack gap={1}>
       <SectionTitle note="Every published version is immutable and carries the hash of its content.">Version history</SectionTitle>
+ {note ? <Typography variant="body2" data-testid="resolved-by-version-note">{note}</Typography> : null}
       <DataTable ariaLabel="Version history" columns={columns} rows={versions} rowKey={(v) => v.version_id}
         emptyText="No version has been published." />
     </Stack>

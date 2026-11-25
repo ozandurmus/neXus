@@ -8,7 +8,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
+import jakarta.servlet.http.HttpServletRequest;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +25,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventReposit
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository.Stretch;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 /**
  * "When was this device upgraded?" from neXus's own observations (V243). Read-only; both routes sit behind
@@ -32,23 +39,39 @@ public final class SoftwareHistoryController {
     static final int DEFAULT_DAYS = 90;
     static final int MAX_DAYS = 3650;
     static final int MAX_ROWS = 1000;
+    private static final Pattern GENERIC_CP_INSTALL_FILE = Pattern.compile(
+            "^install_fw1_R\\d+(?:\\.\\d+)*\\.elg$"
+                    + "|^install_SecurePlatform_HOTFIX_R\\d+(?:_\\d+)*_JUMBO_HF_MAIN(?:_\\d+)?\\.log$");
 
     private final DeviceSoftwareHistoryRepository history;
     private final DeviceRepository devices;
     private final DeviceInstallEventRepository installEvents;
+    private final ObjectProvider<TopologyNamePseudonymizer> names;
 
     public SoftwareHistoryController(DeviceSoftwareHistoryRepository history, DeviceRepository devices,
             DeviceInstallEventRepository installEvents) {
+        this(history, devices, installEvents, null);
+    }
+
+    @Autowired
+    public SoftwareHistoryController(DeviceSoftwareHistoryRepository history, DeviceRepository devices,
+            DeviceInstallEventRepository installEvents, ObjectProvider<TopologyNamePseudonymizer> names) {
         this.history = history;
         this.devices = devices;
         this.installEvents = installEvents;
+        this.names = names;
+    }
+
+    public ResponseEntity<Map<String, Object>> device(String deviceId) {
+        return device(deviceId, null);
     }
 
     @GetMapping("/devices/{deviceId}/software-history")
-    public ResponseEntity<Map<String, Object>> device(@PathVariable String deviceId) {
+    public ResponseEntity<Map<String, Object>> device(@PathVariable String deviceId, HttpServletRequest request) {
         if (devices.find(deviceId).isEmpty()) {
             return ResponseEntity.status(404).body(Map.of("error", "NOT_FOUND"));
         }
+        boolean masked = request != null && PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Stretch s : history.forDevice(deviceId)) {
             rows.add(row(s));
@@ -61,14 +84,20 @@ public final class SoftwareHistoryController {
         // V246: Check Point base/Jumbo install dates from the device's own install log, newest first.
         List<Map<String, Object>> events = new ArrayList<>();
         for (Event e : installEvents.forDevice(deviceId)) {
-            events.add(eventRow(e));
+            events.add(eventRow(e, masked));
         }
         body.put("install_events", events);
         return ResponseEntity.ok(body);
     }
 
+    public Map<String, Object> fleet(Integer days) {
+        return fleet(days, null);
+    }
+
     @GetMapping("/api/v2/software-history/changes")
-    public Map<String, Object> fleet(@RequestParam(name = "days", required = false) Integer days) {
+    public Map<String, Object> fleet(@RequestParam(name = "days", required = false) Integer days,
+            HttpServletRequest request) {
+        boolean masked = request != null && PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
         int window = days == null ? DEFAULT_DAYS : Math.max(1, Math.min(MAX_DAYS, days));
         Instant since = Instant.now().minus(Duration.ofDays(window));
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -89,7 +118,7 @@ public final class SoftwareHistoryController {
         // local time (UTC "now" minus the window; a few hours of device clock offset is immaterial over days).
         List<Map<String, Object>> events = new ArrayList<>();
         for (Event e : installEvents.installedSince(LocalDateTime.now(ZoneOffset.UTC).minusDays(window), MAX_ROWS)) {
-            Map<String, Object> row = eventRow(e);
+            Map<String, Object> row = eventRow(e, masked);
             row.put("device_id", e.deviceId());
             row.put("hostname", e.hostname().orElse(null));
             events.add(row);
@@ -98,16 +127,24 @@ public final class SoftwareHistoryController {
         return body;
     }
 
-    private static Map<String, Object> eventRow(Event e) {
+    private Map<String, Object> eventRow(Event e, boolean masked) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("kind", e.kind().name());
         row.put("product_version", e.productVersion());
         row.put("jumbo_take", e.jumboTake().orElse(null));
         // The device's own clock, no offset.
         row.put("installed_at_local", e.installedAtLocal().toString());
-        row.put("file_name", e.fileName());
+        row.put("file_name", maskInstallFileName(e.fileName(), masked));
         row.put("first_observed_at", e.firstObservedAt().toString());
         return row;
+    }
+
+    private String maskInstallFileName(String fileName, boolean masked) {
+        if (!masked || fileName == null || fileName.isBlank() || GENERIC_CP_INSTALL_FILE.matcher(fileName).matches()) {
+            return fileName;
+        }
+        TopologyNamePseudonymizer pseudonymizer = names == null ? null : names.getIfAvailable();
+        return pseudonymizer == null ? "install_log_masked" : pseudonymizer.maskPolicyName("install_log", fileName);
     }
 
     private static Map<String, Object> row(Stretch s) {

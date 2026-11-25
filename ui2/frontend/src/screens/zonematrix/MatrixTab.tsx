@@ -17,8 +17,12 @@ import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { RADIUS } from "../../theme/tokens";
-import { CellDetailPanel, StatementShape, TemplateDialog, type SelectedPair } from "./MatrixCellDetail";
+import {
+  CellDetailPanel, StatementShape, TemplateDialog, cellCountsCapNote, openViolationsLine, type OpenViolationsLine,
+  type SelectedPair,
+} from "./MatrixCellDetail";
 import type { ZoneTabProps } from "./ZoneMatrixScreen";
+import type { ZoneSummaryHandle } from "./zoneMatrixSummaryUi";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
   DEFAULT_STATEMENTS, MATRIX_SEVERITIES, ZONE_ROLES, deleteServiceSet, getZoneVersion, matrixOf,
@@ -44,7 +48,23 @@ function cellSummaryLabel(statement: MatrixStatement, serviceCount: number): str
   return serviceCount > 0 ? `Allow listed (${serviceCount})` : "Allow listed (empty list)";
 }
 
-export function MatrixTab({ data, refresh, notify }: ZoneTabProps) {
+export interface MatrixTabProps extends ZoneTabProps {
+  /** The stored summary shared with the Violations and Coverage tabs; read here only while the active version is shown. */
+  readonly summary: ZoneSummaryHandle;
+  /** Opens the Violations tab filtered to one source and destination zone. */
+  readonly onOpenCellViolations: (sourceZoneId: string, destinationZoneId: string) => void;
+}
+
+/** The open-violation line, in the colour its tone says (a positive count is the only red). */
+function OpenViolations({ line, testId }: { readonly line: OpenViolationsLine; readonly testId: string }) {
+  return (
+    <Typography variant="caption" data-testid={testId} sx={{ color: line.tone === "bad" ? m3.error : m3.onSurfaceVar, fontWeight: line.tone === "bad" ? 600 : 400 }}>
+      {line.text}
+    </Typography>
+  );
+}
+
+export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations }: MatrixTabProps) {
   const { can, draft } = data.draft;
   const active = data.active;
   const [selectedVersion, setSelectedVersion] = useState<string>(() => (active ? active.version_id : (draft ? "draft" : "active")));
@@ -85,6 +105,11 @@ export function MatrixTab({ data, refresh, notify }: ZoneTabProps) {
     : (active && (selectedVersion === active.version_id || selectedVersion === "active")
       ? active
       : (retiredCache[selectedVersion] ?? active ?? draft));
+
+  // Open-violation counts belong to the active version only: never to a draft or a retired version.
+  const viewingActive = viewed !== null && viewed.state === "ACTIVE";
+  const { ensure: ensureSummary } = summary;
+  useEffect(() => { if (viewingActive) ensureSummary(); }, [viewingActive, ensureSummary]);
 
   const isRetired = Boolean(viewed && viewed.state === "RETIRED");
   const editable = can.edit && !isRetired;
@@ -134,11 +159,20 @@ export function MatrixTab({ data, refresh, notify }: ZoneTabProps) {
 
   const selectedExplicit = activePair ? (cellsByPair.get(`${activePair.sourceId}->${activePair.destinationId}`) ?? null) : null;
 
+  const viewedId = viewed.version_id;
+  const lineOf = (sourceId: string, destinationId: string): OpenViolationsLine =>
+    openViolationsLine(summary.data, viewedId, sourceId, destinationId);
+  const capNote = viewingActive ? cellCountsCapNote(summary.data) : null;
+
   const listColumns: DataColumn<MatrixCellView>[] = [
     { key: "pair", header: "Pair", wrap: true, render: (c) => `${c.source_name} -> ${c.destination_name}` },
     { key: "statement", header: "Statement", width: 200, render: (c) => <><StatementShape statement={c.statement} />{cellSummaryLabel(c.statement, c.services.length)}</> },
     { key: "severity", header: "Severity", width: 120, render: (c) => severityWord(c.severity) },
     { key: "ref", header: "Reference status", width: 150, render: (c) => referenceStatusWord(c.reference_status) },
+    ...(viewingActive ? [{
+      key: "open-violations", header: "Open violations", width: 230, wrap: true,
+      render: (c: MatrixCellView) => <OpenViolations line={lineOf(c.source, c.destination)} testId={`open-violations-${c.source}-${c.destination}`} />,
+    } satisfies DataColumn<MatrixCellView>] : []),
     { key: "open", header: "Detail", width: 110, render: (c) => (
       <M3Button emphasis="text" onClick={() => setSelectedPair({ sourceId: c.source, destinationId: c.destination })}>Inspect</M3Button>
     ) },
@@ -222,6 +256,8 @@ export function MatrixTab({ data, refresh, notify }: ZoneTabProps) {
         </Stack>
       ) : null}
 
+      {capNote ? <Typography variant="body2" data-testid="cell-counts-cap-note" sx={{ color: m3.onSurfaceVar }}>{capNote}</Typography> : null}
+
       {layout === "list" ? (
         <DataTable ariaLabel="Explicit matrix cells" columns={listColumns} rows={matrix.cells}
           rowKey={(c) => `${c.source}->${c.destination}`} emptyText="No explicit cells in this version; every pair follows the version default." />
@@ -268,6 +304,7 @@ export function MatrixTab({ data, refresh, notify }: ZoneTabProps) {
                           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
                             {severityWord(sev)} · {explicit ? `explicit (${referenceStatusWord(explicit.reference_status).toLowerCase()})` : "default"}
                           </Typography>
+                          {viewingActive ? <OpenViolations line={lineOf(row.id, col.id)} testId={`open-violations-${row.id}-${col.id}`} /> : null}
                         </Box>
                       </TableCell>
                     );
@@ -281,7 +318,9 @@ export function MatrixTab({ data, refresh, notify }: ZoneTabProps) {
 
       {activePair ? (
         <CellDetailPanel pair={activePair} explicitCell={selectedExplicit} matrix={matrix} isMasked={isMasked}
-          editable={editable} canConfirm={canConfirm} revision={revision} onRefresh={afterWrite} onChanged={refresh} notify={notify} />
+          editable={editable} canConfirm={canConfirm} revision={revision} onRefresh={afterWrite} onChanged={refresh} notify={notify}
+          openViolations={viewingActive ? lineOf(activePair.sourceId, activePair.destinationId) : null}
+          onOpenViolations={viewingActive ? () => onOpenCellViolations(activePair.sourceId, activePair.destinationId) : null} />
       ) : null}
 
       <ServiceSetsSection sets={matrix.service_sets} editable={editable} revision={revision}

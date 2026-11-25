@@ -102,4 +102,41 @@ class SoftwareVersionHistoryControllerTest {
         assertFalse(response.contains("synthetic-gateway"));
         assertTrue(response.contains("R82"));
     }
+
+    @Test void replayViewerMasksNonGenericInstallLogFileNamesWhileKeepingStandardVendorNames() throws Exception {
+        byte[] key = String.join("-", "synthetic", "history", "mask", "key").getBytes(StandardCharsets.UTF_8);
+        var names = new TopologyNamePseudonymizer(key);
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);
+        org.springframework.beans.factory.ObjectProvider<TopologyNamePseudonymizer> provider = mock(
+                org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(names);
+        var maskedController = new SoftwareHistoryController(history, devices, installs, provider);
+
+        String rawHost = "istx9a8b7-fw-01";
+        String customLog = "install_SecurePlatform_HOTFIX_R81_20_JUMBO_" + rawHost + ".log";
+        var customEvent = new DeviceInstallEventRepository.Event("device-1", Optional.of(rawHost),
+                DeviceInstallEventRepository.Kind.JUMBO_INSTALL, "R81.20", Optional.of(119),
+                java.time.LocalDateTime.parse("2026-11-02T04:15:00"), customLog,
+                Instant.parse("2026-11-18T10:00:00Z"));
+        when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point", "manual",
+                Instant.EPOCH, false, DeviceEnrollmentState.ENROLLED, false, "cred")));
+        when(installs.forDevice("device-1")).thenReturn(List.of(jumbo(), customEvent));
+        when(installs.installedSince(any(), anyInt())).thenReturn(List.of(jumbo(), customEvent));
+
+        var mvc = MockMvcBuilders.standaloneSetup(maskedController).setControllerAdvice(advice).build();
+        for (String path : List.of("/devices/device-1/software-history", "/api/v2/software-history/changes")) {
+            String maskedBody = mvc.perform(get(path).requestAttr(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, true))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            assertFalse(maskedBody.contains(rawHost), path + " leaked raw hostname in install_events");
+            assertFalse(maskedBody.contains(customLog), path + " leaked custom install_events file_name");
+            assertTrue(maskedBody.contains("install_SecurePlatform_HOTFIX_R81_20_JUMBO_HF_MAIN.log"),
+                    path + " keeps vendor-generic install file_name");
+
+            String rawBody = mvc.perform(get(path))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            assertTrue(rawBody.contains(customLog), path + " preserves raw file_name for non-replay-viewer");
+        }
+    }
 }
