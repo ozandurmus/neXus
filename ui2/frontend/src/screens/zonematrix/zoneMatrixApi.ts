@@ -503,6 +503,222 @@ export const evaluateZoneMatrixPolicy = (policyId: string, versionId?: string | 
     include_witnesses: includeWitnesses,
   });
 
+/** The stored outcomes the summary route keeps (a COMPLIANT rule is not stored). */
+export type SummaryOutcome = "VIOLATION" | "UNKNOWN" | "NOT_EVALUABLE";
+export type SummaryState = "READY" | "NO_ACTIVE_VERSION" | "NO_EVALUABLE_POLICY" | "NO_COMPLETE_RUN";
+export type StalenessVerdict = "CURRENT" | "STALE";
+
+export interface SummaryStalenessThreshold {
+  readonly seconds: number;
+  readonly hours: number | null;
+  /** `true` while the 24-hour value is the Product Owner's interim one (PO 2026-11-23), not the bank's. */
+  readonly interim: boolean;
+  readonly source: string;
+  readonly label: string;
+}
+
+export interface SummaryActiveVersion {
+  readonly version_id: string;
+  readonly version_number: number;
+  readonly content_sha256: string;
+  readonly published_at: string | null;
+}
+
+export interface SummaryStalenessHeadline {
+  readonly count: number;
+  readonly exact: boolean;
+  readonly text: string;
+}
+
+export interface SummaryHeadline {
+  readonly version_id: string;
+  readonly version_number: number;
+  readonly distinct_violating_rules: number;
+  readonly violated_zone_pairs: number;
+  readonly critical_rules: number;
+  readonly covered_by_earlier_rule: number;
+  readonly conditional_rules: number;
+  readonly outside_headline_ordered_layer: number;
+  readonly not_evaluable_findings: number;
+  readonly unknown_findings: number;
+  readonly became_undecided_findings: number;
+  readonly stale_policies: number;
+  readonly incomplete_policies: number;
+  readonly older_version_policies: number;
+  readonly not_evaluated_policies: number;
+  readonly resolved_by_version_change_last_7_days: number;
+  readonly exact: boolean;
+  readonly count_text: string;
+  readonly text: string;
+  readonly outside_headline_text: string | null;
+  readonly staleness_headline: SummaryStalenessHeadline;
+}
+
+export interface SummaryRunCounts {
+  readonly violation: number;
+  readonly compliant: number;
+  readonly not_evaluable: number;
+  readonly unknown: number;
+  readonly not_applicable: number;
+  readonly findings: number;
+}
+
+export interface SummaryRun {
+  readonly run_id: string;
+  /** RUNNING, COMPLETE or FAILED. */
+  readonly state: string;
+  readonly failure_reason: string | null;
+  readonly version_id: string;
+  readonly version_number: number;
+  readonly content_sha256: string;
+  readonly started_at: string | null;
+  readonly finished_at: string | null;
+  readonly snapshot_collected_at: string | null;
+  readonly coverage: string | null;
+  readonly counts: SummaryRunCounts | null;
+}
+
+export interface SummaryPolicyStaleness {
+  readonly verdict: StalenessVerdict;
+  /** SNAPSHOT_OLDER_THAN_THRESHOLD, LAST_RUN_FAILED, VERSION_NOT_ACTIVE or SNAPSHOT_TIME_UNKNOWN. */
+  readonly reasons: readonly string[];
+  /** `null` when the age cannot be stated; never 0 in its place. */
+  readonly snapshot_age_seconds: number | null;
+  readonly snapshot_age_known: boolean;
+}
+
+export interface SummaryPolicy {
+  readonly policy_id: string;
+  readonly policy_name: string;
+  readonly vendor: string;
+  readonly source_id: string | null;
+  readonly source_name: string | null;
+  readonly container_id: string | null;
+  readonly container_name: string | null;
+  readonly collected_at: string | null;
+  readonly rule_count: number;
+  readonly staleness: SummaryPolicyStaleness;
+  readonly coverage: "COMPLETE" | "INCOMPLETE" | string;
+  readonly coverage_items: readonly string[];
+  /** `null` when the policy has no COMPLETE run: the number is not known. */
+  readonly collection_failures: number | null;
+  readonly has_complete_run: boolean;
+  readonly latest_complete_run: SummaryRun | null;
+  readonly latest_run: SummaryRun | null;
+}
+
+export interface SummaryNotEvaluated {
+  readonly id: string;
+  readonly name: string;
+  readonly vendor: string;
+  readonly source_id: string | null;
+  readonly source_name: string | null;
+  readonly reason: string;
+}
+
+export interface SummaryViolatedPair {
+  readonly source_zone_id: string | null;
+  readonly destination_zone_id: string | null;
+  readonly source_name: string;
+  readonly destination_name: string;
+  readonly statement: MatrixStatement | string | null;
+  readonly severity: MatrixSeverity | string | null;
+  readonly not_allowed_services: readonly string[];
+}
+
+/** The fields a stored finding and a resolved-by-version-change finding share. */
+export interface SummaryFindingBase {
+  readonly policy_source_id: string;
+  readonly policy_name: string;
+  readonly rule_uid: string;
+  readonly inline_parent_path: readonly string[];
+  readonly rule_id: string | null;
+  readonly rule_number: number | null;
+  readonly rule_name: string | null;
+  readonly target_device_ids: readonly string[];
+  readonly outcome: SummaryOutcome | string;
+  readonly reason: string | null;
+  readonly highest_severity: MatrixSeverity | string | null;
+  readonly flags: readonly string[];
+  readonly covering_rule_id: string | null;
+  readonly violated_pairs: readonly SummaryViolatedPair[];
+  readonly undecided_parts: readonly string[];
+  readonly first_observed_at: string | null;
+  readonly first_observed_any_version: string | null;
+  readonly last_observed_at: string | null;
+}
+
+export interface SummaryFinding extends SummaryFindingBase {
+  readonly run_id: string;
+  readonly version_id: string;
+  readonly version_number: number;
+  readonly content_sha256: string;
+  readonly on_active_version: boolean;
+  /** CURRENT or STALE: the staleness verdict of the finding's policy. */
+  readonly policy_staleness: StalenessVerdict | string;
+  readonly snapshot_age_seconds: number | null;
+}
+
+export interface SummaryResolvedFinding extends SummaryFindingBase {
+  readonly resolved_from_version_id: string;
+  readonly resolved_from_version_number: number | null;
+  readonly resolved_in_version_id: string | null;
+  readonly resolved_in_version_number: number | null;
+  readonly resolved_at: string | null;
+}
+
+export interface SummaryResolvedByVersion {
+  readonly window_days: number;
+  readonly total_last_7_days: number;
+  readonly returned: number;
+  readonly more: number;
+  readonly capped: boolean;
+  readonly last_7_days: readonly SummaryResolvedFinding[];
+  readonly by_version: readonly { readonly version_id: string; readonly version_number: number | null; readonly count: number }[];
+}
+
+export interface ZoneMatrixSummaryResponse {
+  readonly evaluated_at: string | null;
+  readonly state: SummaryState | string;
+  readonly state_text: string;
+  readonly masked: boolean;
+  readonly policy_names_masked: boolean;
+  readonly witnesses_included: boolean;
+  readonly staleness_threshold: SummaryStalenessThreshold;
+  readonly active_version: SummaryActiveVersion | null;
+  readonly headline: SummaryHeadline | null;
+  readonly headline_absent_reason: string | null;
+  readonly policies: readonly SummaryPolicy[];
+  readonly not_evaluated: readonly SummaryNotEvaluated[];
+  readonly filters: { readonly policy_id: string | null; readonly outcome: string | null; readonly limit: number };
+  /** All findings of the latest complete runs, before the route's own filters. */
+  readonly unfiltered_findings: number;
+  /** Findings matching the route's filters; `returned` of them are in `findings`. */
+  readonly total_findings: number;
+  readonly returned: number;
+  readonly more: number;
+  readonly capped: boolean;
+  readonly findings: readonly SummaryFinding[];
+  readonly resolved_by_version_change: SummaryResolvedByVersion;
+}
+
+/** The query the summary route accepts; anything else is a 400. */
+export interface ZoneMatrixSummaryParams {
+  readonly policy_id?: string | null;
+  readonly outcome?: SummaryOutcome | null;
+  readonly limit?: number | null;
+}
+
+/** The stored summary: findings of the latest COMPLETE run of each policy, coverage and staleness (contract 7.1, 7.2). */
+export function getZoneMatrixSummary(params: ZoneMatrixSummaryParams = {}) {
+  const query = new URLSearchParams();
+  if (params.policy_id) query.set("policy_id", params.policy_id);
+  if (params.outcome) query.set("outcome", params.outcome);
+  if (params.limit) query.set("limit", String(params.limit));
+  const text = query.toString();
+  return apiCall<ZoneMatrixSummaryResponse>(`${BASE}/summary${text ? `?${text}` : ""}`, "GET");
+}
+
 /** The zone roles of the template (contract section 6), with the words the screen shows. */
 export const ZONE_ROLES: readonly { readonly value: string; readonly label: string }[] = [
   { value: "INTERNET_UNTRUSTED", label: "Internet (untrusted)" },

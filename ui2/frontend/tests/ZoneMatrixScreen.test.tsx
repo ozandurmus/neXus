@@ -144,7 +144,7 @@ describe("Zone matrix: Zones tab", () => {
     for (const name of ["Add zone", "Edit", "Delete", "Show blocks"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     expect(screen.queryByText(/recorded in the audit log/)).not.toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Address lookup" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Zones", "Versions", "Evaluate"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Violations", "Zones", "Versions", "Evaluate", "Coverage"]);
   });
 
   it("renders a masked response as it is", async () => {
