@@ -9,7 +9,9 @@ import java.util.*;
  * the Check Point insight catalogue I1, I2, I8, I9, I10, I11 and I12, read from the existing engines only. This class
  * runs no analysis of its own: it reads the {@link PolicyHygiene} verdicts and findings of a snapshot and the object
  * where-used / duplicate rows of its {@link PolicyDomainIndex}, assigns the section 3.1 evidence grade by a fixed table
- * of conditions (never a weighted score), and counts the package the way section 3.2 defines.
+ * of conditions (never a weighted score), and counts the package the way section 3.2 defines. Phase P2 step a adds I3
+ * (covered by several earlier rules together) from the {@link PolicyUnionCover} result; the package counts stay the
+ * shadow engine's.
  *
  * <p>Everything an insight carries is a rule or object reference, a number, or a word from a closed vocabulary
  * ({@link #TYPES}, {@link #GRADES}, {@link #NEEDS}, {@link PolicyHygiene#EVIDENCE}, {@link PolicyHygiene#REASONS}), so the
@@ -25,8 +27,15 @@ public final class PolicyInsights {
     static final String PROVEN = "PROVEN", SUPPORTED = "SUPPORTED", INDICATED = "INDICATED", NOT_ESTABLISHED = "NOT_ESTABLISHED", NOT_EVALUABLE = "NOT_EVALUABLE";
     /** The closed grade vocabulary of design section 3.1, strongest first. */
     public static final List<String> GRADES = List.of(PROVEN, SUPPORTED, INDICATED, NOT_ESTABLISHED, NOT_EVALUABLE);
-    /** The insight types of phase P1 (design section 4), in display order. */
-    public static final List<String> TYPES = List.of("I1", "I2", "I8", "I9", "I10", "I11", "I12");
+    /** The insight types of phases P1 and P2a (design section 4), in display order. */
+    public static final List<String> TYPES = List.of("I1", "I2", "I3", "I8", "I9", "I10", "I11", "I12");
+    /** The fixed I3 evidence, one per {@link PolicyUnionCover} cover action and one for an exhausted budget. */
+    static final String I3_SAME = "Earlier enabled rules together cover this match; each has the same action.",
+        I3_DIFFERENT = "Earlier enabled rules together cover this match; at least one has a different action.",
+        I3_INLINE = "Earlier enabled rules together cover this match; at least one is an Apply Layer rule whose inline layer is not analysed.",
+        I3_BUDGET = "Union cover analysis ran out of its work budget; whether earlier rules together cover this match is not proven.";
+    /** Every evidence string an insight carries besides {@link PolicyHygiene#EVIDENCE}; PolicyPrivacy passes these unchanged. */
+    public static final Set<String> EVIDENCE = Set.of(I3_SAME, I3_DIFFERENT, I3_INLINE, I3_BUDGET);
     static final String INSTALL_STATE_NOT_VERIFIED = "INSTALL_STATE_NOT_VERIFIED";
     /**
      * What raises a grade (the "raise to" column): nothing, traffic logs (phase P4), counter samples over time (phase P3),
@@ -66,7 +75,13 @@ public final class PolicyInsights {
      */
     record Counts(int rules, int decided, int upToWithLogs, int logResolvable, int collectionResolvable, int notResolvable,
             List<Blocked> notDecidable, int hitsCollected, int hitsMissing, int disabledRules, int outsideSecurityRules) {}
-    record Report(Counts counts, List<Insight> insights, Map<String, Integer> byType, Map<String, Integer> byGrade, boolean complete, String collectedAt) {}
+    /**
+     * The I3 pass in numbers (design Q8: how often the budget is hit is measured before the engine is revisited): subject
+     * rules evaluated, covered, not proven for the budget, and not evaluable by reason ({@link PolicyUnionCover#NOT_EVALUABLE_REASONS}).
+     */
+    record UnionCover(int evaluated, int covered, int notProven, List<Map<String, Object>> notEvaluable) {}
+    record Report(Counts counts, List<Insight> insights, Map<String, Integer> byType, Map<String, Integer> byGrade, boolean complete, String collectedAt,
+            UnionCover unionCover) {}
 
     /**
      * @param index        the package's domain index (objects, where-used, duplicates), or null when not available:
@@ -78,6 +93,11 @@ public final class PolicyInsights {
      * @param thresholdDays the unused threshold the hygiene result was computed with
      */
     static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays) {
+        return analyze(snapshot, hygiene, index, windowDays, thresholdDays, PolicyUnionCover.analyze(snapshot, hygiene));
+    }
+    /** @param union the {@link PolicyUnionCover} result of the same snapshot and hygiene result (the service caches it) */
+    static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
+            PolicyUnionCover.Result union) {
         var meta = snapshot.metadata();
         List<Insight> insights = new ArrayList<>();
         int rules = 0, decided = 0, logs = 0, collection = 0, notResolvable = 0, hitsCollected = 0, hitsMissing = 0, disabled = 0, outside = 0;
@@ -102,6 +122,7 @@ public final class PolicyInsights {
                     switch (cls) { case LOGS -> logs++; case COLLECTION -> collection++; default -> notResolvable++; }
                 }
                 shadow(meta, rule, a, hygiene, section, insights);
+                unionCover(meta, rule, union.rules().get(rule.id()), insights);
                 for (var f : a.findings()) {
                     if (f.findingClass().equals("expired")) insights.add(insight(meta, "I9", PROVEN, rule, List.of(), NONE, PROVEN, List.of(f.evidence()), Map.of()));
                     else if (f.findingClass().equals("unknown") && f.evidence().equals("Schedule evidence is incomplete."))
@@ -121,7 +142,9 @@ public final class PolicyInsights {
         Map<String, Integer> byType = new LinkedHashMap<>(), byGrade = new LinkedHashMap<>();
         TYPES.forEach(t -> byType.put(t, 0)); GRADES.forEach(g -> byGrade.put(g, 0));
         for (var i : insights) { byType.merge(i.type(), 1, Integer::sum); byGrade.merge(i.grade(), 1, Integer::sum); }
-        return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt());
+        var unionCover = new UnionCover(union.evaluated(), union.covered(), union.notProven(), union.notEvaluable().entrySet().stream()
+            .map(e -> Map.<String, Object>of("unionReason", e.getKey(), "rules", e.getValue())).toList());
+        return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt(), unionCover);
     }
 
     /** The reason that keeps a rule undecided; behind an earlier unreadable rule it is that rule's own reason. */
@@ -147,6 +170,33 @@ public final class PolicyInsights {
         refs.add(covering.map(c -> new RuleRef(c.id(), c.number(), c.name(), "covering")).orElseGet(() -> new RuleRef(a.coveringRuleId(), 0, "UNKNOWN", "covering")));
         out.add(new Insight(PolicySnapshot.ref("insight", meta.id(), type, rule.id()), type, PROVEN, "package", List.copyOf(refs), List.of(),
             PROVEN, NONE, List.of(INSTALL_STATE_NOT_VERIFIED), evidence, Map.of()));
+    }
+
+    /**
+     * I3: the subject never matches because earlier rules of its layer together cover it (design section 4; G1 in
+     * {@link PolicyRegion}). PROVEN with the covering set listed, whatever their actions: the action relation is evidence
+     * and the {@code coverAction} counter, the same split I1/I2 make, so a DIFFERENT set reads as a question of intent.
+     * An exhausted budget is NOT_EVALUABLE (design: "PROVEN or NOT_EVALUABLE (budget)"); nothing in this design raises it.
+     */
+    private static void unionCover(Metadata meta, Rule rule, PolicyUnionCover.Cover cover, List<Insight> out) {
+        if (cover == null) return;
+        String id = PolicySnapshot.ref("insight", meta.id(), "I3", rule.id());
+        var subject = new RuleRef(rule.id(), rule.number(), rule.name(), "subject");
+        if (!cover.status().equals(PolicyUnionCover.COVERED)) {
+            out.add(new Insight(id, "I3", NOT_EVALUABLE, "package", List.of(subject), List.of(), PROVEN, NOT_RESOLVABLE_NEEDS, List.of(),
+                List.of(I3_BUDGET), Map.of("unionReason", PolicyUnionCover.BUDGET)));
+            return;
+        }
+        var refs = new ArrayList<RuleRef>();
+        refs.add(subject);
+        for (Rule c : cover.covering()) refs.add(new RuleRef(c.id(), c.number(), c.name(), "covering"));
+        String evidence = switch (cover.coverAction()) {
+            case PolicyUnionCover.DIFFERENT -> I3_DIFFERENT;
+            case PolicyUnionCover.INLINE_LAYER -> I3_INLINE;
+            default -> I3_SAME;
+        };
+        out.add(new Insight(id, "I3", PROVEN, "package", List.copyOf(refs), List.of(), PROVEN, NONE, List.of(INSTALL_STATE_NOT_VERIFIED),
+            List.of(evidence), Map.of("coveringRules", cover.covering().size(), "coverAction", cover.coverAction())));
     }
 
     /**
