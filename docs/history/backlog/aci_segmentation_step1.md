@@ -11,3 +11,5 @@ status: in_progress · target: PO started 2026-11-14
 2026-11-23: Q7 flow retention enforced (PO decision record 2026-11-14 item 5): CutoverFlowRetention removes cutover_assessment_flow rows of assessments older than 90 days hourly in bounded passes (50 assessments, 50,000 rows), verdict and counts kept; the flows read answers flowsExpired and the assessment page says why the table is empty. ui2.cutover.flow-retention.enabled (default true). Watch-record retention waits for watch records. Real-PostgreSQL test pending a database-capable runner.
 
 ASA and FortiGate old-path policies and operator-override targets evaluated through PolicyLookup; missing zone or interface gives NOT_DECIDED (3ea02652).
+
+2026-11-25: ACI-2 and ACI-3 (as amended by PO Q8) pinned as labelled tests in CutoverAcceptanceCriteriaTest (five tests, both PROVEN; tests and comments only, the DRAFT design text is untouched and its ACI-3 sentence is read as superseded by Q8 and 3ea02652).
