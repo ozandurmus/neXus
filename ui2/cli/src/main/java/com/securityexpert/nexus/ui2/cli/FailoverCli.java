@@ -29,7 +29,14 @@ final class FailoverCli {
 
     private static final String CP = "/api/v2/cp-failover";
     private static final String PAN = "/api/v2/pan-failover";
-    private static final Set<String> VENDORS = Set.of("check_point", "palo_alto");
+    private static final String ASA = "/api/v2/asa-failover";
+    private static final String FGT = "/api/v2/fgt-failover";
+    /** Readiness-only planes (SecurityWebMvcConfig maps GET summary/units/runs and POST readiness for these, nothing else). */
+    private static final Set<String> READINESS_VENDORS = Set.of("check_point", "palo_alto", "cisco_asa", "fortinet");
+    /** Planes that also carry approvals, runs and incidents. */
+    private static final Set<String> EXECUTION_VENDORS = Set.of("check_point", "palo_alto");
+    private static final String ALL_VENDORS = "check_point|palo_alto|cisco_asa|fortinet";
+    private static final Set<String> OPERATIONS = Set.of("FAILOVER", "FAILOVER_ALL_VIRTUAL_SYSTEMS");
 
     /** Plain words for the codes the failover routes answer with; an unknown code is printed as it is. */
     private static final Map<String, String> REFUSALS = Map.ofEntries(
@@ -86,6 +93,7 @@ final class FailoverCli {
             Map.entry("MEMBER_SET_CHANGED", "The cluster members are not the source and target named; nothing was sent."),
             Map.entry("CONFIG_SYNC_ALREADY_ACTIVE", "A configuration sync is already in progress for this unit."),
             Map.entry("CONFIG_SYNC_NOT_FOUND", "No such configuration sync."),
+            Map.entry("VENDOR_NOT_AVAILABLE", "Failover execution is not offered for this vendor; only readiness checks are supported."),
             Map.entry("FAILOVER_MUTATION_DISABLED", "Failover writes are switched off on this server; nothing was sent."));
 
     private final NexusSessionCli cli;
@@ -95,51 +103,63 @@ final class FailoverCli {
     }
 
     static void printUsage() {
-        System.out.println("  failover-summary [--vendor check_point|palo_alto]            every unit: readiness, last run, eligibility");
+        System.out.println("  failover-summary [--vendor " + ALL_VENDORS + "]");
+        System.out.println("                                                 every unit: readiness, last run, eligibility");
         System.out.println("  failover-units <clusterRef> | --member <deviceId> [--vendor v]   the unit screen's unit list");
-        System.out.println("  failover-incidents [--vendor v]                              open failover incidents (security_admin releases)");
+        System.out.println("  failover-cluster-units <clusterId> [--vendor v]              the units of one cluster");
+        System.out.println("  failover-incidents [--vendor check_point|palo_alto]          open failover incidents (security_admin releases)");
         System.out.println("  failover-runs <clusterId> <unitId> [--vendor v] | failover-run <runId> [--vendor v]");
-        System.out.println("  failover-approvals <clusterId> <unitId> [--vendor v]         requests with revision and policy");
+        System.out.println("  failover-approvals <clusterId> <unitId> [--vendor check_point|palo_alto]   requests with revision and policy");
         System.out.println("  failover-readiness <clusterId> <unitId> [--vendor v]         HA readiness checks of one unit (read-only)");
         System.out.println("  failover-request-approval <clusterId> <unitId> --reason <text> --until <instant> [--from <instant>]");
-        System.out.println("                            [--request-id <id>] [--vendor v]   ask for a failover approval (default window start: now)");
-        System.out.println("  failover-approve <requestId> <clusterId> <unitId> <revision> [--vendor v]   the second administrator's approval");
-        System.out.println("  failover-start <clusterId> <unitId> <requestId> --confirm-warning [--vendor v]   start the approved failover");
-        System.out.println("  failover-incident-release <runId> --reason <text>            security_admin: release a run's incident");
+        System.out.println("                            [--request-id <id>] [--operation FAILOVER|FAILOVER_ALL_VIRTUAL_SYSTEMS]");
+        System.out.println("                            [--vendor check_point|palo_alto]   ask for a failover approval (default window start: now;");
+        System.out.println("                                                 FAILOVER_ALL_VIRTUAL_SYSTEMS: Check Point VSX chassis only)");
+        System.out.println("  failover-approve <requestId> <clusterId> <unitId> <revision> [--vendor check_point|palo_alto]   the second administrator's approval");
+        System.out.println("  failover-revoke-approval <approvalId> [--vendor check_point|palo_alto]   withdraw an approval request");
+        System.out.println("  failover-start <clusterId> <unitId> <requestId> --confirm-warning [--vendor check_point|palo_alto]   start the approved failover");
+        System.out.println("  failover-incident-release <runId> --reason <text> [--vendor check_point|palo_alto]   security_admin: release a run's incident");
         System.out.println("  failover-resume <runId> --incident <incidentId> --reason <text>   ask to resume the return step (Check Point)");
         System.out.println("  failover-resume-approve <runId> <resumeId>                   second administrator approves a pending resume");
         System.out.println("  failover-config-sync <clusterId> <unitId> --source <activeDeviceId> --target <passiveDeviceId>");
         System.out.println("                                                 Palo Alto: sync the running config from the active to the passive");
         System.out.println("                                                 (only while readiness check 4 is FAIL; readiness re-runs afterwards)");
         System.out.println("  failover-config-sync-status <syncId>                         the sync's state, outcome and readiness re-run");
-        System.out.println("                                                 every write also accepts --business-hours-ack; refusals print their code in words");
+        System.out.println("                                                 vendors v: " + ALL_VENDORS + " (default check_point); Cisco ASA and FortiGate");
+        System.out.println("                                                 offer the read commands and readiness only; every write also accepts --business-hours-ack;");
+        System.out.println("                                                 refusals print their code in words");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not a failover command */
     int run(String[] args) throws IOException, InterruptedException {
         return switch (args[0]) {
             case "failover-summary" -> {
-                Parsed p = parse(args, "failover-summary [--vendor check_point|palo_alto]", 0, Set.of("--vendor"), Set.of());
+                Parsed p = parse(args, "failover-summary [--vendor " + ALL_VENDORS + "]", 0, Set.of("--vendor"), Set.of(), READINESS_VENDORS);
                 yield read(plane(p) + "/summary");
             }
             case "failover-units" -> {
-                String usage = "failover-units <clusterRef> | --member <deviceId> [--vendor check_point|palo_alto]";
-                Parsed p = parse(args, usage, 0, Set.of("--vendor", "--member"), Set.of());
+                String usage = "failover-units <clusterRef> | --member <deviceId> [--vendor " + ALL_VENDORS + "]";
+                Parsed p = parse(args, usage, 0, Set.of("--vendor", "--member"), Set.of(), READINESS_VENDORS);
                 String member = p.options.get("--member");
                 if ((member == null) == (p.positional.size() != 1)) throw usageError(usage);
                 String query = member != null ? "memberDeviceId=" + enc(opaque(member)) : "clusterRef=" + enc(opaque(p.positional.get(0)));
                 yield read(plane(p) + "/units?" + query);
+            }
+            case "failover-cluster-units" -> {
+                Parsed p = parse(args, "failover-cluster-units <clusterId> [--vendor " + ALL_VENDORS + "]", 1, Set.of("--vendor"), Set.of(),
+                        READINESS_VENDORS);
+                yield read(plane(p) + "/units/" + enc(opaque(p.positional.get(0))));
             }
             case "failover-incidents" -> {
                 Parsed p = parse(args, "failover-incidents [--vendor check_point|palo_alto]", 0, Set.of("--vendor"), Set.of());
                 yield read(plane(p) + "/incidents");
             }
             case "failover-runs" -> {
-                Parsed p = parse(args, "failover-runs <clusterId> <unitId> [--vendor check_point|palo_alto]", 2, Set.of("--vendor"), Set.of());
+                Parsed p = parse(args, "failover-runs <clusterId> <unitId> [--vendor " + ALL_VENDORS + "]", 2, Set.of("--vendor"), Set.of(), READINESS_VENDORS);
                 yield read(plane(p) + "/runs?" + unitQuery(p));
             }
             case "failover-run" -> {
-                Parsed p = parse(args, "failover-run <runId> [--vendor check_point|palo_alto]", 1, Set.of("--vendor"), Set.of());
+                Parsed p = parse(args, "failover-run <runId> [--vendor " + ALL_VENDORS + "]", 1, Set.of("--vendor"), Set.of(), READINESS_VENDORS);
                 yield read(plane(p) + "/runs/" + enc(opaque(p.positional.get(0))));
             }
             case "failover-approvals" -> {
@@ -147,7 +167,7 @@ final class FailoverCli {
                 yield read(plane(p) + "/approvals?" + unitQuery(p));
             }
             case "failover-readiness" -> {
-                Parsed p = parse(args, "failover-readiness <clusterId> <unitId> [--vendor check_point|palo_alto]", 2, Set.of("--vendor"), Set.of());
+                Parsed p = parse(args, "failover-readiness <clusterId> <unitId> [--vendor " + ALL_VENDORS + "]", 2, Set.of("--vendor"), Set.of(), READINESS_VENDORS);
                 String unitId = opaque(p.positional.get(1));
                 yield write("POST", plane(p) + "/units/" + enc(unitId) + "/readiness",
                         NexusSessionCli.json(unitBody(p)));
@@ -162,11 +182,15 @@ final class FailoverCli {
                 body.put("revision", revision(p.positional.get(3), args[0]));
                 yield write("POST", plane(p) + "/approvals/" + enc(opaque(p.positional.get(0))) + "/approve", NexusSessionCli.json(body));
             }
+            case "failover-revoke-approval" -> {
+                Parsed p = parse(args, "failover-revoke-approval <approvalId> [--vendor check_point|palo_alto]", 1, Set.of("--vendor"), Set.of());
+                yield write("POST", plane(p) + "/approvals/" + enc(opaque(p.positional.get(0))) + "/revoke", "{}");
+            }
             case "failover-start" -> start(args);
             case "failover-incident-release" -> {
-                String usage = "failover-incident-release <runId> --reason <text>";
-                Parsed p = parse(args, usage, 1, Set.of("--reason"), Set.of());
-                yield write("POST", CP + "/runs/" + enc(opaque(p.positional.get(0))) + "/incident/release",
+                String usage = "failover-incident-release <runId> --reason <text> [--vendor check_point|palo_alto]";
+                Parsed p = parse(args, usage, 1, Set.of("--reason", "--vendor"), Set.of());
+                yield write("POST", plane(p) + "/runs/" + enc(opaque(p.positional.get(0))) + "/incident/release",
                         NexusSessionCli.json(Map.of("reason", requiredText(p, "--reason", usage))));
             }
             case "failover-resume" -> {
@@ -206,8 +230,13 @@ final class FailoverCli {
 
     private int requestApproval(String[] args) throws IOException, InterruptedException {
         String usage = "failover-request-approval <clusterId> <unitId> --reason <text> --until <instant> [--from <instant>] "
-                + "[--request-id <id>] [--vendor check_point|palo_alto]";
-        Parsed p = parse(args, usage, 2, Set.of("--vendor", "--reason", "--until", "--from", "--request-id"), Set.of());
+                + "[--request-id <id>] [--operation FAILOVER|FAILOVER_ALL_VIRTUAL_SYSTEMS] [--vendor check_point|palo_alto]";
+        Parsed p = parse(args, usage, 2, Set.of("--vendor", "--reason", "--until", "--from", "--request-id", "--operation"), Set.of());
+        String operation = p.options.get("--operation");
+        if (operation != null && (!OPERATIONS.contains(operation)
+                || ("FAILOVER_ALL_VIRTUAL_SYSTEMS".equals(operation) && "palo_alto".equals(p.options.get("--vendor"))))) {
+            throw usageError(usage + "  (FAILOVER_ALL_VIRTUAL_SYSTEMS is for a Check Point VSX chassis only)");
+        }
         String reason = requiredText(p, "--reason", usage);
         Instant until = instant(requiredText(p, "--until", usage), usage);
         Instant from = p.options.containsKey("--from") ? instant(p.options.get("--from"), usage) : Instant.now();
@@ -217,6 +246,7 @@ final class FailoverCli {
         body.put("windowUntil", until.toString());
         body.put("reason", reason);
         body.put("requestId", requestId);
+        if (operation != null) body.put("operation", operation);
         System.err.println("request id: " + requestId);
         return write("POST", plane(p) + "/approvals", NexusSessionCli.json(body));
     }
@@ -304,6 +334,12 @@ final class FailoverCli {
 
     /** Positionals are exactly {@code positionals} (or, for failover-units, checked by the caller); options and flags are closed lists. */
     private static Parsed parse(String[] args, String usage, int positionals, Set<String> valueOptions, Set<String> flagOptions) {
+        return parse(args, usage, positionals, valueOptions, flagOptions, EXECUTION_VENDORS);
+    }
+
+    /** {@code vendors} is the closed list of {@code --vendor} values the command accepts; anything else is a usage error before any call. */
+    private static Parsed parse(String[] args, String usage, int positionals, Set<String> valueOptions, Set<String> flagOptions,
+            Set<String> vendors) {
         List<String> positional = new ArrayList<>();
         Map<String, String> options = new LinkedHashMap<>();
         Set<String> flags = new java.util.HashSet<>();
@@ -322,7 +358,7 @@ final class FailoverCli {
         boolean lenient = "failover-units".equals(args[0]);
         if (!lenient && positional.size() != positionals) throw usageError(usage);
         String vendor = options.get("--vendor");
-        if (vendor != null && !VENDORS.contains(vendor)) throw usageError(usage);
+        if (vendor != null && !vendors.contains(vendor)) throw usageError(usage);
         return new Parsed(positional, options, flags);
     }
 
@@ -331,7 +367,12 @@ final class FailoverCli {
     }
 
     private static String plane(Parsed p) {
-        return "palo_alto".equals(p.options.get("--vendor")) ? PAN : CP;
+        return switch (String.valueOf(p.options.get("--vendor"))) {
+            case "palo_alto" -> PAN;
+            case "cisco_asa" -> ASA;
+            case "fortinet" -> FGT;
+            default -> CP;
+        };
     }
 
     private static String requiredText(Parsed p, String option, String usage) {

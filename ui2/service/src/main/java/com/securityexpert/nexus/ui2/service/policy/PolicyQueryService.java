@@ -796,15 +796,21 @@ public final class PolicyQueryService {
         if (!selectors.isEmpty()) rule.put("targetDevices", selectors);
         return rule;
     }
-    public Optional<PolicyResponse> rule(PolicySnapshot snapshot, String id, int days) {
-        for (var section : snapshot.sections()) for (var rule : section.rules()) if (rule.id().equals(id)) {
-            var refs = new LinkedHashSet<String>();
+    /** The objects the rules' cells and reference extras name, as the rule viewer shows them: id, name, type and status, never members or values. */
+    private List<Map<String, Object>> referencedObjects(PolicySnapshot snapshot, List<Rule> rules) {
+        var refs = new LinkedHashSet<String>();
+        for (var rule : rules) {
             for (var cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application())) refs.addAll(cell.refs());
             for (String key : REF_EXTRAS) refs.addAll(rule.extras().getOrDefault(key, List.of()));
-            var objects = refs.stream().filter(snapshot.objects()::containsKey).map(ref -> {
-                var o = snapshot.objects().get(ref);
-                return map(new PolicyObject(o.id(), o.name(), o.type(), List.of(), List.of(), o.status(), o.schedule()));
-            }).toList();
+        }
+        return refs.stream().filter(snapshot.objects()::containsKey).map(ref -> {
+            var o = snapshot.objects().get(ref);
+            return map(new PolicyObject(o.id(), o.name(), o.type(), List.of(), List.of(), o.status(), o.schedule()));
+        }).toList();
+    }
+    public Optional<PolicyResponse> rule(PolicySnapshot snapshot, String id, int days) {
+        for (var section : snapshot.sections()) for (var rule : section.rules()) if (rule.id().equals(id)) {
+            var objects = referencedObjects(snapshot, List.of(rule));
             var sectionView = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), List.of()));
             sectionView.put("total", section.rules().size());
             return Optional.of(new PolicyResponse(Map.of("metadata", metadata(snapshot.metadata()), "rule", ruleView(rule, snapshot, analysis(snapshot, days)),
@@ -881,7 +887,11 @@ public final class PolicyQueryService {
         body.put("insights", rows.stream().skip((long) page * 200).limit(200).map(this::insightRow).toList());
         return new PolicyResponse(body);
     }
-    /** One insight with the rules and objects behind it, for the detail view; empty when the id is not one of this package's insights. */
+    /**
+     * One insight with the rules and objects behind it, for the detail view; empty when the id is not one of this package's
+     * insights. {@code objects} are the insight's own objects (I11, I12); {@code ruleObjects} are the objects the involved
+     * rules' cells name, so the view can compare the rules cell by cell.
+     */
     public Optional<PolicyResponse> insightDetail(PolicySnapshot snapshot, String insightId, int days) {
         if (!"CP".equals(snapshot.metadata().vendor())) return Optional.empty();
         var report = insightReport(snapshot, days);
@@ -891,12 +901,15 @@ public final class PolicyQueryService {
         var analysis = analysis(snapshot, days);
         Map<String, Rule> byId = new HashMap<>();
         for (var section : snapshot.sections()) for (var rule : section.rules()) byId.put(rule.id(), rule);
-        var rules = insight.rules().stream().map(r -> byId.get(r.ruleId())).filter(Objects::nonNull).map(r -> ruleView(r, snapshot, analysis)).toList();
+        var involved = insight.rules().stream().map(r -> byId.get(r.ruleId())).filter(Objects::nonNull).toList();
+        var rules = involved.stream().map(r -> ruleView(r, snapshot, analysis)).toList();
         var index = inventoryIndex(snapshot);
         var wanted = new HashSet<>(insight.objectIds());
         var objects = index == null ? List.<Map<String, Object>>of() : index.objects.stream().filter(o -> wanted.contains(String.valueOf(o.get("uid")))).toList();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("insight", insightRow(insight)); body.put("rules", rules); body.put("objects", objects);
+        // The comparison view names the objects in each rule's cells; the same projection the rule detail carries.
+        body.put("ruleObjects", referencedObjects(snapshot, involved));
         body.put("days", days); body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
         return Optional.of(new PolicyResponse(body));
     }
