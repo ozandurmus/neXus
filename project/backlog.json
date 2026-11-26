@@ -666,15 +666,6 @@
       "note": ""
     },
     {
-      "id": "sar_parser_nonnumeric_cpu_row_lost",
-      "category": "engineering",
-      "title": "SarParser: one non-numeric sar CPU value looks like a header, so the row and block are silently dropped (disabled test names it)",
-      "status": "planned",
-      "priority": "P3",
-      "target": "9c3579a7",
-      "note": ""
-    },
-    {
       "id": "zone_matrix_step_6b_evidence_report_wiring",
       "category": "policy",
       "title": "Zone matrix step 6b: wire the evidence report (route, storage, rights, catalogue, masking cell kind; ZM-28, ZM-31, ZM-38 open)",

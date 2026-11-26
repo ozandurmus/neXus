@@ -1305,6 +1305,15 @@
       "priority": "P2",
       "target": "b2aec1f5: lt/gt/neq decided as ranges, DEFECT test enabled",
       "note": ""
+    },
+    {
+      "id": "sar_parser_nonnumeric_cpu_row_lost",
+      "category": "engineering",
+      "title": "SarParser: one non-numeric sar CPU value looks like a header, so the row and block are silently dropped (disabled test names it)",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "9c3579a7",
+      "note": ""
     }
   ]
 }

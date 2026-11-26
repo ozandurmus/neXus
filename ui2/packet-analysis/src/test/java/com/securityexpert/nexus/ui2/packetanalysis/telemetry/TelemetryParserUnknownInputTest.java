@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Instant;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -139,14 +138,8 @@ class TelemetryParserUnknownInputTest {
         assertEquals(1130827.0, p.series().get("vmstat.in").value(0));
     }
 
-    /**
-     * OPEN ISSUE (not fixed here, production code is out of scope): SarParser.line() classifies any line with two or more
-     * non-numeric tokens as a header. The all-CPU row has the label {@code all}, so one bad value ({@code 7.0x}) makes it
-     * look like a header: the row is silently ignored (no skip count) and the block's column layout is replaced by the row's
-     * tokens, which drops the rest of that block. The expectation below is the required behaviour.
-     */
+    /** Pins that an {@code all}-CPU row with a non-numeric value is skipped whole as {@code BAD_NUMBER}, never a header or zero. */
     @Test
-    @Disabled("open issue: a single non-numeric sar row is taken as a header (SarParser.line); see javadoc")
     void sarNonNumericValueSkipsTheWholeRowAndNeverBecomesZero() throws IOException {
         String fixture = TelemetryFixtures.sar24h();
         String text = fixture.replaceFirst("(10:00:01\\s+all\\s+)7\\.00", "$17.0x");
@@ -156,6 +149,119 @@ class TelemetryParserUnknownInputTest {
         Series sys = p.series().get("sar.cpu.sys");
         assertEquals(3, sys.size(), "the broken row is absent, not 0");
         assertEquals(1L, p.linesSkipped(), "exactly the one broken line is skipped");
+    }
+
+    @Test
+    void sarNonNumericValueInNonAllCpuRowIsIgnoredAndLaterAllRowsStillCount() throws IOException {
+        String fixture = TelemetryFixtures.sar24h();
+        String oneBad = fixture.replaceFirst("(10:00:01\\s+0\\s+)99\\.00", "$199.0x");
+        assertNotEquals(fixture, oneBad);
+        ParsedTelemetry p1 = parse(oneBad);
+        assertEquals(0L, p1.linesSkipped(), "non-all CPU rows are ignored before value parsing");
+        assertEquals(4, p1.series().get("sar.cpu.sys").size());
+
+        String twoBad = fixture.replaceFirst("(10:00:01\\s+0\\s+)99\\.00(\\s+0\\.00\\s+)1\\.00", "$199.0x$21.0x");
+        assertNotEquals(fixture, twoBad);
+        ParsedTelemetry p2 = parse(twoBad);
+        assertEquals(0L, p2.linesSkipped(), "two non-numeric values in a non-all CPU row still do not make a header");
+        assertEquals(4, p2.series().get("sar.cpu.usr").size());
+        assertEquals(4, p2.series().get("sar.cpu.sys").size());
+        assertEquals(47.0, p2.series().get("sar.cpu.sys").value(2));
+        assertEquals(47.0, p2.series().get("sar.cpu.sys").value(3));
+    }
+
+    @Test
+    void sarNonNumericValueInInterfaceRowIsBadNumberAndLaterInterfaceRowsStillRead() throws IOException {
+        String fixture = TelemetryFixtures.sar24h();
+        String text = fixture.replaceFirst("(10:00:01\\s+eth1\\s+)370141\\.00", "$1370141.0x");
+        assertNotEquals(fixture, text);
+        ParsedTelemetry p = parse(text);
+        assertEquals(1L, p.skipReasons().get("BAD_NUMBER"));
+        assertEquals(1L, p.linesSkipped());
+        Series eth1Rx = p.series().get("sar.rxpck/s|eth1");
+        Series eth1Tx = p.series().get("sar.txpck/s|eth1");
+        Series loRx = p.series().get("sar.rxpck/s|lo");
+        assertEquals(3, eth1Rx.size(), "later eth1 rows in the DEV block still read");
+        assertEquals(3, eth1Tx.size(), "the broken eth1 row stores nothing in sibling columns");
+        assertEquals(390141.0, eth1Rx.value(0));
+        assertEquals(350141.0, eth1Rx.value(1));
+        assertEquals(330141.0, eth1Rx.value(2));
+        assertEquals(4, loRx.size(), "same-timestamp and later lo rows in the DEV block still read");
+    }
+
+    @Test
+    void sarUnknownBlockHeaderBetweenKnownBlocksSwitchesToOtherAndNextKnownHeaderResumes() throws IOException {
+        String banner = lines(TelemetryFixtures.sar24h())[0];
+        String text = banner + "\n\n"
+                + "09:59:59     active/s passive/s    iseg/s    oseg/s\n"
+                + "10:00:00         1.00      2.00    100.00    200.00\n"
+                + "10:00:01        66.00    141.00 165084.00 390141.00\n\n"
+                + "09:59:59    kbmemfree   kbavail kbmemused kbbuffers\n"
+                + "10:00:00      8000000   7500000    500000    100000\n"
+                + "10:00:01      8000000   7500000    500000    100000\n\n"
+                + "09:59:59       call/s retrans/s    read/s   write/s  access/s  getatt/s\n"
+                + "10:00:00        12.00     77.00      1.00      2.00      3.00      4.00\n\n"
+                + "09:59:59     atmptf/s  estres/s retrans/s isegerr/s   orsts/s\n"
+                + "10:00:02         0.00      0.00   1978.00      0.00      0.00\n"
+                + "10:00:03         0.00      1.00   3316.00      0.00      0.00\n";
+        ParsedTelemetry p = parse(text);
+        assertEquals(TelemetryFormat.SAR, p.format());
+        assertEquals(0L, p.linesSkipped(), "unknown block headers and their rows are ignored, never skipped");
+        assertEquals(2, p.series().get("sar.active/s").size(), "unknown block with 4 columns is not mis-read as TCP");
+        assertEquals(2, p.series().get("sar.retrans/s").size(), "known block after unknown blocks resumes cleanly");
+        assertEquals(1978.0, p.series().get("sar.retrans/s").value(0));
+        assertEquals(3316.0, p.series().get("sar.retrans/s").value(1));
+    }
+
+    @Test
+    void sarHeaderLookingLineWithFewerThanTwoNonNumericTokensIsNotAHeader() throws IOException {
+        assertFalse(SarParser.isKnownHeader("10:00:00 runq-sz 1 2 3 4 5"));
+        assertFalse(SarParser.isKnownHeader("10:00:00 %user"));
+        assertNull(SarParser.classify(new String[] {"runq-sz", "1", "2", "3", "4", "5"}));
+        assertNull(SarParser.classify(new String[] {"%user"}));
+
+        String banner = lines(TelemetryFixtures.sar24h())[0];
+        ParsedTelemetry unrecognised = parse(banner + "\n\n10:00:00 runq-sz 1 2 3 4 5\n10:00:01 10 20 30 40 50 60\n");
+        assertFalse(unrecognised.recognised());
+        assertEquals("NO_KNOWN_BLOCK", unrecognised.reason());
+        assertNoSamplesAndNoZero(unrecognised);
+
+        ParsedTelemetry inBlock = parse(banner + "\n\n"
+                + "09:59:59      runq-sz  plist-sz   ldavg-1   ldavg-5  ldavg-15   blocked\n"
+                + "10:00:00          317      2955     12.50     10.20      9.80         0\n"
+                + "10:00:01      runq-sz      2955     12.50     10.20      9.80         0\n"
+                + "10:00:02        %user\n"
+                + "10:00:03          900      2955     12.50     10.20      9.80         0\n");
+        assertEquals(1L, inBlock.skipReasons().get("BAD_NUMBER"));
+        assertEquals(1L, inBlock.skipReasons().get("BAD_COLUMN_COUNT"));
+        assertEquals(2, inBlock.series().get("sar.runq").size());
+        assertEquals(317.0, inBlock.series().get("sar.runq").value(0));
+        assertEquals(900.0, inBlock.series().get("sar.runq").value(1));
+    }
+
+    @Test
+    void sarRowsAfterBadRowInSameBlockAreStillSamples() throws IOException {
+        String fixture = TelemetryFixtures.sar24h();
+        String text = fixture.replaceFirst("(10:00:00\\s+all\\s+)13\\.00", "$113.0x");
+        assertNotEquals(fixture, text);
+        ParsedTelemetry p = parse(text);
+        assertEquals(1L, p.skipReasons().get("BAD_NUMBER"));
+        assertEquals(1L, p.linesSkipped());
+        assertEquals(3, p.series().get("sar.cpu.usr").size());
+        assertEquals(3, p.series().get("sar.cpu.sys").size());
+        assertEquals(3, p.series().get("sar.cpu.iowait").size());
+        assertEquals(3, p.series().get("sar.cpu.idle").size());
+        assertEquals(7.0, p.series().get("sar.cpu.usr").value(0));
+        assertEquals(6.0, p.series().get("sar.cpu.usr").value(1));
+        assertEquals(6.0, p.series().get("sar.cpu.usr").value(2));
+        assertEquals(36.0, p.series().get("sar.cpu.sys").value(0));
+        assertEquals(47.0, p.series().get("sar.cpu.sys").value(1));
+        assertEquals(47.0, p.series().get("sar.cpu.sys").value(2));
+        assertEquals(4, p.series().get("sar.runq").size());
+        assertEquals(4, p.series().get("sar.proc/s").size());
+        assertEquals(4, p.series().get("sar.rxpck/s|eth1").size());
+        assertEquals(4, p.series().get("sar.active/s").size());
+        assertEquals(4, p.series().get("sar.retrans/s").size());
     }
 
     // ---- unrecognised format --------------------------------------------------------------------------------
