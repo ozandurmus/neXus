@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
@@ -15,6 +15,7 @@ import { VersionsTab } from "./VersionsTab";
 import { EvaluateTab } from "./EvaluateTab";
 import { ViolationsTab, type ZonePairFilter } from "./ViolationsTab";
 import { CoverageTab } from "./CoverageTab";
+import { CoverageStrip } from "./CoverageStrip";
 import { useZoneSummary } from "./zoneMatrixSummaryUi";
 import {
   getZoneDraft, getZoneVersion, listZoneVersions, zoneErrorLines,
@@ -24,6 +25,7 @@ import {
 /** The tab indexes the screen switches to itself; the order is the `tabs` list below. */
 const TAB_MATRIX = 0;
 const TAB_VIOLATIONS = 1;
+const TAB_COVERAGE = 5;
 
 /** What one load of the screen holds. `blocks` says whether this load asked for (and so shows) the raw blocks. */
 export interface ZoneMatrixData {
@@ -143,8 +145,12 @@ export function ZoneMatrixScreen() {
   };
   const reload = (hideBlocks = false) => { if (hideBlocks) setWantBlocks(false); refresh(); };
   const showBlocks = (next: boolean) => { setNotice(null); setWantBlocks(next); refresh(); };
-  // The stored summary is read when the Violations or Coverage tab is first opened, not with the screen.
+  // The stored summary is read once the zones load so the coverage strip above the tabs shows coverage on every tab.
   const summary = useZoneSummary();
+  const { ensure: ensureSummary } = summary;
+  useEffect(() => {
+    if (data !== null) ensureSummary();
+  }, [data, ensureSummary]);
   const common = data === null ? null : { data, refresh: reload, notify: setNotice, reading };
   return (
     <ScreenRoot screenType="tool">
@@ -161,6 +167,7 @@ export function ZoneMatrixScreen() {
           ) : null}
           {notice ? <Notice notice={notice} /> : null}
           <DraftBanner data={data} />
+          <CoverageStrip summary={summary} onOpenCoverage={() => setActiveTab(TAB_COVERAGE)} />
           <M3Tabs ariaLabel="Zone matrix views" value={activeTab} onChange={setActiveTab} tabs={[
             { label: "Matrix", panel: <MatrixTab {...common} summary={summary} onOpenCellViolations={openCellViolations} /> },
             { label: "Violations", panel: <ViolationsTab summary={summary} pair={pair} onPairChange={setPair} /> },
