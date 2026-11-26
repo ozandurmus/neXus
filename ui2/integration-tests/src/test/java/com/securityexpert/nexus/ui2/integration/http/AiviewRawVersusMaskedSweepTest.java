@@ -75,7 +75,11 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
  * rule, object and policy names. The P1 planes are seeded too: a Zone Matrix ACTIVE and DRAFT version (raw zone names,
  * IPv4 and IPv6 blocks, cell rationale and regulation reference, the administrator as author and publisher), an ACI
  * cutover segment with one assessment and its flow rows (raw segment name, blocks, flow addresses, the seeded rule), and a
- * Cisco ASA failover pair (raw cluster reference, unit serials, stored running configurations in the test store).
+ * Cisco ASA failover pair (raw cluster reference, unit serials, stored running configurations in the test store); the
+ * seeded static-route preview uses {@code "srp-" + UUID} per V252 ({@code static_route_preview_preview_id_check}), so
+ * {@code GET /api/v2/operations/static-route/preview} answers 200 with the seeded row while
+ * {@code GET /api/v2/operations/static-route/preview/*} answers 404 until
+ * {@code StaticRoutePreview#isValidUuid} / {@code StaticRoutePreviewService} reconciles the {@code srp-} prefix with V252.
  * Output names the route, the HTTP status and the value <em>class</em> with a count --
  * never a value. A surviving raw value fails the test unless the route and class are on {@link #KNOWN_LEAKS}, which
  * must match the findings exactly (an entry that stops leaking fails too, so the list only shrinks on purpose).</p>
@@ -85,7 +89,8 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
  * inline parent path, two violated cells with witness ranges and a NAT view; the earlier with one finding resolved by a
  * version change) -- and failover run history: one finished run per vendor family (Check Point and Palo Alto: a
  * failover run with its approval; Cisco ASA and FortiGate: a readiness run, their readiness switches switched on in this
- * test's application only) on pairs that carry raw cluster references, hostnames, serials, addresses and the
+ * test's application only, whereas {@code AiviewFailoverIncidentsSweepTest} leaves both switches at their default OFF)
+ * on pairs that carry raw cluster references, hostnames, serials, addresses and the
  * administrator. Not covered: failover approvals and runs of VSX virtual systems (units need real VSX inventory
  * contexts), the in-flight run states, dispatch intents and check results.</p>
  *
@@ -1527,8 +1532,10 @@ class AiviewRawVersusMaskedSweepTest {
 
         List<String> uncovered = new ArrayList<>();
         COVERAGE.forEach((route, expected) -> {
-            if (!seen.getOrDefault(route, Set.of()).containsAll(expected)) {
-                uncovered.add(route + " expected " + expected + " saw " + seen.get(route));
+            if (!Integer.valueOf(200).equals(statusByRoute.get(route))
+                    || !seen.getOrDefault(route, Set.of()).containsAll(expected)) {
+                uncovered.add(route + " expected 200+" + expected + " saw " + seen.get(route)
+                        + " status " + statusByRoute.get(route));
             }
         });
         assertEquals(List.of(), uncovered, "seeded rows must reach these views, or a zero count proves nothing");

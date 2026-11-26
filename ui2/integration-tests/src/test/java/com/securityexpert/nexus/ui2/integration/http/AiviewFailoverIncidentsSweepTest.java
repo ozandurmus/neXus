@@ -85,9 +85,16 @@ import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
  * GET cp-failover/config-syncs/*                NOT COVERED answers a refusal (CONFIG_SYNC_NOT_SUPPORTED), no record
  * GET {asa,fgt}-failover/config-syncs/*         NOT COVERED aiview refused 403 (unmapped)
  * GET {cp,pan}-failover/runs?...                COVERED     (list of the unit's runs: readiness, stopped, in flight)
- * GET {asa,fgt}-failover/runs?...               NOT COVERED answers 200 with an empty list by design (readinessUnavailable): nothing to mask
+ * GET {asa,fgt}-failover/runs?...               NOT COVERED answers 200 [] in this boot because AsaFailoverReadinessSwitch and
+ *                                               FgtFailoverReadinessSwitch stay at their default OFF (CpFailoverService#runs:
+ *                                               readinessUnavailable); covered with both switches enabled in
+ *                                               AiviewRawVersusMaskedSweepTest
  * GET {cp,pan,asa,fgt}-failover/runs/*          COVERED     (run detail with check results, per seeded run)
- * GET {cp,pan,asa,fgt}-failover/units, units/*, summary  COVERED  (units, members, readiness, incident refusal)
+ * GET {cp,pan}-failover/units?...               COVERED     (seeded unit and member ids, OPEN_INCIDENT refusal; pan also configSync)
+ * GET {asa,fgt}-failover/units?...              COVERED     (seeded unit and member ids, FAILOVER_VENDOR_NOT_AVAILABLE refusal)
+ * GET {cp,pan,asa,fgt}-failover/units/*         COVERED     (seeded unit and member ids per cluster)
+ * GET {cp,pan,asa,fgt}-failover/summary         COVERED     (fleet summary across all five seeded pairs: units, members, pan readiness
+ *                                               checks and configSync, cp/pan OPEN_INCIDENT refusal, asa/fgt vendor refusal)
  * GET {cp,pan}-failover/approvals?...           COVERED     (approval reason text)
  * GET {asa,fgt}-failover/approvals              NOT COVERED aiview refused 403 (unmapped)
  * GET /api/v2/failover/*&#47;executions/*          NOT COVERED aiview refused 403: the route has no entry in the action map, so the gate
@@ -163,6 +170,24 @@ class AiviewFailoverIncidentsSweepTest {
     /** Reachable routes that answer a refusal and no record (status other than 200): NOT COVERED. */
     static final Set<String> ANSWERS_A_REFUSAL = Set.of("GET /api/v2/cp-failover/config-syncs/*");
 
+    /**
+     * Reachable routes that answer HTTP 200 with an empty list in this test's boot because
+     * {@code AsaFailoverReadinessSwitch} and {@code FgtFailoverReadinessSwitch} stay at their default {@code OFF}
+     * ({@code CpFailoverService#runs}: {@code readinessUnavailable}): NOT COVERED here; covered with both readiness
+     * switches enabled in {@link AiviewRawVersusMaskedSweepTest}.
+     */
+    static final Set<String> EMPTY_WITH_DEFAULT_READINESS_SWITCH = Set.of(
+            "GET /api/v2/asa-failover/runs", "GET /api/v2/fgt-failover/runs");
+
+    /** Markers expected on every prefix's fleet summary ({@code CpFailoverController#summary} lists all five seeded pairs). */
+    static final Set<String> SUMMARY_MARKERS = Set.of(
+            "unit-cp1", "member-cp1-a", "member-cp1-b",
+            "unit-cp2", "member-cp2-a", "member-cp2-b",
+            "unit-pan", "member-pan-a", "member-pan-b",
+            "unit-asa", "member-asa-a", "member-asa-b",
+            "unit-fgt", "member-fgt-a", "member-fgt-b",
+            "check-result", "incident-refusal", "config-sync", "vendor-readiness-only");
+
     /** Views that must show seeded rows (by marker), so a zero count is a count over real data and not an empty page. */
     static final Map<String, Set<String>> COVERAGE = Map.ofEntries(
             Map.entry("GET /api/v2/cp-failover/incidents", Set.of("incident-stopped", "incident-members")),
@@ -174,6 +199,25 @@ class AiviewFailoverIncidentsSweepTest {
             Map.entry("GET /api/v2/pan-failover/runs/*", Set.of("run-stopped", "run-readiness", "check-result")),
             Map.entry("GET /api/v2/asa-failover/runs/*", Set.of("run-readiness", "check-result")),
             Map.entry("GET /api/v2/fgt-failover/runs/*", Set.of("run-readiness", "check-result")),
+            Map.entry("GET /api/v2/cp-failover/units", Set.of(
+                    "unit-cp1", "member-cp1-a", "member-cp1-b",
+                    "unit-cp2", "member-cp2-a", "member-cp2-b", "incident-refusal")),
+            Map.entry("GET /api/v2/pan-failover/units", Set.of(
+                    "unit-pan", "member-pan-a", "member-pan-b", "incident-refusal", "config-sync")),
+            Map.entry("GET /api/v2/asa-failover/units", Set.of(
+                    "unit-asa", "member-asa-a", "member-asa-b", "vendor-readiness-only")),
+            Map.entry("GET /api/v2/fgt-failover/units", Set.of(
+                    "unit-fgt", "member-fgt-a", "member-fgt-b", "vendor-readiness-only")),
+            Map.entry("GET /api/v2/cp-failover/units/*", Set.of(
+                    "unit-cp1", "member-cp1-a", "member-cp1-b",
+                    "unit-cp2", "member-cp2-a", "member-cp2-b")),
+            Map.entry("GET /api/v2/pan-failover/units/*", Set.of("unit-pan", "member-pan-a", "member-pan-b")),
+            Map.entry("GET /api/v2/asa-failover/units/*", Set.of("unit-asa", "member-asa-a", "member-asa-b")),
+            Map.entry("GET /api/v2/fgt-failover/units/*", Set.of("unit-fgt", "member-fgt-a", "member-fgt-b")),
+            Map.entry("GET /api/v2/cp-failover/summary", SUMMARY_MARKERS),
+            Map.entry("GET /api/v2/pan-failover/summary", SUMMARY_MARKERS),
+            Map.entry("GET /api/v2/asa-failover/summary", SUMMARY_MARKERS),
+            Map.entry("GET /api/v2/fgt-failover/summary", SUMMARY_MARKERS),
             Map.entry("GET /api/v2/cp-failover/approvals", Set.of("approval")),
             Map.entry("GET /api/v2/pan-failover/approvals", Set.of("approval")));
 
@@ -352,6 +396,11 @@ class AiviewFailoverIncidentsSweepTest {
                     }
                 }
             });
+        }
+        for (Pair p : e.pairs()) {
+            markers.put(p.clusterId(), "unit-" + p.name());
+            markers.put(p.a().id(), "member-" + p.name() + "-a");
+            markers.put(p.b().id(), "member-" + p.name() + "-b");
         }
         seedKnownAdministrator(e);
         var repo = new JooqCpFailoverRepository(new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)),
@@ -687,13 +736,15 @@ class AiviewFailoverIncidentsSweepTest {
             if (resp.body().contains("\"incidentRef\"") && resp.body().contains("\"members\"")) kinds.add("incident-members");
             if (resp.body().contains("\"incidentActive\":true")) kinds.add("incident-stopped");
             if (resp.body().contains("\"incidentRef\":\"")) kinds.add("incident-ref");
+            if (resp.body().contains("\"refusalReason\":\"OPEN_INCIDENT\"")) kinds.add("incident-refusal");
+            if (resp.body().contains("\"failoverRefusal\":\"FAILOVER_VENDOR_NOT_AVAILABLE\"")) kinds.add("vendor-readiness-only");
             if (resp.status() == 200) assertFalse(resp.body().isBlank(), "a masked payload is not empty: " + call.key());
             int sum = found.values().stream().mapToInt(Integer::intValue).sum();
             total += sum;
             byKey.merge(call.key(), 1, Integer::sum);
-            report.add(String.format(Locale.ROOT, "AIVIEW_FAILOVER %-10s %3d %-56s %-24s raw=%s",
+            report.add(String.format(Locale.ROOT, "AIVIEW_FAILOVER %-10s %3d %-56s %-24s raw=%s seeded_rows_seen=%s",
                     reachable.get(call.key()) ? "reachable" : "gated", resp.status(), call.key(), call.detail(),
-                    found.isEmpty() ? "0" : found.toString()));
+                    found.isEmpty() ? "0" : found.toString(), kinds));
             if (!reachable.get(call.key())) {
                 int code = resp.status();
                 assertTrue(code == 401 || code == 403, call.key() + " must refuse aiview, answered " + code);
@@ -704,13 +755,27 @@ class AiviewFailoverIncidentsSweepTest {
                 + e.raw().size() + " surviving_raw_occurrences=" + total + " sent=" + SENT);
 
         assertEquals(Map.of("GET", calls.size()), SENT, "only GET requests are sent (the login is the one POST)");
+        Set<String> ledger = new TreeSet<>(COVERAGE.keySet());
+        assertTrue(java.util.Collections.disjoint(ledger, EMPTY_WITH_DEFAULT_READINESS_SWITCH));
+        ledger.addAll(EMPTY_WITH_DEFAULT_READINESS_SWITCH);
+        assertTrue(java.util.Collections.disjoint(ledger, ANSWERS_A_REFUSAL));
+        ledger.addAll(ANSWERS_A_REFUSAL);
+        assertTrue(java.util.Collections.disjoint(ledger, MUST_BE_REFUSED));
+        ledger.addAll(MUST_BE_REFUSED);
+        assertEquals(byKey.keySet(), ledger, "every called failover route must be classified in the ledger sets");
         List<String> uncovered = new ArrayList<>();
         COVERAGE.forEach((route, expected) -> {
-            if (!seen.getOrDefault(route, Set.of()).containsAll(expected)) {
-                uncovered.add(route + " expected " + expected + " saw " + seen.get(route) + " status " + status.get(route));
+            if (!Integer.valueOf(200).equals(status.get(route))
+                    || !seen.getOrDefault(route, Set.of()).containsAll(expected)) {
+                uncovered.add(route + " expected 200+" + expected + " saw " + seen.get(route) + " status " + status.get(route));
             }
         });
         assertEquals(List.of(), uncovered, "seeded rows must reach these views, or a zero count proves nothing");
+        for (String emptyRoute : EMPTY_WITH_DEFAULT_READINESS_SWITCH) {
+            assertEquals(200, status.get(emptyRoute), emptyRoute + " answers 200 [] while readiness switch is OFF");
+            assertEquals(Set.of(), seen.getOrDefault(emptyRoute, Set.of()),
+                    emptyRoute + " must see no seeded rows while readiness switch is OFF");
+        }
         for (Call call : calls) {
             boolean refusalOnly = MUST_BE_REFUSED.contains(call.key()) || ANSWERS_A_REFUSAL.contains(call.key());
             if (!refusalOnly) {
