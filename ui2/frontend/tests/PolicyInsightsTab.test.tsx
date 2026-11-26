@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { COVER_ACTION_WORDS, INSIGHT_TYPES, INSTALL_CAVEAT, PolicyInsightsTab, packageNumbers, raiseText } from "../src/screens/PolicyInsightsTab";
+import { I7_INSPECTION_SUGGESTION, TYPE_SUGGESTION } from "../src/screens/policyInsightActions";
 import { POLICY_TAB_GROUPS, policyTabFromSlug } from "../src/screens/PolicyScreen";
 import type { PolicyInsight, PolicyInsightCounts, PolicyInsightDetail, PolicyInsightsPage } from "../src/auth/adminApi";
 
@@ -200,4 +201,34 @@ it("says an I4 whose budget ran out is not proven and claims nothing", async () 
   const region = await screen.findByRole("dialog", { name: "Insight detail" });
   expect(await within(region).findByLabelText("Partial shadow evidence")).toHaveTextContent("Not proven: analysis budget. The rule may or may not overlap earlier rules; nothing is claimed.");
   expect(within(region).queryByRole("note")).toBeNull();
+});
+
+const promote: PolicyInsight = { insightId: "77777777-7777-7777-7777-777777777777", insightType: "I7", evidenceGrade: "PROVEN", insightScope: "package",
+  rules: [{ ruleId: "r5", number: 5, name: "RULE-ALPHA-05", insightRole: "subject" }, { ruleId: "r1", number: 1, name: "RULE-ALPHA-01", insightRole: "promoteAbove" },
+    { ruleId: "r3", number: 3, name: "RULE-ALPHA-03", insightRole: "crossed" }], objectIds: [],
+  raiseTo: { evidenceGrade: "PROVEN", insightNeeds: "NONE" }, insightCaveats: ["INSTALL_STATE_NOT_VERIFIED"],
+  evidence: ["Moving this rule above the broad rule it overlaps is proven to change no verdict or log setting: no behaviour change for the verdict and the log setting of stored management intent (profile settings are not collected for Check Point)."],
+  counter: { reorderResult: "SAFE", equivalence: "EQUIVALENT", crossedRules: 1, moreCrossed: 0, decidingRules: 1, changedRules: 0, changedBoxes: 0 } };
+const promoteInspection: PolicyInsight = { ...promote, insightId: "77777777-7777-7777-7777-777777777778",
+  counter: { ...promote.counter, reorderResult: "SAFE_INSPECTION_CHANGES", equivalence: "CHANGES", changedRules: 1, changedBoxes: 2 } };
+const reorderPage: PolicyInsightsPage = { ...page, insights: [promote, promoteInspection], total: 2, byType: { ...page.byType, I7: 2 },
+  safeReorder: { evaluated: 9, safe: 1, safeInspectionChanges: 1, unsafeDifferentEffect: 2, anchorBlocked: 3, crossesSection: 1, notProven: 1,
+    notEvaluable: [{ reorderReason: "rule not resolved", rules: 2 }] } };
+it("lists I7 after I4 with both wordings, offers it as a type filter, states the reorder numbers and shows no green chip", async () => {
+  expect(INSIGHT_TYPES.indexOf("I7")).toBe(INSIGHT_TYPES.indexOf("I4") + 1);
+  expect(TYPE_SUGGESTION.I7).toBe("Promote this rule above the broad rule it overlaps. Stage 1 of the reorganisation; no command is generated.");
+  expect(I7_INSPECTION_SUGGESTION).toContain("verdict-safe, inspection changes: review the profile and log differences first".replace("verdict", "Verdict"));
+  const { fetchMock } = mount({ list: reorderPage });
+  const table = await screen.findByRole("table", { name: "Policy insights" });
+  const [, safeRow, inspectionRow] = within(table).getAllByRole("row");
+  expect(safeRow).toHaveTextContent("I7 · Promote (proven reorder)");
+  expect(safeRow).toHaveTextContent("#5 RULE-ALPHA-05 · #1 RULE-ALPHA-01 · #3 RULE-ALPHA-03");
+  expect(safeRow).toHaveTextContent(TYPE_SUGGESTION.I7);
+  expect(inspectionRow).toHaveTextContent("Verdict-safe, inspection changes: review the profile and log differences first.");
+  for (const row of [safeRow, inspectionRow]) expect(row.querySelector(".MuiChip-colorSuccess")).toBeNull();
+  expect(screen.getByLabelText("Reorder analysis")).toHaveTextContent(
+    "I7 reorder (promote): 9 promote moves checked (one per I4 rule) · 1 no behaviour change · 1 verdict-safe, inspection changes · 2 cross a rule with another verdict · 3 blocked by an anchor · 1 would leave their section (counted, no insight) · 1 not proven (work budget) · not evaluated: 2 rule not resolved");
+  expect(screen.getByLabelText("Insights by type")).toHaveTextContent("I7 Promote (proven reorder): 2");
+  fireEvent.click(screen.getByText("I7 Promote (proven reorder): 2"));
+  await waitFor(() => expect(fetchMock.mock.calls.some(call => String(call[0]).includes("type=I7") && String(call[0]).includes("page=0"))).toBe(true));
 });

@@ -140,12 +140,12 @@ final class PolicyPartialShadow {
     static boolean sameAction(Rule earlier, Rule subject) {
         return !isApplyLayer(earlier) && !isApplyLayer(subject) && PolicyHygiene.sameAction(earlier, subject);
     }
-    private static boolean isApplyLayer(Rule rule) {
+    static boolean isApplyLayer(Rule rule) {
         return "Apply Layer".equals(rule.action()) || !rule.extras().getOrDefault("inline-layer", List.of()).isEmpty();
     }
 
     /** The two boxes share at least one point: every dimension's intersection is non-empty. */
-    private static boolean intersects(Box a, Box b, Budget budget) {
+    static boolean intersects(Box a, Box b, Budget budget) {
         for (int i = 0; i < PolicyRegion.DIMENSIONS; i++)
             if (PolicyRegion.intersect(a.dims().get(i), b.dims().get(i), budget).empty()) return false;
         return true;

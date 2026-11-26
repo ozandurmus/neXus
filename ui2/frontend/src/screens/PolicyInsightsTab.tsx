@@ -4,16 +4,16 @@ import { getPolicyInsights, responsesAreMasked, type InsightGrade, type InsightT
 import { downloadText } from "./DeviceShared";
 import { ChangeListPanel, InsightDetail } from "./PolicyInsightDetail";
 import { policyFailureText } from "./PolicyRuleViewer";
-import { GRADE_EXPLAIN, TYPE_LABEL, TYPE_SUGGESTION, changeItem, changeListCsv, changeListText, gradeColor, loadChangeList, raiseText, saveChangeList, withChange, withoutChange,
+import { GRADE_EXPLAIN, TYPE_LABEL, changeItem, changeListCsv, changeListText, insightGradeColor, insightSuggestion, loadChangeList, raiseText, saveChangeList, withChange, withoutChange,
   type ChangeItem, type SuggestedAction } from "./policyInsightActions";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 
 export { COVER_ACTION_WORDS, INSTALL_CAVEAT, TYPE_LABEL, TYPE_SUGGESTION, raiseText } from "./policyInsightActions";
 
-/** Policy Insights phases P1, P2a and P2b (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
+/** Policy Insights phases P1, P2a, P2b and P2c-1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
 const n = (value: number) => value.toLocaleString("en-US");
-export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I4", "I8", "I9", "I10", "I11", "I12"];
+export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I4", "I7", "I8", "I9", "I10", "I11", "I12"];
 export const INSIGHT_GRADES: readonly InsightGrade[] = ["PROVEN", "SUPPORTED", "INDICATED", "NOT_ESTABLISHED", "NOT_EVALUABLE"];
 const reasonClassWords = { LOGS: "traffic logs could decide", COLLECTION: "a new collection could decide", NOT_RESOLVABLE: "nothing in this design can decide" } as const;
 
@@ -134,6 +134,12 @@ export function PolicyInsightsTab({ policy, policyName, openRule, openObject = (
         I4 partial shadow: {n(data.partialShadow.evaluated)} rules checked against the earlier rules of their layer · {n(data.partialShadow.partial)} partly shadowed, same action
         · {n(data.partialShadow.differentAction)} overlap an earlier rule with another action (counted, no insight) · {n(data.partialShadow.notProven)} not proven (work budget){data.partialShadow.notEvaluable.length > 0
           ? ` · not evaluated: ${data.partialShadow.notEvaluable.map(r => `${n(r.rules)} ${r.partialReason}`).join(", ")}` : ""}</Typography>}
+      {data.safeReorder && <Typography variant="caption" display="block" aria-label="Reorder analysis" sx={{ color: m3.onSurfaceVar }}>
+        I7 reorder (promote): {n(data.safeReorder.evaluated)} promote moves checked (one per I4 rule) · {n(data.safeReorder.safe)} no behaviour change
+        · {n(data.safeReorder.safeInspectionChanges)} verdict-safe, inspection changes · {n(data.safeReorder.unsafeDifferentEffect)} cross a rule with another verdict
+        · {n(data.safeReorder.anchorBlocked)} blocked by an anchor · {n(data.safeReorder.crossesSection)} would leave their section (counted, no insight)
+        · {n(data.safeReorder.notProven)} not proven (work budget){data.safeReorder.notEvaluable.length > 0
+          ? ` · not evaluated: ${data.safeReorder.notEvaluable.map(r => `${n(r.rules)} ${r.reorderReason}`).join(", ")}` : ""}</Typography>}
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }} aria-label="Insights by type">
         {INSIGHT_TYPES.map(t => <Chip key={t} label={`${t} ${TYPE_LABEL[t]}: ${data.byType?.[t] ?? 0}`} color={type === t ? "primary" : "default"} onClick={() => { setType(type === t ? "" : t); setPage(0); }} />)}
       </Stack>
@@ -164,8 +170,8 @@ export function PolicyInsightsTab({ policy, policyName, openRule, openObject = (
           <TableCell>{insight.rules.length > 0
             ? insight.rules.map(r => `#${r.number || "?"} ${r.name}`).join(" · ")
             : `${insight.objectIds.length} ${insight.objectIds.length === 1 ? "object" : "objects"} (${insight.insightScope === "domain" ? "domain-wide" : "package"})`}</TableCell>
-          <TableCell>{TYPE_SUGGESTION[insight.insightType] ?? "UNKNOWN"}</TableCell>
-          <TableCell><Chip size="small" color={gradeColor(insight.evidenceGrade)} label={insight.evidenceGrade} title={GRADE_EXPLAIN[insight.evidenceGrade]} /></TableCell>
+          <TableCell>{insightSuggestion(insight)}</TableCell>
+          <TableCell><Chip size="small" color={insightGradeColor(insight.insightType, insight.evidenceGrade)} label={insight.evidenceGrade} title={GRADE_EXPLAIN[insight.evidenceGrade]} /></TableCell>
           <TableCell><Typography variant="caption">{raiseText(insight)}</Typography></TableCell>
           <TableCell>{planned ? <Chip size="small" variant="outlined" color="primary" label={planned.label} title={planned.plan} /> : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>—</Typography>}</TableCell>
         </TableRow>; })}</TableBody>

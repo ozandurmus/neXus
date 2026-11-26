@@ -134,9 +134,13 @@ public final class PolicyPrivacy {
         if (key.equals("coverAction")) return PolicyUnionCover.COVER_ACTIONS.contains(text) ? text : "UNKNOWN";
         if (key.equals("unionReason")) return PolicyUnionCover.BUDGET.equals(text) || PolicyUnionCover.NOT_EVALUABLE_REASONS.contains(text) ? text : "UNKNOWN";
         if (key.equals("partialReason")) return PolicyPartialShadow.BUDGET.equals(text) || PolicyPartialShadow.NOT_EVALUABLE_REASONS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("reorderReason")) return PolicyReorder.BUDGET.equals(text) || PolicyReorder.NOT_EVALUABLE_REASONS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("reorderResult")) return PolicyReorder.OFFERED.contains(text) ? text : "UNKNOWN";
+        if (key.equals("equivalence")) return PolicyReorder.EQUIVALENCE.contains(text) ? text : PolicyReorder.NOT_PROVEN;
+        if (key.equals("crossedReason")) return PolicyReorder.CROSSED_REASONS.contains(text) ? text : "UNKNOWN";
         if (key.equals("insightCaveats")) return PolicyInsights.INSTALL_STATE_NOT_VERIFIED.equals(text) ? text : "UNKNOWN";
         if (key.equals("insightScope")) return Set.of("package", "domain").contains(text) ? text : "UNKNOWN";
-        if (key.equals("insightRole")) return Set.of("subject", "covering", "overlapping").contains(text) ? text : "UNKNOWN";
+        if (key.equals("insightRole")) return Set.of("subject", "covering", "overlapping", "promoteAbove", "crossed").contains(text) ? text : "UNKNOWN";
         if (key.equals("reasonClass")) return PolicyInsights.REASON_CLASSES.contains(text) ? text : PolicyInsights.NOT_RESOLVABLE;
         if (key.equals("findingClass")) return PolicyHygiene.CLASSES.contains(text) ? text : "unknown";
         if (key.equals("severity")) return PolicyHygiene.SEVERITIES.contains(text) ? text : "LOW";

@@ -13,7 +13,7 @@ vi.mock("../src/screens/DeviceShared", async original => ({ ...(await original<t
 /** Policy Insights detail panel (PO 2026-11-25). Fixtures carry the AIView masked state only: pseudonyms and 192.0.2.x. */
 const ids: Record<InsightType, string> = {
   I1: "11111111-1111-1111-1111-111111111111", I2: "22222222-2222-2222-2222-222222222222",
-  I3: "33333333-3333-3333-3333-333333333333", I4: "44444444-4444-4444-4444-444444444444",
+  I3: "33333333-3333-3333-3333-333333333333", I4: "44444444-4444-4444-4444-444444444444", I7: "77777777-7777-7777-7777-777777777777",
   I8: "88888888-8888-8888-8888-888888888888", I9: "99999999-9999-9999-9999-999999999999",
   I10: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", I11: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", I12: "cccccccc-cccc-cccc-cccc-cccccccccccc",
 };
@@ -23,11 +23,14 @@ const coveringA = { ruleId: "r1", number: 1, name: "RULE-ALPHA-01", insightRole:
 const coveringB = { ruleId: "r2", number: 2, name: "RULE-ALPHA-02", insightRole: "covering" as const };
 const overlapA = { ruleId: "r1", number: 1, name: "RULE-ALPHA-01", insightRole: "overlapping" as const };
 const overlapB = { ruleId: "r2", number: 2, name: "RULE-ALPHA-02", insightRole: "overlapping" as const };
+const promoteAbove = { ruleId: "r1", number: 1, name: "RULE-ALPHA-01", insightRole: "promoteAbove" as const };
+const crossedRule = { ruleId: "r2", number: 2, name: "RULE-ALPHA-02", insightRole: "crossed" as const };
 const make = (type: InsightType, grade: InsightGrade, over: Partial<PolicyInsight> = {}): PolicyInsight => ({
   insightId: ids[type], insightType: type, evidenceGrade: grade, insightScope: type === "I11" || type === "I12" ? "domain" : "package",
   rules: type === "I1" || type === "I2" ? [subject, covering]
     : type === "I3" ? [subject, coveringA, coveringB]
       : type === "I4" ? [subject, overlapA, overlapB]
+        : type === "I7" ? [subject, promoteAbove, crossedRule]
         : type === "I11" || type === "I12" ? [] : [subject],
   objectIds: [], raiseTo: { evidenceGrade: grade, insightNeeds: "NONE" },
   insightCaveats: grade === "PROVEN" ? ["INSTALL_STATE_NOT_VERIFIED"] : [], evidence: [], counter: {}, ...over });
@@ -384,4 +387,80 @@ it("exports a readable text and a CSV, keeps one change per insight and ignores 
   expect(loadChangeList("p1", false)).toEqual([first]);
   window.localStorage.setItem(changeListKey("p1", false), "{not json");
   expect(loadChangeList("p1", false)).toEqual([]);
+});
+
+// ---- I7: promote with a per-move proof (P2c-1) ----
+const i7Proof = [{ ruleId: "r1", crossedReason: "same verdict effect", inspectionChanges: false }, { ruleId: "r2", crossedReason: "disjoint", inspectionChanges: false }];
+const i7Safe = make("I7", "PROVEN", {
+  evidence: ["Moving this rule above the broad rule it overlaps is proven to change no verdict or log setting: no behaviour change for the verdict and the log setting of stored management intent (profile settings are not collected for Check Point)."],
+  counter: { reorderResult: "SAFE", equivalence: "EQUIVALENT", crossedRules: 1, moreCrossed: 0, decidingRules: 1, changedRules: 0, changedBoxes: 0, crossedProof: i7Proof as never } });
+const i7Inspection = make("I7", "PROVEN", {
+  evidence: ["Moving this rule above the broad rule it overlaps is proven to change no verdict; a crossed rule differs in profile or log setting, or it was not collected: verdict-safe, inspection changes."],
+  counter: { reorderResult: "SAFE_INSPECTION_CHANGES", equivalence: "CHANGES", crossedRules: 12, moreCrossed: 2, decidingRules: 1, changedRules: 1, changedBoxes: 3,
+    crossedProof: [{ ...i7Proof[0], inspectionChanges: true }, i7Proof[1]] as never } });
+const i7Budget = make("I7", "NOT_EVALUABLE", { rules: [subject, promoteAbove], insightCaveats: [], raiseTo: { evidenceGrade: "PROVEN", insightNeeds: "NOT_RESOLVABLE" },
+  evidence: ["Reorder analysis ran out of its work budget; whether this rule can move above the broad rule it overlaps is not proven."],
+  counter: { reorderReason: "analysis budget", equivalence: "NOT_PROVEN" } });
+const reorderRules = () => [rule("r3", 3, "RULE-ALPHA-03", "Accept", "host"), rule("r1", 1, "RULE-ALPHA-01", "Accept", "net"), rule("r2", 2, "RULE-ALPHA-02", "Drop", "net2")];
+const COMMAND_TEXT = /mgmt_cli|set access-rule|add access-rule|clish|position (top|bottom|above|below)|install-policy|publish/i;
+
+it("words the I7 headline: no behaviour change only for SAFE, verdict-safe with inspection changes otherwise, UNKNOWN when not proven", () => {
+  expect(insightHeadline(i7Safe, detailOf(i7Safe, reorderRules()))).toBe(
+    "Rule #3 (RULE-ALPHA-03) can move above rule #1 (RULE-ALPHA-01), across 1 rule in between, with no verdict or log setting change for any packet (profile settings are not collected for Check Point).");
+  const inspection = insightHeadline(i7Inspection, detailOf(i7Inspection, reorderRules()));
+  expect(inspection).toContain("without changing a verdict. Verdict-safe, inspection changes");
+  expect(inspection.toLowerCase()).not.toContain("no behaviour change");
+  expect(insightHeadline(i7Budget)).toBe("Moving rule #3 (RULE-ALPHA-03) above rule #1 (RULE-ALPHA-01) could not be checked (analysis budget): whether it changes a verdict is UNKNOWN.");
+  expect(coverReasons(i7Safe, detailOf(i7Safe, reorderRules()))).toContain("Symbolic check: every packet whose deciding rule changes keeps its action, profile and log setting.");
+  expect(coverReasons(i7Inspection).join(" ")).toContain("1 of the rules deciding it today differ in profile or log setting (3 regions, not listed)");
+  expect(coverReasons(i7Budget)).toEqual([]);
+});
+it("shows an I7 move side by side with the broad rule deciding first today, the crossed rules and the proof, never green", async () => {
+  mount([i7Safe], [detailOf(i7Safe, reorderRules())]);
+  const dialog = await openPanel("I7");
+  const head = within(within(dialog).getByRole("table", { name: "Rule comparison" })).getAllByRole("columnheader");
+  expect(head).toHaveLength(4);
+  expect(head[1]).toHaveTextContent("Decides first today"); expect(head[1]).toHaveTextContent("#1 · RULE-ALPHA-01");
+  expect(head[2]).toHaveTextContent("Crossed rule"); expect(head[2]).toHaveTextContent("#2 · RULE-ALPHA-02");
+  expect(head[3]).toHaveTextContent("Promoted"); expect(head[3]).toHaveTextContent("#3 · RULE-ALPHA-03");
+  const evidence = within(dialog).getByLabelText("Reorder evidence");
+  expect(evidence).toHaveTextContent("No behaviour change. Symbolic check: every packet whose deciding rule changes keeps its action, profile and log setting.");
+  const proof = within(evidence).getByLabelText("Move proof");
+  expect(proof).toHaveTextContent("#1 (decides first today): Same verdict effect: same action and inline layer.");
+  expect(proof).toHaveTextContent("#2: Disjoint: it matches none of this rule's packets on its install-on.");
+  expect(evidence).toHaveTextContent("One move against the stored order; moves are not combined. No command is generated");
+  expect(dialog.querySelector(".MuiChip-colorSuccess")).toBeNull();
+  const grade = within(dialog).getAllByText("PROVEN")[0].closest(".MuiChip-root");
+  expect(grade).toHaveClass("MuiChip-colorInfo");
+  const actions = within(dialog).getByLabelText("Suggested actions");
+  expect(actions.querySelector('[data-action="REORDER_RULE"] [data-action-effect]')).toHaveTextContent("No behaviour change");
+  fireEvent.click(within(actions).getByRole("button", { name: "Promote above broad rule" }));
+  const item = loadChangeList("p1", false)[0];
+  expect(item).toMatchObject({ insightType: "I7", kind: "REORDER_RULE", effect: "No behaviour change", plan: "Move rule #3 (RULE-ALPHA-03) above rule #1 (RULE-ALPHA-01)." });
+  expect(`${item.plan} ${item.caveat}`).not.toMatch(COMMAND_TEXT);
+  expect(changeListText([item], { masked: true, exportedAt: new Date("2026-11-26T08:00:00Z") })).not.toMatch(COMMAND_TEXT);
+});
+it("words an I7 with another profile or log setting as verdict-safe, inspection changes and never as no behaviour change", async () => {
+  mount([i7Inspection], [detailOf(i7Inspection, reorderRules())]);
+  const dialog = await openPanel("I7");
+  const text = dialog.textContent ?? "";
+  expect(text).toContain("Verdict-safe, inspection changes");
+  expect(text.toLowerCase()).not.toContain("no behaviour change");
+  expect(text).not.toMatch(/(^|[^-])\bsafe\b/i);
+  expect(within(dialog).getByLabelText("Reorder evidence")).toHaveTextContent("Symbolic check: changes in 3 regions decided today by 1 rules with another profile or log setting (regions not listed).");
+  expect(within(dialog).getByLabelText("Move proof")).toHaveTextContent("#1 (decides first today): Same verdict effect: same action and inline layer; another profile or log setting.");
+  expect(dialog).toHaveTextContent("Showing 1 of 12 crossed rules (+2 more not listed).");
+  expect(comparisonCell(dialog, "log", "promoteAbove")).toHaveAttribute("data-cover", "differs");
+  expect(dialog.querySelector(".MuiChip-colorSuccess")).toBeNull();
+  const action = suggestedActions(i7Inspection)[0];
+  expect(action).toMatchObject({ kind: "REORDER_RULE", effect: "Verdict-safe, inspection changes" });
+  expect(action.caveat).toContain("Review the profile and log differences first.");
+  expect(action.plan).not.toMatch(COMMAND_TEXT);
+});
+it("says an I7 whose budget ran out is not proven, claims nothing and offers the move only with a warning", async () => {
+  mount([i7Budget], [detailOf(i7Budget, reorderRules().slice(0, 2))]);
+  const dialog = await openPanel("I7");
+  expect(within(dialog).getByLabelText("Reorder evidence")).toHaveTextContent("Not proven: analysis budget. The move may or may not change a verdict; nothing is claimed.");
+  expect((dialog.textContent ?? "").toLowerCase()).not.toContain("no behaviour change");
+  expect(suggestedActions(i7Budget)[0]).toMatchObject({ effect: "Behaviour may change", warning: gradeWarning("NOT_EVALUABLE") });
 });

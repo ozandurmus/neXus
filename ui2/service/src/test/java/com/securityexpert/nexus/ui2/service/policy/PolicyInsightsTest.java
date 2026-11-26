@@ -228,7 +228,7 @@ class PolicyInsightsTest {
         var report = report(snapshot);
         assertEquals(report.insights().size(), report.byType().values().stream().mapToInt(Integer::intValue).sum());
         assertEquals(report.insights().size(), report.byGrade().values().stream().mapToInt(Integer::intValue).sum());
-        assertEquals(List.of("I1", "I2", "I3", "I4", "I8", "I9", "I10", "I11", "I12"), PolicyInsights.TYPES);
+        assertEquals(List.of("I1", "I2", "I3", "I4", "I7", "I8", "I9", "I10", "I11", "I12"), PolicyInsights.TYPES);
         assertEquals(List.of("PROVEN", "SUPPORTED", "INDICATED", "NOT_ESTABLISHED", "NOT_EVALUABLE"), PolicyInsights.GRADES);
     }
 }
