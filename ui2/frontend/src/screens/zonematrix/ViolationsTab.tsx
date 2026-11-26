@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
@@ -57,6 +57,66 @@ function ruleHref(policyId: string, ruleId: string | null): string | null {
 function ruleLabel(f: { readonly rule_number: number | null; readonly rule_name: string | null; readonly rule_uid: string }): string {
   const number = f.rule_number === null ? "#?" : `#${f.rule_number}`;
   return `${number} ${f.rule_name || f.rule_uid}`;
+}
+
+function renderPairNotAllowed(
+  pair: SummaryFinding["violated_pairs"][number],
+  outcome: SummaryFinding["outcome"],
+  multiPair: boolean,
+): { readonly node: ReactNode; readonly isMono: boolean } {
+  const services = pair.not_allowed_services ?? [];
+  const prefix = multiPair ? `${pair.source_name} -> ${pair.destination_name}: ` : "";
+  if (services.length > 0) {
+    return { node: `${prefix}${services.join(", ")}`, isMono: true };
+  }
+  if (outcome === "VIOLATION" && pair.statement === "DENY_ALL") {
+    return { node: `${prefix}All traffic in pair (deny all)`, isMono: false };
+  }
+  const reason = multiPair
+    ? "No not-allowed service part is recorded for this pair"
+    : "No not-allowed service part is recorded for this finding";
+  return {
+    node: prefix ? <>{prefix}<Unknown reason={reason} /></> : <Unknown reason={reason} />,
+    isMono: false,
+  };
+}
+
+function renderNotAllowedPart(f: SummaryFinding) {
+  const violatedPairs = f.violated_pairs ?? [];
+  const undecidedParts = f.undecided_parts ?? [];
+  const multiPair = violatedPairs.length > 1;
+  const items: { readonly node: ReactNode; readonly isMono: boolean }[] = violatedPairs.map((p) =>
+    renderPairNotAllowed(p, f.outcome, multiPair),
+  );
+  if (violatedPairs.length === 0 && f.outcome === "VIOLATION") {
+    items.push({
+      node: <Unknown reason="No violated zone pair is recorded for this violation finding" />,
+      isMono: false,
+    });
+  }
+  if (undecidedParts.length > 0) {
+    items.push({ node: `undecided: ${undecidedParts.join(", ")}`, isMono: true });
+  }
+  if (items.length === 0) {
+    items.push({
+      node: <Unknown reason="No not-allowed service part is recorded for this finding" />,
+      isMono: false,
+    });
+  }
+  if (items.length === 1) {
+    return (
+      <Box component="span" data-testid="finding-not-allowed" sx={items[0].isMono ? mono : undefined}>
+        {items[0].node}
+      </Box>
+    );
+  }
+  return (
+    <Box data-testid="finding-not-allowed">
+      {items.map((item, i) => (
+        <Box key={i} sx={item.isMono ? mono : undefined}>{i > 0 ? "\n" : ""}{item.node}</Box>
+      ))}
+    </Box>
+  );
 }
 
 /**
@@ -319,6 +379,8 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
   const { data, params, setParams } = summary;
   // The witness read is offered only when the server says this session may view blocks; never for a masked session.
   const canWitness = data?.can?.view_blocks === true && data?.masked !== true;
+  // Non-masked callers with policy_names_masked hold zone_matrix_read without policy_read (contract 3.4, 7.1).
+  const canOpenPolicyViewer = data?.masked === true || data?.policy_names_masked !== true;
 
   const keepSelected = (options: readonly ViolationFilterOption[], current: string, fallbackLabel = current): readonly ViolationFilterOption[] =>
     current && !options.some((o) => o.value === current) ? [...options, { value: current, label: fallbackLabel }] : options;
@@ -373,10 +435,17 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
     {
       key: "rule", header: "Rule", width: 210, wrap: true,
       render: (f) => {
+        const label = ruleLabel(f);
         const href = ruleHref(f.policy_source_id, f.rule_id);
-        return href
-          ? <a href={href} aria-label={`Open ${ruleLabel(f)} in the policy viewer`}>{ruleLabel(f)}</a>
-          : <span>{ruleLabel(f)}</span>;
+        const showUid = Boolean(f.rule_uid) && f.rule_uid !== (f.rule_name || f.rule_uid);
+        return (
+          <Box>
+            {href !== null && canOpenPolicyViewer
+              ? <a href={href} aria-label={`Open ${label} in the policy viewer`}>{label}</a>
+              : <span>{label}</span>}
+            {showUid ? <Box data-testid="finding-rule-uid" sx={{ ...mono, color: m3.onSurfaceVar }}>{f.rule_uid}</Box> : null}
+          </Box>
+        );
       },
     },
     ...(canWitness ? [{
@@ -384,6 +453,12 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
       render: (f: SummaryFinding) => <FindingWitness finding={f} />,
     }] : []),
     { key: "policy", header: "Policy", width: 150, wrap: true, render: (f) => f.policy_name },
+    {
+      key: "devices", header: "Devices", width: 180, wrap: true,
+      render: (f) => f.target_device_ids.length > 0
+        ? <Box component="span" data-testid="finding-devices" sx={mono}>{f.target_device_ids.join(", ")}</Box>
+        : <span data-testid="finding-devices"><Unknown reason="No target device is recorded for this finding" /></span>,
+    },
     {
       key: "pairs", header: "Violated zone pairs", width: 320, wrap: true,
       render: (f) => f.violated_pairs.length === 0 ? <Unknown reason="The finding names no zone pair" /> : (
@@ -397,6 +472,10 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
           ))}
         </Box>
       ),
+    },
+    {
+      key: "notAllowed", header: "Not-allowed part", width: 240, wrap: true,
+      render: renderNotAllowedPart,
     },
     {
       key: "outcome", header: "Outcome", width: 130,
@@ -451,7 +530,7 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
         </Box>
       ),
     },
-  ], [canWitness]);
+  ], [canWitness, canOpenPolicyViewer]);
 
   const gate = summaryGate(summary, "Zone matrix violations");
   if (gate !== null || data === null) return <Box sx={{ pt: 1.5 }}>{gate}</Box>;
