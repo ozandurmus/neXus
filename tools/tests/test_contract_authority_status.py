@@ -174,6 +174,10 @@ _KNOWN_DRAFT_AUTHORITY_CITATIONS: dict[tuple[str, str, str], str] = {
      "ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md",
      "7fa76e1cb91b49c760b0989ca54ca917cbd20d71d0b4455f676901bc86268893"):
         "DETECTOR FALSE POSITIVE — §1 'Verified repository facts' row F11 cites the draft as the source of a fact (hit counts not collected), next to the PO decision record; surfaced 2026-11-25 by the 'Status:' label fix",
+    ("POLICY_INSIGHTS_DESIGN_2026_11_24.md",
+     "POLICY_HYGIENE_MODES_AND_RESOLUTION_DESIGN_2026_11_13.md",
+     "50a4036c701620d9015e3fd77db7a071d1a901d17461c12f0dee45645561540a"):
+        "DETECTOR FALSE POSITIVE — §11 reports that the DRAFT was missing from docs/design and that this design relies on nothing in it; the file was restored 2026-11-26 as DRAFT (not authority), which made the report's filename resolve",
 }
 
 

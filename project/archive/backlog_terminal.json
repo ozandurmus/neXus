@@ -1314,6 +1314,15 @@
       "priority": "P3",
       "target": "9c3579a7",
       "note": ""
+    },
+    {
+      "id": "policy_insights_design_followups",
+      "category": "engineering",
+      "title": "Policy Insights design follow-ups: missing hygiene-modes design file the code cites, stale work-budget figure",
+      "status": "done",
+      "priority": "P3",
+      "target": "POLICY_INSIGHTS_DESIGN_2026_11_24.md section 11",
+      "note": ""
     }
   ]
 }

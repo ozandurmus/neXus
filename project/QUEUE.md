@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T05:55:03Z
+Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T07:21:17Z
 
 ## Now
 - NXS-LOCAL-0419 — Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge (automated_validated)
@@ -81,7 +81,6 @@ Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T05:55:03Z
 - P3/planned legacy_python_separation
 - P3/planned old_export_copies_disposal
 - P3/planned opt_nexus_step_d_delete_old_copies
-- P3/planned policy_insights_design_followups
 - P3/planned preview_golden_database_rollout
 - P3/planned radware_cc_identity_and_defensepro_reads
 - P3/planned script_run_launcher_stdout_race

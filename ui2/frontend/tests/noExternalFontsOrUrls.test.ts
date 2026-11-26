@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 const EXTERNAL_URL_RE = /https?:\/\//i;
 const GOOGLE_FONT_HOST_RE = /fonts\.(?:googleapis|gstatic)\.com/i;
+const BUNDLED_ASSET_RE = /\.(?:css|less|sass|scss|styl|woff2?|ttf|otf|eot)(?:$|\?)/i;
 
 const indexHtmlModules = import.meta.glob("../index.html", { query: "?raw", import: "default", eager: true }) as Record<
   string,
@@ -64,6 +65,19 @@ describe("self-hosted fonts and no external URLs in index.html or CSS", () => {
       logLevel: "silent",
       build: {
         write: false,
+        // This guard inspects only emitted HTML, CSS, and font assets; externalizing resolved
+        // third-party JS modules and skipping JS minification avoids 30s+ full-suite CPU
+        // contention timeouts while still traversing every app module and bundling all CSS/fonts.
+        minify: false,
+        cssMinify: true,
+        reportCompressedSize: false,
+        rollupOptions: {
+          external(id, _importer, isResolved) {
+            if (!isResolved) return false;
+            const normalized = id.replace(/\\/g, "/");
+            return normalized.includes("/node_modules/") && !BUNDLED_ASSET_RE.test(normalized);
+          },
+        },
       },
     });
     const outputs = Array.isArray(result) ? result : [result];
