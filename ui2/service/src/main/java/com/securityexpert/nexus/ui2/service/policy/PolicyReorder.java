@@ -93,6 +93,15 @@ final class PolicyReorder {
     static Result analyze(PolicySnapshot snapshot, PolicyPartialShadow.Result partial) { return analyze(snapshot, partial, TOTAL_WORK, RULE_WORK); }
 
     static Result analyze(PolicySnapshot snapshot, PolicyPartialShadow.Result partial, int workLimit, int ruleLimit) {
+        return analyze(snapshot, partial, new Budget(workLimit), ruleLimit);
+    }
+
+    /**
+     * The same pass over a budget the caller owns: the reorder-only proposal ({@link PolicyProposal}) shares one pool over
+     * every step it analyses and reads what is left ({@code budget.left[0] < 0}: used up). The only addition of the
+     * proposal step to this class.
+     */
+    static Result analyze(PolicySnapshot snapshot, PolicyPartialShadow.Result partial, Budget budget, int ruleLimit) {
         var meta = snapshot.metadata();
         Map<String, Move> moves = new LinkedHashMap<>();
         Map<String, Integer> counts = new HashMap<>();
@@ -100,7 +109,6 @@ final class PolicyReorder {
         partial.rules().forEach((id, p) -> { if (PolicyPartialShadow.PARTIAL.equals(p.status()) && p.sameAction() && !p.overlapping().isEmpty()) candidates.put(id, p); });
         if (!"CP".equals(meta.vendor()) || !snapshot.failures().isEmpty() || candidates.isEmpty())
             return new Result(Map.of(), 0, 0, 0, 0, 0, 0, 0, partial.notEvaluable());
-        Budget budget = new Budget(workLimit);
         var resolver = Resolver.shadowing(snapshot, budget);
         var scope = new EvaluationScope<List<Entry>>(meta, ArrayList::new);
         Map<String, Position> where = new HashMap<>();
