@@ -15,7 +15,8 @@ import java.util.List;
  * {@code ZoneMatrixController}, same routes, session cookie, CSRF token and role gates as the screen. Body field names are
  * the controller's request records; a command with a larger body takes it as one JSON argument or {@code @file}, and the
  * CLI never adds, renames or corrects a field. The output is the server's answer, so the server's aiview projection is the
- * CLI's output.
+ * CLI's output. {@code zone-matrix-finding-witness} reads one stored finding's witness tuples; the server refuses aiview
+ * and every caller without {@code zone_matrix_zones_read}, and records each read before it answers.
  */
 final class ZonesMatrixCli {
 
@@ -44,6 +45,7 @@ final class ZonesMatrixCli {
         System.out.println("  zone-matrix-evaluate [policyId|-] [versionId|-] [witnesses]   evaluate a version against the policies; witnesses adds witness data");
         System.out.println("  zone-matrix-summary [policyId|-] [outcome|-] [limit]   stored summary of the latest complete run of each policy");
         System.out.println("  zone-matrix-run <policyId> [--version <versionId>]   start a stored run of one policy (active version unless named); prints run_id, already_running, state");
+        System.out.println("  zone-matrix-finding-witness <findingId>         stored witness tuples of one finding (finding_id from zone-matrix-summary); needs zone_matrix_zones_read, audited, not for aiview");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not a zone-matrix command */
@@ -118,6 +120,10 @@ final class ZonesMatrixCli {
                         + (args.length == 4 ? ",\"version_id\":" + quote(SanitizerCli.id(args[3])) : "") + "}";
                 yield NexusSessionCli.print(cli.call("POST", BASE + "/runs", body));
             }
+            case "zone-matrix-finding-witness" -> {
+                requireExactly(args, 2, "zone-matrix-finding-witness <findingId>");
+                yield NexusSessionCli.print(cli.call("GET", BASE + "/findings/" + findingId(args[1]) + "/witness", null));
+            }
             case "zone-matrix-summary" -> {
                 List<String> query = new ArrayList<>();
                 if (present(args, 1)) query.add("policy_id=" + encode(args[1]));
@@ -155,6 +161,12 @@ final class ZonesMatrixCli {
 
     private static String number(String value) {
         if (!value.matches("[1-9][0-9]{0,17}")) throw new IllegalArgumentException("usage: revision is a positive number");
+        return value;
+    }
+
+    /** The opaque finding id exactly as the summary prints it (digits, no leading zero); anything else is not sent. */
+    private static String findingId(String value) {
+        if (!value.matches("[1-9][0-9]{0,18}")) throw new IllegalArgumentException("usage: findingId is the finding_id the summary prints");
         return value;
     }
 

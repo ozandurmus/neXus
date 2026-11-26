@@ -303,6 +303,54 @@ class ZoneMatrixRunStorageTest {
         }
     }
 
+    /**
+     * Step 4b-2 (sections 7.1, 8.1): the audited witness read returns exactly the witness tuples and NAT view stored with the
+     * finding, by the opaque id the summary carries; the id of a finding of a run that is not COMPLETE, or of no finding, reads
+     * nothing. The read writes nothing (the audit row is the service's, written first).
+     */
+    @Test void theStoredWitnessOfOneFindingReadsBackByItsOpaqueId() throws Exception {
+        try (Connection db = fixture.appConnection(); Statement s = db.createStatement()) {
+            ZoneMatrixRunRepository repository = new JooqZoneMatrixRunRepository(
+                    new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            String policy = "pol-witness-" + UUID.randomUUID();
+            String runId = UUID.randomUUID().toString();
+            repository.start(run(runId, policy));
+            Finding withWitness = finding(policy, "uid-w1", "VIOLATION");
+            Finding withoutWitness = new Finding(policy, "uid-w2", List.of(), List.of("zone-a->zone-b"), "r-0008", 8,
+                    "RULE-SYNTHETIC-8", "sec-1", "Pre rules", List.of(), "VIOLATION", null, "HIGH", List.of(), null,
+                    List.of(new Cell("zone-a", "zone-b", "DENY_ALL", "HIGH", List.of("any"), null, null)),
+                    List.of(), null, FINISHED, null, FINISHED, null, null);
+            assertTrue(repository.complete(runId, FINISHED, 5L, COUNTS, COVERAGE, List.of(withWitness, withoutWitness)));
+
+            List<IdentifiedFinding> identified = repository.identifiedFindingsOf(runId);
+            assertEquals(List.of(withWitness, withoutWitness), identified.stream().map(IdentifiedFinding::finding).toList(),
+                    "identified findings are findingsOf with their ids, in the same order");
+            long id = identified.get(0).findingId();
+            assertEquals(id, scalar(s, "SELECT finding_id FROM zone_matrix_finding WHERE run_id = '" + runId
+                    + "' AND rule_uid = 'uid-w1'"));
+            long auditBefore = scalar(s, "SELECT count(*) FROM audit_log");
+
+            StoredFindingWitness stored = repository.findingWitness(id).orElseThrow();
+            assertEquals(id, stored.findingId());
+            assertEquals(runId, stored.runId());
+            assertEquals(VERSION, stored.versionId());
+            assertEquals(1, stored.versionNumber());
+            assertEquals("original", stored.natView());
+            assertEquals(withWitness.violatedCells(), stored.violatedCells(), "the stored tuples read back unchanged");
+            assertEquals("192.0.2.16/28", stored.violatedCells().get(0).witness().sourceRange());
+
+            StoredFindingWitness none = repository.findingWitness(identified.get(1).findingId()).orElseThrow();
+            assertNull(none.violatedCells().get(0).witness(), "a finding that stored no witness reads back none");
+            assertNull(none.natView());
+
+            assertTrue(repository.findingWitness(Long.MAX_VALUE).isEmpty(), "no finding has this id");
+            String running = UUID.randomUUID().toString();
+            repository.start(run(running, "pol-witness-running-" + UUID.randomUUID()));
+            assertEquals(List.of(), repository.identifiedFindingsOf(running), "a RUNNING run shows no findings");
+            assertEquals(auditBefore, scalar(s, "SELECT count(*) FROM audit_log"), "the repository read writes no row");
+        }
+    }
+
     @Test void migrationIsDryRunnableInsideATransaction() throws Exception {
         String sql;
         try (var resource = getClass().getResourceAsStream("/db/migration/V267__zone_matrix_runs_and_findings.sql")) {

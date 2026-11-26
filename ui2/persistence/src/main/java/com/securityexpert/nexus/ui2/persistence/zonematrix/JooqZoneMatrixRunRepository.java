@@ -205,6 +205,27 @@ public final class JooqZoneMatrixRunRepository implements ZoneMatrixRunRepositor
                 .stream().map(JooqZoneMatrixRunRepository::finding).toList());
     }
 
+    @Override public List<IdentifiedFinding> identifiedFindingsOf(String completeRunId) {
+        return transactions.inTransaction(dsl -> dsl.fetch("select f.finding_id, " + FINDING_COLUMNS
+                + " from zone_matrix_finding f join zone_matrix_run r on r.run_id = f.run_id "
+                + "where f.run_id = {0} and r.state = 'COMPLETE' order by f.finding_id", completeRunId)
+                .stream().map(r -> new IdentifiedFinding(r.get("finding_id", Long.class), finding(r))).toList());
+    }
+
+    @Override public Optional<StoredFindingWitness> findingWitness(long findingId) {
+        return transactions.inTransaction(dsl -> Optional.ofNullable(dsl.fetchOne("select f.finding_id, f.run_id, "
+                + "r.version_id, r.version_number, f.nat_view, f.violated_cells::text as violated_cells_json "
+                + "from zone_matrix_finding f join zone_matrix_run r on r.run_id = f.run_id "
+                + "where f.finding_id = {0} and r.state = 'COMPLETE'", findingId))
+                .map(r -> new StoredFindingWitness(
+                        r.get("finding_id", Long.class),
+                        r.get("run_id", String.class),
+                        r.get("version_id", String.class),
+                        r.get("version_number", Integer.class),
+                        r.get("nat_view", String.class),
+                        cells(r.get("violated_cells_json", String.class)))));
+    }
+
     @Override public List<ResolvedByVersionFinding> resolvedByVersionChange(Instant since) {
         return transactions.inTransaction(dsl -> {
             var rows = dsl.fetch("select f.finding_id, "

@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=665 rows=11970
+# route authorization decision table; kinds=18 routes=667 rows=12006
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -3276,6 +3276,24 @@ machine-replay-viewer | GET /api/v2/zone-matrix/draft | PERMIT actor=match sessi
 viewer-no-csrf | GET /api/v2/zone-matrix/draft | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_read:PERMITTED]
 viewer-no-origin | GET /api/v2/zone-matrix/draft | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_read:PERMITTED]
 must-change | GET /api/v2/zone-matrix/draft | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+role-viewer | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+role-operator | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+role-onboarding_admin | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+role-backup_admin | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+role-compliance_admin | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_zones_read:PERMITTED]
+role-security_admin | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_zones_read:PERMITTED]
+role-operation_admin | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+role-replay_viewer | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+root | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_zones_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+viewer-no-csrf | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+viewer-no-origin | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"zone_matrix_zones_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[zone_matrix_zones_read:DENIED]
+must-change | GET /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | GET /api/v2/zone-matrix/policies | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /api/v2/zone-matrix/policies | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /api/v2/zone-matrix/policies | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -7200,6 +7218,24 @@ machine-replay-viewer | HEAD /api/v2/zone-matrix/draft | REFUSE 403 application/
 viewer-no-csrf | HEAD /api/v2/zone-matrix/draft | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/zone-matrix/draft | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/zone-matrix/draft | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/zone-matrix/findings/synthetic-ref/witness | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/zone-matrix/policies | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/zone-matrix/policies | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/zone-matrix/policies | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}

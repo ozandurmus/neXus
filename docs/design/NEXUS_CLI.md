@@ -54,6 +54,7 @@ server session and deletes the file.
 | `zone-matrix-confirm-reference <json\|@file>`, `zone-matrix-publish <json\|@file>` | Zone matrix: Confirm reference, Publish (four-eyes) |
 | `zone-matrix-evaluate [policyId\|-] [versionId\|-] [witnesses]`, `zone-matrix-summary [policyId\|-] [outcome\|-] [limit]` | Zone matrix: Evaluate; Violations and Coverage summary |
 | `zone-matrix-run <policyId> [--version <versionId>]` | Zone matrix: start a stored (durable) run of one policy; prints `run_id`, `already_running`, `state` (no screen button) |
+| `zone-matrix-finding-witness <findingId>` | Zone matrix: Violations > Show witness; the stored witness tuples of one finding (`finding_id` from the summary); needs `zone_matrix_zones_read`, audited (`WITNESS_VIEW`), refused for aiview |
 | `policy-offline-analyses <policyId> [page]`, `policy-offline-analysis <analysisId>`, `policy-offline-analysis-upload <policyId> <mappingJson\|@file> <file.csv>`, `policy-offline-analysis-delete <analysisId>` | Policy / Rule usage: saved offline CSV analyses, one analysis, upload CSV with column mapping, delete |
 | `path-query <json\|@file>`, `path-validate <json\|@file>`, `path-validation <validationId>` | Trace: path query, submit CLASS_0 hop validation, read hop validation outcomes |
 | `topology`, `topology-overrides`, `topology-override-add <json\|@file>`, `topology-override-revoke <overrideId>`, `topology-rebuild` | Trace / Topology: held L3 topology, link overrides, create or revoke override, rebuild (`security_admin` for writes) |
