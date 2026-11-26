@@ -416,7 +416,7 @@ public final class AiviewSweepEstate {
                         + "interface_name, route_name, device_comment, representative_host, state, verdict, pre_checks_json, "
                         + "command_plan_json, inverse_plan_json, completed_at) values (?, ?, ?, ?, ?, ?, 'check_point', "
                         + "'default', 'ADD', '203.0.113.0/24', ?, 'eth1', ?, ?, '203.0.113.10', 'DONE', 'PASS', '[]'::jsonb, "
-                        + "'{}'::jsonb, '{}'::jsonb, now())",
+                        + "'{}'::jsonb, '[]'::jsonb, now())",
                         preview, UUID.randomUUID().toString(), "4".repeat(64), e.principal(), e.cluster(), e.cpMemberA().id(),
                         e.cpMemberB().interfaceAddress(), "to-" + e.panFirewall().hostname(),
                         "for " + e.principal());

@@ -47,7 +47,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 
 class StaticRoutePreviewJobExecutorTest {
 
-    private static final String PREVIEW_ID = "99999999-8888-4777-8666-555555555555";
+    private static final String PREVIEW_ID = "srp-99999999-8888-4777-8666-555555555555";
     private static final String DEVICE_ID = "11111111-2222-4333-8444-555555555555";
 
     private GateRegistryPort loadGateRegistry() {
@@ -138,6 +138,8 @@ class StaticRoutePreviewJobExecutorTest {
         assertNotNull(store.lastPreRouteSha);
         assertTrue(store.lastBeforePathJson.contains("\"selectedPrefix\":\"0.0.0.0/0\""));
         assertTrue(store.lastCommandPlanJson.contains("\"mutationPossible\":false"));
+        assertNotNull(store.lastInversePlanJson);
+        assertTrue(store.lastInversePlanJson.startsWith("["), "inverse_plan_json must serialize as a JSON array");
     }
 
     @Test

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
+import com.securityexpert.nexus.ui2.jobs.staticroute.StaticRoutePreview;
 import com.securityexpert.nexus.ui2.jobs.staticroute.StaticRoutePreview.ValidationException;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -130,13 +131,30 @@ class StaticRoutePreviewServiceTest {
 
         SubmissionOutcome first = service.submitPreview(req, "actor-op-admin", false);
         assertFalse(first.deduplicated());
+        String previewId = (String) first.body().get("preview_id");
+        assertNotNull(previewId);
+        assertTrue(previewId.startsWith(StaticRoutePreview.PREVIEW_ID_PREFIX), "preview_id must carry V252 srp- prefix");
+        assertTrue(StaticRoutePreview.isValidPreviewId(previewId));
+        assertTrue(StaticRoutePreview.isValidUuid(previewId));
+        assertFalse(StaticRoutePreview.isValidPreviewId(previewId.substring(4)), "bare UUID must be rejected");
         assertEquals(Boolean.FALSE, first.body().get("mutation_possible"));
         assertEquals(StaticRoutePreviewService.PREVIEW_BADGE, first.body().get("preview_badge"));
         assertEquals("CHG-2026-0099", first.body().get("change_ticket_ref"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> inversePlan = (List<Map<String, Object>>) first.body().get("inverse_plan");
+        assertNotNull(inversePlan);
+        assertFalse(inversePlan.isEmpty(), "inverse_plan must deserialize JSON array of CompiledPreviewStep");
+
+        // getPreview accepts srp-<uuid> and refuses a bare UUID
+        Optional<Map<String, Object>> fetched = service.getPreview(previewId, false);
+        assertTrue(fetched.isPresent());
+        assertEquals(previewId, fetched.get().get("preview_id"));
+        assertTrue(service.getPreview(previewId.substring(4), false).isEmpty());
 
         // Replaying with the exact same payload returns deduplicated = true
         SubmissionOutcome replay = service.submitPreview(req, "actor-op-admin", true);
         assertTrue(replay.deduplicated());
+        assertEquals(previewId, replay.body().get("preview_id"));
         // Under aiview (masked = true), sensitive actor/ticket/reason/comment fields are withheld
         assertNull(replay.body().get("requested_by"));
         assertNull(replay.body().get("change_ticket_ref"));

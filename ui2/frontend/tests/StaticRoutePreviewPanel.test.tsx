@@ -36,7 +36,7 @@ const TARGETS: StaticRouteTargetOption[] = [
 ];
 
 const SAMPLE_PREVIEW: StaticRoutePreviewRecord = {
-  preview_id: "99999999-8888-4777-8666-555555555555",
+  preview_id: "srp-99999999-8888-4777-8666-555555555555",
   idempotency_key: "ui-srp-test-1",
   requested_at: "2026-11-18T08:15:00Z",
   completed_at: "2026-11-18T08:15:02Z",
