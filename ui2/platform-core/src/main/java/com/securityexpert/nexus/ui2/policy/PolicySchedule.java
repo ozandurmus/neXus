@@ -16,8 +16,10 @@ public record PolicySchedule(String kind, String start, String end, List<Window>
     public static PolicySchedule unknown() { return new PolicySchedule("unknown", null, null, List.of(), "UTC", false); }
     public static String date(String value) {
         if (value == null || value.isBlank()) return null;
-        try { return OffsetDateTime.parse(value).toString(); } catch (RuntimeException ignored) {}
-        for (String format : List.of("uuuu-MM-dd'T'HH:mm", "uuuu-MM-dd'T'HH:mm:ss", "uuuu/MM/dd@HH:mm", "dd-MMM-uuuu HH:mm:ss")) {
+        // Check Point writes ISO offsets without the colon (+0300); the value is otherwise the same ISO text.
+        String iso = value.replaceFirst("([+-][0-9]{2})([0-9]{2})$", "$1:$2");
+        try { return OffsetDateTime.parse(iso).toString(); } catch (RuntimeException ignored) {}
+        for (String format : List.of("uuuu-MM-dd'T'HH:mm", "uuuu-MM-dd'T'HH:mm:ss", "uuuu/MM/dd@HH:mm", "d-MMM-uuuu H:mm", "d-MMM-uuuu H:mm:ss")) {
             try { return LocalDateTime.parse(value, DateTimeFormatter.ofPattern(format, Locale.ENGLISH).withResolverStyle(java.time.format.ResolverStyle.STRICT)).toString(); }
             catch (RuntimeException ignored) {}
         }
@@ -34,7 +36,11 @@ public record PolicySchedule(String kind, String start, String end, List<Window>
             var now = instant.atZone(ZoneId.of(timezone));
             if (start != null && end != null && at(start).isAfter(at(end))) return "unknown";
             if (start != null && now.isBefore(at(start))) return "upcoming";
-            if (end != null && now.isAfter(at(end))) return "expired";
+            if (end != null && now.isAfter(at(end))) {
+                // Without a known timezone the end is a wall-clock time of unknown offset (offsets span 26 h): expiry is
+                // proven only 26 h (the widest offset spread, above the 24 h floor) past the end, so no offset can turn a still-open schedule into "expired".
+                return timezoneKnown || now.toInstant().isAfter(at(end).toInstant().plus(Duration.ofHours(26))) ? "expired" : "unknown";
+            }
             if (kind.equals("one-time")) {
                 if (!windows.isEmpty()) return windows.stream().anyMatch(w -> !now.isBefore(at(w.start())) && !now.isAfter(at(w.end()))) ? "active" : "upcoming";
                 return start == null && end == null ? "always" : "active";

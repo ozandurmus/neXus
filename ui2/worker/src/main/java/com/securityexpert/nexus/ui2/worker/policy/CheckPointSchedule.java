@@ -16,8 +16,13 @@ final class CheckPointSchedule {
             var recurrence = node.path("recurrence");
             var hours = node.path("hours-ranges");
             if (recurrence.isMissingNode() || recurrence.path("pattern").asText().equalsIgnoreCase("none")) {
-                if (hours.isArray()) for (JsonNode range : hours) if (range.path("enabled").asBoolean(false)) return PolicySchedule.unknown();
                 if (start == null && end == null && !node.path("end-never").asBoolean(false)) return PolicySchedule.unknown();
+                // One-time schedule with enabled hours-ranges: the hours repeat on every day between start and end, so it is
+                // the daily recurrence bounded by start/end; expiry (past end) is independent of the hours.
+                List<PolicySchedule.Window> daily = new ArrayList<>();
+                if (hours.isArray()) for (JsonNode range : hours) if (range.path("enabled").asBoolean(false))
+                    daily.add(new PolicySchedule.Window(List.of(), List.of(), PolicySchedule.hour(range.path("from").asText()), PolicySchedule.hour(range.path("to").asText())));
+                if (!daily.isEmpty()) return new PolicySchedule("recurring", start, end, daily, "UTC", false);
                 return new PolicySchedule("one-time", start, end, List.of(), "UTC", false);
             }
             String pattern = recurrence.path("pattern").asText().toLowerCase(Locale.ROOT);
@@ -63,7 +68,7 @@ final class CheckPointSchedule {
         if (node.isMissingNode() || node.isNull()) return null;
         if (!node.isObject()) return PolicySchedule.date(node.asText());
         if (node.has("date") && node.has("time")) return LocalDateTime.parse(node.path("date").asText() + " " + node.path("time").asText(),
-                DateTimeFormatter.ofPattern("dd-MMM-uuuu HH:mm", Locale.ENGLISH).withResolverStyle(ResolverStyle.STRICT)).toString();
+                DateTimeFormatter.ofPattern("d-MMM-uuuu H:mm", Locale.ENGLISH).withResolverStyle(ResolverStyle.STRICT)).toString();
         // Vendor documents schedule ISO offsets as ignored: retain wall-clock time, unlike modification timestamps.
         String iso = PolicySchedule.date(node.path("iso-8601").asText());
         try { return OffsetDateTime.parse(iso).toLocalDateTime().toString(); }

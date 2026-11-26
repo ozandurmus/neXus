@@ -10,7 +10,8 @@ class CheckPointScheduleTest {
     @Test void oneTimeEndNeverAndRecurrenceShapes() throws Exception {
         var once = CheckPointSchedule.parse(json.readTree("{\"start\":{\"iso-8601\":\"2026-10-01T00:00:00Z\"},\"end\":{\"iso-8601\":\"2026-10-31T23:59:00Z\"}}"));
         assertEquals("active", once.status(Instant.parse("2026-10-02T12:00:00Z")));
-        assertEquals("expired", once.status(Instant.parse("2026-11-01T00:00:00Z")));
+        assertEquals("unknown", once.status(Instant.parse("2026-11-01T00:00:00Z"))); // inside the 26 h timezone buffer
+        assertEquals("expired", once.status(Instant.parse("2026-11-02T12:00:00Z")));
         assertEquals("always", CheckPointSchedule.parse(json.readTree("{\"end-never\":true}")).status(Instant.now()));
         for (String pattern : new String[]{"Daily", "Weekly", "Monthly"}) {
             var fixture = json.createObjectNode().put("end-never", true).put("start-now", true);
@@ -56,5 +57,30 @@ class CheckPointScheduleTest {
         assertNull(CheckPointPolicyMapper.modifiedTime(json.readTree("{\"iso-8601\":\"not a time\"}")));
         assertNull(CheckPointPolicyMapper.modifiedTime(json.missingNode()));
         assertNull(CheckPointPolicyMapper.modifiedTime(json.readTree("null")));
+    }
+    @Test void dateShapesAndTimezoneBuffer() throws Exception {
+        // d-MMM-uuuu with a single-digit day and hour; colon-less ISO offset (wall-clock kept, offset ignored).
+        var shape = CheckPointSchedule.parse(json.readTree("{\"start\":{\"date\":\"5-Oct-2026\",\"time\":\"9:05\"},\"end\":{\"iso-8601\":\"2026-10-09T21:51+0300\"}}"));
+        assertEquals("2026-10-05T09:05", shape.start()); assertEquals("2026-10-09T21:51", shape.end());
+        assertEquals("unknown", CheckPointSchedule.parse(json.readTree("{\"end\":{\"date\":\"31-Feb-2026\",\"time\":\"10:00\"},\"start-now\":true}")).kind());
+        // Expiry is PROVEN only past the buffer when the timezone is not known: 2026-10-09T21:51 + 26 h = 2026-10-10T23:51Z.
+        assertEquals("unknown", shape.status(Instant.parse("2026-10-10T23:50:00Z")));
+        assertEquals("expired", shape.status(Instant.parse("2026-10-10T23:52:00Z")));
+        assertEquals("active", shape.status(Instant.parse("2026-10-08T12:00:00Z")));
+        assertEquals("upcoming", shape.status(Instant.parse("2026-10-01T12:00:00Z")));
+        // A known timezone needs no buffer.
+        var known = new com.securityexpert.nexus.ui2.policy.PolicySchedule("one-time", null, "2026-10-09T21:51", java.util.List.of(), "UTC", true);
+        assertEquals("expired", known.status(Instant.parse("2026-10-09T21:52:00Z")));
+    }
+    @Test void oneTimeScheduleWithHoursRangesIsDecidedOnlyWhereSound() throws Exception {
+        var node = json.readTree("{\"start\":{\"iso-8601\":\"2026-10-01T00:00:00\"},\"end\":{\"iso-8601\":\"2026-10-05T00:00:00\"},"
+            + "\"hours-ranges\":[{\"enabled\":true,\"from\":\"08:00\",\"to\":\"18:00\"},{\"enabled\":false,\"from\":\"00:00\",\"to\":\"23:59\"}]}");
+        var schedule = CheckPointSchedule.parse(node);
+        assertEquals("expired", schedule.status(Instant.parse("2026-10-20T12:00:00Z")));
+        assertEquals("active", schedule.status(Instant.parse("2026-10-02T12:00:00Z")));
+        assertEquals("upcoming", schedule.status(Instant.parse("2026-10-02T20:00:00Z"))); // outside the hours: not "expired"
+        assertEquals("upcoming", schedule.status(Instant.parse("2026-09-20T12:00:00Z")));
+        // An unparseable hour keeps the whole schedule unknown.
+        assertEquals("unknown", CheckPointSchedule.parse(json.readTree("{\"start-now\":true,\"end\":{\"iso-8601\":\"2026-10-05T00:00:00\"},\"hours-ranges\":[{\"enabled\":true,\"from\":\"x\",\"to\":\"18:00\"}]}")).kind());
     }
 }
