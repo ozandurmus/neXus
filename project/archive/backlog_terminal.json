@@ -1314,6 +1314,15 @@
       "priority": "P3",
       "target": "9c3579a7",
       "note": ""
+    },
+    {
+      "id": "zone_matrix_bridge_size_debt",
+      "category": "engineering",
+      "title": "ZoneMatrixPolicyBridge is still 1713 lines after the NAT builder split (limit 1500); further split needed",
+      "status": "done",
+      "priority": "P3",
+      "target": "8ec46955",
+      "note": ""
     }
   ]
 }
