@@ -280,7 +280,7 @@ maybe_refill() {
     if agy_only; then
       { echo; agy_state_blob
         if [ "$kind" = p1 ]; then
-          printf '\n## AGY_ONLY output location\nWrite the lane briefs as files in the directory planner-out/ of THIS worktree: <short-name>.brief and\n<short-name>.meta (meta lines such as base=origin/main, engine=agy). Do not write into the ops state directory; the lane\nrunner moves planner-out/*.brief and *.meta into the lane queue when this lane ends. Do not commit planner-out/.\n'
+          printf '\n## AGY_ONLY output location\nWrite the lane briefs as files in the directory planner-out/ of THIS worktree: <short-name>.brief and\n<short-name>.meta (meta lines: base=origin/main, engine=agy, model=<tier>). Always write an explicit model= in each\nplanner-out/<short-name>.meta picking the minimum required tier:\n- gemini-4-hydrogen-high: docs, checklists, bounded tests, single-file UI components, pure helpers, small ops fixes.\n- gemini-4-neon-medium: standard multi-file P1 features, API routes, sweep expansions, review fixes, ports.\n- gemini-4-neon-high: security/RBAC/masking boundaries, Flyway migrations, persistence/schema contracts, concurrency.\n- gemini-4-carbon-high: ONLY multi-module algorithmic/soundness engines or deep cross-subsystem refactors (rare; never default).\nDo not write into the ops state directory; the lane runner moves planner-out/*.brief and *.meta into the lane queue when\nthis lane ends. Do not commit planner-out/.\n'
         fi; } >> "$Q/$rn.brief.tmp"
     fi
     mv "$Q/$rn.brief.tmp" "$Q/$rn.brief"
@@ -333,22 +333,21 @@ start_next_lane() {
   if { agy_only || { ! grep -qE '^pin_claude=1' "$meta" 2>/dev/null && [ ! -e "$Q/ENGINE_CLAUDE" ] && [ ! -e "$Q/AGY_OFF" ] \
      && [ "$agy_now" -lt $(( (MAX + 1) / 2 )) ]; }; } && [ "$engine" != qwen ]; then
     [ -n "$explicit_model" ] && engine=agy
-    # PO 2026-11-24: Antigravity back, 3 parallel lanes; Carbon / Neon / Hydrogen by difficulty (MODEL_ROUTING.md).
+    # PO 2026-11-24: Antigravity back, 3 parallel lanes; minimum-required tier by difficulty (MODEL_ROUTING.md).
     [ -z "$explicit_model" ] && case "$n" in
-      *-state-sync*) agy_only && { engine=agy; model=gemini-4-neon-high; };;  # Claude Sonnet normally (project records; tier B rule)
-      *-debt-*|*-test*|*refill-backlog*|*refill-debt*) engine=agy; model=gemini-4-hydrogen-high;;
-      *-neon-review-findings*) engine=agy; model=gemini-4-neon-high;;  # fixes on delivery/security scripts: keep high
-      *refill-review*|*-review-*) engine=agy; model=gemini-4-neon-high;;
-      *-port-*|*-fix-*|*refill-ui*) engine=agy; model=gemini-4-neon-medium;;  # PO 2026-11-24: medium is enough here
-      *-p1-*|*refill-p1*) engine=agy; model=gemini-4-carbon-high;;
+      *-docs-*|*-checklist*|*-debt-*|*-test*|*refill-backlog*|*refill-debt*) engine=agy; model=gemini-4-hydrogen-high;;
+      *-state-sync*|*-neon-review-findings*|*refill-review*|*-review-*) engine=agy; model=gemini-4-neon-high;;
+      *-port-*|*-fix-*|*refill-ui*|*refill-p1*|*-p1-*) engine=agy; model=gemini-4-neon-medium;;
     esac
-    # AGY_ONLY: a lane the names above did not route still goes to agy (Neon high), never to Claude.
-    if agy_only && [ -z "$explicit_model" ] && ! echo "$model" | grep -qE 'carbon|neon|hydrogen'; then engine=agy; model=gemini-4-neon-high; fi
+    # AGY_ONLY: a lane the names above did not route still goes to agy (Neon medium), never to Claude.
+    if agy_only && [ -z "$explicit_model" ] && ! echo "$model" | grep -qE 'carbon|neon|hydrogen'; then engine=agy; model=gemini-4-neon-medium; fi
     agy_only && [ "$engine" != agy ] && engine=agy
-    # A model marked rate-limited by a recent 429 is skipped: next in carbon -> neon -> hydrogen (high), else Claude.
+    # A model marked rate-limited by a recent 429 is skipped: default down/sideways (hydrogen-high -> neon-medium ->
+    # neon-high); only include carbon-high if the lane explicitly started on a carbon model, else Claude.
     if [ "$engine" = agy ] && agy_limited "$model"; then
-      local alt picked=""
-      for alt in gemini-4-carbon-high gemini-4-neon-high gemini-4-hydrogen-high; do
+      local alt picked="" alts="gemini-4-hydrogen-high gemini-4-neon-medium gemini-4-neon-high"
+      case "$model" in gemini-4-carbon-*) alts="$alts gemini-4-carbon-high";; esac
+      for alt in $alts; do
         [ "$alt" = "$model" ] && continue
         agy_limited "$alt" || { picked=$alt; break; }
       done
@@ -375,6 +374,14 @@ start_next_lane() {
   # Fresh base (council 2026-11-23: stale bases caused most port lanes). A fetch can collide with the ship chain's fetch on the
   # ref lock (2026-11-20), so retry briefly and fall back to the refs already there.
   if [ "$base" = origin/main ]; then for _ in 1 2 3; do git -C "$REPO" fetch -q origin main 2>/dev/null && break; sleep 5; done; fi
+  # A leftover zero-commit lane branch (e.g. after a killed/aborted start) blocks worktree add; clean it up safely only
+  # when it has 0 commits ahead of $base. Never delete a branch with >= 1 commit ahead of $base.
+  if git -C "$REPO" rev-parse --verify "lane/q-$n2" >/dev/null 2>&1 \
+     && [ "$(git -C "$REPO" rev-list --count "$base..lane/q-$n2" 2>/dev/null)" = "0" ]; then
+    git -C "$REPO" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$REPO" branch -D "lane/q-$n2" >/dev/null 2>&1 || true
+    log "removed zero-commit leftover branch lane/q-$n2"
+  fi
   # A leftover dir (a Gradle daemon wrote ui2/.gradle after the worktree was removed, 2026-11-24 G521) blocks the add;
   # remove it only when git does not list it as a worktree.
   if [ -d "$wt" ] && ! git -C "$REPO" worktree list --porcelain | grep -qx "worktree $wt"; then rm -rf "$wt"; fi
