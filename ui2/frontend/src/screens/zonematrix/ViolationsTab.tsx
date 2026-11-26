@@ -19,6 +19,11 @@ import {
   severityWord, statementWord,
   type SummaryCellCount, type SummaryFinding, type SummaryHeadline, type SummaryOutcome, type SummaryResolvedFinding, type ZoneMatrixSummaryResponse,
 } from "./zoneMatrixApi";
+import {
+  FIRST_OBSERVED_OPTIONS, NO_REASON_VALUE, STALENESS_OPTIONS, UNKNOWN_VENDOR_VALUE,
+  buildDeviceOptions, buildPolicySourceOptions, buildPolicyVendorByRunId, buildReasonOptions, buildVendorOptions,
+  matchesViolationFilters, type FirstObservedRange, type PolicyStalenessChoice, type ViolationFilterOption,
+} from "./violationFilters";
 
 const PAGE_SIZE = 50;
 const LIMITS: readonly number[] = [200, 500, 1000];
@@ -186,11 +191,43 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
   const changePair = (next: ZonePairFilter) =>
     setPair(next.sourceZoneId === ALL_ZONES && next.destinationZoneId === ALL_ZONES ? null : next);
   const [severity, setSeverity] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [policySourceId, setPolicySourceId] = useState("");
+  const [deviceId, setDeviceId] = useState("");
   const [flag, setFlag] = useState("");
+  const [reason, setReason] = useState("");
+  const [firstObserved, setFirstObserved] = useState<FirstObservedRange | "">("");
   const [lifecycle, setLifecycle] = useState("");
+  const [staleness, setStaleness] = useState<PolicyStalenessChoice | "">("");
   const [offset, setOffset] = useState(0);
   const { data, params, setParams } = summary;
 
+  const keepSelected = (options: readonly ViolationFilterOption[], current: string, fallbackLabel = current): readonly ViolationFilterOption[] =>
+    current && !options.some((o) => o.value === current) ? [...options, { value: current, label: fallbackLabel }] : options;
+
+  const policyVendorByRunId = useMemo(() => buildPolicyVendorByRunId(data?.policies ?? []), [data]);
+  const vendorOptions = useMemo(
+    () => keepSelected(
+      buildVendorOptions(data?.policies ?? [], data?.findings ?? [], policyVendorByRunId),
+      vendor,
+      vendor === UNKNOWN_VENDOR_VALUE ? "Vendor unknown" : vendor,
+    ),
+    [data, policyVendorByRunId, vendor],
+  );
+  const policySourceOptions = useMemo(
+    () => keepSelected(buildPolicySourceOptions(data?.findings ?? [], data?.policies ?? []), policySourceId),
+    [data, policySourceId],
+  );
+  const deviceOptions = useMemo(
+    () => keepSelected(buildDeviceOptions(data?.findings ?? []), deviceId),
+    [data, deviceId],
+  );
+  const reasonOptions = useMemo(
+    () => reason === NO_REASON_VALUE
+      ? buildReasonOptions(data?.findings ?? [])
+      : keepSelected(buildReasonOptions(data?.findings ?? []), reason),
+    [data, reason],
+  );
   const flagOptions = useMemo(
     () => [...new Set((data?.findings ?? []).flatMap((f) => f.flags))].sort(),
     [data],
@@ -208,13 +245,11 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
     for (const id of [sourceZone, destinationZone]) if (id !== ALL_ZONES && !byId.has(id)) byId.set(id, id);
     return [...byId.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [data, sourceZone, destinationZone]);
-  const rows = useMemo(() => (data?.findings ?? []).filter((f) =>
-    (sourceZone === ALL_ZONES && destinationZone === ALL_ZONES
-      || f.violated_pairs.some((p) => (sourceZone === ALL_ZONES || p.source_zone_id === sourceZone)
-        && (destinationZone === ALL_ZONES || p.destination_zone_id === destinationZone)))
-    && (severity === "" || f.highest_severity === severity || f.violated_pairs.some((p) => p.severity === severity))
-    && (flag === "" || f.flags.includes(flag))
-    && (lifecycle === "" || (lifecycle === "undecided") === f.flags.includes(BECAME_UNDECIDED))), [data, severity, flag, lifecycle, sourceZone, destinationZone]);
+  const renderNowMs = Date.now();
+  const rows = (data?.findings ?? []).filter((f) => matchesViolationFilters(f, policyVendorByRunId, {
+    sourceZoneId: sourceZone, destinationZoneId: destinationZone, severity, vendor, policySourceId, deviceId,
+    flag, reason, firstObserved, lifecycle, staleness,
+  }, renderNowMs));
 
   const columns: readonly DataColumn<SummaryFinding>[] = useMemo(() => [
     {
@@ -356,10 +391,36 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
             {shownPair ? (
               <M3Button emphasis="text" onClick={() => { setOffset(0); setPair(null); }}>Clear zone filters</M3Button>
             ) : null}
+            <TextField select size="small" label="Vendor" value={vendor} sx={{ minWidth: 160 }}
+              onChange={(e) => { setOffset(0); setVendor(e.target.value); }}>
+              <MenuItem value="">All vendors</MenuItem>
+              {vendorOptions.map((v) => <MenuItem key={v.value} value={v.value}>{v.label}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="Policy source" value={policySourceId} sx={{ minWidth: 190 }}
+              onChange={(e) => { setOffset(0); setPolicySourceId(e.target.value); }}>
+              <MenuItem value="">All policy sources</MenuItem>
+              {policySourceOptions.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="Device" value={deviceId} sx={{ minWidth: 180 }}
+              onChange={(e) => { setOffset(0); setDeviceId(e.target.value); }}>
+              <MenuItem value="">All devices</MenuItem>
+              {deviceOptions.map((d) => <MenuItem key={d.value} value={d.value}>{d.label}</MenuItem>)}
+            </TextField>
             <TextField select size="small" label="Flag" value={flag} sx={{ minWidth: 190 }}
               onChange={(e) => { setOffset(0); setFlag(e.target.value); }}>
               <MenuItem value="">Any flag</MenuItem>
               {flagOptions.map((x) => <MenuItem key={x} value={x}>{flagWords(x)}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="Reason" value={reason} sx={{ minWidth: 210 }}
+              onChange={(e) => { setOffset(0); setReason(e.target.value); }}>
+              <MenuItem value="">Any reason</MenuItem>
+              {reasonOptions.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
+              <MenuItem value={NO_REASON_VALUE}>No reason recorded</MenuItem>
+            </TextField>
+            <TextField select size="small" label="First observed (current version history, not rule's age)" value={firstObserved} sx={{ minWidth: 360 }}
+              onChange={(e) => { setOffset(0); setFirstObserved(e.target.value as FirstObservedRange | ""); }}>
+              <MenuItem value="">Any first-observed date</MenuItem>
+              {FIRST_OBSERVED_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
             </TextField>
             <TextField select size="small" label="State" value={lifecycle} sx={{ minWidth: 190 }}
               onChange={(e) => { setOffset(0); setLifecycle(e.target.value); }}>
@@ -367,9 +428,14 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
               <MenuItem value="open">Open, still decided</MenuItem>
               <MenuItem value="undecided">Became undecided</MenuItem>
             </TextField>
+            <TextField select size="small" label="Staleness" value={staleness} sx={{ minWidth: 160 }}
+              onChange={(e) => { setOffset(0); setStaleness(e.target.value as PolicyStalenessChoice | ""); }}>
+              <MenuItem value="">Any staleness</MenuItem>
+              {STALENESS_OPTIONS.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+            </TextField>
           </Stack>
           <Typography variant="body2" data-testid="findings-count">{countsText(data, rows.length)}</Typography>
-          <Hint>The outcome, policy and request size are applied by the server; severity, flag and state only narrow the rows returned. Not evaluable and unknown rows stay in the list unless you filter them out.</Hint>
+          <Hint>The outcome, policy and request size are applied by the server; severity, source zone, destination zone, vendor, policy source, device, flag, reason, first observed and staleness only narrow the rows returned. First observed is the first-observed date in the current version history, not the rule&apos;s age. Not evaluable and unknown rows stay in the list unless you filter them out.</Hint>
           <DataTable
             ariaLabel="Violation findings"
             columns={columns}

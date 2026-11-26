@@ -1,0 +1,329 @@
+# P1 counts-only PO-session run sheet (2026-11-26)
+
+## Status
+
+DRAFT — 2026-11-26. Run sheet only: decides nothing and authorizes nothing; a run is authorized only by the Product Owner session that starts it. Checked against `origin/main` at `77422e86`.
+
+Controlling text:
+
+- `AGENTS.md` — Evidence laws (`Automated validation != real-environment validation`), Sensitive identity reporting law (`compare locally -> report the relationship, not the values`), Mandatory AIView inspection & post-parsing masking law (database inspections query counts and booleans only, never unmasked device rows), and Raw-evidence law.
+- `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` (`RATIFIED`, ref `PO-2026-11-23-ayyas-midday`).
+- The harness READMEs, migrations, and backlog history records cited in each section below, verified on `origin/main` at `77422e86`.
+
+Every run on this sheet is an in-pod, read-only, counts-only Product Owner session run. None contacts a network device, none issues a device command, and none adds or changes a capability-gate row or schedule. Run them outside deploy rollout and end-to-end test windows (`measure_run.sh` stages into `/app/tmp`, which is lost on a rollout, and `probe.mjs` uses a machine session that an overlapping e2e run revokes).
+
+---
+
+## 1. PAN-OS below 12 stored zone sets
+
+### Purpose
+
+Feeds backlog item `policy_collection_gaps` and Product Owner answer 5 of `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` (section 1 item 5, governing `docs/design/PAN_VSYS_ZONE_UNIVERSE_2026_11_15.md` section 6 "Limits") by measuring with counts only inside `ui2-service` whether enrolled Palo Alto firewalls not on PAN-OS 12 already hold parseable, fresh vsys zone sets in their stored effective-running documents.
+
+### Preconditions
+
+- `scripts/measurement/pan_vsys_zone_sets_pre12/` (`README.md`, `PanPre12ZoneSetMeasure.java`, `selftest.sh`, `measure_run.sh`, `run_in_pod.sh`, `show_safe.sh`) is present on `origin/main` at `77422e86`.
+- The running `deploy/ui2-service` pod's `/app/service.jar` contains `PaloAltoConfiguredInterfaceParser` with `zoneNamesByVsys` and view `v_latest_effective_running_config` (`LatestEffectiveRunningReader`); per `scripts/measurement/pan_vsys_zone_sets_pre12/README.md`, if the running pod's parser is older and lacks `zoneNamesByVsys`, `measure_run.sh` fails at compile time and nothing runs.
+- Operator host configuration (`~/.config/nexus/hosta`) and cluster `kubectl -n ui2` access exist on the operator workstation as read by `measure_run.sh`.
+- No deploy rollout or `hosta_e2e.sh` run is active (`measure_run.sh` exits if `hosta_e2e.sh` is running, and `/app/tmp` is lost on a pod rollout).
+- Explicit Product Owner session go-ahead before executing `measure_run.sh`.
+
+### Steps
+
+Copied verbatim from `scripts/measurement/pan_vsys_zone_sets_pre12/README.md`:
+
+Local self-test (no pod, no database, no device; expects `show_safe	ok` and `selftest	ok`):
+
+```sh
+cd ui2 && ./gradlew :worker:classes :persistence:classes :platform-core:classes :job-engine:classes
+bash scripts/measurement/pan_vsys_zone_sets_pre12/selftest.sh
+```
+
+PO-session in-pod run (`measure_run.sh` stages `run_in_pod.sh` and `show_safe.sh`, waits for `done` or `fatal`, writes `show_safe.sh`-filtered output to `pre12zs-<tag>.tsv`, and removes `/app/tmp/pre12zs-<tag>`):
+
+```sh
+MEASURE_WORK_DIR=<scratch dir> bash scripts/measurement/pan_vsys_zone_sets_pre12/measure_run.sh <tag>
+```
+
+### Evidence to record
+
+From `pre12zs-<tag>.tsv` (tab-separated tokens matching `[a-z0-9_.]+` only):
+
+- Fleet scope lines (`scope fleet <counter> <n>`): `total_pan_gateways`, `pan_os_12_gateways`, `measured_not_12_gateways`.
+- Bucket totals (`bucket <v9|v10|v11|vother|vunknown|all> <counter> <n>`) and anonymous ordinal lines (`device pan_NN version_bucket <token>`, `device pan_NN <counter> <n>`): `firewalls_enrolled`, `with_stored_document`, `without_stored_document`, `age_le_24h`, `age_le_7d`, `age_older`, `age_unknown`, `parsed_ok`, `not_parseable`, `skipped_size`, `artefact_unreadable`, `with_vsys`, `vsys_total`, `vsys_with_zone`, `vsys_zero_zone`, `zone_total`, `max_zones_in_vsys`, `zone_set_candidate_le_24h`.
+- Guard and completion lines: `filtered_lines` (expected `0`) and terminal token (`done` or `fatal	<lowercase exception class>`).
+
+### How to read the result
+
+Per `scripts/measurement/pan_vsys_zone_sets_pre12/README.md`, `docs/design/PAN_VSYS_ZONE_UNIVERSE_2026_11_15.md` section 6, and `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` answer 5:
+
+| Outcome in `pre12zs-<tag>.tsv` | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| `done`, `filtered_lines` = `0`, and `bucket all zone_set_candidate_le_24h` > `0` (`age_le_24h`, `parsed_ok`, `with_vsys`, and `vsys_zero_zone` = `0`) | Stored effective-running documents on non-PAN-OS-12 firewalls already parse into fresh, non-empty vsys zone universes via `PaloAltoConfiguredInterfaceParser` | Write a MEASUREMENT RECORD and ask the Product Owner whether to widen the stored effective-running read beyond PAN-OS 12 (`PAN_VSYS_ZONE_UNIVERSE_2026_11_15.md` section 6 "Limits") |
+| `done`, `parsed_ok` > `0` and `vsys_with_zone` > `0`, but `age_le_24h` = `0` (`age_le_7d` / `age_older` dominate) | Non-PAN-OS-12 stored documents hold zone sets, but their `collected_at` age exceeds the 24-hour freshness bound at measurement time | Record counts in a MEASUREMENT RECORD; widening alone would still leave rules `UNKNOWN` whenever configuration collection is older than 24 hours |
+| `done`, `without_stored_document` dominates or `not_parseable` / `vsys_zero_zone` / `skipped_size` / `artefact_unreadable` leave `zone_set_candidate_le_24h` = `0` | Widening the stored-document read would not supply usable zone universes (`vsys_zero_zone` is not a valid universe; `src="tpl"` and unreadable vsys entries are not exposed by `zoneNamesByVsys`) | Record counts in a MEASUREMENT RECORD; keep the PAN-OS 12 limit of `PAN_VSYS_ZONE_UNIVERSE_2026_11_15.md` section 6 unchanged unless the PO authorizes a separate collection or parser lane |
+| `compile failed` in `measure_run.sh`, terminal `fatal <exception_class>`, or `filtered_lines` > `0` | Pod jar predates `zoneNamesByVsys`, runtime DB/store read failed, or `show_safe.sh` dropped an unsafe field | Do not record as measured; verify the deployed build or open a harness fix item citing only the exception class token and `filtered_lines` count |
+
+### Never record
+
+Raw database rows, firewall hostnames, management or interface addresses, `device_id` values, serial numbers, vsys names, zone names, effective-running XML/configuration text, artefact-store keys, usernames, exception messages, bank identifiers, or any mapping from `pan_NN` ordinals back to devices.
+
+### Closes
+
+Satisfies the pre-12 zone-set measurement prerequisite of PO answer 5 (`docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` section 1 item 5 and section 5) for backlog item `policy_collection_gaps` once the PO session writes the MEASUREMENT RECORD (the widening decision itself remains a separate PO decision). Automated tests (`selftest.sh` and unit suites) and this live run are separate gates; `policy_collection_gaps` reaches `REAL_ENV_VALIDATED` only on clean live runs of both Section 1 and Section 2.
+
+---
+
+## 2. Hygiene gap engine attribution
+
+### Purpose
+
+Feeds backlog item `policy_collection_gaps` (and companion item `policy_gaps_engine_attribution_harness_run`) under Product Owner answer 5 of `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` by running `PolicyHygiene` (`sound` and `legacy` modes) and the Check Point gateway completeness classifier inside `ui2-service` over live stored snapshots to measure decided-versus-`UNKNOWN` rule counts after the D-1 gateway, V221 App-ID, and V229 zone-set fixes (`docs/design/POLICY_COLLECTION_GAPS_LIVE_MEASUREMENT_2026_11_17.md` section 5).
+
+### Preconditions
+
+- `scripts/measurement/policy_collection_gaps/` (`README.md`, `GapEngineMeasure.java`, `selftest.sh`, `measure_run.sh`, `run_in_pod.sh`, `show_safe.sh`) is present on `origin/main` at `77422e86`.
+- All three gap fixes are deployed in the running `deploy/ui2-service` pod (`PolicyHygiene.analyze`, `PolicyLegacyView.of`, `ZoneUniverse`, `pan_vsys_zone_set` from V229, and `cp_policy_object_inventory` / `cp_policy_json_chunk`); per `scripts/measurement/policy_collection_gaps/README.md`, a pod older than the three fixes lacks `ZoneUniverse` and terminates with `fatal exceptionininitializererror`.
+- Operator host configuration (`~/.config/nexus/hosta`) and cluster `kubectl -n ui2` access exist on the operator workstation as read by `measure_run.sh`.
+- No deploy rollout or `hosta_e2e.sh` run is active (`measure_run.sh` refuses to start while `hosta_e2e.sh` runs, and `/app/tmp` is lost on a pod rollout).
+- Explicit Product Owner session go-ahead before executing `measure_run.sh`.
+
+### Steps
+
+Copied verbatim from `scripts/measurement/policy_collection_gaps/README.md`:
+
+Local self-test (no pod, no database, no device; expects `show_safe	ok` and `selftest	ok`):
+
+```sh
+cd ui2 && ./gradlew :service:classes :persistence:classes :platform-core:classes :worker:classes
+bash scripts/measurement/policy_collection_gaps/selftest.sh
+```
+
+PO-session in-pod run (`measure_run.sh` stages `run_in_pod.sh` and `show_safe.sh`, runs `GapEngineMeasure` at `-Xmx2g` with a 1800 s timeout, filters `measure.out` through `show_safe.sh` into `gapeng-<tag>.tsv`, and removes `/app/tmp/gapeng-<tag>`):
+
+```sh
+MEASURE_WORK_DIR=<scratch dir> bash scripts/measurement/policy_collection_gaps/measure_run.sh <tag>
+```
+
+### Evidence to record
+
+From `gapeng-<tag>.tsv` (four tab-separated fields `kind id key value`, every field matching `[a-z0-9_.]+`):
+
+- Fleet scope lines (`scope fleet <counter> <n>`): `snapshots_total`, `snapshots_parse_failed`, `snapshots_with_failures_skipped`, `snapshots_analysed`, `snapshots_analysed_cp`, `snapshots_analysed_pan`, `snapshots_analysed_other`, `snapshots_analysis_failed`, `pan_zone_universe_known_snapshots`, `pan_zone_universe_unknown_snapshots`, `zone_set_rows`, `zone_set_rows_invalid`, `zone_sets_unreadable`, `inventory_gateway_rows`, `inventory_unreadable`, `cp_snapshots_gateway_census`, `cp_snapshots_with_gateway_objects`.
+- Top-10 rank lines (`package p01..p10 vendor <cp|pan|other>`, `package p01..p10 security_rules <n>`).
+- Engine verdict and attribution lines (`engine <label>.<sound|legacy> <counter> <n>` for `p01`..`p10`, `fleet.cp`, `fleet.pan`, `fleet.other`, `fleet.all`): `rules_evaluated`, `not_shadowed`, `redundant`, `conflict`, `unknown_total`, `gateway_own_usable`, `gateway_own_unmarked`, `gateway_blocker_usable`, `gateway_blocker_unmarked`, `gateway_any`, `app_default_ports`, `zone_list_universe_known`, `zone_list_universe_unknown`, `unknown_attributed`, `other_unknown`.
+- Closed `UNKNOWN` reason slugs (`reason <label>.<sound|legacy> <slug> <n>`).
+- Gateway completeness counts (`gateway <snapshot|inventory>.<type_slug|all> <reason|total> <n>` across slugs `simple_gateway`, `simple_cluster`, `cpmi_gateway_cluster`, `vsx_gateway`, `vsx_cluster`, `vs_cluster_netobj`, `other` and reasons `complete`, `not_in_inventory_or_stale`, `missing_or_invalid_main_ipv4`, `missing_interfaces`, `interface_missing_ip`, `cluster_missing_members`, `member_missing_ip_or_interfaces`, `empty_kept_addresses`, `incomplete_not_attributable`, `marker_present_unusable`).
+- Guard and completion lines: `filtered_lines` (expected `0`) and terminal token (`done` or `fatal	<lowercase exception class>`).
+
+### How to read the result
+
+Per `scripts/measurement/policy_collection_gaps/README.md` and `docs/design/POLICY_COLLECTION_GAPS_LIVE_MEASUREMENT_2026_11_17.md` sections 3–5:
+
+| Outcome in `gapeng-<tag>.tsv` | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| `done`, `snapshots_analysis_failed` = `0`, `filtered_lines` = `0`; `sound` and `legacy` counts present for `p01`..`p10` and `fleet.all` | Live decided (`not_shadowed`, `redundant`, `conflict`) vs `unknown_total` rule counts are known; `legacy` minus `sound` gives the `defaultPortsHold` gain, and `zone_list_universe_known` vs `zone_list_universe_unknown` gives the V229 zone-set reach | Record the post-fix MEASUREMENT RECORD restating the 22,020 baseline groups (13,945 CP gateway, 4,928 PAN App-ID default ports, 481 PAN vsys zone lists) |
+| `gateway *.all not_in_inventory_or_stale` > `0` | Snapshot gateway objects lack a matching inventory item or are older than the latest Check Point `gateways-and-servers` inventory | Re-check after a completed Check Point policy collection before attributing unmarked gateways to parser rules |
+| `gateway *.all incomplete_not_attributable` > `0` (while the four raw-only reasons `missing_interfaces`, `interface_missing_ip`, `cluster_missing_members`, `member_missing_ip_or_interfaces` read `0`, as expected on stored projections) | Stored gateway projections kept an address with `completeness = false`; stored data cannot split the four raw `CpObjectInventoryParser.gatewayAddresses` conditions because raw replies are discarded | Only if the PO wants `incomplete_not_attributable` split further, propose a field-presence parser-diagnostic read under the `AGENTS.md` ad hoc parser-diagnostics gate (never run by this harness) |
+| `zone_list_universe_unknown` dominates `zone_list_universe_known` | Most Palo Alto zone-list rules sit in snapshots whose targets have no fresh (< 24 h), non-empty `pan_vsys_zone_set` | Pair with Section 1's counts for the PO decision on widening stored effective-running reads vs keeping the PAN-OS 12 limit |
+| `fatal exceptionininitializererror`, other `fatal <exception_class>`, `snapshots_analysis_failed` > `0`, or `filtered_lines` > `0` | Running pod predates `ZoneUniverse`, a read hit `statement_timeout = '120s'` or threw, or `show_safe.sh` dropped an unsafe field | Keep the item `in_progress`; verify pod build or open a targeted fix citing only the safe counter/class tokens |
+
+### Never record
+
+Raw `policy_snapshot` or `cp_policy_object_inventory` rows, policy IDs or hashes, `device_id` values, rule UIDs or rule names, gateway/cluster/object names, IPv4/IPv6 addresses, vsys or zone names, usernames, exception messages, bank identifiers, or any mapping from `p01`..`p10` ordinals to policy names.
+
+### Closes
+
+Closes the live engine-attribution measurement of `policy_collection_gaps` (and `policy_gaps_engine_attribution_harness_run`) once the PO session records the MEASUREMENT RECORD. Automated tests (`selftest.sh` and unit suites) and this live in-pod run are separate gates; `policy_collection_gaps` reaches `REAL_ENV_VALIDATED` only on a clean run (`done`, `snapshots_analysis_failed` = `0`, `filtered_lines` = `0`) alongside Section 1.
+
+---
+
+## 3. Zone matrix scale measurement for ZM-12 and the ZM-39 heap ceiling
+
+### Purpose
+
+Feeds backlog item `zone_matrix_delivery` acceptance criteria `ZM-12` (`docs/design/ZONE_MATRIX_CONTRACT.md` sections 9 and 10.2: performance budget on the 10 largest stored policies) and `ZM-39` (sections 9 and 10.2: measured heap ceiling and interactive-policy p95 during a fleet re-evaluation on the dedicated run pool).
+
+### Preconditions
+
+- **Not on `origin/main` at `77422e86`:** `git ls-files | grep -i -E "zone.?matrix.*(scale|measure)|measurement/zone"` returns only `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md` and `ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/zonematrix/ZoneMatrixScaleMeasurementTest.java`. The in-pod harness of lane G615 (`zm-scale-measure-harness-inpod`) is **not** on `origin/main` at `77422e86`.
+- Before a PO session can execute this live measurement, the in-pod harness of lane G615 (`zm-scale-measure-harness-inpod`) must merge to `origin/main`, its README command must be verified against that commit, and the running `ui2-service` pod must include the Zone Matrix evaluation engine and step-4 run pool (`V216`, `V220`, `V228`, `V267`).
+
+### Steps
+
+- **Not verified:** in-pod scale-measurement command of lane G615 (`zm-scale-measure-harness-inpod`) — absent from `origin/main` at `77422e86` and left out rather than invented.
+- What exists on `origin/main` at `77422e86` is synthetic automated verification only, documented in `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md` and implemented in `ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/zonematrix/ZoneMatrixScaleMeasurementTest.java` (run locally in `ui2` inside `./gradlew :service:test` over 10 synthetic policies up to 16,500 rules against 500 synthetic zones and 200,000 `/30` blocks, with no pod or stored estate data).
+- Once lane G615 (`zm-scale-measure-harness-inpod`) lands on `origin/main`, update this section with its exact README self-test and in-pod commands before starting a PO-session run.
+
+### Evidence to record
+
+Once the in-pod harness is on `origin/main` and run, record only anonymous ordinals, counts, durations, and heap deltas matching `docs/design/ZONE_MATRIX_CONTRACT.md` section 9 and `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md`:
+
+- Per-policy ordinal (`1`..`10`), vendor token (`CP` / `PAN`), rule count, total evaluation `ms`, hygiene `ms`, additional JVM heap `MB`, verdict/flag counts (`VIOLATION`, `COMPLIANT`, `NOT_EVALUABLE`, `UNKNOWN`, `NOT_APPLICABLE`, `COVERED_BY_EARLIER_DENY`, `IDENTITY_IGNORED`, `TIME_IGNORED`), and count of rules hitting the per-rule work budget (`UNKNOWN`).
+- Fleet summary figures: 500-zone / 200,000-block compile `ms`, largest stored policy wall-clock `ms` and additional heap `MB`, sequential 10-policy wall-clock `ms`, empirical peak heap delta for the `ZM-39` heap ceiling, and interactive-policy p95 latency check during fleet re-evaluation.
+
+### How to read the result
+
+Per `docs/design/ZONE_MATRIX_CONTRACT.md` section 9 (`ZM-12`, `ZM-39`), `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md`, and `docs/history/backlog/zone_matrix_delivery.md`:
+
+| Outcome | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| In-pod harness absent from `origin/main` (state at `77422e86`) | Synthetic scaling is proven in `ZoneMatrixScaleMeasurementTest`, but live stored-policy scaling (`ZM-12`) and empirical heap/p95 (`ZM-39`) are unmeasured | Wait for lane G615 (`zm-scale-measure-harness-inpod`) on `origin/main`, verify its README command, and run in a subsequent PO session |
+| Largest stored policy <= `30,000 ms` and <= `512 MB` additional heap; all 10 largest stored policies <= `180,000 ms`; interactive policy p95 holds during fleet re-evaluation | `ZM-12` budget gates hold on real stored policies and empirical heap numbers are available for `ZM-39` | Attach the counts-only MEASUREMENT RECORD to close the open real-environment half of `ZM-12`, and feed the measured heap ceiling into the `ZM-39` code check (`docs/history/backlog/zone_matrix_delivery.md` notes no heap-ceiling value exists in code until measured) |
+| Largest stored policy > `30,000 ms` or > `512 MB` additional heap, 10 policies > `180,000 ms`, or interactive policy p95 degrades | Real estate object/group/NAT shapes exceed the section 9 budget or contend with interactive reads | Keep `ZM-12` / `ZM-39` `PARTIAL` and open an engine/pool/block-cap tuning lane (`ZONE_MATRIX_CONTRACT.md` section 9) |
+
+### Never record
+
+Raw `policy_snapshot` or `zone_matrix_version` rows, policy IDs or package/device-group names, rule UIDs or rule names, zone names, CIDR blocks, witness tuples or NAT addresses, usernames, or bank identifiers.
+
+### Closes
+
+Closes nothing at `77422e86` because the in-pod harness is not yet on `origin/main`. Once that harness merges and passes cleanly in the pod, the PO session may mark the open real-environment measurement half of `ZM-12` and the empirical measurement input of `ZM-39` in `zone_matrix_delivery`. Automated tests (`ZoneMatrixScaleMeasurementTest`) and the in-pod stored-policy run are separate gates; `zone_matrix_delivery` reaches `REAL_ENV_VALIDATED` only after its remaining delivery steps and a clean live run complete.
+
+---
+
+## 4. ASA saved-state relation check
+
+### Purpose
+
+Feeds the open Cisco ASA saved-state half of backlog item `verify_first_scheduled_mds_export_and_asa_saved_state` (and companion item `asa_mask_token_real_unit_check`, while the scheduled MDS export half is already recorded in `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` section 4) by checking with a read-only aggregate on `asa_config_relation` whether post-V253 nightly ASA backups confirm the `*****` startup-config mask assumption (`docs/design/OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md` section 3.3).
+
+### Preconditions
+
+- Migrations `ui2/service/src/main/resources/db/migration/V250__asa_config_relation.sql` and `ui2/service/src/main/resources/db/migration/V253__asa_config_relation_manifest_key.sql` and `AsaConfigRelation` (including the 2026-11-25 pairing-budget fix pinned by `AsaConfigRelationMaskShapesTest`) are on `origin/main` at `77422e86` and deployed live.
+- At least one post-V253 scheduled nightly Cisco ASA backup has completed (`V253__asa_config_relation_manifest_key.sql` executed `DELETE FROM asa_config_relation;` so that Myers diff alignment and manifest `artefact_id` re-keying populate fresh rows).
+- Read-only `psql` access to database `ui2` on `ui2-db-0` in an authorized Product Owner session.
+
+### Steps
+
+Numbered read-only aggregate procedure from `docs/history/backlog/verify_first_scheduled_mds_export_and_asa_saved_state.md` (2026-11-25 bullet), querying only the non-identifying columns verified in `V250__asa_config_relation.sql` (`relation`, `lines_differing`, `lines_equal_by_mask`, `derived_at`; `artefact_id` and `device_id` from V250 and `differing_keywords` from `V253__asa_config_relation_manifest_key.sql` are not selected; no dedicated shell wrapper script exists in the repository, so none is quoted):
+
+1. Count rows per `relation` value (`MATCH`, `MISMATCH`, `NOT_EVALUABLE`).
+2. Sum `lines_differing`.
+3. Sum `lines_equal_by_mask`.
+4. Count rows with `lines_equal_by_mask > 0` (and specifically `MATCH` rows with `lines_differing = 0` and `lines_equal_by_mask > 0`).
+5. Count rows with `relation = 'NOT_EVALUABLE'`.
+6. Read `max(derived_at)`.
+
+Verified read-only SQL aggregate (needs no raw text, key, hostname, or identifier column):
+
+```sql
+BEGIN TRANSACTION READ ONLY;
+SELECT
+    COUNT(*)                                                  AS rows_total,
+    COUNT(*) FILTER (WHERE relation = 'MATCH')                AS rows_match,
+    COUNT(*) FILTER (WHERE relation = 'MISMATCH')             AS rows_mismatch,
+    COUNT(*) FILTER (WHERE relation = 'NOT_EVALUABLE')        AS rows_not_evaluable,
+    COALESCE(SUM(lines_differing), 0)                         AS sum_lines_differing,
+    COALESCE(SUM(lines_equal_by_mask), 0)                     AS sum_lines_equal_by_mask,
+    COUNT(*) FILTER (WHERE lines_equal_by_mask > 0)           AS rows_equal_by_mask_gt_0,
+    COUNT(*) FILTER (WHERE relation = 'MATCH'
+                       AND lines_differing = 0
+                       AND lines_equal_by_mask > 0)           AS rows_match_zero_diff_mask_gt_0,
+    MAX(derived_at)                                           AS newest_derived_at
+FROM public.asa_config_relation;
+ROLLBACK;
+```
+
+### Evidence to record
+
+Only the aggregate counts/sums and single newest timestamp: `rows_total`, `rows_match`, `rows_mismatch`, `rows_not_evaluable`, `sum_lines_differing`, `sum_lines_equal_by_mask`, `rows_equal_by_mask_gt_0`, `rows_match_zero_diff_mask_gt_0`, and `newest_derived_at`.
+
+### How to read the result
+
+Per `docs/history/backlog/verify_first_scheduled_mds_export_and_asa_saved_state.md` (2026-11-25 bullet) and `docs/design/OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md` section 3.3:
+
+| Outcome | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| `rows_total` > `0`, `rows_not_evaluable` = `0`, and `rows_match_zero_diff_mask_gt_0` > `0` (`lines_equal_by_mask > 0` on `MATCH` rows with `lines_differing = 0`) | Real ASA startup reads printed masked secrets matching `*****`, and `AsaConfigRelation` accepted them without misreporting saved units as `UNSAVED` or `UNKNOWN` | Record the counts to confirm the V250 `*****` mask assumption on live units |
+| `rows_match` > `0`, all `MATCH` rows have `lines_equal_by_mask` = `0`, and `rows_mismatch` = `0` | Saved configurations matched without exercising a masked secret difference (no masked key present in startup reads) | Record counts; `*****` token is neither contradicted nor positively witnessed yet |
+| `MATCH` rows all have `lines_equal_by_mask` = `0` while `rows_mismatch` > `0` | Either units genuinely hold unsaved running changes, or the startup mask token/line shape differs from `*****` so masked lines count toward `lines_differing` | Compare across consecutive nights: a `MISMATCH` population whose `sum_lines_differing` is small and stable across nights points to a secret-bearing line shape missing from `AsaConfigRelationMaskShapesTest` (7 of 18 pinned shapes are marked `assumed`) and opens a parser-shape lane |
+| `rows_total` = `0` or `rows_not_evaluable` > `0` | No post-V253 nightly ASA backup has completed yet (`rows_total` = `0`), or a stored bundle lacked a valid running/startup ASA configuration (`rows_not_evaluable` > `0`) | Wait for the scheduled nightly backup if `rows_total` = `0`; if `rows_not_evaluable` > `0`, open a bounded backup/parser investigation without dumping configuration text |
+
+### Never record
+
+Per-device `asa_config_relation` rows, `artefact_id`, `device_id`, raw `running-config.txt` or `startup-config.txt` lines, masked or clear keys/secrets/hashes, hostnames, management or interface addresses, serial numbers, usernames, or bank identifiers.
+
+### Closes
+
+Together with the PO's recorded MDS export verification (`docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` section 4), a clean aggregate allows the PO session to mark `verify_first_scheduled_mds_export_and_asa_saved_state` (and `asa_mask_token_real_unit_check` when `rows_match_zero_diff_mask_gt_0` > `0`) validated. Automated tests (`AsaConfigRelationMaskShapesTest`) and this live database check are separate gates; `verify_first_scheduled_mds_export_and_asa_saved_state` reaches `REAL_ENV_VALIDATED` only on a clean live run.
+
+---
+
+## 5. aiview live counts-only leak probe
+
+### Purpose
+
+Feeds backlog item `aiview_masking_leak_audit` and engineering default 3(b) / open consequence 5 of `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` by walking the 157 permitted `role:replay_viewer` (`aiview`) GET routes in `tools/security/aiview_leak_audit/routes.json` inside the live cluster and counting salted SHA-256 token matches against raw database identity columns so the Product Owner can verify live masking and decide whether a separate masked read-model/database role is needed.
+
+### Preconditions
+
+- `tools/security/aiview_leak_audit/` (`README.md`, `probe.mjs`, `core.mjs`, `routes.json`, `export_reference.sql`, `probe-pod.yaml`, `gen_routes.py`) and the 2026-11-25 masking fixes (`ConfigurationController`, `TopologyNamePseudonymizer`, `SubnetPreservingIpMasker`, `PrivacyMaskingResponseBodyAdvice`) are on `origin/main` at `77422e86` and deployed live.
+- `kubectl -n ui2` access exists from the repository root, `cronjob/ui2-e2e` and `ui2-db-0` exist in namespace `ui2`, and `routes.json` is current (`tools/tests/test_aiview_leak_audit_routes.py`).
+- Per `tools/security/aiview_leak_audit/README.md`, **no deploy e2e or ship is running** (an overlapping run revokes the machine session).
+- Explicit Product Owner session go-ahead before launching `pod/aiview-leak-audit`.
+
+### Steps
+
+Copied verbatim from `tools/security/aiview_leak_audit/README.md`:
+
+```sh
+E2E_IMAGE=$(kubectl -n ui2 get cronjob ui2-e2e -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}')
+sed "s#SET_E2E_IMAGE#$E2E_IMAGE#" tools/security/aiview_leak_audit/probe-pod.yaml | kubectl apply -f -
+kubectl -n ui2 wait --for=condition=Ready pod/aiview-leak-audit --timeout=180s
+
+# 1. code (not sensitive) into the pod
+tar -C tools/security/aiview_leak_audit -cf - probe.mjs core.mjs routes.json | kubectl -n ui2 exec -i aiview-leak-audit -- tar -C /work -xf -
+
+# 2. random salt, generated in the pod
+SALT=$(kubectl -n ui2 exec aiview-leak-audit -- sh -c 'head -c 16 /dev/urandom | od -An -tx1 | tr -d " \n"')
+
+# 3. reference hashes, streamed from the database pod into the probe pod (never written to this Mac)
+kubectl -n ui2 exec -i ui2-db-0 -- sh -c \
+  'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -At -v salt='"$SALT"' -f -' \
+  < tools/security/aiview_leak_audit/export_reference.sql \
+  | kubectl -n ui2 exec -i aiview-leak-audit -- sh -c 'cat > /work/ref.tsv'
+
+# 4. the audit (about 320 requests; table to stdout, add --json for machine-readable)
+kubectl -n ui2 exec aiview-leak-audit -- node /work/probe.mjs --ref /work/ref.tsv --salt "$SALT" --json > leak-audit-result.json
+
+# 5. clean up
+kubectl -n ui2 delete pod aiview-leak-audit
+```
+
+### Evidence to record
+
+From `leak-audit-result.json`, counts, route templates (`synthetic-ref` placeholders), and value-class names only — **rule: any surviving match is reported strictly as its value class (`HOST`, `ADDR`, `IPV4`, `SERIAL`, `CLUSTER`, `USER`, `NAME_WORD`) plus route template and integer count, never as a value, hash, or payload excerpt**:
+
+- Reference coverage summary: `reference.entries_by_category` (counts per class `HOST`, `ADDR`, `IPV4`, `SERIAL`, `CLUSTER`, `USER`, `NAME_WORD`), `reference.source_columns` (`category`, `column`, `rows`), `reference.request_budget`, `reference.requests_sent`.
+- Fleet totals: `totals.requests`, `totals.ok`, `totals.bytes_scanned`, `totals.routes_with_matches`, and `totals.matches` per value class (`HOST`, `ADDR`, `IPV4`, `SERIAL`, `CLUSTER`, `USER`, `NAME_WORD`).
+- Per-route template entries (`routes[<route_template>]`): `requests`, `ok`, `client_error`, `server_error`, `other`, `skipped`, `truncated`, `bytes_scanned`, `header_matches`, and `matches` per value class.
+- Uncovered route lists/counts: `routes_without_ok_response` and `routes_not_probed`, plus cleanup confirmation (`pod_deleted=true`).
+
+### How to read the result
+
+Per `tools/security/aiview_leak_audit/README.md` ("Reading the result" and "Covered and not covered") and `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` sections 3(b) and 5:
+
+| Outcome in `leak-audit-result.json` | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| `totals.matches` = `0` for `HOST`, `ADDR`, `IPV4`, `SERIAL`, and `0` (or verified deliberate public labels only) for `USER` and `CLUSTER`, with non-zero `reference.entries_by_category` | Zero raw database identities from `export_reference.sql` survived masking across the probed live `aiview` GET routes and headers | Record the counts-only report and put engineering default 3(b) (`aiview_masked_readonly_admin`: whether to build or defer a separate masked read-model/DB role) to the Product Owner |
+| Non-zero `totals.matches` in `HOST`, `ADDR`, `IPV4`, or `SERIAL`, or non-public `USER` / `CLUSTER` | Raw identity leak on the reported `routes[<route_template>]` (body or `header_matches`) | Report **route template + value class + count only** (never the value); re-run the route under `aiview` to identify the unmasked field name (never printing its value), ship a projection fix lane, and re-probe |
+| Non-zero `NAME_WORD` only (`HOST`, `ADDR`, `IPV4`, `SERIAL` = `0`) | Low-confidence match: 4+ character words from user or cluster names can collide with ordinary words (`README.md`) | Use as candidate routes to inspect by field name, not as an automatic leak failure |
+| Non-empty `routes_without_ok_response` or `routes_not_probed`, or a category with `0` entries in `reference.entries_by_category` | Those routes/categories were not exercised with a 2xx payload or had no reference data — **not covered, not clean** (`README.md`) | Record uncovered route templates/categories explicitly alongside clean counts, and keep separate visibility on documented out-of-scope classes (e.g. non-GET routes and the `UNCATALOGUED_PRINCIPAL` free-text class pinned in `AiviewFailoverIncidentsSweepTest`) |
+
+### Never record
+
+Any surviving raw value, `/work/ref.tsv` hashes, `$SALT`, machine tokens (`T`, `NEXUS_PROBE_MACHINE_TOKEN`, `NEXUS_E2E_MACHINE_TOKEN`), `ui2_session` cookies, resolved request paths carrying real UUIDs or refs, response body fragments or headers, hostnames, IPv4/IPv6 addresses, serial numbers, cluster references, usernames, or bank identifiers.
+
+### Closes
+
+Closes the live raw-versus-masked comparison run of `aiview_masking_leak_audit` and provides the input required for the Product Owner decision on engineering default 3(b) (`aiview_masked_readonly_admin`). Automated synthetic sweeps (`AiviewRawVersusMaskedSweepTest` and rounds 2–7) and this live cluster probe are separate gates; `aiview_masking_leak_audit` reaches `REAL_ENV_VALIDATED` only on a clean live run (`HOST`, `ADDR`, `IPV4`, `SERIAL` matches = `0` and no unresolved `USER`/`CLUSTER` leak) together with the PO's read-model disposition.
+
+---
+
+## Not on this sheet
+
+- **Script Execution real-environment validation (`script_execution_module`):** governed by PO answer 6 (`docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md`) and covered by its own standalone checklist in `docs/design/SCRIPT_EXECUTION_REAL_ENV_VALIDATION_CHECKLIST_2026_11_23.md`.
+- **Anything that issues a network-device command:** excluded; any new, changed, or ad hoc parser-diagnostic device read (for example splitting Check Point `incomplete_not_attributable` gateway objects on raw replies, `docs/design/FORTIGATE_POLICY_LOOKUP_VALIDATION_READ_PROPOSAL_2026_11_23.md`, or `docs/design/MC_DEVICE_HEALTH_READ_PROPOSAL_2026_11_24.md`) requires the network-device command gate and literal Product Owner approval (`AGENTS.md` "Network action taxonomy").
+- **CyberArk and enterprise platform items (`cyberark_archive_key_custody`, `recovery_offhost_key_custody`, `enterprise_phase0_logging_monitoring_scans`):** on hold awaiting external/enterprise prerequisites rather than in-pod counts-only runs.
+- **Product Owner decisions and councils (not runs):** convening `recertification_council` (`docs/design/RULE_RECERTIFICATION_COUNCIL_PACKET_2026_11_25.md`, PO answer 4), deciding whether to widen pre-12 PAN zone-set reads after Section 1, deciding the Zone Matrix ASA/FortiGate amendment (`docs/design/ZONE_MATRIX_ASA_FORTIGATE_AMENDMENT_PROPOSAL_2026_11_25.md`, default 3(a)), and deciding the `aiview` masked read-model/DB role after Section 5 (default 3(b)).
