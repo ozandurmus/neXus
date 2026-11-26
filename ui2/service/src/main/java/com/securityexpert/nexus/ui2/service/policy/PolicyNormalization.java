@@ -864,11 +864,20 @@ final class PolicyNormalization {
             }
             return union(parts);
         }
+        private static final Set<String> IDENTITY_OBJECT_TYPES = Set.of("access-role", "dynamic-user-group");
+        private static final Set<String> GATEWAY_OBJECT_TYPES = Set.of("gateway", "simple-gateway", "simple-cluster",
+            "checkpoint-host", "cluster-member");
+        private static final Set<String> DYNAMIC_OR_UNSUPPORTED_OBJECT_TYPES = Set.of("dns-domain", "updatable-object",
+            "dynamic-object", "security-zone", "wildcard",
+            "gateway", "simple-gateway", "simple-cluster", "checkpoint-host", "cluster-member");
         Selector object(String id, String family, Set<String> path) {
             budget.spend(); String key = family + ":" + id;
             if (memo.containsKey(key)) return memo.get(key);
             var o = objects.get(id);
-            if (o == null || !o.status().equals("RESOLVED")) throw new Unknown("unresolved object");
+            if (o == null) throw new Unknown("unresolved object");
+            if (IDENTITY_OBJECT_TYPES.contains(o.type())) throw new Unknown(PolicyHygiene.ACCESS_ROLE_CONSTRAINT);
+            if (DYNAMIC_OR_UNSUPPORTED_OBJECT_TYPES.contains(o.type())) throw new Unknown("dynamic or unsupported object type");
+            if (!o.status().equals("RESOLVED")) throw new Unknown("unresolved object");
             if (!path.add(id) || path.size() > 32) throw new Unknown("group cycle or depth limit");
             Selector result;
             if (o.type().equals("any")) result = new Selector(true, Map.of());
@@ -972,7 +981,7 @@ final class PolicyNormalization {
         private Selector boundObject(String id, Set<String> path, boolean[] limited) {
             budget.spend();
             var o = objects.get(id);
-            if (o != null && o.type().equals("gateway") && o.status().equals("RESOLVED")) { limited[0] = true; return gatewayBound(id, o); }
+            if (o != null && GATEWAY_OBJECT_TYPES.contains(o.type()) && o.status().equals("RESOLVED")) { limited[0] = true; return gatewayBound(id, o); }
             if (o == null || !o.status().equals("RESOLVED") || !Set.of("group", "address-group").contains(o.type())) return object(id, "address", new HashSet<>());
             if (o.members().isEmpty() || !o.values().isEmpty()) throw new Unknown("empty or dynamic group");
             if (!path.add(id) || path.size() > 32) throw new Unknown("group cycle or depth limit");
@@ -992,11 +1001,14 @@ final class PolicyNormalization {
         Selector gatewayBound(String id, PolicyObject o) {
             budget.spend(); String key = "gateway-addresses:" + id;
             if (memo.containsKey(key)) return memo.get(key);
-            if (!o.members().isEmpty() || !o.values().contains("gateway-addresses: complete")) throw new Unknown("dynamic or unsupported object type");
+            if (!o.members().isEmpty() || !o.values().contains("gateway-addresses: complete")
+                    || o.values().stream().anyMatch(v -> v.startsWith("gateway-addresses: ") && !v.equals("gateway-addresses: complete")))
+                throw new Unknown("dynamic or unsupported object type");
             List<Range> ranges = new ArrayList<>();
             for (String value : o.values()) {
                 budget.spend();
                 if (!value.startsWith("gateway-ipv4: ") && !value.startsWith("ipv4-address: ")) continue;
+                if (value.equals("ipv4-address: ")) continue;
                 try {
                     var r = PolicyRuleQuery.interval(value.substring(value.indexOf(": ") + 2));
                     if (r[0] != r[1]) throw new IllegalArgumentException("not one address");
@@ -1164,18 +1176,23 @@ final class PolicyNormalization {
         }
         Selector service(PolicyObject o) {
             var fields = fields(o); Map<String, List<Range>> ranges = new TreeMap<>();
+            boolean panSourcePorts = extended && panSnapshot != null;
+            for (String key : fields.keySet()) {
+                if (key.equals("source-port") || (!panSourcePorts && SOURCE_PORT_FIELDS.contains(key)))
+                    throw new Unknown("unsupported service constraint");
+            }
             String protocol = fields.get("protocol");
             if (extended && ("icmp".equals(protocol) || "icmp6".equals(protocol))) return icmp(protocol, fields);
             for (var entry : fields.entrySet()) {
                 String key = entry.getKey(); if (key.equals("protocol")) continue;
-                if (extended && SOURCE_PORT_FIELDS.contains(key)) continue;
+                if (panSourcePorts && SOURCE_PORT_FIELDS.contains(key)) continue;
                 String proto = key.equals("port") ? protocol : key.equals("protocol/tcp/port") ? "tcp" : key.equals("protocol/udp/port") ? "udp" : null;
                 if (proto == null || !Set.of("tcp", "udp").contains(proto)) throw new Unknown("unsupported service constraint");
                 for (String port : entry.getValue().split(",", -1)) { budget.spend(); ranges.computeIfAbsent(proto, p -> new ArrayList<>()).add(port(port)); }
             }
-            // Palo Alto source port (extended only): the service's destination ports under a source-port family.
+            // Palo Alto source port (extended PAN shadowing only): the service's destination ports under a source-port family.
             for (String proto : List.of("tcp", "udp")) {
-                String sources = extended ? fields.get("protocol/" + proto + "/source-port") : null;
+                String sources = panSourcePorts ? fields.get("protocol/" + proto + "/source-port") : null;
                 if (sources == null) continue;
                 var destinations = ranges.remove(proto);
                 if (destinations == null) throw new Unknown("unsupported service constraint");

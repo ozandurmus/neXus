@@ -55,7 +55,7 @@ class PolicyHygienePartialPriorTest {
     @Test void accessRolePriorWithDisjointDestinationReleasesTheLaterRule() {
         for (String role : List.of("role", "role-unsupported")) {
             var snapshot = cp(cp("r1", 1, "Accept", role, "net", "port"), cp("r2", 2, "Accept", "any", "other-host", "port"));
-            assertUnknown(snapshot, "r1", role.equals("role") ? "dynamic or unsupported object type" : "unresolved object");
+            assertUnknown(snapshot, "r1", PolicyHygiene.ACCESS_ROLE_CONSTRAINT);
             assertClean(snapshot, "r2");
             // A disjoint service (TCP 443 against UDP 53) proves it as well.
             assertClean(cp(cp("r1", 1, "Accept", role, "any", "port"), cp("r2", 2, "Accept", "any", "any", "dns")), "r2");
@@ -188,7 +188,7 @@ class PolicyHygienePartialPriorTest {
         var tight = PolicyHygiene.analyze(small, 90, NOW, PolicyHygiene.TOTAL_WORK, 1500, small.objects());
         assertFalse(tight.budgetReached());
         assertEquals(UNSUPPORTED, tight.rules().get("b0").shadowReason());
-        for (int i = 0; i < n; i++) assertEquals("dynamic or unsupported object type", tight.rules().get("a" + i).shadowReason(), "a" + i);
+        for (int i = 0; i < n; i++) assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, tight.rules().get("a" + i).shadowReason(), "a" + i);
         assertClean(small, "b0");
         System.out.println("PARTIAL PRIOR SCALE " + n + " partial priors x " + n + " later rules: " + millis + " ms");
     }

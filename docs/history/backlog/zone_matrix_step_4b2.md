@@ -11,3 +11,4 @@ Heap ceiling of contract 5.1 not enforced, needs the in-pod measurement; V267 ne
 
 2026-11-25: On-demand durable run reachable (contract 5.1 third trigger): `POST /api/v2/zone-matrix/runs` (existing action `zone_matrix_evaluate`, 202 with `run_id`, `already_running`, `state`; ZM-40 byte limit applies) and CLI `zone-matrix-run <policyId> [--version <versionId>]`; no UI button is added, `POST /api/v2/zone-matrix/evaluate` is unchanged
 2026-11-25: Matrix tab shows per-cell open-violation counts on the active version and opens a pair's findings; Violations gets source/destination zone filters and a per-cell counts panel; Versions shows resolved-by-matrix-version counts (frontend); evidence-report wiring remains.
+- 2026-11-26: Coverage strip on every tab (contract 7.1)

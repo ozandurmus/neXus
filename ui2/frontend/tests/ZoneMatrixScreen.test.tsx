@@ -137,7 +137,7 @@ describe("Zone matrix: Zones tab", () => {
     expect(within(app).getByText("about 7.92 x 10^28")).toBeInTheDocument();
     expect(within(table).getByText("Z-DB")).toBeInTheDocument();
     expect(screen.getByTestId("unassigned-space")).toHaveTextContent("IPv4 4,294,966,784");
-    // Blocks are an audited read: never fetched by default. The Matrix tab of the active version reads the stored summary once.
+    // Blocks are an audited read: never fetched by default. The screen starts one stored-summary read once the zones load (for the coverage strip on every tab).
     expect(gets(sent)).toEqual(["/api/v2/zone-matrix/draft?blocks=0", "/api/v2/zone-matrix/versions/v-active?blocks=0", "/api/v2/zone-matrix/versions", "/api/v2/zone-matrix/summary"]);
     expect(screen.queryByText("192.0.2.0/24")).not.toBeInTheDocument();
     // can.edit false, can.view_blocks false: no editor, no blocks toggle, no lookup.
@@ -357,21 +357,25 @@ describe("Zone matrix: Versions tab", () => {
 describe("Zone matrix: states and refusals", () => {
   it("shows a read error with Retry and reads again", async () => {
     let failing = true;
-    serve(world({ can: READ_ONLY, hasDraft: false, override: (method, url) => (failing && method === "GET" && url.startsWith("/api/v2/zone-matrix/draft")
+    const sent = serve(world({ can: READ_ONLY, hasDraft: false, override: (method, url) => (failing && method === "GET" && url.startsWith("/api/v2/zone-matrix/draft")
       ? { status: 500, body: { error: "INTERNAL", reason: "the zones could not be loaded" } } : undefined) }));
     render(<ZoneMatrixScreen />);
     expect(await screen.findByText("The zones could not be read")).toBeInTheDocument();
     expect(screen.getByText("The zones could not be loaded.")).toBeInTheDocument();
+    expect(gets(sent)).not.toContain("/api/v2/zone-matrix/summary");
     failing = false;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await openZones();
     expect(await screen.findByRole("table", { name: "Zones" })).toBeInTheDocument();
+    await waitFor(() => expect(gets(sent)).toContain("/api/v2/zone-matrix/summary"));
   });
 
   it("says that no version has been published, and offers the first zone only to an editor", async () => {
-    serve(world({ noActive: true, hasDraft: false }));
+    const sent = serve(world({ noActive: true, hasDraft: false }));
     render(<ZoneMatrixScreen />);
     expect(await screen.findByText("No version has been published")).toBeInTheDocument();
+    await waitFor(() => expect(gets(sent)).toContain("/api/v2/zone-matrix/summary"));
+    expect(screen.getByTestId("zone-matrix-coverage-strip")).toHaveTextContent(/coverage not known/i);
     await openZones();
     expect(screen.getByRole("button", { name: "Add zone" })).toBeInTheDocument();
     await openVersions();

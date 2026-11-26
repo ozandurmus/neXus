@@ -94,4 +94,51 @@ class PolicyHygieneGatewayBoundTest {
         objects.put("far", object("far", "host", "ipv4-address: 203.0.113.9"));
         return new PolicySnapshot(snapshot.metadata(), snapshot.sections(), objects);
     }
+
+    @Test void emptyMainIpv4InDictionaryStillBoundsWhenGatewayAddressesAreComplete() {
+        Map<String, PolicyObject> objects = new HashMap<>(objects());
+        objects.put("gw-empty-main", gateway("gw-empty-main", "ipv4-address: ", "gateway-ipv4: 192.0.2.1", "gateway-addresses: complete"));
+        objects.put("gw-conflicting-marker", gateway("gw-conflicting-marker", "ipv4-address: 192.0.2.1", "gateway-ipv4: 192.0.2.1",
+            "gateway-addresses: complete", "gateway-addresses: incomplete"));
+        objects.put("far", object("far", "host", "ipv4-address: 203.0.113.9"));
+        var okBase = sections("CP", cpSection("s1", null, rule("r1", 1, "any", "gw-empty-main"), rule("r2", 2, "any", "far")));
+        assertEquals("NOT_SHADOWED", assessment(new PolicySnapshot(okBase.metadata(), okBase.sections(), objects), "r2").shadowStatus());
+        var badBase = sections("CP", cpSection("s1", null, rule("r1", 1, "any", "gw-conflicting-marker"), rule("r2", 2, "any", "far")));
+        assertEquals("UNKNOWN", assessment(new PolicySnapshot(badBase.metadata(), badBase.sections(), objects), "r2").shadowStatus());
+    }
+
+    @Test void gatewayBoundIncreasesDecidedByPassOverWithoutEverProducingProvenCover() {
+        Map<String, PolicyObject> objects = new HashMap<>(objects());
+        objects.put("gw-h1", object("gw-h1", "host", "ipv4-address: 192.0.2.1"));
+        objects.put("gw-pair", object("gw-pair", "address-range", "ip-range: 192.0.2.1-192.0.2.2"));
+        objects.put("far", object("far", "host", "ipv4-address: 203.0.113.9"));
+
+        var completeBase = sections("CP", cpSection("s1", null,
+            rule("r1", 1, "any", "gw"),
+            PolicyHygienePartialPriorTest.cp("r2", 2, "Drop", "any", "gw-host", "port"),
+            rule("r3", 3, "any", "gw-h1"),
+            rule("r4", 4, "any", "gw-pair"),
+            rule("r5", 5, "any", "far")));
+        var completeSnap = new PolicySnapshot(completeBase.metadata(), completeBase.sections(), objects);
+
+        var incompleteBase = sections("CP", cpSection("s1", null,
+            rule("r1", 1, "any", "gw-incomplete"),
+            PolicyHygienePartialPriorTest.cp("r2", 2, "Drop", "any", "gw-host", "port"),
+            rule("r3", 3, "any", "gw-h1"),
+            rule("r4", 4, "any", "gw-pair"),
+            rule("r5", 5, "any", "far")));
+        var incompleteSnap = new PolicySnapshot(incompleteBase.metadata(), incompleteBase.sections(), objects);
+
+        var incompleteReport = PolicyInsights.analyze(incompleteSnap, PolicyHygiene.analyze(incompleteSnap, 90, NOW, PolicyHygiene.TOTAL_WORK), null, Map.of(), 90);
+        var completeReport = PolicyInsights.analyze(completeSnap, PolicyHygiene.analyze(completeSnap, 90, NOW, PolicyHygiene.TOTAL_WORK), null, Map.of(), 90);
+
+        // Complete D-1 addresses let disjoint r5 pass over r1, raising decided from 0 to 1, while partial prior r1 never
+        // covers r2 (I2), never union-covers r4 with r3 (I3), and never partly shadows r4 (I4).
+        assertEquals(0, incompleteReport.counts().decided());
+        assertEquals(1, completeReport.counts().decided());
+        for (String type : List.of("I1", "I2", "I3"))
+            assertTrue(PolicyInsightsTest.of(completeReport, type).isEmpty(), "partial prior gw must never produce PROVEN " + type);
+        for (var i4 : PolicyInsightsTest.of(completeReport, "I4"))
+            assertFalse(i4.rules().stream().anyMatch(ref -> ref.ruleId().equals("r1")), i4.toString());
+    }
 }

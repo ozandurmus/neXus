@@ -41,17 +41,23 @@ final class CpObjectInventoryParser {
      */
     static CpObjectInventory.GatewayAddresses gatewayAddresses(JsonNode node, String type) {
         Set<String> kept = new LinkedHashSet<>();
-        boolean complete = address(node.path("ipv4-address"), kept) && interfaces(node.path("interfaces"), kept, true);
-        JsonNode members = node.path("cluster-members");
-        if (CLUSTER_TYPES.contains(type) && !(members.isArray() && members.size() > 0)) complete = false;
-        if (!members.isMissingNode() && !members.isNull()) {
-            if (!members.isArray()) complete = false;
+        JsonNode interfaces = objectList(node.path("interfaces"));
+        boolean complete = address(node.path("ipv4-address"), kept) && interfaces(interfaces, kept, true);
+        JsonNode rawMembers = node.path("cluster-members");
+        JsonNode members = objectList(rawMembers);
+        if (CLUSTER_TYPES.contains(type) && !(members != null && members.size() > 0)) complete = false;
+        if (!rawMembers.isMissingNode() && !rawMembers.isNull()) {
+            if (members == null) complete = false;
             else for (JsonNode member : members) {
                 if (!member.isObject()) { complete = false; continue; }
                 boolean ip = address(member.path("ip-address"), kept) & address(member.path("ipv4-address"), kept);
-                boolean any = member.path("ip-address").isTextual() || member.path("ipv4-address").isTextual();
-                boolean listed = member.path("interfaces").isArray() && member.path("interfaces").size() > 0;
-                if (!ip || !any && !listed || listed && !interfaces(member.path("interfaces"), kept, true)) complete = false;
+                boolean any = hasAddressText(member.path("ip-address")) || hasAddressText(member.path("ipv4-address"));
+                JsonNode rawMemberIfaces = member.path("interfaces");
+                JsonNode memberIfaces = objectList(rawMemberIfaces);
+                boolean hasMemberIfacesField = !rawMemberIfaces.isMissingNode() && !rawMemberIfaces.isNull();
+                boolean listed = memberIfaces != null && memberIfaces.size() > 0;
+                if (!ip || (hasMemberIfacesField && memberIfaces == null) || (!any && !listed)
+                        || (listed && !interfaces(memberIfaces, kept, true))) complete = false;
             }
         }
         if (kept.isEmpty()) complete = false;
@@ -59,19 +65,37 @@ final class CpObjectInventoryParser {
     }
     /** Classic ClusterXL cluster objects, which must list their members for a complete address set. */
     static final Set<String> CLUSTER_TYPES = Set.of("simple-cluster", "CpmiGatewayCluster");
-    /** A missing field is fine; a present one must be a valid IPv4 address text. */
+    /**
+     * Unwraps either a direct JSON array or an un-truncated Check Point sub-list wrapper {@code {"objects":[...],"total":N}}.
+     * If {@code total} disagrees with {@code objects.size()} (or {@code from}/{@code to} appear without {@code total}), returns null so D-1 fails closed.
+     */
+    private static JsonNode objectList(JsonNode node) {
+        if (node.isArray()) return node;
+        if (!node.isObject() || !node.path("objects").isArray()) return null;
+        JsonNode objects = node.path("objects"), total = node.path("total");
+        if (!total.isMissingNode() && !total.isNull())
+            return total.isIntegralNumber() && total.canConvertToInt() && total.intValue() == objects.size() ? objects : null;
+        return node.has("from") || node.has("to") ? null : objects;
+    }
+    /** A missing or empty-string field is absent; a non-empty present value must be a valid IPv4 address text. */
     private static boolean address(JsonNode value, Set<String> kept) {
-        if (value.isMissingNode() || value.isNull()) return true;
+        if (value.isMissingNode() || value.isNull() || (value.isTextual() && value.textValue().isEmpty())) return true;
         if (!value.isTextual() || !validIpv4(value.textValue())) return false;
         kept.add(value.textValue());
         return true;
     }
+    private static boolean hasAddressText(JsonNode value) {
+        return value.isTextual() && !value.textValue().isEmpty();
+    }
+    private static boolean validIpv6Text(JsonNode value) {
+        return value.isTextual() && !value.textValue().isBlank() && value.textValue().indexOf(':') >= 0;
+    }
     private static boolean interfaces(JsonNode list, Set<String> kept, boolean required) {
-        if (!list.isArray() || list.size() == 0) return !required;
+        if (list == null || !list.isArray() || list.size() == 0) return !required;
         boolean complete = true;
         for (JsonNode iface : list) {
             if (!iface.isObject()) { complete = false; continue; }
-            boolean v4 = iface.path("ipv4-address").isTextual(), v6 = iface.path("ipv6-address").isTextual();
+            boolean v4 = hasAddressText(iface.path("ipv4-address")), v6 = validIpv6Text(iface.path("ipv6-address"));
             if (!address(iface.path("ipv4-address"), kept) || !v4 && !v6) complete = false;
         }
         return complete;

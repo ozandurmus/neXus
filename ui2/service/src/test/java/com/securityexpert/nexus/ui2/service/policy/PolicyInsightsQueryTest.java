@@ -75,4 +75,21 @@ class PolicyInsightsQueryTest {
         assertEquals(2, detail.path("ruleObjects").size());
         assertFalse(detail.toString().contains("OBJ-TEST-"), "object names in the compared cells are pseudonymised for aiview");
     }
+    @Test void theAiviewProjectionKeepsNotReadableAndWaitingCountsUnmangled() {
+        var objects = new HashMap<>(cpObjects());
+        objects.put("role-dyn", new com.securityexpert.nexus.ui2.policy.PolicySnapshot.PolicyObject(
+            "role-dyn", "OBJ-ROLE-01", "access-role", List.of(), List.of(), "DYNAMIC"));
+        var base = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "role-dyn", "net"), cp("r2", 2, "Drop", "host", "net")));
+        var snapshot = new com.securityexpert.nexus.ui2.policy.PolicySnapshot(base.metadata(), base.sections(), objects);
+        var counts = masked(query.insights(snapshot, 0, "", "", 90).body()).path("counts");
+        assertEquals(1, counts.path("notReadable").asInt());
+        assertEquals(1, counts.path("waiting").asInt());
+        assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, counts.path("notDecidable").get(0).path("shadowReason").asText());
+        var waiting = counts.path("waitingRules").get(0);
+        assertEquals("r1", waiting.path("blockingRuleId").asText());
+        assertEquals(1, waiting.path("blockingRuleNumber").asInt());
+        assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, waiting.path("shadowReason").asText());
+        assertEquals("LOGS", waiting.path("reasonClass").asText());
+        assertEquals(1, waiting.path("rules").asInt());
+    }
 }

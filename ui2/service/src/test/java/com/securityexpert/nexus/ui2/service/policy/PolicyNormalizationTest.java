@@ -144,4 +144,84 @@ class PolicyNormalizationTest {
         assertEquals("unsupported rulebase", match.problem());
         assertTrue(match.selectors().isEmpty());
     }
+
+    // ---- object type vs status & source-port fail-closed soundness ------------------------------------------------------
+
+    @Test
+    void objectTypeCheckedBeforeStatusDistinguishesIdentityDynamicAndMissingObjects() {
+        assertFalse(CutoverAssessment.NARROWING_REASONS.contains(PolicyHygiene.ACCESS_ROLE_CONSTRAINT),
+            "CutoverAssessment must not treat an access-role selector as a narrowing extra");
+        assertTrue(PolicyHygiene.REASONS.contains(PolicyHygiene.ACCESS_ROLE_CONSTRAINT));
+
+        Map<String, PolicyObject> objects = new LinkedHashMap<>(OBJECTS);
+        for (String status : List.of("DYNAMIC", "RESOLVED", "UNSUPPORTED"))
+            objects.put("role-" + status, new PolicyObject("role-" + status, "OBJ-ROLE-" + status, "access-role", List.of(), List.of(), status));
+        objects.put("dug", new PolicyObject("dug", "OBJ-DUG-01", "dynamic-user-group", List.of(), List.of(), "DYNAMIC"));
+        objects.put("dns", new PolicyObject("dns", "OBJ-DNS-01", "dns-domain", List.of(), List.of(), "DYNAMIC"));
+        objects.put("upd", new PolicyObject("upd", "OBJ-UPD-01", "updatable-object", List.of(), List.of(), "DYNAMIC"));
+        objects.put("dyn", new PolicyObject("dyn", "OBJ-DYN-01", "dynamic-object", List.of(), List.of(), "DYNAMIC"));
+        objects.put("zone", new PolicyObject("zone", "OBJ-ZONE-01", "security-zone", List.of(), List.of(), "DYNAMIC"));
+        objects.put("wild", new PolicyObject("wild", "OBJ-WILD-01", "wildcard", List.of(), List.of(), "UNSUPPORTED"));
+        objects.put("host-unres", new PolicyObject("host-unres", "OBJ-HOST-UNRES", "host", List.of(), List.of(), "UNRESOLVED"));
+        objects.put("unres", new PolicyObject("unres", "OBJ-UNRES-01", "unresolved", List.of(), List.of(), "UNRESOLVED"));
+
+        var resolver = new PolicyNormalization.Resolver(objects, budget());
+        for (String id : List.of("role-DYNAMIC", "role-RESOLVED", "role-UNSUPPORTED", "dug")) {
+            var ex = assertThrows(PolicyNormalization.Unknown.class, () -> resolver.cell(positive(id), "address"), id);
+            assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, ex.getMessage(), id);
+        }
+        for (String id : List.of("dns", "upd", "dyn", "zone", "wild")) {
+            var ex = assertThrows(PolicyNormalization.Unknown.class, () -> resolver.cell(positive(id), "address"), id);
+            assertEquals("dynamic or unsupported object type", ex.getMessage(), id);
+        }
+        for (String id : List.of("missing-id", "host-unres", "unres")) {
+            var ex = assertThrows(PolicyNormalization.Unknown.class, () -> resolver.cell(positive(id), "address"), id);
+            assertEquals("unresolved object", ex.getMessage(), id);
+        }
+    }
+
+    @Test
+    void serviceWithSourcePortRestrictionFailsClosedAndNeverProducesFalseProven() {
+        Map<String, PolicyObject> objects = new LinkedHashMap<>(PolicyHygienePartialPriorTest.partialObjects());
+        objects.put("svc-cp-src", PolicyHygieneTest.object("svc-cp-src", "service-tcp", "protocol: tcp", "port: 443", "source-port: 1024-65535"));
+        objects.put("svc-cp-all", PolicyHygieneTest.object("svc-cp-all", "service-tcp", "protocol: tcp", "port: 443", "source-port: 0-65535"));
+        objects.put("svc-cp-cmp", PolicyHygieneTest.object("svc-cp-cmp", "service-tcp", "protocol: tcp", "port: >1023", "source-port: >1023"));
+        objects.put("svc-cp-empty", PolicyHygieneTest.object("svc-cp-empty", "service-tcp", "protocol: tcp", "port: 443", "source-port: "));
+        objects.put("svc-pan-shape-on-cp", PolicyHygieneTest.object("svc-pan-shape-on-cp", "service",
+            "protocol/tcp/port: 443", "protocol/tcp/source-port: 1024-65535"));
+        objects.put("half-a", PolicyHygieneTest.object("half-a", "network", "ip-netmask: 192.0.2.0/25"));
+        objects.put("half-b", PolicyHygieneTest.object("half-b", "network", "ip-netmask: 192.0.2.128/25"));
+
+        var base = PolicyHygieneTest.sections("CP", PolicyHygieneTest.cpSection("s1", null,
+            PolicyHygienePartialPriorTest.cp("r1", 1, "Accept", "half-a", "net", "svc-cp-src"),
+            PolicyHygienePartialPriorTest.cp("r2", 2, "Drop", "host", "net", "port"),
+            PolicyHygienePartialPriorTest.cp("r3", 3, "Accept", "half-b", "net", "port"),
+            PolicyHygienePartialPriorTest.cp("r4", 4, "Accept", "net", "net", "port"),
+            PolicyHygienePartialPriorTest.cp("r5", 5, "Accept", "any", "other-host", "port")));
+        var snapshot = new PolicySnapshot(base.metadata(), base.sections(), objects);
+
+        var resolver = PolicyNormalization.Resolver.shadowing(snapshot, budget());
+        for (String svc : List.of("svc-cp-src", "svc-cp-all", "svc-cp-cmp", "svc-cp-empty", "svc-pan-shape-on-cp")) {
+            var ex = assertThrows(PolicyNormalization.Unknown.class, () -> resolver.cell(positive(svc), "service"), svc);
+            assertEquals("unsupported service constraint", ex.getMessage(), svc);
+        }
+
+        // Were r1 widened to source ports 0..65535, r1 would shadow r2 (I2 CONFLICT), r1+r3 would union-cover r4 (I3),
+        // and r1 would partly shadow same-action r4 (I4). Failing closed prevents every false PROVEN while r4 (wider
+        // source than half-a) and r5 (disjoint destination 198.51.100.7) are never covered by r1.
+        var hygiene = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
+        assertEquals("unsupported service constraint", hygiene.rules().get("r1").shadowReason());
+        assertEquals("UNKNOWN", hygiene.rules().get("r2").shadowStatus());
+        assertNull(hygiene.rules().get("r2").coveringRuleId());
+        assertEquals("NOT_SHADOWED", hygiene.rules().get("r4").shadowStatus());
+        assertNull(hygiene.rules().get("r4").coveringRuleId());
+        assertEquals("NOT_SHADOWED", hygiene.rules().get("r5").shadowStatus());
+
+        var report = PolicyInsights.analyze(snapshot, hygiene, null, Map.of(), 90);
+        for (String type : List.of("I1", "I2", "I3"))
+            assertTrue(PolicyInsightsTest.of(report, type).isEmpty(), "no PROVEN " + type + " may rest on a source-port service");
+        // r4 is partly shadowed only by r3 (half-b), never by r1.
+        for (var i4 : PolicyInsightsTest.of(report, "I4"))
+            assertFalse(i4.rules().stream().anyMatch(ref -> ref.ruleId().equals("r1")), i4.toString());
+    }
 }

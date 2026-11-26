@@ -12,9 +12,10 @@ import {
 } from "./zoneMatrixApi";
 
 /**
- * The stored summary (`GET /api/v2/zone-matrix/summary`), read by the Violations and Coverage tabs. It is read lazily: the
- * first time one of those tabs is opened, so the screen's own load keeps its requests. One read serves both tabs; the
- * Violations tab changes `params` (the filters the route honours) and the read repeats.
+ * The stored summary (`GET /api/v2/zone-matrix/summary`), started once the Zone matrix screen has read its zones so the
+ * coverage strip above the tabs shows coverage on every tab. One read serves the strip and the Matrix, Violations,
+ * Versions and Coverage tabs; the Violations tab changes `params` (the filters the route honours for `findings`) and the
+ * read repeats while `headline`, `policies` and `not_evaluated` stay fleet-wide.
  */
 export interface ZoneSummaryHandle {
   readonly data: ZoneMatrixSummaryResponse | null;
@@ -86,11 +87,19 @@ export function SummaryReadFailure({ summary }: { readonly summary: ZoneSummaryH
 }
 
 /** The staleness threshold with where it comes from; while it is the interim value the response's own label is printed. */
-export function ThresholdNote({ threshold }: { readonly threshold: SummaryStalenessThreshold }) {
+export function ThresholdNote({
+  threshold,
+  id = "staleness-threshold",
+  testId = "staleness-threshold",
+}: {
+  readonly threshold: SummaryStalenessThreshold;
+  readonly id?: string;
+  readonly testId?: string;
+}) {
   const value = threshold.hours !== null ? `${threshold.hours} h` : `${threshold.seconds} s`;
   return (
-    <Hint id="staleness-threshold">
-      <span data-testid="staleness-threshold">
+    <Hint id={id}>
+      <span data-testid={testId}>
         A policy is stale when its snapshot is older than {value}
         {threshold.interim ? " (INTERIM)" : ""}: {threshold.label}.
       </span>

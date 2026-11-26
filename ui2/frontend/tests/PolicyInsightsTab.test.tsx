@@ -8,8 +8,10 @@ import type { PolicyInsight, PolicyInsightCounts, PolicyInsightDetail, PolicyIns
 
 const counts: PolicyInsightCounts = {
   rules: 10, decided: 4, upToWithLogs: 7, logResolvable: 3, collectionResolvable: 1, notResolvable: 2,
-  notDecidable: [{ shadowReason: "user or category constraint", reasonClass: "LOGS", rules: 3 }, { shadowReason: "snapshot collection incomplete", reasonClass: "COLLECTION", rules: 1 },
+  notReadable: 4, waiting: 2,
+  notDecidable: [{ shadowReason: "user or category constraint", reasonClass: "LOGS", rules: 1 }, { shadowReason: "snapshot collection incomplete", reasonClass: "COLLECTION", rules: 1 },
     { shadowReason: "unresolved object", reasonClass: "NOT_RESOLVABLE", rules: 2 }],
+  waitingRules: [{ blockingRuleId: "r2", blockingRuleNumber: 2, shadowReason: "access-role or identity constraint", reasonClass: "LOGS", rules: 2 }],
   hitsCollected: 6, hitsMissing: 4, disabledRules: 1, outsideSecurityRules: 2,
 };
 const shadow: PolicyInsight = { insightId: "11111111-1111-1111-1111-111111111111", insightType: "I1", evidenceGrade: "PROVEN", insightScope: "package",
@@ -45,8 +47,11 @@ it("states the three package numbers as counts first and a share second, with up
   expect(region.querySelector("[data-count=none]")).toHaveTextContent("2");
   expect(region.querySelectorAll("[data-segment]").length).toBe(4);
   const reasons = within(region).getByLabelText("Not decidable by reason");
-  expect(reasons).toHaveTextContent("3 rules · user or category constraint (traffic logs could decide)");
-  expect(reasons).toHaveTextContent("2 rules · unresolved object (nothing in this design can decide)");
+  expect(reasons).toHaveTextContent("1 rule not readable · user or category constraint (traffic logs could decide)");
+  expect(reasons).toHaveTextContent("2 rules not readable · unresolved object (nothing in this design can decide)");
+  const waiting = within(region).getByLabelText("Readable rules waiting behind an earlier rule");
+  expect(waiting).toHaveTextContent("2 rules readable, wait behind rule #2 · access-role or identity constraint (traffic logs could decide)");
+  expect(region.querySelector("[data-undecided-split]")).toHaveTextContent("4 rules not readable · 2 rules readable, wait behind an earlier rule");
   expect(region).toHaveTextContent("Over 10 enabled security rules. 1 disabled and 2 NAT rules are left out");
   expect(region).toHaveTextContent("Hit counters: 6 stored · 4 not collected");
   expect(region).toHaveTextContent("known before any log exists");
