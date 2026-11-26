@@ -3817,12 +3817,17 @@ export const deleteCutoverAssessment = (id: string) => offlineMutation<{ deleted
 export interface SupportBundleItem {
   readonly kind: string; readonly ordinal: number; readonly state: string; readonly outcome_code: string | null;
   readonly size_bytes: number | null; readonly digest_prefix: string | null; readonly detail: string | null;
+  readonly vs_id?: number | null; readonly domain_ref?: string | null;
 }
 export interface SupportBundleRequest {
   readonly id: string; readonly device_id: string; readonly device_pseudonym: string; readonly vendor: string;
-  readonly run_mode: string; readonly run_at: string; readonly requested_at: string; readonly finished_at: string | null;
+  readonly run_mode: string; readonly run_at: string; readonly requested_at: string;
+  readonly started_at?: string | null; readonly finished_at: string | null;
   readonly expires_at: string; readonly expiry_warning: boolean; readonly downloaded_at: string | null; readonly download_count: number;
   readonly state: string; readonly outcome: string | null; readonly items: readonly SupportBundleItem[];
+  readonly previous_request_id?: string | null; readonly retry_request_id?: string | null;
+  readonly auto_retry?: boolean; readonly retry_outcome?: string | null;
+  readonly hold_reasons?: readonly string[]; readonly not_started_summary?: string | null;
   /** A work directory the run left on the device and did not remove (V240); the admin may have it removed. */
   readonly work_dir_pending?: boolean; readonly cleanup_state?: string | null; readonly cleanup_outcome?: string | null;
   /** Absent for the replay viewer (aiview). */
@@ -3834,10 +3839,25 @@ export interface SupportBundleKindRow {
   /** Offered for a Check Point management server or Multi-Domain Server (heavy items and the presence read). */
   readonly check_point_management?: boolean;
 }
+export interface SupportBundleCatalogueResponse {
+  readonly kinds: SupportBundleKindRow[];
+  readonly module_draining?: boolean;
+  readonly collection_window_open?: boolean;
+  readonly collection_window_ends_at?: string | null;
+}
+export interface SupportBundleRequestInput {
+  readonly kinds: string[];
+  readonly reason: string;
+  readonly run_at?: string;
+  readonly case_ref?: string;
+  readonly previous_request_id?: string;
+  readonly vs_ids?: readonly number[];
+  readonly domain_ref?: string;
+}
 const SUPPORT_BUNDLES = "/api/v2/support-bundles";
-export const getSupportBundleCatalogue = () => call<{ kinds: SupportBundleKindRow[] }>(`${SUPPORT_BUNDLES}/catalogue`, "GET");
+export const getSupportBundleCatalogue = () => call<SupportBundleCatalogueResponse>(`${SUPPORT_BUNDLES}/catalogue`, "GET");
 export const listSupportBundles = () => call<{ support_bundles: SupportBundleRequest[] }>(SUPPORT_BUNDLES, "GET");
-export const requestSupportBundle = (deviceId: string, input: { kinds: string[]; reason: string; run_at?: string; case_ref?: string }) =>
+export const requestSupportBundle = (deviceId: string, input: SupportBundleRequestInput) =>
   call<{ id: string; job_id: string; status: string; mds_warning?: boolean; warning?: string }>(`/api/v2/devices/${encodeURIComponent(deviceId)}/support-bundles`, "POST", input);
 export const cancelSupportBundle = (id: string, reason: string) =>
   call<{ id: string; state: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/cancel`, "POST", { reason });

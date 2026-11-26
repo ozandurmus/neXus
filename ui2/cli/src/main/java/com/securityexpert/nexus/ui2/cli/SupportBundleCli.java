@@ -35,7 +35,7 @@ final class SupportBundleCli {
     static void printUsage() {
         System.out.println("  support-bundles [deviceId] [state=<state>] [limit=<n>]        support bundle requests (masked for aiview)");
         System.out.println("  support-bundle <requestId>                                      one request: prechecks, items, sizes, expiry");
-        System.out.println("  support-bundle-request <deviceId> <kindsCsv> <reason> [--at <ISO-8601>] [--case <ref>]");
+        System.out.println("  support-bundle-request <deviceId> <kindsCsv> <reason> [--at <ISO-8601>] [--case <ref>] [--previous <requestId>] [--vs <vsCsv>] [--domain <ref>]");
         System.out.println("                                                 security_admin: collect the items on a device (e.g. cp_gaia_extras,cp_hcp_latest)");
         System.out.println("  support-bundle-cancel <requestId> <reason>                     cancel a queued request");
         System.out.println("  support-bundle-download <requestId> <reason> <dest.tgz> [--sanitized]");
@@ -88,13 +88,27 @@ final class SupportBundleCli {
     }
 
     private int request(String[] args) throws IOException, InterruptedException {
-        String usage = "support-bundle-request <deviceId> <kindsCsv> <reason> [--at <ISO-8601>] [--case <ref>]";
+        String usage = "support-bundle-request <deviceId> <kindsCsv> <reason> [--at <ISO-8601>] [--case <ref>] [--previous <requestId>] [--vs <vsCsv>] [--domain <ref>]";
         need(args, 4, usage);
-        String runAt = null, caseRef = null;
+        String runAt = null, caseRef = null, previousId = null, domainRef = null;
+        List<Integer> vsIds = new ArrayList<>();
         for (int i = 4; i < args.length; i++) {
             if ("--at".equals(args[i]) && i + 1 < args.length) runAt = args[++i];
             else if ("--case".equals(args[i]) && i + 1 < args.length) caseRef = args[++i];
-            else throw new IllegalArgumentException("usage: " + usage);
+            else if ("--previous".equals(args[i]) && i + 1 < args.length) previousId = uuid(args[++i]);
+            else if ("--domain".equals(args[i]) && i + 1 < args.length) domainRef = opaque(args[++i]);
+            else if ("--vs".equals(args[i]) && i + 1 < args.length) {
+                for (String v : args[++i].split(",")) {
+                    if (v.isBlank()) continue;
+                    try {
+                        int n = Integer.parseInt(v.strip());
+                        if (n < 0 || n > 4095) throw new IllegalArgumentException("usage: " + usage);
+                        vsIds.add(n);
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("usage: " + usage);
+                    }
+                }
+            } else throw new IllegalArgumentException("usage: " + usage);
         }
         List<String> kinds = new ArrayList<>();
         for (String k : args[2].split(",")) if (!k.isBlank()) kinds.add(k.strip());
@@ -104,6 +118,13 @@ final class SupportBundleCli {
         body.append("],\"reason\":").append(quote(args[3]));
         if (runAt != null) body.append(",\"run_at\":").append(quote(runAt));
         if (caseRef != null) body.append(",\"case_ref\":").append(quote(caseRef));
+        if (previousId != null) body.append(",\"previous_request_id\":").append(quote(previousId));
+        if (!vsIds.isEmpty()) {
+            body.append(",\"vs_ids\":[");
+            for (int i = 0; i < vsIds.size(); i++) body.append(i == 0 ? "" : ",").append(vsIds.get(i));
+            body.append(']');
+        }
+        if (domainRef != null) body.append(",\"domain_ref\":").append(quote(domainRef));
         body.append('}');
         return NexusSessionCli.print(cli.call("POST", "/api/v2/devices/" + opaque(args[1]) + "/support-bundles", body.toString()));
     }
