@@ -151,13 +151,20 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             String contentSha256,
             ZoneMatrixStaleness.Verdict policyStaleness,
             Duration snapshotAge,
-            ZoneMatrixRunRepository.Finding finding) {
+            ZoneMatrixRunRepository.Finding finding,
+            Long findingId) {
         public StoredFinding {
             Objects.requireNonNull(runId, "runId");
             Objects.requireNonNull(versionId, "versionId");
             Objects.requireNonNull(contentSha256, "contentSha256");
             Objects.requireNonNull(policyStaleness, "policyStaleness");
             Objects.requireNonNull(finding, "finding");
+        }
+
+        /** A stored finding without its opaque id (a store that keeps none): no per-finding witness read is offered. */
+        public StoredFinding(String runId, String versionId, int versionNumber, String contentSha256,
+                ZoneMatrixStaleness.Verdict policyStaleness, Duration snapshotAge, ZoneMatrixRunRepository.Finding finding) {
+            this(runId, versionId, versionNumber, contentSha256, policyStaleness, snapshotAge, finding, null);
         }
     }
 
@@ -459,6 +466,14 @@ public final class ZoneMatrixRunService implements AutoCloseable {
 
     // ---------------------------------------------------------------- stored projections (step 4b-2a)
 
+    /**
+     * The stored witness tuples of one finding of a {@code COMPLETE} run (section 8.1), by its opaque id. Reads only: the
+     * caller checks the right and writes the audit row before anything is returned ({@link ZoneMatrixService#findingWitness}).
+     */
+    public Optional<ZoneMatrixRunRepository.StoredFindingWitness> storedWitness(long findingId) {
+        return runs.findingWitness(findingId);
+    }
+
     /** Assembles stored coverage, staleness, findings, headline and version-change resolutions using the default threshold. */
     public StoredSummary storedSummary() {
         return storedSummary(stalenessThreshold);
@@ -569,7 +584,8 @@ public final class ZoneMatrixRunService implements AutoCloseable {
 
             if (latestComplete != null) {
                 boolean onActiveVersion = activeVersionId != null && activeVersionId.equals(latestComplete.versionId());
-                for (ZoneMatrixRunRepository.Finding f : runs.findingsOf(latestComplete.runId())) {
+                for (ZoneMatrixRunRepository.IdentifiedFinding identified : runs.identifiedFindingsOf(latestComplete.runId())) {
+                    ZoneMatrixRunRepository.Finding f = identified.finding();
                     if (f.resolvedAt() != null) continue;
                     storedFindings.add(new StoredFinding(
                             latestComplete.runId(),
@@ -578,7 +594,8 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                             latestComplete.contentSha256(),
                             staleness.verdict(),
                             staleness.snapshotAge(),
-                            f));
+                            f,
+                            identified.findingId()));
                     if (ZoneMatrixEvaluator.OUTCOME_NOT_EVALUABLE.equals(f.outcome())) notEvaluableFindings++;
                     else if (ZoneMatrixEvaluator.OUTCOME_UNKNOWN.equals(f.outcome())) unknownFindings++;
                     if (f.flags().contains(ZoneMatrixFindingLifecycle.FLAG_BECAME_UNDECIDED)) {

@@ -649,6 +649,8 @@ export interface SummaryFindingBase {
 }
 
 export interface SummaryFinding extends SummaryFindingBase {
+  /** The opaque key of the audited witness read; `null` (or absent) when the store kept none: no witness read is offered. */
+  readonly finding_id?: string | null;
   readonly run_id: string;
   readonly version_id: string;
   readonly version_number: number;
@@ -690,6 +692,8 @@ export interface SummaryCellCount {
 }
 
 export interface ZoneMatrixSummaryResponse {
+  /** The caller's affordances; `view_blocks` (zone_matrix_zones_read, never for a masked session) opens the witness read. */
+  readonly can?: ZoneMatrixCan;
   readonly evaluated_at: string | null;
   readonly state: SummaryState | string;
   readonly state_text: string;
@@ -741,6 +745,48 @@ export function getZoneMatrixSummary(params: ZoneMatrixSummaryParams = {}) {
   const text = query.toString();
   return apiCall<ZoneMatrixSummaryResponse>(`${BASE}/summary${text ? `?${text}` : ""}`, "GET");
 }
+
+/** One stored witness tuple, as stored: ranges, never narrowed to one address. An unreadable part is "UNKNOWN". */
+export interface StoredWitnessTuple {
+  readonly source_range: string;
+  readonly destination_range: string;
+  /** `tcp`, `udp`, `any`, or `UNKNOWN`. */
+  readonly protocol: string;
+  /** A port number as text, `any`, or `UNKNOWN`. */
+  readonly port: string;
+  /** The stored service text (e.g. `tcp/443`, `application-default`). */
+  readonly service: string;
+}
+
+export interface StoredWitnessCell {
+  readonly source_zone_id: string | null;
+  readonly destination_zone_id: string | null;
+  readonly nat_view: string;
+  /** `null`: this cell stored no witness; the screen says UNKNOWN. */
+  readonly witness: StoredWitnessTuple | null;
+}
+
+/** `GET /api/v2/zone-matrix/findings/{findingId}/witness`: one audited read (`WITNESS_VIEW`), never cached. */
+export interface FindingWitnessResponse {
+  readonly finding_id: string;
+  readonly run_id: string;
+  readonly version_id: string;
+  readonly version_number: number;
+  readonly nat_view: string;
+  readonly witnesses_included: boolean;
+  readonly audited: boolean;
+  readonly cells_total: number;
+  readonly witnesses_stored: number;
+  readonly cells: readonly StoredWitnessCell[];
+  readonly can: ZoneMatrixCan;
+}
+
+/**
+ * The stored witness tuples of one finding (contract 7.1, 8.1). The server refuses it without zone_matrix_zones_read and
+ * for a masked session, and records every answer in the audit log before it sends it, so it is called only on a click.
+ */
+export const getFindingWitness = (findingId: string) =>
+  apiCall<FindingWitnessResponse>(`${BASE}/findings/${encodeURIComponent(findingId)}/witness`, "GET");
 
 /** The zone roles of the template (contract section 6), with the words the screen shows. */
 export const ZONE_ROLES: readonly { readonly value: string; readonly label: string }[] = [

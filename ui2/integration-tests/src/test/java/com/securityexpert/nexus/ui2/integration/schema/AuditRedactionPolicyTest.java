@@ -386,6 +386,13 @@ class AuditRedactionPolicyTest {
             // opaque actor fingerprint of the writer (same classification as system_log_settings.updated_by)
             "log_detection_settings.enabled", "log_detection_settings.settings_id", "log_detection_settings.shadow_until",
             "log_detection_settings.updated_at", "log_detection_settings.updated_by",
+            // log_detection_settings (V273): the P2 switch, a boolean on the same row
+            "log_detection_settings.p2_enabled",
+            // log_template_catalog (V273): catalog versions; manifest and diff hold closed keys, versions, ids and counts,
+            // never a log line; created_by and frozen_by are tier-2 redacted
+            "log_template_catalog.catalog_version", "log_template_catalog.state", "log_template_catalog.previous_version",
+            "log_template_catalog.manifest", "log_template_catalog.digest", "log_template_catalog.template_count",
+            "log_template_catalog.diff", "log_template_catalog.created_at", "log_template_catalog.frozen_at",
             // log_finding_action (V272): acknowledgement events; note and actor are tier-2 redacted
             "log_finding_action.action", "log_finding_action.action_id", "log_finding_action.created_at",
             "log_finding_action.finding_id",
@@ -874,6 +881,7 @@ class AuditRedactionPolicyTest {
             "system_log_file.wrapped_data_key", 1, "device_crash_entry.name_hmac", 2,
             "device_crash_entry.process", 2, "device_crash_alert.process", 2, "system_log_run.detail", 2,
             "log_finding_action.note", 2, "log_finding_action.actor", 2,
+            "log_template_catalog.created_by", 2, "log_template_catalog.frozen_by", 2,
             // V161: keyed content identities are redacted like the anchors.
             "system_log_chunk.plaintext_hmac", 2, "system_log_file.content_hmac", 2,
             // V184: a device virtual-router name.

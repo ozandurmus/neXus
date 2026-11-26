@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +26,8 @@ import org.springframework.web.bind.annotation.*;
  * stored summary (sections 7.1 and 7.2): no route here mutates or deletes a run or a finding (ZM-37). Step 4b-2 adds the
  * on-demand trigger of section 5.1 ({@code POST /api/v2/zone-matrix/runs}): it starts a new durable run through the same
  * {@link ZoneMatrixRunService#submit} the publish and collection triggers use, and never changes or deletes an existing run.
+ * Step 4b-2 also adds the audited read of one stored finding's witness tuples
+ * ({@code GET /api/v2/zone-matrix/findings/{findingId}/witness}, sections 7.1 and 8.1); the summary itself never carries one.
  */
 @RestController
 public final class ZoneMatrixController {
@@ -229,6 +232,20 @@ public final class ZoneMatrixController {
                     !masked && permitted(request, ActionRegistry.POLICY_READ));
             return with(ZoneMatrixSummaryView.project(runs.storedSummary(), labels, query), request);
         });
+    }
+
+    /**
+     * Step 4b-2, sections 7.1 and 8.1: the stored witness tuples and NAT view of one finding, by the opaque
+     * {@code finding_id} its summary row carries. Gated as {@code zone_matrix_zones_read} (SecurityWebMvcConfig); the masked
+     * persona is refused here whatever else it holds, and every answer that carries a witness is on record first
+     * ({@code WITNESS_VIEW}, {@link ZoneMatrixService#findingWitness}). The answer is never cached.
+     */
+    @GetMapping("/api/v2/zone-matrix/findings/{findingId}/witness")
+    public ResponseEntity<?> findingWitness(@PathVariable String findingId, HttpServletRequest request) {
+        boolean masked = masked(request);
+        ResponseEntity<?> answer = run(() -> with(service.findingWitness(actor(request), masked,
+                !masked && permitted(request, ActionRegistry.ZONE_MATRIX_ZONES_READ), findingId, runs::storedWitness), request));
+        return ResponseEntity.status(answer.getStatusCode()).cacheControl(CacheControl.noStore()).body(answer.getBody());
     }
 
     private View view(HttpServletRequest request, String blocks) {

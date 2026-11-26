@@ -270,7 +270,19 @@ class NexusSessionCliTest {
             assertEquals(2, cli.run(new String[] {"log-coverage"}));
             assertEquals(2, cli.run(new String[] {"log-findings", "dev-1", "dev-2"}));
             assertEquals(2, cli.run(new String[] {"log-detection-set"}));
+            assertEquals(2, cli.run(new String[] {"log-catalog-freeze", "../cat-1"}));
             assertTrue(calls.isEmpty(), calls.toString());
+            // P2: the template catalog and the P2 switch
+            assertEquals(0, cli.run(new String[] {"log-detection-set", "p2_enabled=true"}));
+            assertEquals(0, cli.run(new String[] {"log-catalog"}));
+            assertEquals(0, cli.run(new String[] {"log-catalog-diff", "cat-2", "cat-1"}));
+            assertEquals(0, cli.run(new String[] {"log-catalog-build", "from=2026-10-09", "to=2026-11-05"}));
+            assertEquals(0, cli.run(new String[] {"log-catalog-freeze", "cat-2"}));
+            assertEquals(java.util.List.of("PUT /api/v2/config/log-detection", "GET /api/v2/config/log-detection/catalogs",
+                    "GET /api/v2/config/log-detection/catalogs/cat-2?from=cat-1", "POST /api/v2/config/log-detection/catalogs",
+                    "POST /api/v2/config/log-detection/catalogs/cat-2/freeze"), calls);
+            assertTrue(bodies.contains("{\"p2_enabled\":true}"), bodies.toString());
+            assertTrue(bodies.contains("{\"from\":\"2026-10-09\",\"to\":\"2026-11-05\"}"), bodies.toString());
         } finally {
             server.stop(0);
         }

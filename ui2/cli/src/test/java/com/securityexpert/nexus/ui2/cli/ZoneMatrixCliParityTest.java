@@ -35,6 +35,7 @@ class ZonesMatrixCliParityTest {
             "ZoneMatrixController.java");
     private static final Pattern MAPPING = Pattern.compile("@(Get|Post|Put|Delete|Patch)Mapping\\(\"(" + Pattern.quote(ZonesMatrixCli.BASE) + "[^\"]*)\"\\)");
     private static final Pattern UUID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    private static final Pattern FINDING_ID = Pattern.compile("/findings/[0-9]+/");
     private static final Pattern PATH_VARIABLE = Pattern.compile("\\{[A-Za-z]+}");
     private static final String VERSION = "11111111-2222-4333-8444-555555555555";
     private static final String ZONE = "66666666-7777-4888-9999-aaaaaaaaaaaa";
@@ -63,12 +64,14 @@ class ZonesMatrixCliParityTest {
         table.put("POST /evaluate", new String[] {"zone-matrix-evaluate"});
         table.put("GET /summary", new String[] {"zone-matrix-summary"});
         table.put("POST /runs", new String[] {"zone-matrix-run", "POL-ALPHA"});
+        table.put("GET /findings/{id}/witness", new String[] {"zone-matrix-finding-witness", "4711"});
         return table;
     }
 
     private static String normalised(String method, String uri) {
         String route = uri.contains("?") ? uri.substring(0, uri.indexOf('?')) : uri;
-        return method + " " + UUID.matcher(route.substring(ZonesMatrixCli.BASE.length())).replaceAll("{id}");
+        String path = UUID.matcher(route.substring(ZonesMatrixCli.BASE.length())).replaceAll("{id}");
+        return method + " " + FINDING_ID.matcher(path).replaceAll("/findings/{id}/");
     }
 
     private static List<String> controllerRoutes() throws Exception {
@@ -173,6 +176,11 @@ class ZonesMatrixCliParityTest {
             assertEquals("{\"policy_id\":\"POL-ALPHA\",\"version_id\":\"" + VERSION + "\"}",
                     one(cli, seen, "zone-matrix-run", "POL-ALPHA", "--version", VERSION).body());
             assertNull(one(cli, seen, "zone-matrix-run", "POL-ALPHA").query());
+            // step 4b-2: the audited witness read of one stored finding is a GET with no query and no body.
+            Seen witness = one(cli, seen, "zone-matrix-finding-witness", "4711");
+            assertEquals("GET /findings/{id}/witness", witness.route());
+            assertNull(witness.query());
+            assertEquals("", witness.body());
         });
     }
 
@@ -210,7 +218,13 @@ class ZonesMatrixCliParityTest {
                 new String[] {"zone-matrix-run", "POL-ALPHA", "--version", "not-an-id"},
                 new String[] {"zone-matrix-run", "POL-ALPHA", VERSION},
                 new String[] {"zone-matrix-run", "POL-ALPHA", "--versions", VERSION},
-                new String[] {"zone-matrix-run", "POL-ALPHA", "--version", VERSION, "extra"});
+                new String[] {"zone-matrix-run", "POL-ALPHA", "--version", VERSION, "extra"},
+                new String[] {"zone-matrix-finding-witness"},
+                new String[] {"zone-matrix-finding-witness", "0"},
+                new String[] {"zone-matrix-finding-witness", "007"},
+                new String[] {"zone-matrix-finding-witness", "-1"},
+                new String[] {"zone-matrix-finding-witness", "../summary"},
+                new String[] {"zone-matrix-finding-witness", "12", "extra"});
         PrintStream err = System.err;
         try {
             withServer(home, "{}", (cli, seen) -> {

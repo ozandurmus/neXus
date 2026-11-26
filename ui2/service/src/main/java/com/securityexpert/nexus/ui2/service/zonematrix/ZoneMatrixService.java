@@ -5,6 +5,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository.Version;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.service.policy.PolicyPrivacy;
 import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
@@ -1076,6 +1077,120 @@ public final class ZoneMatrixService {
 
         boolean showWitnesses = includeWitnesses && canViewBlocks && view != View.MASKED;
         return projectEvaluation(result, parsedContent, view, showWitnesses, hasPolicyRead);
+    }
+
+    /**
+     * Step 4b-2, section 7.1 Violations tab ("open Trace with the witness tuple, only with zone_matrix_zones_read") and section
+     * 8.1 ({@code zone_matrix_finding} stores the witness tuples and the NAT view): the stored witness of one finding, read by
+     * the opaque id the stored summary row carries.
+     *
+     * <p>Refusals, in order: the masked persona always ({@code READ_ONLY_PERSONA}, whatever other role it holds); a caller
+     * without {@code zone_matrix_zones_read} ({@code ZONE_BLOCKS_NOT_PERMITTED}); an id that is not exactly the text the
+     * summary gave, or no finding of a {@code COMPLETE} run with it ({@code FINDING_NOT_FOUND}, 404); a finding that stored no
+     * witness on any cell ({@code WITNESS_NOT_STORED}, 409; never an empty list). Only then the {@code WITNESS_VIEW} row is
+     * written to {@code zone_matrix_access_log} (its trigger writes {@code audit_log}) through the same {@link #record} the
+     * on-demand evaluation uses; when that write fails the read fails closed with {@code ZONE_MATRIX_AUDIT_UNAVAILABLE} and
+     * returns no witness. The log line and the audit row carry ids, the version number and counts, never an address or a
+     * name (ZM-10). A witness is returned as stored: ranges, never narrowed to one sample address.</p>
+     */
+    public Map<String, Object> findingWitness(
+            String actor,
+            boolean replayViewer,
+            boolean canViewBlocks,
+            String findingId,
+            java.util.function.LongFunction<Optional<ZoneMatrixRunRepository.StoredFindingWitness>> reader) {
+        if (replayViewer) {
+            throw new Refused(403, "READ_ONLY_PERSONA", "the masked persona never sees witness addresses");
+        }
+        if (!canViewBlocks) {
+            throw new Refused(403, "ZONE_BLOCKS_NOT_PERMITTED", "viewing witness addresses needs zone_matrix_zones_read");
+        }
+        long id = findingKey(findingId);
+        ZoneMatrixRunRepository.StoredFindingWitness stored = reader.apply(id)
+                .orElseThrow(() -> new Refused(404, "FINDING_NOT_FOUND", "no stored finding of a complete run has this id"));
+        int cells = stored.violatedCells().size();
+        int witnesses = (int) stored.violatedCells().stream().filter(c -> c.witness() != null).count();
+        if (witnesses == 0) {
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("finding_id", String.valueOf(stored.findingId()));
+            details.put("cells_total", cells);
+            throw new Refused(409, "WITNESS_NOT_STORED",
+                    "this finding stored no witness tuple; its witness is UNKNOWN, not empty", details);
+        }
+        record(actor, "WITNESS_VIEW", stored.versionId());
+        LOG.info("zone_matrix_witness_read finding_id={} run_id={} version_id={} version_number={} cells={} witnesses={}",
+                stored.findingId(), stored.runId(), stored.versionId(), stored.versionNumber(), cells, witnesses);
+
+        List<Map<String, Object>> rows = new ArrayList<>(cells);
+        for (ZoneMatrixRunRepository.Cell c : stored.violatedCells()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("source_zone_id", c.sourceZone());
+            row.put("destination_zone_id", c.destinationZone());
+            row.put("nat_view", c.natView() == null ? "UNKNOWN" : c.natView());
+            if (c.witness() == null) {
+                row.put("witness", null);
+            } else {
+                Map<String, Object> w = new LinkedHashMap<>();
+                String service = c.witness().service();
+                w.put("source_range", orUnknown(c.witness().sourceRange()));
+                w.put("destination_range", orUnknown(c.witness().destinationRange()));
+                w.put("protocol", witnessProtocol(service));
+                w.put("port", witnessPort(service));
+                w.put("service", orUnknown(service));
+                row.put("witness", w);
+            }
+            rows.add(row);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("finding_id", String.valueOf(stored.findingId()));
+        out.put("run_id", stored.runId());
+        out.put("version_id", stored.versionId());
+        out.put("version_number", stored.versionNumber());
+        out.put("nat_view", stored.natView() == null ? "UNKNOWN" : stored.natView());
+        out.put("witnesses_included", true);
+        out.put("audited", true);
+        out.put("cells_total", cells);
+        out.put("witnesses_stored", witnesses);
+        out.put("cells", rows);
+        return out;
+    }
+
+    /**
+     * The finding id exactly as the summary printed it ({@code String.valueOf} of the stored id): digits only, no sign, no
+     * leading zero. Any other text is no stored finding; it is never normalised into one (identity law).
+     */
+    static long findingKey(String findingId) {
+        Refused unknown = new Refused(404, "FINDING_NOT_FOUND", "no stored finding of a complete run has this id");
+        if (findingId == null || findingId.isEmpty() || findingId.length() > 19) throw unknown;
+        for (int i = 0; i < findingId.length(); i++) {
+            char ch = findingId.charAt(i);
+            if (ch < '0' || ch > '9') throw unknown;
+        }
+        long id;
+        try { id = Long.parseLong(findingId); } catch (NumberFormatException e) { throw unknown; }
+        if (id <= 0 || !String.valueOf(id).equals(findingId)) throw unknown;
+        return id;
+    }
+
+    private static String orUnknown(String value) { return value == null || value.isBlank() ? "UNKNOWN" : value; }
+
+    /** {@code tcp/443} gives {@code tcp}, {@code any} gives {@code any}; anything else (e.g. application-default) is UNKNOWN. */
+    static String witnessProtocol(String service) {
+        if ("any".equals(service)) return "any";
+        if (service == null) return "UNKNOWN";
+        int slash = service.indexOf('/');
+        String protocol = slash < 0 ? null : service.substring(0, slash);
+        return "tcp".equals(protocol) || "udp".equals(protocol) ? protocol : "UNKNOWN";
+    }
+
+    /** {@code tcp/443} gives {@code 443}, {@code any} gives {@code any}; anything else is UNKNOWN. */
+    static String witnessPort(String service) {
+        if ("any".equals(service)) return "any";
+        if (service == null || "UNKNOWN".equals(witnessProtocol(service))) return "UNKNOWN";
+        String port = service.substring(service.indexOf('/') + 1);
+        if (port.isEmpty() || port.length() > 5) return "UNKNOWN";
+        for (int i = 0; i < port.length(); i++) if (port.charAt(i) < '0' || port.charAt(i) > '9') return "UNKNOWN";
+        return port;
     }
 
     /**

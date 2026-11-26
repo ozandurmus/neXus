@@ -48,6 +48,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/zone-matrix/runs", ActionRegistry.ZONE_MATRIX_EVALUATE),
             // Zone matrix, delivery step 4b-2b (sections 7.1 and 7.2): the read-only stored summary; names masked in the controller.
             Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ),
+            // Zone matrix, delivery step 4b-2 (sections 3.4, 7.1 and 8.1): the audited witness read of one stored finding;
+            // replay_viewer is refused in the controller too, whatever other role it holds.
+            Map.entry("GET /api/v2/zone-matrix/findings/*/witness", ActionRegistry.ZONE_MATRIX_ZONES_READ),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /devices/*/software-history", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/software-history/changes", ActionRegistry.DEVICE_READ),
@@ -286,6 +289,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/log-findings/*/acknowledge", ActionRegistry.LOG_FINDING_ACKNOWLEDGE),
             Map.entry("GET /api/v2/config/log-detection", ActionRegistry.LOG_DETECTION_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/log-detection", ActionRegistry.LOG_DETECTION_SETTINGS_WRITE),
+            // Log detection engine P2 (design sections 6.5 and 9): the template catalog under the same two settings actions.
+            Map.entry("GET /api/v2/config/log-detection/catalogs", ActionRegistry.LOG_DETECTION_SETTINGS_READ),
+            Map.entry("GET /api/v2/config/log-detection/catalogs/*", ActionRegistry.LOG_DETECTION_SETTINGS_READ),
+            Map.entry("POST /api/v2/config/log-detection/catalogs", ActionRegistry.LOG_DETECTION_SETTINGS_WRITE),
+            Map.entry("POST /api/v2/config/log-detection/catalogs/*/freeze", ActionRegistry.LOG_DETECTION_SETTINGS_WRITE),
             // Phase B settings (section 14): the one row of retention, caps and the two switches; security_admin only.
             Map.entry("GET /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_WRITE),

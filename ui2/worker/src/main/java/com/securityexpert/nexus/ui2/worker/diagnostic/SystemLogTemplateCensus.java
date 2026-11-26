@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.platform.SystemLogCensusFeed;
 import com.securityexpert.nexus.ui2.platform.SystemLogCensusFeed.Chunk;
 import com.securityexpert.nexus.ui2.platform.SystemLogCensusFeed.Masked;
+import com.securityexpert.nexus.ui2.platform.logtemplate.TemplateMiner;
 import com.securityexpert.nexus.ui2.worker.diagnostic.CensusLineShapes.Marker;
 import com.securityexpert.nexus.ui2.worker.diagnostic.CensusLineShapes.Severity;
 
