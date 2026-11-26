@@ -9,6 +9,7 @@ import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../../shell/States";
 import type { Tone } from "../../shell/tone";
+import { parseTraceTuple, traceTupleHref } from "../../shell/traceTupleLink";
 import { m3 } from "../../theme/m3Theme";
 import { Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
@@ -182,6 +183,17 @@ export function witnessText(w: StoredWitnessTuple): string {
   return `source ${w.source_range || "UNKNOWN"} -> destination ${w.destination_range || "UNKNOWN"} ${service}`;
 }
 
+/**
+ * "Open in Trace" href for one stored witness, or null. Only a tuple whose source and destination are each one concrete IPv4
+ * host address (no range, no prefix) with protocol tcp or udp and a port 1..65535 resolves; anything else (a range, `any`,
+ * `UNKNOWN`) gets no link. The candidate is validated by the same strict parser Trace uses, so a link never opens a tuple
+ * Trace would refuse. Never called for a masked session.
+ */
+export function witnessTraceHref(w: StoredWitnessTuple): string | null {
+  const href = traceTupleHref({ src: w.source_range, dst: w.destination_range, protocol: w.protocol, port: w.port });
+  return parseTraceTuple(href.slice(href.indexOf("#"))) ? href : null;
+}
+
 type WitnessState =
   | { readonly kind: "idle" }
   | { readonly kind: "loading" }
@@ -193,7 +205,8 @@ type WitnessState =
 /**
  * Contract 7.1 Violations tab, "open Trace with the witness tuple (only with zone_matrix_zones_read)": the stored witness of
  * one finding, read only on a click (an audited `WITNESS_VIEW` read, never prefetched), held by this row alone and dropped
- * when hidden. Trace takes no tuple from its address yet, so the tuple is shown as copyable text rather than a link.
+ * when hidden. A tuple of single IPv4 hosts over tcp/udp also offers "Open in Trace" (fragment prefill, no auto-run); a range
+ * or other protocol stays copyable text only. This component is rendered only for unmasked sessions with `view_blocks`.
  */
 function FindingWitness({ finding }: { readonly finding: SummaryFinding }) {
   const [state, setState] = useState<WitnessState>({ kind: "idle" });
@@ -247,13 +260,16 @@ function FindingWitness({ finding }: { readonly finding: SummaryFinding }) {
           {state.data.cells.map((c, i) => (
             <Box key={i} data-testid="witness-cell" sx={{ mt: 0.5 }}>
               <Typography variant="body2">{zone(c.source_zone_id)} -&gt; {zone(c.destination_zone_id)} · NAT view {c.nat_view || "UNKNOWN"}</Typography>
+              {c.witness && witnessTraceHref(c.witness)
+                ? <Box component="a" href={witnessTraceHref(c.witness)!} data-testid="witness-trace-link" sx={{ display: "block" }}>Open in Trace</Box>
+                : null}
               {c.witness
                 ? <Box component="code" data-testid="witness-tuple" sx={{ ...mono, display: "block", userSelect: "all" }}>{witnessText(c.witness)}</Box>
                 : <Unknown reason="No witness tuple was stored for this cell" />}
             </Box>
           ))}
           <Hint>Witness {state.data.witnesses_stored} of {state.data.cells_total} violated cells; matrix version {state.data.version_number}.
-            Trace does not take a tuple from a link yet: copy it into Trace.</Hint>
+            Ranges and non-TCP/UDP tuples are not opened in Trace: copy them instead.</Hint>
           {hide}
         </Box>
       );
