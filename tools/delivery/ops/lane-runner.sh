@@ -20,6 +20,9 @@
 . "$(dirname "${BASH_SOURCE[0]}")/ops_lib.sh"
 Q=$OPS_STATE/lane-queue; L=$OPS_STATE/logs; SQ=$OPS_STATE/ship-queue; REPO=$OPS_REPO
 log() { ops_log "$@"; }
+# AGY_ONLY mode (PO decision record 2026-11-26): while lane-queue/AGY_ONLY exists Claude is out of quota and Antigravity
+# carries the pipeline alone. Never decided anywhere else: ask this function.
+agy_only() { [ -e "$Q/AGY_ONLY" ]; }
 
 running() { ps -axo command | grep -E "(^/.*Python .*argon_task_neon\.py|^/bin/bash .*claude_task\.sh)" | grep -v grep | wc -l | tr -d ' '; }
 # Local Qwen lanes (engine=qwen in .meta) have their own slot: at most 1 (18 GB model on a 32 GB Mac), never
@@ -84,6 +87,9 @@ finish_lane() {
   out=$(lane_outcome "$L/q-$n.nohup")
   [ "$out" = RUNNING ] && return 0
   age=$(( $(date +%s) - $(file_mtime "$s") ))
+  # AGY_ONLY planner: its briefs are in the worktree (planner-out/), not in the ops state; an agent that wrote them and made
+  # no commit ends NO_CHANGE, which is as good as OK here.
+  case "$out" in OK|NO_CHANGE) grep -q '^planner_out=1' "$Q/started/$n.meta" 2>/dev/null && collect_planner_out "$n";; esac
   case "$out" in
     QUOTA)
       # Every lane that hit the quota goes back to the queue once (2026-11-25: the second lane of the same agy quota window
@@ -93,8 +99,10 @@ finish_lane() {
         # (PO 2026-11-25 "antigravity'de kota sorunu yok"): mark that model for NEXUS_AGY_MODEL_REST_S and let routing pick
         # the next Gemini model; only an unknown engine switch falls back to ENGINE_CLAUDE.
         am=$(grep -E '^agy_model=' "$Q/started/$n.meta" 2>/dev/null | cut -d= -f2-)
-        if [ -n "$am" ] && grep -qiE 'Individual quota|RESOURCE_EXHAUSTED' "$L/q-$n.nohup" 2>/dev/null; then
+        if [ -n "$am" ] && { agy_only || grep -qiE 'Individual quota|RESOURCE_EXHAUSTED' "$L/q-$n.nohup" 2>/dev/null; }; then
           touch "$Q/.agy-limited-$am"; log "agy $am rate-limited in $n -> other Gemini models first for a while"
+        elif agy_only; then
+          log "agy quota hit in $n under AGY_ONLY -> no Claude fallback; the brief is re-queued"
         else
           [ -e "$Q/ENGINE_CLAUDE" ] || { touch "$Q/ENGINE_CLAUDE"; log "agy quota hit in $n -> switching new lanes to Claude"; }
         fi
@@ -154,6 +162,28 @@ finish_lane() {
   if [ -n "$gate" ]; then start_harness_gate "$n"; log "harness gate started for $n"; fi
 }
 
+# collect_planner_out <name>: move the briefs an AGY_ONLY planner wrote into planner-out/ of its worktree into the lane queue
+# under standard names. At most 3 briefs; only plain meta keys survive (never allow_paths, adddir or pin_claude), so a model
+# cannot widen its own briefs' authority.
+collect_planner_out() {
+  local n=$1 wt="$OPS_CODO/nexus-q-$1" b m short nn cnt=0 k v
+  [ -d "$wt/planner-out" ] || { log "planner $n: no planner-out/ in its worktree"; return 0; }
+  for b in "$wt"/planner-out/*.brief; do
+    [ -e "$b" ] || continue
+    [ "$cnt" -ge 3 ] && break
+    m=${b%.brief}.meta
+    short=$(basename "$b" .brief | tr -c 'A-Za-z0-9._\n-' '-'); nn=$(bash "$OPS_DIR/lanename.sh" "$short") || continue
+    { for k in base engine model claude_model effort ship; do
+        v=$(grep -E "^$k=" "$m" 2>/dev/null | tail -1 | cut -d= -f2-)
+        [ -z "$v" ] && case "$k" in base) v=origin/main;; engine) v=agy;; esac
+        [ -n "$v" ] && echo "$k=$v"
+      done; } > "$Q/$nn.meta.tmp"
+    mv "$Q/$nn.meta.tmp" "$Q/$nn.meta"; cp "$b" "$Q/$nn.brief.tmp"; mv "$Q/$nn.brief.tmp" "$Q/$nn.brief"
+    cnt=$((cnt + 1)); log "planner $n: queued $nn from planner-out/"
+  done
+  [ "$cnt" -gt 0 ] || log "ALERT planner $n wrote no brief into planner-out/"
+}
+
 # start_harness_gate <name>: the gate runs in the background (serialized by its own lock).
 start_harness_gate() { ( nohup /bin/bash "$OPS_DIR/harness-gate.sh" "$1" > "$L/harness-gate-$1.nohup" 2>&1 & ); }
 
@@ -202,6 +232,21 @@ planner_due() {
   { [ "$hh" = 08 ] || [ "$hh" = 16 ]; } && [ "$qn" -lt 2 ] && [ $(( $(date +%s) - last )) -gt 7200 ]
 }
 
+# agy_state_blob: the ops state a Claude refill/planner lane would read from outside its worktree, as inline text for an
+# AGY_ONLY brief (headless agy cannot read outside its worktree). Bounded to ~40 KB: status.sh, the open brief names
+# (queued, started, hold/) and project/QUEUE.md from origin/main.
+agy_state_blob() {
+  {
+    echo "## Inlined ops state (AGY_ONLY: you cannot read files outside this worktree)"
+    echo; echo "### status.sh"; bash "$OPS_DIR/status.sh" 2>&1 | head -c 6000
+    echo; echo "### open briefs (queued / started / hold)"
+    { ls "$Q"/*.brief 2>/dev/null | sed 's#.*/#queued: #; s#\.brief$##'
+      ls "$Q"/started/*.brief 2>/dev/null | sed 's#.*/#started: #; s#\.brief$##'
+      ls "$Q"/hold/*.brief 2>/dev/null | sed 's#.*/#hold: #; s#\.brief$##'; } | head -c 6000
+    echo; echo "### project/QUEUE.md (origin/main)"; git -C "$REPO" show origin/main:project/QUEUE.md 2>&1
+  } | head -c 40000
+}
+
 # Refill (PO 2026-11-22: work runs back to back): without NO_REFILL, with fewer than 4 briefs queued and no refill lane
 # queued or running, queue one rotating refill lane (p1 -> debt -> backlog -> review), at most every 5 minutes. With
 # NO_REFILL (PO 2026-11-24) the rotating refill stops and only the P1 planner runs (planner_due).
@@ -219,15 +264,26 @@ maybe_refill() {
     rn=$(bash "$OPS_DIR/lanename.sh" "refill-$kind")  # standard name at queue time (PO 2026-11-24)
     # pin_claude=1: the planner reads the ops state outside its worktree, which headless agy refuses (read_file auto-denied,
     # 2026-11-25 G706); it is short, so it always runs on Claude.
-    printf 'base=origin/main\nengine=claude\npin_claude=1\nship=no\nadddir=%s\n' "$OPS_STATE" > "$Q/$rn.meta"
+    if agy_only; then
+      # AGY_ONLY (PO 2026-11-26): no Claude, no adddir; the state is inlined below, a planner writes into planner-out/.
+      printf 'base=origin/main\nengine=agy\nship=no\n' > "$Q/$rn.meta"; [ "$kind" = p1 ] && echo 'planner_out=1' >> "$Q/$rn.meta"
+    else
+      printf 'base=origin/main\nengine=claude\npin_claude=1\nship=no\nadddir=%s\n' "$OPS_STATE" > "$Q/$rn.meta"
+    fi
     cp "$OPS_STATE/refill-${kind%b}.template" "$Q/$rn.brief.tmp" || { rm -f "$Q/$rn.meta" "$Q/$rn.brief.tmp"; log "ALERT refill template refill-${kind%b}.template missing"; return 0; }
     if [ "$pd" = 1 ]; then
       # The planner writes exactly as many briefs as the lane cap (PO 2026-11-24), whatever the template says.
       sed_inplace 's/Write 3 to 6 lane briefs/Write exactly 3 lane briefs (lane cap 3, PO 2026-11-24)/' "$Q/$rn.brief.tmp"
       grep -q 'exactly 3 lane briefs' "$Q/$rn.brief.tmp" || printf '\nWrite exactly 3 lane briefs (lane cap 3, PO 2026-11-24).\n' >> "$Q/$rn.brief.tmp"
     fi
+    if agy_only; then
+      { echo; agy_state_blob
+        if [ "$kind" = p1 ]; then
+          printf '\n## AGY_ONLY output location\nWrite the lane briefs as files in the directory planner-out/ of THIS worktree: <short-name>.brief and\n<short-name>.meta (meta lines such as base=origin/main, engine=agy). Do not write into the ops state directory; the lane\nrunner moves planner-out/*.brief and *.meta into the lane queue when this lane ends. Do not commit planner-out/.\n'
+        fi; } >> "$Q/$rn.brief.tmp"
+    fi
     mv "$Q/$rn.brief.tmp" "$Q/$rn.brief"
-    case "$kind" in p1*) printf 'claude_model=sonnet\neffort=high\n' >> "$Q/$rn.meta";; esac
+    agy_only || case "$kind" in p1*) printf 'claude_model=sonnet\neffort=high\n' >> "$Q/$rn.meta";; esac
     touch "$Q/.last-refill"; echo "$kind" > "$Q/.last-refill-kind"
     if [ "$pd" = 1 ]; then log "queued refill $rn (planner)"; else log "queued refill $rn"; fi
   fi
@@ -241,7 +297,7 @@ agy_limited() {
 
 # Pick the lowest-numbered brief whose engine has a free slot (qwen: 1 own slot; others: MAX) and start it.
 start_next_lane() {
-  local b next="" n meta base model adddir engine agy_now desc tot lbl n2 wt cmodel ceffort
+  local b next="" n meta base model adddir engine agy_now desc tot lbl n2 wt cmodel ceffort explicit_model
   for b in $(ls "$Q"/*.brief 2>/dev/null | sort); do
     if grep -q '^engine=qwen' "${b%.brief}.meta" 2>/dev/null; then
       [ "$(qwen_running)" -lt 1 ] && { next=$b; break; }
@@ -254,24 +310,40 @@ start_next_lane() {
   base=$(grep -E '^base=' "$meta" 2>/dev/null | cut -d= -f2-); base=${base:-origin/main}
   model=$(grep -E '^model=' "$meta" 2>/dev/null | cut -d= -f2-); model=${model:-gemini-4-argon-high}
   adddir=$(grep -E '^adddir=' "$meta" 2>/dev/null | cut -d= -f2-)
-  engine=$(grep -E '^engine=' "$meta" 2>/dev/null | cut -d= -f2-); [ -e "$Q/ENGINE_CLAUDE" ] && [ "$engine" != qwen ] && engine=claude
+  engine=$(grep -E '^engine=' "$meta" 2>/dev/null | cut -d= -f2-)
+  # An explicit model=gemini-4-* in the meta of an agy lane is kept (its effort is the model name's suffix); without it the
+  # lane name picks the model below.
+  explicit_model=""; if [ "${engine:-agy}" = agy ] && echo "$model" | grep -qE '^gemini-4-'; then
+    grep -qE '^model=' "$meta" 2>/dev/null && explicit_model=$model
+  fi
+  # AGY_ONLY: Claude is out of quota, so ENGINE_CLAUDE and engine=claude are ignored (qwen keeps its own slot).
+  if agy_only; then
+    [ "$engine" = claude ] && engine=agy
+  else
+    [ -e "$Q/ENGINE_CLAUDE" ] && [ "$engine" != qwen ] && engine=claude
+  fi
   # Model routing by job kind (MODEL_ROUTING.md, PO 2026-11-23): spread lanes over the Gemini 4 models on Antigravity's own
   # quota. Not when the meta names a Claude model, ENGINE_CLAUDE is set (agy quota) or AGY_OFF exists.
   # Half and half (PO 2026-11-23 "yarı yarıya Claude ve antigravity"): at most half of the slots on Antigravity.
   agy_now=$(ps -axo command | grep -E "^/.*Python .*argon_task_neon\.py" | grep -v grep | wc -l | tr -d ' ')
   # A refill-written claude_model=haiku default no longer pins a lane to Claude (2026-11-24: debt lanes ran on Haiku while
   # Antigravity slots sat idle); only pin_claude=1 in the meta does.
-  if ! grep -qE '^pin_claude=1' "$meta" 2>/dev/null && [ "$engine" != qwen ] && [ ! -e "$Q/ENGINE_CLAUDE" ] && [ ! -e "$Q/AGY_OFF" ] \
-     && [ "$agy_now" -lt $(( (MAX + 1) / 2 )) ]; then
+  # AGY_ONLY lifts the half-and-half cap, pin_claude, ENGINE_CLAUDE and AGY_OFF: every one of the MAX slots may run on agy.
+  if { agy_only || { ! grep -qE '^pin_claude=1' "$meta" 2>/dev/null && [ ! -e "$Q/ENGINE_CLAUDE" ] && [ ! -e "$Q/AGY_OFF" ] \
+     && [ "$agy_now" -lt $(( (MAX + 1) / 2 )) ]; }; } && [ "$engine" != qwen ]; then
+    [ -n "$explicit_model" ] && engine=agy
     # PO 2026-11-24: Antigravity back, 3 parallel lanes; Carbon / Neon / Hydrogen by difficulty (MODEL_ROUTING.md).
-    case "$n" in
-      *-state-sync*) ;;  # stays on Claude Sonnet (project records; tier B rule)
+    [ -z "$explicit_model" ] && case "$n" in
+      *-state-sync*) agy_only && { engine=agy; model=gemini-4-neon-high; };;  # Claude Sonnet normally (project records; tier B rule)
       *-debt-*|*-test*|*refill-backlog*|*refill-debt*) engine=agy; model=gemini-4-hydrogen-high;;
       *-neon-review-findings*) engine=agy; model=gemini-4-neon-high;;  # fixes on delivery/security scripts: keep high
       *refill-review*|*-review-*) engine=agy; model=gemini-4-neon-high;;
       *-port-*|*-fix-*|*refill-ui*) engine=agy; model=gemini-4-neon-medium;;  # PO 2026-11-24: medium is enough here
       *-p1-*|*refill-p1*) engine=agy; model=gemini-4-carbon-high;;
     esac
+    # AGY_ONLY: a lane the names above did not route still goes to agy (Neon high), never to Claude.
+    if agy_only && [ -z "$explicit_model" ] && ! echo "$model" | grep -qE 'carbon|neon|hydrogen'; then engine=agy; model=gemini-4-neon-high; fi
+    agy_only && [ "$engine" != agy ] && engine=agy
     # A model marked rate-limited by a recent 429 is skipped: next in carbon -> neon -> hydrogen (high), else Claude.
     if [ "$engine" = agy ] && agy_limited "$model"; then
       local alt picked=""
@@ -279,12 +351,14 @@ start_next_lane() {
         [ "$alt" = "$model" ] && continue
         agy_limited "$alt" || { picked=$alt; break; }
       done
-      if [ -n "$picked" ]; then log "agy $model rate-limited -> $n on $picked"; model=$picked; else engine=claude; fi
+      if [ -n "$picked" ]; then log "agy $model rate-limited -> $n on $picked"; model=$picked
+      elif agy_only; then log "every agy model rate-limited under AGY_ONLY -> $n stays queued (no Claude fallback)"; return 0
+      else engine=claude; fi
     fi
   fi
   # Antigravity cap (PO 2026-11-24: 3 parallel lanes there, Carbon/Neon/Hydrogen only): a lane that is not routed to a
   # Gemini model because the cap is full runs on Claude Sonnet instead of falling back to the Argon default.
-  if [ "${engine:-agy}" = agy ] && { [ "$agy_now" -ge $(( (MAX + 1) / 2 )) ] || ! echo "$model" | grep -qE 'carbon|neon|hydrogen'; }; then
+  if ! agy_only && [ "${engine:-agy}" = agy ] && { [ "$agy_now" -ge $(( (MAX + 1) / 2 )) ] || ! echo "$model" | grep -qE 'carbon|neon|hydrogen'; }; then
     engine=claude; grep -qE '^claude_model=' "$meta" 2>/dev/null || printf 'claude_model=sonnet\neffort=medium\n' >> "$meta"
   fi
   # Lane names (PO 2026-11-24): <yyyymmdd>-<HHMM>-G<all-time no>-D<day no>-<short name>. Since 2026-11-24 evening the name is
@@ -328,11 +402,25 @@ start_next_lane() {
   fi
 }
 
+# script_sum <file>: a content hash for the self-update check.
+script_sum() { cksum < "$1" 2>/dev/null | awk '{print $1 "-" $2}'; }
+# lane_reexec: replace this process with the new script; the lanes run in their own nohup processes and are never touched.
+lane_reexec() { exec /bin/bash "$LANE_SELF" "$MAX"; }
+# lane_self_check: re-exec when the script file changed since this process loaded it (PO 2026-11-26: a shipped runner change
+# takes effect without a person restarting the runner).
+lane_self_check() {
+  [ -n "${LANE_SELF:-}" ] && [ -n "${LANE_SELF_SUM:-}" ] || return 0
+  [ "$(script_sum "$LANE_SELF")" = "$LANE_SELF_SUM" ] && return 0
+  log "lane-runner.sh changed on disk -> re-executing (running lanes keep running)"; lane_reexec
+}
+
 lane_main() {
   set -u
   MAX=${1:-3}
+  LANE_SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}"); LANE_SELF_SUM=$(script_sum "$LANE_SELF")
   mkdir -p "$Q/started" "$Q/done" "$Q/hold" "$L"
   while true; do
+    lane_self_check
     finish_pass
     # PAUSED: no new lane starts (2026-11-20: agy quota exhausted and headless claude auth expired drained the queue).
     if [ -e "$Q/PAUSED" ]; then sleep 60; continue; fi

@@ -10,6 +10,8 @@
 #            review in logs/review-<name>.md (a person decides).
 . "$(dirname "${BASH_SOURCE[0]}")/ops_lib.sh"
 J=$OPS_STATE; SQ=$J/ship-queue; L=$J/logs; R=$OPS_REPO
+# AGY_ONLY (PO decision record 2026-11-26): Claude is out of quota; the tier-B review runs on Antigravity Neon xhigh only.
+agy_only() { [ -e "$J/lane-queue/AGY_ONLY" ]; }
 
 # review_decide <name> <ship-entry> <branch> <review-file>: act on the verdict in the review file.
 review_decide() {
@@ -21,7 +23,7 @@ review_decide() {
     return 0
   fi
   if grep -qE '^VERDICT: PASS$' "$out" || { grep -qE '^VERDICT: PASS' "$out" && ! grep -q 'BLOCK (Neon)' "$out"; }; then
-    sed_inplace '/^review=pending$/d' "$f"; echo "reviewed=sonnet" >> "$f"
+    sed_inplace '/^review=pending$/d' "$f"; echo "reviewed=$(agy_only && echo neon-agy-only || echo sonnet)" >> "$f"
     echo "$(date '+%F %T') B-REVIEW PASS $n" >> "$L/ship-runner.log"
     return 0
   fi
@@ -34,6 +36,7 @@ review_decide() {
   desc=$(echo "$n" | sed -E 's/^([0-9]{8}-[0-9]{4}-G[0-9]+-D[0-9]+-|[0-9]{1,5}-)//')
   sed_inplace '/^review=pending$/d' "$f"; echo "review_returned=1" >> "$f"
   local extra=(review_returned=1 pin_claude=1)
+  agy_only && extra=(review_returned=1)   # no Claude lane exists while AGY_ONLY is on
   grep -q '^allow_paths=1' "$f" && extra+=(allow_paths=1)
   lane_brief "fix-blocked-$desc" "$br" "# Task: fix the pre-merge review BLOCK of lane $n
 This worktree is branch $br (finished lane $n, a clone of its commits). A pre-merge review blocked it. Fix each concrete
@@ -73,6 +76,12 @@ review_main() {
     # lanes back) is not a review: try again after NEXUS_REVIEW_RETRY_S (default 20 min), at most twice more.
     local attempt
     for attempt in 1 2 3; do
+      if agy_only; then
+        printf '%s\n' "$diff" > "$wt/.review-$n.diff"   # inside the worktree: headless agy cannot read outside it
+        (cd "$wt" && agy -p "You review one change before it is merged to main of a bank firewall-operations product (Java/React), written by a small model without human review. Report only concrete defects that matter: wrong behaviour, a broken invariant, UNKNOWN or missing data shown as OK/zero/green, a security or privacy regression (credentials, device commands, authorization, masking), a weakened or deleted test, concurrency/transaction mistakes, swallowed errors, real-looking hostnames/IPs/serials or secret-shaped literals. Ignore style. End with exactly one line: 'VERDICT: PASS' or 'VERDICT: BLOCK' and, for BLOCK, the defects with file:line above it. The diff is in the file .review-$n.diff in this directory." \
+           --model gemini-4-neon-xhigh --mode plan --print-timeout 1500) > "$out" 2>&1 || true
+        rm -f "$wt/.review-$n.diff"
+      else
           (cd "$wt" && claude -p "You review one change before it is merged to main of a bank firewall-operations product (Java/React).
       It was written by a small model without human review. Look only for concrete defects that matter: wrong behaviour, a
       broken invariant, UNKNOWN or missing data shown as OK/zero/green, a security or privacy regression (credentials,
@@ -83,6 +92,7 @@ review_main() {
       
       The change (git diff against main):
       $diff" --model sonnet --effort medium --permission-mode plan --output-format text) > "$out" 2>&1
+      fi
       grep -qE '^VERDICT: (PASS|BLOCK)' "$out" && break
       echo "$(date '+%F %T') B-REVIEW UNAVAILABLE $n (attempt $attempt): $(head -c 160 "$out" | tr '\n' ' ')" >> "$L/ship-runner.log"
       [ "$attempt" -lt 3 ] && sleep "${NEXUS_REVIEW_RETRY_S:-1200}"
@@ -91,7 +101,7 @@ review_main() {
   [ -e "$f" ] || exit 0
   # Two eyes from two model families (PO 2026-11-23 "çift göz analiz değerli"): a lane written by Claude also gets a
   # Gemini Neon review; one written on Antigravity already has a different family (Sonnet) as its reviewer.
-  if grep -qE '^VERDICT: PASS' "$out" && ! grep -q "Gemini 4" <(git -C "$R" log -1 --format=%B "$br"); then
+  if ! agy_only && grep -qE '^VERDICT: PASS' "$out" && ! grep -q "Gemini 4" <(git -C "$R" log -1 --format=%B "$br"); then
     wt2=$OPS_CODO/nexus-q-$n; [ -d "$wt2" ] || wt2=$R
     printf '%s\n' "$diff" > "$wt2/.review-$n.diff"   # inside the worktree: headless agy cannot read outside it
     (cd "$wt2" && agy -p "You review one change before it is merged (bank firewall-operations product, Java/React), written by a small model without human review. Report only concrete defects that matter: wrong behaviour, broken invariant, UNKNOWN shown as OK/zero, security or privacy regression, weakened/deleted test, concurrency mistakes, swallowed errors, real-looking hostnames/IPs/secrets. Ignore style. End with exactly one line 'VERDICT: PASS' or 'VERDICT: BLOCK'. The diff is in the file .review-$n.diff in this directory." \

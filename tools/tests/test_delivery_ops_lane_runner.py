@@ -200,3 +200,152 @@ def test_start_next_lane_requeues_a_brief_whose_worktree_cannot_be_created(ops):
         assert r.returncode == 0, r.stderr
     assert (ops.lq / "done" / "20261124-1201-G2-D2-p1-bad.brief.FAILED_WORKTREE").exists()
     assert "ALERT worktree failed twice" in r.stdout
+
+
+# ---- AGY_ONLY mode (PO decision record 2026-11-26) ---------------------------------------------------------------------
+
+def agy_env(ops, agy_running=0):
+    """Stub engines: argon_task_neon.py and claude_task.sh record their arguments; `ps` lists `agy_running` agy lanes."""
+    (ops.state / "argon_task_neon.py").write_text("import sys\nopen(sys.argv[sys.argv.index('--log')+1] + '.args','w').write(' '.join(sys.argv))\n"
+                                                  "print('[argon] exit=0 head=abc x')\n")
+    (ops.state / "claude_task.sh").write_text('echo "CLAUDE $*"\n')
+    ops.fake("ps", "".join('echo "/usr/bin/Python /s/argon_task_neon.py --worktree w"\n' for _ in range(agy_running)) + "exit 0")
+
+
+def queue_brief(ops, name, meta):
+    (ops.lq / f"{name}.brief").write_text("b\n")
+    (ops.lq / f"{name}.meta").write_text(meta)
+
+
+def start(ops, name, meta, agy_only=True, agy_running=0, extra=""):
+    agy_env(ops, agy_running)
+    (ops.lq / "started").mkdir(exist_ok=True)
+    if agy_only:
+        (ops.lq / "AGY_ONLY").touch()
+    queue_brief(ops, name, meta)
+    r = ops.source("lane-runner.sh", f"MAX=3; {extra}\nstart_next_lane")
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_agy_only_routes_a_pin_claude_lane_to_agy(ops):
+    out = start(ops, "20261126-1300-G5-D5-p1-pinned", "base=main\nengine=claude\npin_claude=1\nclaude_model=sonnet\n")
+    assert "gemini-4-carbon-high" in out and "claude" not in out.replace("pin_claude", "")
+
+
+def test_without_agy_only_pin_claude_still_runs_on_claude(ops):
+    out = start(ops, "20261126-1300-G5-D5-p1-pinned", "base=main\nengine=claude\npin_claude=1\nclaude_model=sonnet\n", agy_only=False)
+    assert "(claude sonnet" in out
+
+
+def test_agy_only_ignores_engine_claude_and_agy_off(ops):
+    (ops.lq / "ENGINE_CLAUDE").touch(); (ops.lq / "AGY_OFF").touch()
+    out = start(ops, "20261126-1300-G5-D5-fix-x", "base=main\n")
+    assert "gemini-4-neon-medium" in out
+
+
+def test_agy_only_sends_a_state_sync_lane_to_agy_not_claude(ops):
+    out = start(ops, "20261126-1300-G5-D5-state-sync", "base=main\nengine=claude\nclaude_model=sonnet\n")
+    assert "gemini-4-neon-high" in out
+
+
+def test_agy_only_lifts_the_half_and_half_slot_cap(ops):
+    # Two agy lanes already run (MAX 3): normally the third spills to Claude, under AGY_ONLY it stays on agy.
+    out = start(ops, "20261126-1300-G5-D5-p1-third", "base=main\n", agy_running=2)
+    assert "gemini-4-carbon-high" in out
+    ops.lq.joinpath("AGY_ONLY").unlink()
+    for f in ops.lq.glob("20261126*"):
+        f.unlink()
+    out = start(ops, "20261126-1301-G6-D6-p1-fourth", "base=main\n", agy_only=False, agy_running=2)
+    assert "(claude" in out
+
+
+def test_explicit_gemini_model_in_the_meta_is_honored_by_an_agy_lane(ops):
+    out = start(ops, "20261126-1300-G5-D5-p1-explicit", "base=main\nengine=agy\nmodel=gemini-4-neon-xhigh\n", agy_only=False)
+    assert "gemini-4-neon-xhigh" in out and "carbon" not in out
+    args = next(ops.logs.glob("q-*.log.args")).read_text()
+    assert "--model gemini-4-neon-xhigh --effort xhigh" in args
+
+
+def test_without_a_model_line_the_lane_name_still_routes(ops):
+    out = start(ops, "20261126-1300-G5-D5-p1-named", "base=main\nengine=agy\n", agy_only=False)
+    assert "gemini-4-carbon-high" in out
+
+
+def test_agy_only_with_every_model_rate_limited_keeps_the_brief_queued(ops):
+    for m in ("carbon", "neon", "hydrogen"):
+        (ops.lq / f".agy-limited-gemini-4-{m}-high").touch()
+    out = start(ops, "20261126-1300-G5-D5-p1-limited", "base=main\nengine=claude\npin_claude=1\n")
+    assert "stays queued" in out and (ops.lq / "20261126-1300-G5-D5-p1-limited.brief").exists()
+    assert not (ops.lq / "ENGINE_CLAUDE").exists()
+
+
+def test_agy_only_quota_hit_never_creates_engine_claude(ops):
+    (ops.lq / "AGY_ONLY").touch()
+    ops.write_lane(LANE, "[argon] exit=3 head=abc x", age_s=900, meta="base=origin/main\nagy_model=gemini-4-carbon-high\n",
+                   report="error: Individual quota reached. Resets in 10m32s.")
+    finish(ops)
+    assert not (ops.lq / "ENGINE_CLAUDE").exists() and (ops.lq / f"{LANE}.brief").exists()
+    assert (ops.lq / ".agy-limited-gemini-4-carbon-high").exists()
+
+
+def planner_setup(ops, agy_only=True):
+    (ops.state / "refill-p1.template").write_text("# Planner\nWrite 3 to 6 lane briefs into the lane queue.\n")
+    (ops.lq / "NO_REFILL").touch()
+    if agy_only:
+        (ops.lq / "AGY_ONLY").touch()
+    ops.git(ops.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (ops.lq / "hold").mkdir(exist_ok=True)
+    (ops.lq / "hold" / "20261125-0900-G1-D1-held-one.brief").write_text("x\n")
+    # QUEUE.md lives on origin/main
+    (ops.repo / "project").mkdir(exist_ok=True)
+    (ops.repo / "project" / "QUEUE.md").write_text("QUEUE-MARKER-LINE\n")
+    ops.git(ops.repo, "add", "-A"); ops.git(ops.repo, "commit", "-q", "-m", "q")
+    ops.git(ops.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+
+def test_agy_only_planner_brief_carries_the_inlined_state_and_runs_on_agy(ops):
+    planner_setup(ops)
+    r = ops.source("lane-runner.sh", "maybe_refill")
+    assert r.returncode == 0, r.stderr
+    brief = next(ops.lq.glob("*refill-p1.brief")).read_text()
+    meta = next(ops.lq.glob("*refill-p1.meta")).read_text()
+    assert "QUEUE-MARKER-LINE" in brief and "held-one" in brief and "### status.sh" in brief and "planner-out/" in brief
+    assert "exactly 3 lane briefs" in brief and len(brief) < 45000
+    assert "engine=agy" in meta and "planner_out=1" in meta and "pin_claude" not in meta and "adddir" not in meta
+    assert "claude_model" not in meta
+
+
+def test_without_agy_only_the_planner_stays_on_claude(ops):
+    planner_setup(ops, agy_only=False)
+    ops.source("lane-runner.sh", "maybe_refill")
+    brief = next(ops.lq.glob("*refill-p1.brief")).read_text()
+    meta = next(ops.lq.glob("*refill-p1.meta")).read_text()
+    assert "QUEUE-MARKER-LINE" not in brief and "engine=claude" in meta and "pin_claude=1" in meta and "adddir=" in meta
+
+
+def test_a_finished_planner_lane_moves_planner_out_into_the_lane_queue(ops):
+    (ops.lq / "AGY_ONLY").touch()
+    wt = ops.codo / f"nexus-q-{LANE}"
+    (wt / "planner-out").mkdir(parents=True)
+    for i in (1, 2):
+        (wt / "planner-out" / f"job{i}.brief").write_text(f"brief {i}\n")
+        (wt / "planner-out" / f"job{i}.meta").write_text("base=origin/main\nallow_paths=1\npin_claude=1\nadddir=/x\nship=no\n")
+    ops.write_lane(LANE, "[argon] exit=0 head=abc x", meta="base=origin/main\nship=no\nplanner_out=1\n")
+    finish(ops)
+    briefs = sorted(ops.lq.glob("2*-job*.brief"))
+    assert len(briefs) == 2 and briefs[0].read_text().startswith("brief")
+    meta = briefs[0].with_suffix(".meta").read_text()
+    assert "base=origin/main" in meta and "engine=agy" in meta and "ship=no" in meta
+    assert "allow_paths" not in meta and "pin_claude" not in meta and "adddir" not in meta
+
+
+def test_the_lane_runner_re_executes_itself_only_when_its_script_changed(ops, tmp_path):
+    script = tmp_path / "lane-runner.sh"
+    script.write_text("echo one\n")
+    body = (f'LANE_SELF="{script}"; LANE_SELF_SUM=$(script_sum "$LANE_SELF"); lane_reexec() {{ echo REEXEC; }}\n'
+            'lane_self_check; echo "after-unchanged"\n'
+            f'echo two >> "{script}"; lane_self_check; echo "after-changed"')
+    r = ops.source("lane-runner.sh", body)
+    assert r.stdout.split() .count("REEXEC") == 1 and "after-unchanged" in r.stdout
+    assert r.stdout.index("after-unchanged") < r.stdout.index("REEXEC")

@@ -258,3 +258,170 @@ def test_a_named_preview_e2e_failure_is_the_lanes_fault_not_infrastructure():
     i = src.index("infra=$((infra + 1))")
     guard = src[src.rindex("if ", 0, i):i]
     assert "PREVIEW E2E FAILED TEST:" in guard and "! grep -q" in guard
+
+
+# ---- AGY_ONLY mode (PO decision record 2026-11-26) ---------------------------------------------------------------------
+
+def guarded_branch(ops, files):
+    """A branch of ops.repo with `files` added on top of main; origin/main points at main."""
+    ops.git(ops.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    ops.git(ops.repo, "checkout", "-q", "-b", "lane/q-guard")
+    for rel, text in files.items():
+        (ops.repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ops.repo / rel).write_text(text)
+    ops.git(ops.repo, "add", "-A"); ops.git(ops.repo, "commit", "-q", "-m", "change")
+    ops.git(ops.repo, "checkout", "-q", "main")
+    mb = ops.git(ops.repo, "merge-base", "lane/q-guard", "origin/main")
+    return mb, ops.git(ops.repo, "diff", "--name-only", mb, "lane/q-guard")
+
+
+def fake_consult(ops, verdict):
+    f = ops.tmp / "consult.py"
+    f.write_text("import argparse\np=argparse.ArgumentParser()\nfor a in ('--brief','--output','--model','--effort'): p.add_argument(a)\n"
+                 "a=p.parse_args()\nopen('/dev/null').close()\nopen(a.output,'w').write('review text\\n'+%r+'\\n')\n"
+                 "open(a.output+'.args','w').write(a.model+' '+a.effort+'\\n'+open(a.brief).read())\n" % verdict)
+    return f
+
+
+def guard_review(ops, verdict, files):
+    (ops.lq).mkdir(exist_ok=True)
+    (ops.lq / "AGY_ONLY").touch()
+    mb, changed = guarded_branch(ops, files)
+    entry = ops.sq / f"{LANE}.ship"
+    entry.write_text(f"branch=lane/q-guard\nname={LANE}\n")
+    consult = fake_consult(ops, verdict)
+    (ops.repo / "docs").mkdir(exist_ok=True)
+    r = ops.source("ship-runner.sh", f'agy_only_guard_review {LANE} "{entry}" lane/q-guard {mb} "{changed}"; echo "RC=$?"',
+                   cwd=ops.repo, extra_env={"NEXUS_CONSULT_ARGON": str(consult)})
+    assert r.returncode == 0, r.stderr
+    return entry.read_text(), r.stdout
+
+
+def test_agy_only_neon_pass_releases_a_guarded_path_item(ops):
+    text, out = guard_review(ops, "VERDICT: PASS", {"scripts/tool.py": "x = 1\n"})
+    assert "RC=0" in out and "allow_paths=1" in text and "approved=agy-neon-xhigh AGY_ONLY exception PO 2026-11-26" in text
+    assert not (ops.repo / "docs" / ".agy-only-review").exists()
+
+
+def test_agy_only_neon_block_or_no_verdict_keeps_the_item_held(ops):
+    for verdict in ("VERDICT: BLOCK", "no verdict here"):
+        text, out = guard_review(ops, verdict, {"scripts/tool.py": "x = 1\n"})
+        assert "RC=1" in out and "allow_paths" not in text
+        ops.git(ops.repo, "branch", "-D", "lane/q-guard")
+
+
+@pytest.mark.parametrize("files", [
+    {"ui2/service/src/main/resources/db/migration/V999__x.sql": "select 1;\n"},
+    {"deploy/run.sh": "echo\n"},
+    {".github/workflows/ci.yml": "a: b\n"},
+    {"tools/delivery/ops/lane-runner.sh": "agy_only() { :; }  # AGY_ONLY\n"},
+])
+def test_agy_only_exceptions_stay_held_even_when_neon_would_pass(ops, files):
+    text, out = guard_review(ops, "VERDICT: PASS", files)
+    assert "RC=1" in out and "allow_paths" not in text and "stays held for a person" in out
+    assert not (ops.repo / "docs" / ".agy-only-review").exists() and not list(ops.repo.glob("**/*.args"))
+
+
+def test_a_ship_runner_change_without_agy_only_lines_goes_through_the_review(ops):
+    text, out = guard_review(ops, "VERDICT: PASS", {"tools/delivery/ops/status.sh": "# comment\n"})
+    assert "RC=0" in out and "allow_paths=1" in text
+
+
+def test_the_ship_loop_asks_for_the_review_only_under_agy_only(ops):
+    body = ops.source("ship-runner.sh", 'declare -f agy_only').stdout
+    assert 'AGY_ONLY' in body
+    src = (OPS / "ship-runner.sh").read_text()
+    assert src.count("agy_only_guard_review \"$n\"") == 1 and "&& agy_only" in src
+
+
+def shipped_batch(ops, batch, files):
+    ops.git(ops.repo, "checkout", "-q", "-b", f"batch/{batch}")
+    for rel, text in files.items():
+        (ops.repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ops.repo / rel).write_text(text)
+    ops.git(ops.repo, "add", "-A"); ops.git(ops.repo, "commit", "-q", "-m", "ship")
+    ops.git(ops.repo, "checkout", "-q", "main")
+    inflight(ops, batch, [LANE], [f"SHIPPED batch/{batch} 12:00"])
+
+
+def test_a_shipped_batch_touching_the_ops_scripts_marks_a_self_update(ops):
+    shipped_batch(ops, "B1", {"tools/delivery/ops/status.sh": "# new\n"})
+    r = ops.source("ship-runner.sh", 'finish_batch B1; echo "SU=$SELF_UPDATE"')
+    assert "SU=1" in r.stdout
+    shipped_batch(ops, "B2", {"docs/x.md": "x\n"})
+    r = ops.source("ship-runner.sh", 'finish_batch B2; echo "SU=$SELF_UPDATE"')
+    assert "SU=0" in r.stdout
+
+
+def self_update(ops, inflight_dirs):
+    co = ops.tmp / "runner-checkout"
+    ops.git_repo(co, {"tools/delivery/ops/x.sh": "a\n"})
+    ops.git(co, "update-ref", "refs/remotes/origin/main", "HEAD")
+    for d in inflight_dirs:
+        (ops.sq / "inflight" / d).mkdir(parents=True)
+    r = ops.source("ship-runner.sh", f'runner_checkout() {{ echo "{co}"; }}; runner_reexec() {{ echo REEXEC; }}\n'
+                                     'SELF_UPDATE=1; self_update_if_idle; echo "SU=$SELF_UPDATE"')
+    assert r.returncode == 0, r.stderr
+    return co, r.stdout
+
+
+def test_the_self_update_waits_while_a_batch_is_in_flight(ops):
+    co, out = self_update(ops, ["B9"])
+    assert "REEXEC" not in out and "SU=1" in out
+    assert os.access(co / "tools/delivery/ops/x.sh", os.W_OK)
+
+
+def test_the_self_update_checks_out_origin_main_read_only_and_re_executes_when_idle(ops):
+    co, out = self_update(ops, [])
+    assert "REEXEC" in out and "SU=0" in out
+    assert not os.access(co / "tools/delivery/ops/x.sh", os.W_OK)
+    os.chmod(co / "tools/delivery/ops", 0o755); os.chmod(co / "tools/delivery/ops/x.sh", 0o644)   # let pytest clean up
+
+
+# ---- b-review.sh under AGY_ONLY ----------------------------------------------------------------------------------------
+
+def review_run(ops, agy_only, agy_reply):
+    ops.git(ops.repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    ops.git(ops.repo, "checkout", "-q", "-b", f"lane/q-{LANE}")
+    (ops.repo / "a.txt").write_text("a\n")
+    ops.git(ops.repo, "add", "-A"); ops.git(ops.repo, "commit", "-q", "-m", "change")
+    ops.git(ops.repo, "checkout", "-q", "main")
+    ship_entry(ops)
+    if agy_only:
+        (ops.lq / "AGY_ONLY").touch()
+    ops.fake("claude", f'echo CLAUDE-CALLED >> "{ops.tmp}/calls"; echo "VERDICT: PASS"')
+    ops.fake("agy", f'echo "AGY $*" >> "{ops.tmp}/calls"; ls .review-* >> "{ops.tmp}/calls" 2>&1; echo "{agy_reply}"')
+    r = ops.source("b-review.sh", f'review_main {LANE}', extra_env={"NEXUS_REVIEW_RETRY_S": "0"})
+    assert r.returncode == 0, r.stderr
+    calls = (ops.tmp / "calls").read_text() if (ops.tmp / "calls").exists() else ""
+    return calls
+
+
+def test_b_review_under_agy_only_uses_neon_xhigh_and_never_claude(ops):
+    calls = review_run(ops, True, "VERDICT: PASS")
+    assert "CLAUDE-CALLED" not in calls and "--model gemini-4-neon-xhigh --mode plan --print-timeout 1500" in calls
+    assert ".review-" in calls and "reviewed=neon-agy-only" in (ops.sq / f"{LANE}.ship").read_text()
+    assert not list(ops.repo.glob(".review-*")) and not list(ops.codo.glob("**/.review-*.diff"))
+
+
+def test_b_review_without_agy_only_still_uses_claude(ops):
+    calls = review_run(ops, False, "VERDICT: PASS")
+    assert "CLAUDE-CALLED" in calls and "reviewed=sonnet" in (ops.sq / f"{LANE}.ship").read_text()
+
+
+def test_b_review_under_agy_only_retries_three_times_then_holds(ops):
+    calls = review_run(ops, True, "no verdict")
+    assert calls.count("AGY ") == 3 and "CLAUDE-CALLED" not in calls
+    assert (ops.sq / "held" / f"{LANE}.ship").exists()
+
+
+def test_b_review_block_under_agy_only_queues_a_fix_lane_without_pin_claude(ops):
+    review_run(ops, True, "VERDICT: BLOCK")
+    meta = next(ops.lq.glob("*fix-blocked*.meta")).read_text()
+    assert "review_returned=1" in meta and "pin_claude" not in meta
+
+
+def test_status_prints_agy_only_on(ops):
+    assert "AGY_ONLY" not in ops.bash(f'bash "{OPS}/status.sh"').stdout
+    (ops.lq / "AGY_ONLY").touch()
+    assert "AGY_ONLY on" in ops.bash(f'bash "{OPS}/status.sh"').stdout
