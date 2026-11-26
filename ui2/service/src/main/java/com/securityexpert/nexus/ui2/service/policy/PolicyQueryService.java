@@ -932,7 +932,7 @@ public final class PolicyQueryService {
         body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
         body.put("counts", map(report.counts())); body.put("byType", report.byType()); body.put("byGrade", report.byGrade());
         body.put("unionCover", map(report.unionCover())); body.put("partialShadow", map(report.partialShadow()));
-        body.put("safeReorder", map(report.safeReorder()));
+        body.put("merge", map(report.merge())); body.put("safeReorder", map(report.safeReorder()));
         body.put("insights", rows.stream().skip((long) page * 200).limit(200).map(this::insightRow).toList());
         return new PolicyResponse(body);
     }
@@ -966,7 +966,28 @@ public final class PolicyQueryService {
         var hygiene = analysis(snapshot, days);
         var union = unionCover(snapshot, hygiene);
         var partial = partialShadow(snapshot, hygiene, union);
-        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, union, partial, reorder(snapshot, partial));
+        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, union, partial, merge(snapshot), reorder(snapshot, partial));
+    }
+    private record CachedMerge(PolicySnapshot snapshot, PolicyMerge.Result result) {}
+    private final Map<String, CachedMerge> mergeCache = new LinkedHashMap<>(8, 0.75f, true);
+    /**
+     * The I5 pass ({@link PolicyMerge}) of one snapshot instance, cached exactly like {@link #reorder}: it reads only the
+     * snapshot, which does not depend on the unused threshold or the clock.
+     */
+    private PolicyMerge.Result merge(PolicySnapshot snapshot) {
+        String id = snapshot.metadata().id();
+        synchronized (mergeCache) {
+            var cached = mergeCache.get(id);
+            if (cached != null && cached.snapshot() == snapshot) return cached.result();
+        }
+        PolicyMerge.Result result;
+        hygieneSlots.acquireUninterruptibly();
+        try { result = PolicyMerge.analyze(snapshot); } finally { hygieneSlots.release(); }
+        synchronized (mergeCache) {
+            mergeCache.put(id, new CachedMerge(snapshot, result));
+            if (mergeCache.size() > 4) mergeCache.remove(mergeCache.keySet().iterator().next());
+        }
+        return result;
     }
     private record CachedReorder(PolicySnapshot snapshot, PolicyReorder.Result result) {}
     private final Map<String, CachedReorder> reorderCache = new LinkedHashMap<>(8, 0.75f, true);

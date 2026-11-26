@@ -30,8 +30,10 @@ class PolicyInsightsQueryTest {
         assertEquals(3, all.path("counts").path("rules").asInt());
         assertEquals(all.path("total").asInt(), all.path("insights").size());
         assertEquals(1, all.path("byType").path("I1").asInt()); assertEquals(1, all.path("byType").path("I10").asInt());
-        // The I7 measurement block sits next to the I3 and I4 ones, with every counter and the not-evaluable list.
-        for (String block : List.of("unionCover", "partialShadow", "safeReorder")) assertTrue(all.has(block), block);
+        // The I5 and I7 measurement blocks sit next to the I3 and I4 ones, with every counter and the not-evaluable list.
+        for (String block : List.of("unionCover", "partialShadow", "merge", "safeReorder")) assertTrue(all.has(block), block);
+        for (String key : List.of("evaluated", "candidates", "alreadyShadowed", "differsInSeveralCells", "differentEffect", "differentInstallOn", "anchorBlocked", "notProven", "notEvaluable"))
+            assertTrue(all.path("merge").has(key), key);
         for (String key : List.of("evaluated", "safe", "safeInspectionChanges", "unsafeDifferentEffect", "anchorBlocked", "crossesSection", "notProven", "notEvaluable"))
             assertTrue(all.path("safeReorder").has(key), key);
         // r3 (the /24) overlaps r1 (one host) with the same action: one promote of r3 above r1, across r2, with no behaviour change.
@@ -66,6 +68,7 @@ class PolicyInsightsQueryTest {
             PolicyInsightsTest.withHits(cp("r3", 3, "Accept", "net", "any"), 0L, null)));
         var body = masked(query.insights(snapshot, 0, "", "", 90).body());
         assertEquals(3, body.path("counts").path("rules").asInt());
+        assertTrue(body.path("merge").path("evaluated").isNumber(), "the I5 counters pass the projection as numbers");
         assertTrue(body.path("safeReorder").path("evaluated").isNumber(), "the I7 counters pass the projection as numbers");
         for (JsonNode row : body.path("insights")) {
             assertTrue(PolicyInsights.TYPES.contains(row.path("insightType").asText()));

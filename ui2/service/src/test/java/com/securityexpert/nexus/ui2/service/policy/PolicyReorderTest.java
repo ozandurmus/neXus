@@ -80,8 +80,9 @@ class PolicyReorderTest {
         var block = report.safeReorder();
         assertEquals(1, block.evaluated()); assertEquals(1, block.safe());
         assertEquals(0, block.safeInspectionChanges() + block.unsafeDifferentEffect() + block.anchorBlocked() + block.crossesSection() + block.notProven());
-        // I7 sits right after I4 in the display order, and the package counts stay the shadow engine's.
-        assertTrue(PolicyInsights.TYPES.indexOf("I7") == PolicyInsights.TYPES.indexOf("I4") + 1);
+        // I7 sits right after I5 (and I5 after I4) in the display order, and the package counts stay the shadow engine's.
+        assertTrue(PolicyInsights.TYPES.indexOf("I5") == PolicyInsights.TYPES.indexOf("I4") + 1);
+        assertTrue(PolicyInsights.TYPES.indexOf("I7") == PolicyInsights.TYPES.indexOf("I5") + 1);
         assertEquals(PolicyInsightsTest.report(snapshot).counts(), report.counts());
     }
     @Test void aCrossedDisjointRuleIsHarmlessAndListed() {

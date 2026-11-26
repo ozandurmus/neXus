@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:47:24Z
+Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-26T09:24:07Z
 
 ## Now
-- NXS-LOCAL-0419 — Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge (automated_validated)
+- NXS-LOCAL-0422 — Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -46,6 +46,7 @@ Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:47:24Z
 - P2/planned path_analysis_phase_b
 - P2/planned platform_backup_step1_host_roll
 - P2/planned policy_gaps_engine_attribution_harness_run
+- P2/planned policy_insights_p3_counter_samples_contract_review
 - P2/planned policy_install_p2_p4
 - P2/planned product_rename_identity
 - P2/planned reports_r2
@@ -60,6 +61,7 @@ Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:47:24Z
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
+- P3/planned aiview_job_transcript_masked_read_decision
 - P3/planned aiview_sweep_test_hosta_cause
 - P3/planned asa_mask_token_real_unit_check
 - P3/planned backup_claim_time_authorization_recheck
@@ -81,6 +83,7 @@ Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:47:24Z
 - P3/planned legacy_python_separation
 - P3/planned old_export_copies_disposal
 - P3/planned opt_nexus_step_d_delete_old_copies
+- P3/planned policy_insights_onetime_hours_range_schedule
 - P3/planned preview_golden_database_rollout
 - P3/planned radware_cc_identity_and_defensepro_reads
 - P3/planned script_run_launcher_stdout_race
@@ -161,8 +164,8 @@ Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:47:24Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0422 (automated_validated)
+- NXS-LOCAL-0421 (automated_validated)
+- NXS-LOCAL-0420 (automated_validated)
 - NXS-LOCAL-0419 (automated_validated)
 - NXS-LOCAL-0418 (automated_validated)
-- NXS-LOCAL-0417 (automated_validated)
-- NXS-LOCAL-0416 (automated_validated)
-- NXS-LOCAL-0415 (automated_validated)

@@ -13,7 +13,7 @@ vi.mock("../src/screens/DeviceShared", async original => ({ ...(await original<t
 /** Policy Insights detail panel (PO 2026-11-25). Fixtures carry the AIView masked state only: pseudonyms and 192.0.2.x. */
 const ids: Record<InsightType, string> = {
   I1: "11111111-1111-1111-1111-111111111111", I2: "22222222-2222-2222-2222-222222222222",
-  I3: "33333333-3333-3333-3333-333333333333", I4: "44444444-4444-4444-4444-444444444444", I7: "77777777-7777-7777-7777-777777777777",
+  I3: "33333333-3333-3333-3333-333333333333", I4: "44444444-4444-4444-4444-444444444444", I5: "55555555-5555-5555-5555-555555555555", I7: "77777777-7777-7777-7777-777777777777",
   I8: "88888888-8888-8888-8888-888888888888", I9: "99999999-9999-9999-9999-999999999999",
   I10: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", I11: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", I12: "cccccccc-cccc-cccc-cccc-cccccccccccc",
 };
