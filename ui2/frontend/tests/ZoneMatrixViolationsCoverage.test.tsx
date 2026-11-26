@@ -85,18 +85,20 @@ const summaryGets = (s: Served) => s.gets.filter((u) => u.startsWith("/api/v2/zo
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
 
-describe("Zone matrix: tab list and lazy read", () => {
-  it("orders the tabs Matrix, Violations, Zones, Versions, Evaluate, Coverage and reads the stored summary once", async () => {
+describe("Zone matrix: tab list and single summary read", () => {
+  it("orders the tabs Matrix, Violations, Zones, Versions, Evaluate, Coverage and reads the stored summary once when zones load", async () => {
     const s = serve();
     render(<ZoneMatrixScreen />);
     await screen.findByRole("tab", { name: "Coverage" });
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Violations", "Zones", "Versions", "Evaluate", "Coverage"]);
-    // The Matrix tab of the active version starts the one read (open-violation counts); no other tab adds a second.
+    // The screen starts the one summary read once the zones load (for the coverage strip on every tab); switching tabs adds no second read.
     await waitFor(() => expect(summaryGets(s)).toEqual(["/api/v2/zone-matrix/summary"]));
+    fireEvent.click(screen.getByRole("tab", { name: "Zones" }));
+    expect(summaryGets(s)).toEqual(["/api/v2/zone-matrix/summary"]);
     fireEvent.click(screen.getByRole("tab", { name: "Violations" }));
     await screen.findByRole("table", { name: "Violation findings" });
     expect(summaryGets(s)).toEqual(["/api/v2/zone-matrix/summary"]);
-    // The other summary tab reuses the one read.
+    // The Coverage tab reuses the same read.
     fireEvent.click(screen.getByRole("tab", { name: "Coverage" }));
     await screen.findByRole("table", { name: "Policy coverage" });
     expect(summaryGets(s)).toHaveLength(1);
