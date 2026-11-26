@@ -40,9 +40,11 @@ import {
   describeApiError,
   formatRunAs,
   inferScriptKindFromExtension,
+  notifySendsMail,
   parseEgressInput,
   readFileAsBase64,
   stemFromFileName,
+  validateFiveFieldCronShape,
   type ExtensionKindInference,
 } from "./ScriptFormHelpers";
 
@@ -200,6 +202,7 @@ export function CreateScriptDialog({
   const [timeoutSeconds, setTimeoutSeconds] = useState("300");
   const [egressText, setEgressText] = useState("");
   const [notify, setNotify] = useState<ScriptNotifyMode>("none");
+  const [mailOnFailureOnly, setMailOnFailureOnly] = useState(false);
   const [runAs, setRunAs] = useState<string>(defaultRunAs);
   const [credentialRefs, setCredentialRefs] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -255,6 +258,7 @@ export function CreateScriptDialog({
     setUploadedBase64(null);
     setUploadedFileName("");
     setUploadedSize(null);
+    setMailOnFailureOnly(false);
     setError(null);
     onClose();
   };
@@ -263,6 +267,7 @@ export function CreateScriptDialog({
   const effectiveName = name.trim() || stemFromFileName(effectiveFileName);
   const parsedTimeout = Number(timeoutSeconds);
   const timeoutValid = Number.isInteger(parsedTimeout) && parsedTimeout >= 1 && parsedTimeout <= 3600;
+  const scheduleError = validateFiveFieldCronShape(schedule);
   const canSubmit =
     !busy &&
     !extensionRefused &&
@@ -270,6 +275,7 @@ export function CreateScriptDialog({
     Boolean(effectiveName) &&
     hasBody &&
     timeoutValid &&
+    scheduleError === null &&
     Boolean(effectiveRunAs);
 
   const handleSubmit = async () => {
@@ -289,6 +295,7 @@ export function CreateScriptDialog({
         egress: parseEgressInput(egressText),
         credential_refs: credentialRefs,
         notify,
+        notify_mail_on_failure_only: notifySendsMail(notify) && mailOnFailureOnly,
         run_as: effectiveRunAs,
       });
       // Immediately clear script body from browser memory after save (write-only contract).
@@ -296,6 +303,7 @@ export function CreateScriptDialog({
       setUploadedBase64(null);
       setUploadedFileName("");
       setUploadedSize(null);
+      setMailOnFailureOnly(false);
       onCreated(created);
     } catch (submitErr) {
       setError(describeApiError(submitErr));
@@ -428,7 +436,11 @@ export function CreateScriptDialog({
               placeholder="0 2 * * *"
               value={schedule}
               onChange={(e) => setSchedule(e.target.value)}
-              helperText={`minute hour day-of-month month day-of-week in ${scheduleZone} (leave blank for unscheduled)`}
+              error={scheduleError !== null}
+              helperText={
+                scheduleError ??
+                `minute hour day-of-month month day-of-week in ${scheduleZone} (leave blank for unscheduled)`
+              }
               InputProps={{ sx: { fontFamily: MONO } }}
             />
             <TextField
@@ -458,6 +470,22 @@ export function CreateScriptDialog({
                 </MenuItem>
               ))}
             </TextField>
+            <FormControlLabel
+              sx={{ minWidth: 220 }}
+              control={
+                <Switch
+                  checked={notifySendsMail(notify) && mailOnFailureOnly}
+                  onChange={(e) => setMailOnFailureOnly(e.target.checked)}
+                  disabled={busy || !notifySendsMail(notify)}
+                  inputProps={{ "aria-label": "Mail on failure only" }}
+                />
+              }
+              label={
+                <Typography sx={{ ...TYPE.body }} title="The syslog line is sent on every run end; only the mail is narrowed.">
+                  {notifySendsMail(notify) ? "Mail on failure only" : "Mail on failure only (needs SMTP or Both)"}
+                </Typography>
+              }
+            />
             <TextField
               select
               size="small"

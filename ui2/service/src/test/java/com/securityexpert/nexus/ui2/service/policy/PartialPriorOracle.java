@@ -240,7 +240,8 @@ final class PartialPriorOracle {
         }
         /** The joint (application, port) dimension of a rule in a world. */
         private BitSet serviceApplication(Rule rule, World world) {
-            var app = rule.application(); boolean cp = snapshot.metadata().vendor().equals("CP");
+            var app = rule.application();
+            boolean emptyAppAny = PolicyNormalization.EMPTY_APPLICATION_ANY.contains(snapshot.metadata().vendor());
             if (applicationDefault(rule.service())) {
                 var ids = identities(app);
                 if (ids == null) return full(sa());
@@ -256,7 +257,7 @@ final class PartialPriorOracle {
             BitSet ports = cell(rule.service(), "service");
             // A content-provided (or any other opaque) application is its atoms in this world; whatever the oracle cannot
             // read as identities is every atom.
-            BitSet applications = cp && app.refs().isEmpty() && !app.negated() ? full(apps.size()) : atoms(app, world);
+            BitSet applications = emptyAppAny && app.refs().isEmpty() && !app.negated() ? full(apps.size()) : atoms(app, world);
             var out = new BitSet(sa());
             for (int a = applications.nextSetBit(0); a >= 0; a = applications.nextSetBit(a + 1))
                 for (int p = ports.nextSetBit(0); p >= 0; p = ports.nextSetBit(p + 1)) out.set(a * SERVICE_SIZE + p);
