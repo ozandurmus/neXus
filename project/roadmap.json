@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0419",
+  "current_build": "NXS-LOCAL-0422",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,11 +150,11 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0419",
-      "title": "Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge",
+      "build": "NXS-LOCAL-0422",
+      "title": "Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening",
       "status": "automated_validated",
-      "started": "2026-11-25",
-      "completed": "2026-11-25"
+      "started": "2026-11-26",
+      "completed": "2026-11-26"
     },
     "next": {
       "build": "recovery_offhost_key_custody",

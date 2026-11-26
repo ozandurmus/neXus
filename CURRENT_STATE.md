@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Checkpoint of 2026-11-25 against `origin/main` at `2a1a3e13`; ships through 2026-11-25 are merged.
+Checkpoint of 2026-11-26 against `origin/main` at `9cde5eca`; ships through 2026-11-26 12:06 are merged.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V272**.
+UI2 is the maintained Java/React product; repository schema is **V273**.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -20,19 +20,18 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0419` — **AUTOMATED_VALIDATED** (2026-11-25): Overview zone matrix attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness hands integration to HOST-A, delivery runners merged. `0417`-`0418` — zone matrix summary route and per-family resolution. `0416` log detection P1 in shadow (V272), MC device health read gated and off (V271). `NXS-LOCAL-0412` — **AUTOMATED_VALIDATED** (2026-11-24): Policy Insights design frozen (Check Point first, phase P1 next), unused helpers removed;
-earlier `0406`-`0411`: zone matrix runs (V267), HA divergence, CP sync warning;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0419`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0422` — **AUTOMATED_VALIDATED** (2026-11-26): Policy Insights I7 safe reorder and a reorder-only proposal engine (no route yet), zone matrix ZM-26 fix, aiview topology masking, runner hardening. `0420`-`0421`: zone matrix on-demand run route, witness read and Violations/Coverage tabs, aiview sweep rounds 3-9 with leak fixes, Script Execution output tail in Jobs, log detection P2 default off (V273). `0416` log detection P1 in shadow (V272); MC device health read gated and off (V271). `0412` Policy Insights design frozen (Check Point first); `0406`-`0411` zone matrix runs (V267), HA divergence.
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0422`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
 Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
 
-Since 2026-11-18: Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), the HA & failover screen redesign, a CP sync warning, ASA/FortiGate cutover lookup, platform backup keeps 7 archives. The Estate view is read-only and paused. Backup cutover prepared, not performed.
+Since 2026-11-18: Script Execution slices 1-3 (V251, V258, V266), static route R0 reads only (V252), ASA saved-state relation (V253), VSX chassis and VS0 failover (V255/V256/V265), CP per-VS policy gate (V254), failover authority recheck (V260), database roles step 0 (V261), policy chunk garbage collection (V262), window-preserving requeue (V263), HA & failover screen redesign, ASA/FortiGate cutover lookup. The Estate view is read-only and paused. Backup cutover prepared, not performed.
 
-Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
+Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism; the OP.x/CON.x/D-V list in `project/QUEUE.md`. Open in item notes: Script Execution S3.5c wording, aiview and failover free text or job transcripts, the recertification council. DRAFTs await answers, nothing decided: zone matrix ASA/FortiGate amendment, FortiOS lookup validation read, Policy Insights P3 counter samples.
 
-Failover execution plan PRs 1–10 landed (V133–V143). The Check Point and Palo
-Alto pilot runs finished DONE/SUCCEEDED on 2026-10-22 (`failover_run`). The
+Failover execution plan PRs 1–10 landed (V133–V143); Check Point and Palo
+Alto pilot runs finished DONE/SUCCEEDED on 2026-10-22. The
 mutation switch authorizes nothing by itself: typed request, approval, fresh
 readiness, one fleet mutation and uncertain-outcome fencing still apply.
 Authority: [2026-10-06 decision](docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md),
@@ -47,21 +46,17 @@ still in progress under the [runtime contract](docs/design/MODULE_POD_RUNTIME_CO
 Pre-deploy release snapshots support guarded rollback; isolated pre-merge
 preview e2e checks the candidate with masked evidence and fails on page/API 4xx.
 Release also applies the committed manifests of the policy, service,
-configuration, compliance and worker modules (the worker joined in batch 3),
-and a ship retries when the image build failed only on a base-image layer
-download. Development mode ended on 2026-11-10: the manifest carries
+configuration, compliance and worker modules. Development mode ended on 2026-11-10: the manifest carries
 `UI2_SCHEDULING_ENABLED=true` and each job family has its own audited switch. Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
-Europe/Istanbul** (default 60-minute windows). Superseded in part (PO
-2026-10-20, [record](docs/design/PO_DECISION_RECORD_2026_10_20_ADMIN_MANUAL_JOBS_AND_BUSINESS_HOURS.md)):
+Europe/Istanbul** (default 60-minute windows). Superseded in part ([PO
+2026-10-20](docs/design/PO_DECISION_RECORD_2026_10_20_ADMIN_MANUAL_JOBS_AND_BUSINESS_HOURS.md)):
 manual jobs of `security_admin`/`operation_admin` are never held to the windows
 and ask for a confirmation inside business hours (08:00–20:00); operator,
 aiview and every scheduled job keep the windows. Full scheduled fleet backups
 and daily MDS export instead run **once daily at 02:00 Europe/Istanbul**
 (PO 2026-10-10, PR #570; admission 02:00–02:59, no missed-day backlog).
-Backup retention is **7 days** (PO 2026-10-12, supplied in this brief;
-current stored policy was not queried). The scheduling/disk incident and
-manual manifest-deletion deviation are recorded in the
-[backup incident](docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md).
+Backup retention is **7 days** (PO 2026-10-12; stored policy not queried).
+See the [backup incident](docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md).
 
 ## Packet Analysis and Data Sanitizer
 
@@ -84,18 +79,17 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
 - NSPM wave 2 and 3 and per-device job serialization are not merged here.
 - Support bundles: all vendors built; vendor upload untested against real vendor hosts; PO-attended pilot open.
 - Database roles: V242 roles exist, no workload switched. Module pods: backup pod at 0 replicas, cutover not done.
-- Verify: the first scheduled MDS export and the first ASA saved-state relations (due since 2026-11-19); the first policy chunk garbage collection counts.
+- Verify: the first ASA saved-state relations (the MDS export half is verified by the PO); the first policy chunk garbage collection counts. Counts-only run sheet (DRAFT) for the open P1 items: `docs/design/P1_COUNTS_ONLY_RUN_SHEET_2026_11_26.md`.
 - Review 2026-11-28: time-boxed CVE acceptances (`cve_acceptances_review_2026_11_28`).
-- Fleet facts (2026-11-16): 136 devices, 40 clusters with daily failover readiness checks, about 1,450 automated jobs a day.
-- Open follow-ups: nightly e2e fails on a legitimate Platform status warning; cisa_kev fetch refused during a deploy; Trivy cache claim; failover four-eyes check before the SCC handover.
-- Masking residual gaps are closed in rules by logmask-v7/v8 (queued), not yet
-  measured against a real masked sample (`masking_residual_gaps_system_log_and_sanitizer`);
-  the raw-versus-masked aiview comparison is open (`aiview_masking_leak_audit`).
+- Fleet facts (2026-11-16): 136 devices, 40 clusters, about 1,450 automated jobs a day.
+- Open follow-ups: nightly e2e fails on a legitimate Platform status warning; cisa_kev fetch refused during a deploy; Trivy cache claim; failover four-eyes check.
+- Masking residual gaps: closed in rules by logmask-v7/v8 (queued), not measured
+  on a real masked sample (`masking_residual_gaps_system_log_and_sanitizer`);
+  aiview sweep: round 9, automated only (`aiview_masking_leak_audit`).
 - Real-env validation of the worker manifest sync
   (`manifest_drift_service_worker_configuration_policy`) and the Check Point aiview readiness script client error
   (`cp_aiview_readiness_script_client_error`) are open follow-ups.
 - CVE exceptions remain time-boxed in `security/baseline.yaml`; the remaining
   UBI base entries review **2026-11-14**, the rest **2026-12-31**. glibc waits
   for a Red Hat fix (`ubi_base_glibc_fix_pending`). Acceptance is not remediation.
-- Full pod migration, retention-policy verification and capacity monitoring
-  remain engineering-owner follow-ups.
+- Full pod migration, retention verification and capacity monitoring stay engineering follow-ups.

@@ -14,7 +14,8 @@ export const CHANGE_LIST_NOTICE = "Nothing is sent to the firewall. Apply these 
 export const INSTALL_CAVEAT = "Proven for the stored management policy, not for what is installed on a gateway (INSTALL_STATE_NOT_VERIFIED).";
 
 export const TYPE_LABEL: Readonly<Record<InsightType, string>> = {
-  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I4: "Partly shadowed", I7: "Promote (proven reorder)",
+  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I4: "Partly shadowed",
+  I5: "Merge candidate (adjacent rules)", I7: "Promote (proven reorder)",
   I8: "Disabled rule", I9: "Expired or expiring schedule", I10: "Zero or old hits", I11: "Unused object", I12: "Duplicate objects",
 };
 /** What the user does, one sentence per type; a grade other than PROVEN adds its own limit below the sentence. */
@@ -23,6 +24,7 @@ export const TYPE_SUGGESTION: Readonly<Record<InsightType, string>> = {
   I2: "Decide which rule is right: an earlier rule with a different action decides every packet this rule matches. Never removed automatically.",
   I3: "Remove: earlier rules of this layer together decide every packet this rule matches; the covering set is listed. If one of them has another action, decide which rule is right first.",
   I4: "Review: earlier rules of this layer with the same action already decide part of this rule's match. Nothing here shows what changing the order would do.",
+  I5: "Merge these two adjacent rules into one; the merged rule keeps the first rule's identity. No command is generated.",
   I7: "Promote this rule above the broad rule it overlaps. Stage 1 of the reorganisation; no command is generated.",
   I8: "Remove after your team's holding period.",
   I9: "Remove or renew the rule.",
@@ -30,17 +32,23 @@ export const TYPE_SUGGESTION: Readonly<Record<InsightType, string>> = {
   I11: "Remove the object or tighten the group that holds it.",
   I12: "Consolidate: these objects have the same type and the same values.",
 };
+export const I5_NOT_PROVEN_SUGGESTION = "Not proven (work budget): whether these two adjacent rules can be merged is UNKNOWN.";
 /** I7 (design 4, decision record Q2): the inspection-change variant of the suggestion, and the one for a move the budget left unproven. */
 export const I7_INSPECTION_SUGGESTION = `${TYPE_SUGGESTION.I7} Verdict-safe, inspection changes: review the profile and log differences first.`;
 export const I7_NOT_PROVEN_SUGGESTION = "Not proven (work budget): whether this rule can move above the broad rule it overlaps is UNKNOWN.";
-/** The suggestion sentence of one insight: the type's own, except the two I7 variants. */
+/** The suggestion sentence of one insight: the type's own, except the I5 budget and two I7 variants. */
 export function insightSuggestion(insight: PolicyInsight): string {
+  if (insight.insightType === "I5" && insight.evidenceGrade === "NOT_EVALUABLE") return I5_NOT_PROVEN_SUGGESTION;
   if (insight.insightType === "I7") {
     if (insight.evidenceGrade === "NOT_EVALUABLE") return I7_NOT_PROVEN_SUGGESTION;
     if (insight.counter?.reorderResult !== "SAFE") return I7_INSPECTION_SUGGESTION;
   }
   return TYPE_SUGGESTION[insight.insightType] ?? "UNKNOWN";
 }
+export const DIFFERING_CELL_WORDS: Readonly<Record<string, string>> = {
+  source: "Source", destination: "Destination", service: "Service", application: "Application",
+};
+export const MERGE_CAVEAT = "Proven for the verdict and the log setting of stored management intent (profile settings are not collected for Check Point). The merged rule keeps the first rule's identity; names and comments are not concatenated. No command is generated: apply it in your own change window.";
 /** I7 results in words: "no behaviour change" only for SAFE; never a bare "safe". */
 export const REORDER_RESULT_WORDS: Readonly<Record<string, string>> = {
   SAFE: "No behaviour change", SAFE_INSPECTION_CHANGES: "Verdict-safe, inspection changes",
@@ -73,9 +81,9 @@ export const raiseText = (insight: PolicyInsight) => {
 };
 export const gradeColor = (grade: InsightGrade): "success" | "info" | "warning" | "default" =>
   grade === "PROVEN" ? "success" : grade === "SUPPORTED" ? "info" : grade === "INDICATED" ? "warning" : "default";
-/** The grade chip of one insight: a reorder (I7) is never shown in a green state, whatever its grade. */
+/** The grade chip of one insight: a merge (I5) or reorder (I7) is never shown in a green state, whatever its grade. */
 export const insightGradeColor = (type: InsightType, grade: InsightGrade): "success" | "info" | "warning" | "default" =>
-  type === "I7" && grade === "PROVEN" ? "info" : gradeColor(grade);
+  (type === "I5" || type === "I7") && grade === "PROVEN" ? "info" : gradeColor(grade);
 
 interface Party { id: string; number: number; name: string; action?: string }
 const position = (p: Party | undefined) => p && p.number > 0 ? `#${p.number}` : "#?";
@@ -93,14 +101,15 @@ const withAction = (p: Party | undefined) => p?.action ? ` (${actionWord(p.actio
 
 /** The rules of an insight by role. The detail, once loaded, carries the real position and action; the list row is the fallback. */
 export function insightParties(insight: PolicyInsight, detail?: PolicyInsightDetail | null): { subject?: Party; covering?: Party; coverings: Party[]; overlapping: Party[];
-  above?: Party; crossed: Party[] } {
-  const collect = (role: "subject" | "covering" | "overlapping" | "promoteAbove" | "crossed"): Party[] =>
+  above?: Party; crossed: Party[]; merged?: Party } {
+  const collect = (role: "subject" | "covering" | "overlapping" | "promoteAbove" | "crossed" | "merged"): Party[] =>
     insight.rules.filter(r => r.insightRole === role).map(ref => {
       const full = detail?.rules.find(r => r.id === ref.ruleId);
       return { id: ref.ruleId, number: full?.number ?? ref.number, name: full?.name ?? ref.name, action: full?.action };
     });
   const coverings = collect("covering");
-  return { subject: collect("subject")[0], covering: coverings[0], coverings, overlapping: collect("overlapping"), above: collect("promoteAbove")[0], crossed: collect("crossed") };
+  return { subject: collect("subject")[0], covering: coverings[0], coverings, overlapping: collect("overlapping"),
+    above: collect("promoteAbove")[0], crossed: collect("crossed"), merged: collect("merged")[0] };
 }
 const objectNames = (insight: PolicyInsight, detail?: PolicyInsightDetail | null) =>
   (detail?.objects ?? []).filter(o => insight.objectIds.includes(o.uid)).map(o => o.name).filter(Boolean);
@@ -137,6 +146,15 @@ export function insightHeadline(insight: PolicyInsight, detail?: PolicyInsightDe
       const more = Number(insight.counter?.moreOverlapping ?? 0);
       const set = ruleSetWords(overlapping, more);
       return `${Subject} is partly shadowed by ${set}: part of what ${s} matches is decided earlier with the same action${withAction(subject)}, which can explain a zero or low hit counter.`;
+    }
+    case "I5": {
+      const { merged } = insightParties(insight, detail);
+      if (insight.evidenceGrade === "NOT_EVALUABLE") {
+        const reason = String(insight.counter?.mergeReason ?? "UNKNOWN");
+        return `Merging ${ruleWords(merged)} into ${ruleWords(subject)} could not be checked (${reason}): whether they can be merged is UNKNOWN.`;
+      }
+      const cellName = (DIFFERING_CELL_WORDS[String(insight.counter?.differingCell ?? "")] ?? "UNKNOWN").toLowerCase();
+      return `${Subject} and adjacent ${ruleWords(merged)} match the same packets in every cell except ${cellName} and can be merged into ${s} with no verdict or log setting change (profile settings are not collected for Check Point).`;
     }
     case "I7": {
       const { above } = insightParties(insight, detail);
@@ -210,6 +228,16 @@ export function coverReasons(insight: PolicyInsight, detail?: PolicyInsightDetai
       `Nothing here checks the rules between ${s} and ${set} for reordering.`,
     ];
   }
+  if (insight.insightType === "I5" && insight.evidenceGrade !== "NOT_EVALUABLE") {
+    const { merged } = insightParties(insight, detail);
+    const m = position(merged);
+    const cellLabel = DIFFERING_CELL_WORDS[String(insight.counter?.differingCell ?? "")] ?? "UNKNOWN";
+    return [
+      `${s} and ${m} are adjacent enabled rules in the same layer and section; ${s} keeps its identity.`,
+      `Both rules have the same install-on placement, action${withAction(subject)} and log setting (profile settings are not collected for Check Point).`,
+      `Differing cell: ${cellLabel}. Every other cell matches the same values, so replacing ${s} and ${m} by their union in ${cellLabel.toLowerCase()} matches the union of the two rules.`,
+    ];
+  }
   if (insight.insightType === "I7" && insight.evidenceGrade !== "NOT_EVALUABLE") {
     const { above, crossed } = insightParties(insight, detail);
     const b = above && above.number > 0 ? position(above) : "the broad rule";
@@ -232,6 +260,7 @@ export type ChangeKind =
   | "REVIEW_INTENT"
   | "MOVE_ABOVE_COVERING"
   | "NARROW_RULE"
+  | "MERGE_RULES"
   | "REORDER_RULE"
   | "EXTEND_SCHEDULE"
   | "DISABLE_ONE_WINDOW"
@@ -324,6 +353,12 @@ export function suggestedActions(insight: PolicyInsight, detail?: PolicyInsightD
           `Move ${rule} above ${set} so ${s} collects its own hits directly.`, "Behaviour may change",
           `Not yet verified by safe-reorder (I7): rules between ${s} and ${set}, as well as logging and inspection profiles, are not checked here.`),
       ];
+    }
+    case "I5": {
+      const { merged } = insightParties(insight, detail);
+      const target = merged && merged.number > 0 ? `rule ${position(merged)}${named(merged)}` : `a rule${named(merged)}`;
+      const effect: ChangeEffect = proven && insight.counter?.mergeResult === "MERGE_CANDIDATE" ? "No behaviour change" : "Behaviour may change";
+      return [action("MERGE_RULES", "Merge adjacent rules", true, `Merge ${target} into ${rule}.`, effect, MERGE_CAVEAT)];
     }
     case "I7": {
       const { above } = insightParties(insight, detail);

@@ -10,9 +10,10 @@ import java.util.*;
  * runs no analysis of its own: it reads the {@link PolicyHygiene} verdicts and findings of a snapshot and the object
  * where-used / duplicate rows of its {@link PolicyDomainIndex}, assigns the section 3.1 evidence grade by a fixed table
  * of conditions (never a weighted score), and counts the package the way section 3.2 defines. Phase P2 step a adds I3
- * (covered by several earlier rules together) from the {@link PolicyUnionCover} result and step b adds I4 (partly shadowed
- * by earlier rules of the same action) from the {@link PolicyPartialShadow} result, and step c-1 adds I7 (a proven promote of
- * an I4 rule above the broad rule it overlaps) from the {@link PolicyReorder} result; the package counts stay the shadow
+ * (covered by several earlier rules together) from the {@link PolicyUnionCover} result, step b adds I4 (partly shadowed
+ * by earlier rules of the same action) from the {@link PolicyPartialShadow} result, step c-1 adds I7 (a proven promote of
+ * an I4 rule above the broad rule it overlaps) from the {@link PolicyReorder} result, and step c-2a adds I5 (adjacent
+ * rules differing in one cell only) from the {@link PolicyMerge} result; the package counts stay the shadow
  * engine's.
  *
  * <p>Everything an insight carries is a rule or object reference, a number, or a word from a closed vocabulary
@@ -29,8 +30,8 @@ public final class PolicyInsights {
     static final String PROVEN = "PROVEN", SUPPORTED = "SUPPORTED", INDICATED = "INDICATED", NOT_ESTABLISHED = "NOT_ESTABLISHED", NOT_EVALUABLE = "NOT_EVALUABLE";
     /** The closed grade vocabulary of design section 3.1, strongest first. */
     public static final List<String> GRADES = List.of(PROVEN, SUPPORTED, INDICATED, NOT_ESTABLISHED, NOT_EVALUABLE);
-    /** The insight types of phases P1, P2a, P2b and P2c-1 (design section 4), in display order. */
-    public static final List<String> TYPES = List.of("I1", "I2", "I3", "I4", "I7", "I8", "I9", "I10", "I11", "I12");
+    /** The insight types of phases P1, P2a, P2b, P2c-1 and P2c-2a (design section 4), in display order. */
+    public static final List<String> TYPES = List.of("I1", "I2", "I3", "I4", "I5", "I7", "I8", "I9", "I10", "I11", "I12");
     /** The fixed I3 evidence, one per {@link PolicyUnionCover} cover action and one for an exhausted budget. */
     static final String I3_SAME = "Earlier enabled rules together cover this match; each has the same action.",
         I3_DIFFERENT = "Earlier enabled rules together cover this match; at least one has a different action.",
@@ -43,6 +44,12 @@ public final class PolicyInsights {
     static final String I4_PARTIAL = "Part of this match is proven to overlap earlier enabled rules of the same layer; every overlapping earlier rule has the same action.",
         I4_BUDGET = "Partial overlap analysis ran out of its work budget; whether earlier rules overlap part of this match is not proven.";
     /**
+     * The fixed I5 evidence (design 4 row I5, 6.3): merging two adjacent rules that differ in one cell only changes no
+     * verdict or log setting; the Check Point profile caveat is worded identically to {@link #I7_SAFE}.
+     */
+    static final String I5_MERGE = "Merging these two adjacent rules by taking the union in their one differing cell is proven to change no verdict or log setting: no behaviour change for the verdict and the log setting of stored management intent (profile settings are not collected for Check Point).",
+        I5_BUDGET = "Merge analysis ran out of its work budget; whether these two adjacent rules can be merged is not proven.";
+    /**
      * The fixed I7 evidence (design 6.1, 6.4; decision record Q2): only the SAFE move says "no behaviour change"; a move
      * whose verdicts agree but whose profile or log setting differs (or was not collected) is "verdict-safe, inspection
      * changes"; an exhausted budget proves nothing.
@@ -51,7 +58,7 @@ public final class PolicyInsights {
         I7_INSPECTION = "Moving this rule above the broad rule it overlaps is proven to change no verdict; a crossed rule differs in profile or log setting, or it was not collected: verdict-safe, inspection changes.",
         I7_BUDGET = "Reorder analysis ran out of its work budget; whether this rule can move above the broad rule it overlaps is not proven.";
     /** Every evidence string an insight carries besides {@link PolicyHygiene#EVIDENCE}; PolicyPrivacy passes these unchanged. */
-    public static final Set<String> EVIDENCE = Set.of(I3_SAME, I3_DIFFERENT, I3_INLINE, I3_BUDGET, I4_PARTIAL, I4_BUDGET, I7_SAFE, I7_INSPECTION, I7_BUDGET);
+    public static final Set<String> EVIDENCE = Set.of(I3_SAME, I3_DIFFERENT, I3_INLINE, I3_BUDGET, I4_PARTIAL, I4_BUDGET, I5_MERGE, I5_BUDGET, I7_SAFE, I7_INSPECTION, I7_BUDGET);
     /**
      * An I4 insight lists at most this many overlapping earlier rules (the rest is the {@code moreOverlapping} counter), and
      * an I7 insight at most this many crossed rules (the rest is {@code moreCrossed}).
@@ -115,6 +122,14 @@ public final class PolicyInsights {
      */
     record PartialShadow(int evaluated, int partial, int differentAction, int notProven, List<Map<String, Object>> notEvaluable) {}
     /**
+     * The I5 pass in numbers (design Q8): adjacent enabled pairs evaluated in proven sections, merge candidates, pairs
+     * already shadowed by the first rule (I1), pairs differing in two or more cells, pairs differing in full effect
+     * signature or install-on, pairs touching an anchor, not proven for the budget (these seven sum to {@code evaluated}),
+     * and not evaluable rules by reason.
+     */
+    record Merge(int evaluated, int candidates, int alreadyShadowed, int differsInSeveralCells, int differentEffect,
+            int differentInstallOn, int anchorBlocked, int notProven, List<Map<String, Object>> notEvaluable) {}
+    /**
      * The I7 pass in numbers (design Q8): moves evaluated (one per I4 rule), safe, safe with inspection changes, unsafe for
      * a crossed rule of another verdict effect, blocked by an anchor, crossing a section (not offered in this step), not
      * proven for the budget, and not evaluable by reason.
@@ -122,7 +137,7 @@ public final class PolicyInsights {
     record SafeReorder(int evaluated, int safe, int safeInspectionChanges, int unsafeDifferentEffect, int anchorBlocked, int crossesSection,
             int notProven, List<Map<String, Object>> notEvaluable) {}
     record Report(Counts counts, List<Insight> insights, Map<String, Integer> byType, Map<String, Integer> byGrade, boolean complete, String collectedAt,
-            UnionCover unionCover, PartialShadow partialShadow, SafeReorder safeReorder) {}
+            UnionCover unionCover, PartialShadow partialShadow, Merge merge, SafeReorder safeReorder) {}
 
     /**
      * @param index        the package's domain index (objects, where-used, duplicates), or null when not available:
@@ -142,15 +157,24 @@ public final class PolicyInsights {
     }
     static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
             PolicyUnionCover.Result union, PolicyPartialShadow.Result partial) {
-        return analyze(snapshot, hygiene, index, windowDays, thresholdDays, union, partial, PolicyReorder.analyze(snapshot, partial));
+        return analyze(snapshot, hygiene, index, windowDays, thresholdDays, union, partial, PolicyMerge.analyze(snapshot), PolicyReorder.analyze(snapshot, partial));
+    }
+    static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
+            PolicyUnionCover.Result union, PolicyPartialShadow.Result partial, PolicyReorder.Result reorder) {
+        return analyze(snapshot, hygiene, index, windowDays, thresholdDays, union, partial, PolicyMerge.analyze(snapshot), reorder);
+    }
+    static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
+            PolicyUnionCover.Result union, PolicyPartialShadow.Result partial, PolicyMerge.Result merge) {
+        return analyze(snapshot, hygiene, index, windowDays, thresholdDays, union, partial, merge, PolicyReorder.analyze(snapshot, partial));
     }
     /**
      * @param union   the {@link PolicyUnionCover} result of the same snapshot and hygiene result (the service caches it)
      * @param partial the {@link PolicyPartialShadow} result of the same inputs (the service caches it too)
+     * @param merge   the {@link PolicyMerge} result of the same snapshot (cached as well)
      * @param reorder the {@link PolicyReorder} result of that I4 result (cached as well)
      */
     static Report analyze(PolicySnapshot snapshot, PolicyHygiene.Result hygiene, PolicyDomainIndex index, Map<String, Integer> windowDays, int thresholdDays,
-            PolicyUnionCover.Result union, PolicyPartialShadow.Result partial, PolicyReorder.Result reorder) {
+            PolicyUnionCover.Result union, PolicyPartialShadow.Result partial, PolicyMerge.Result merge, PolicyReorder.Result reorder) {
         var meta = snapshot.metadata();
         List<Insight> insights = new ArrayList<>();
         int rules = 0, decided = 0, notReadable = 0, waiting = 0, logs = 0, collection = 0, notResolvable = 0,
@@ -188,6 +212,7 @@ public final class PolicyInsights {
                 shadow(meta, rule, a, hygiene, section, insights);
                 unionCover(meta, rule, cover, insights);
                 partialShadow(meta, rule, partial.rules().get(rule.id()), insights);
+                merge(meta, merge.pairs().get(rule.id()), insights);
                 reorder(meta, rule, reorder.moves().get(rule.id()), insights);
                 for (var f : a.findings()) {
                     if (f.findingClass().equals("expired")) insights.add(insight(meta, "I9", PROVEN, rule, List.of(), NONE, PROVEN, List.of(f.evidence()), Map.of()));
@@ -219,10 +244,13 @@ public final class PolicyInsights {
             .map(e -> Map.<String, Object>of("unionReason", e.getKey(), "rules", e.getValue())).toList());
         var partialShadow = new PartialShadow(partial.evaluated(), partial.partial(), partial.differentAction(), partial.notProven(), partial.notEvaluable().entrySet().stream()
             .map(e -> Map.<String, Object>of("partialReason", e.getKey(), "rules", e.getValue())).toList());
+        var mergeReport = new Merge(merge.evaluated(), merge.candidates(), merge.alreadyShadowed(), merge.differsInSeveralCells(),
+            merge.differentEffect(), merge.differentInstallOn(), merge.anchorBlocked(), merge.notProven(), merge.notEvaluable().entrySet().stream()
+            .map(e -> Map.<String, Object>of("mergeReason", e.getKey(), "rules", e.getValue())).toList());
         var safeReorder = new SafeReorder(reorder.evaluated(), reorder.safe(), reorder.safeInspectionChanges(), reorder.unsafeDifferentEffect(),
             reorder.anchorBlocked(), reorder.crossesSection(), reorder.notProven(), reorder.notEvaluable().entrySet().stream()
             .map(e -> Map.<String, Object>of("reorderReason", e.getKey(), "rules", e.getValue())).toList());
-        return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt(), unionCover, partialShadow, safeReorder);
+        return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt(), unionCover, partialShadow, mergeReport, safeReorder);
     }
 
     private static String ownReason(PolicyHygiene.Assessment a) {
@@ -306,6 +334,31 @@ public final class PolicyInsights {
         out.add(new Insight(id, "I4", PROVEN, "package", List.copyOf(refs), List.of(), PROVEN, NONE, List.of(INSTALL_STATE_NOT_VERIFIED),
             List.of(I4_PARTIAL), Map.of("overlappingRules", partial.overlapping().size(),
                 "moreOverlapping", Math.max(0, partial.overlapping().size() - MAX_OVERLAPPING))));
+    }
+
+    /**
+     * I5: merge two adjacent enabled rules {@code (a, b)} of the same layer and section that match the same packets in
+     * every dimension except one (design 4 row I5, 6.3), proven per pair by {@link PolicyMerge}. Rules: the surviving rule
+     * {@code a} ({@code subject}: keeps its identity) followed by {@code b} ({@code merged}). Counter carries only closed
+     * words ({@code mergeResult}, {@code differingCell}): no ranges, no addresses, no concatenated names or comments. An
+     * exhausted budget is NOT_EVALUABLE; refused pairs are counted, not shown.
+     */
+    private static void merge(Metadata meta, PolicyMerge.Pair pair, List<Insight> out) {
+        if (pair == null) return;
+        Rule a = pair.surviving(), b = pair.merged();
+        String id = PolicySnapshot.ref("insight", meta.id(), "I5", a.id(), b.id());
+        var refs = List.of(new RuleRef(a.id(), a.number(), a.name(), "subject"), new RuleRef(b.id(), b.number(), b.name(), "merged"));
+        if (pair.result().equals(PolicyMerge.NOT_PROVEN)) {
+            out.add(new Insight(id, "I5", NOT_EVALUABLE, "package", refs, List.of(), PROVEN, NOT_RESOLVABLE_NEEDS, List.of(),
+                List.of(I5_BUDGET), Map.of("mergeReason", PolicyMerge.BUDGET)));
+            return;
+        }
+        if (!PolicyMerge.OFFERED.contains(pair.result())) return;
+        Map<String, Object> counter = new LinkedHashMap<>();
+        counter.put("mergeResult", pair.result());
+        counter.put("differingCell", pair.differingCell());
+        out.add(new Insight(id, "I5", PROVEN, "package", refs, List.of(), PROVEN, NONE, List.of(INSTALL_STATE_NOT_VERIFIED),
+            List.of(I5_MERGE), Collections.unmodifiableMap(counter)));
     }
 
     /**

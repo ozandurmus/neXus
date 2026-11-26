@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Box, Button, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import { getPolicyInsight, type InsightCrossedProof, type InsightRuleRef, type InsightType, type PolicyInsight, type PolicyInsightDetail, type PolicyObject, type PolicyRule } from "../auth/adminApi";
 import { CellEntries, ObjectChip, actionWord, policyFailureText, scheduleLabel } from "./PolicyRuleViewer";
-import { CHANGE_LIST_NOTICE, COVER_ACTION_WORDS, CROSSED_REASON_WORDS, GRADE_EXPLAIN, INSTALL_CAVEAT, REORDER_CAVEAT, REORDER_RESULT_WORDS, TYPE_LABEL, coverReasons,
+import { CHANGE_LIST_NOTICE, COVER_ACTION_WORDS, CROSSED_REASON_WORDS, DIFFERING_CELL_WORDS, GRADE_EXPLAIN, INSTALL_CAVEAT, MERGE_CAVEAT, REORDER_CAVEAT, REORDER_RESULT_WORDS, TYPE_LABEL, coverReasons,
   insightGradeColor, insightHeadline, raiseText, suggestedActions,
   type ChangeItem, type SuggestedAction } from "./policyInsightActions";
 import { formatStamp } from "../shell/time";
@@ -26,6 +26,13 @@ function coverFields(insight: PolicyInsight): Readonly<Record<string, Cover>> {
       return coverAction === "DIFFERENT" || coverAction === "INLINE_LAYER" ? { ...SHADOW_COVER, action: "differs" } : SHADOW_COVER;
     }
     case "I4": return insight.evidenceGrade === "NOT_EVALUABLE" ? {} : SHADOW_COVER;
+    // I5: every compared row holds except the single cell in which the two adjacent rules differ.
+    case "I5": {
+      if (insight.evidenceGrade === "NOT_EVALUABLE") return {};
+      const cell = String(insight.counter?.differingCell ?? "");
+      const row = cell === "application" ? "service" : cell;
+      return { ...SHADOW_COVER, log: "holds", ...(row ? { [row]: "differs" as Cover } : {}) };
+    }
     // I7: the cells the move's proof rests on; the track / log row differs in the inspection-change variant.
     case "I7": return insight.evidenceGrade === "NOT_EVALUABLE" ? {} : { ...SHADOW_COVER, log: insight.counter?.reorderResult === "SAFE" ? "holds" : "differs" };
     case "I8": return { enabled: "holds" };
@@ -34,7 +41,7 @@ function coverFields(insight: PolicyInsight): Readonly<Record<string, Cover>> {
   }
 }
 const ROLE_TAG: Readonly<Record<InsightType, string>> = {
-  I1: "Never reached", I2: "Never reached", I3: "Never reached", I4: "Partly shadowed", I7: "Promoted",
+  I1: "Never reached", I2: "Never reached", I3: "Never reached", I4: "Partly shadowed", I5: "Keeps identity", I7: "Promoted",
   I8: "Disabled", I9: "Time-limited", I10: "No recent hits", I11: "", I12: "",
 };
 const sectionTitle = { fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: m3.onSurfaceVar, display: "block", mt: 2.5, mb: 0.75 } as const;
@@ -47,7 +54,8 @@ const roleLabel = (insight: PolicyInsight, role: InsightRuleRef["insightRole"]) 
   if (role === "overlapping") return "Overlapping earlier rule";
   if (role === "promoteAbove") return "Decides first today";
   if (role === "crossed") return "Crossed rule";
-  if (insight.evidenceGrade === "NOT_EVALUABLE" && (insight.insightType === "I3" || insight.insightType === "I4" || insight.insightType === "I7")) return "Not proven";
+  if (insight.evidenceGrade === "NOT_EVALUABLE" && (insight.insightType === "I3" || insight.insightType === "I4" || insight.insightType === "I5" || insight.insightType === "I7")) return "Not proven";
+  if (role === "merged") return "Merged into first";
   return ROLE_TAG[insight.insightType] || "Rule";
 };
 
@@ -87,8 +95,8 @@ function RuleComparison({ insight, detail, days, openRule, openObject }: { insig
         <TableCell sx={{ width: 132 }} />
         {columns.map(({ ref, rule }) => {
           const earlier = ref.insightRole === "covering" || ref.insightRole === "overlapping";
-          // A reorder is never shown in a green state: its rules carry the neutral container.
-          const reorder = insight.insightType === "I7";
+          // A merge or reorder is never shown in a green state: its rules carry the neutral container.
+          const reorder = insight.insightType === "I5" || insight.insightType === "I7";
           return <TableCell key={ref.ruleId} data-role={ref.insightRole} sx={{ verticalAlign: "bottom" }}>
             <Chip size="small" data-role-tag={ref.insightRole} label={roleLabel(insight, ref.insightRole)}
               sx={{ fontWeight: 700, bgcolor: reorder ? m3.primaryContainer : earlier ? m3.successContainer : m3.warningContainer,
@@ -205,8 +213,21 @@ export function InsightDetail({ policy, insightId, days, openRule, openObject, p
         {" "}Overlapping earlier rules: {counter.overlappingRules}{Number(counter.moreOverlapping) > 0 ? ` (+${counter.moreOverlapping} more not listed)` : ""}.</Typography>}
       {counter.partialReason !== undefined && <Typography variant="body2">Not proven: {String(counter.partialReason)}. The rule may or may not overlap earlier rules; nothing is claimed.</Typography>}
     </Box>}
+    {insight.insightType === "I5" && <MergeEvidence insight={insight} />}
     {insight.insightType === "I7" && <ReorderEvidence insight={insight} detail={detail} />}
   </>;
+}
+
+/** I5: the differing cell name, the profile caveat and the fixed merge notice. */
+function MergeEvidence({ insight }: { insight: PolicyInsight }) {
+  const counter = insight.counter ?? {};
+  const cellLabel = DIFFERING_CELL_WORDS[String(counter.differingCell ?? "")] ?? "UNKNOWN";
+  return <Box aria-label="Merge evidence" sx={{ mt: 1 }}>
+    {counter.mergeReason !== undefined && <Typography variant="body2">Not proven: {String(counter.mergeReason)}. Whether these two adjacent rules can be merged is not proven; nothing is claimed.</Typography>}
+    {counter.mergeResult === "MERGE_CANDIDATE" && <Typography variant="body2" data-differing-cell={String(counter.differingCell ?? "")} sx={{ fontWeight: 600 }}>
+      Differing cell: {cellLabel} (the merged cell is the union). No behaviour change for the verdict and the log setting of stored management intent (profile settings are not collected for Check Point).</Typography>}
+    <Typography role="note" variant="caption" display="block" sx={{ mt: 0.5, color: m3.warningInk }}>{MERGE_CAVEAT}</Typography>
+  </Box>;
 }
 
 /** I7: the move's proof as data -- the result in its fixed words, the symbolic check, and why each crossed rule is harmless. */

@@ -3,6 +3,39 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0422",
+      "status": "automated_validated",
+      "title": "Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening",
+      "summary": "Policy Insights gained I7 safe reorder with a per-move proof (e942a3f7) and a pure reorder-only proposal engine, not wired to a route (016e715e); zone matrix NOT_EVALUABLE rules no longer project a bare zero headline (33c26833), the scale h",
+      "started": "2026-11-26",
+      "completed": "2026-11-26",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0422.md"
+    },
+    {
+      "build": "NXS-LOCAL-0421",
+      "status": "automated_validated",
+      "title": "Log detection P2 (V273, off), zone matrix stored-witness read, Script Execution inline output, Policy Insights mapper and count fixes, aiview sweep rounds 8-9, bridge split",
+      "summary": "Log detection phase P2 landed behind its own switch, default off (V273, d2a95f34); zone matrix gained the audited stored-witness read, the ZoneMatrixPolicyBridge size split and the contract 7.1 Violations filters (b19f40c1, c4234656). Scrip",
+      "started": "2026-11-26",
+      "completed": "2026-11-26",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0421.md"
+    },
+    {
+      "build": "NXS-LOCAL-0420",
+      "status": "automated_validated",
+      "title": "Zone matrix on-demand run route and 4b-2 tabs, PAN applications by name, Policy Insights I4 and detail drawer, aiview sweep rounds 3-7 with leak fixes, CLI parity, lane runner quota handling",
+      "summary": "Zone matrix gained the on-demand run route POST /api/v2/zone-matrix/runs (586cb710), Violations and Coverage tabs with per-cell open-violation counts (5002c05c, 05893fd8) and Palo Alto application-name evaluation (683ec5d5); Policy Insights",
+      "started": "2026-11-25",
+      "completed": "2026-11-25",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0420.md"
+    },
+    {
       "build": "NXS-LOCAL-0419",
       "status": "automated_validated",
       "title": "Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge",

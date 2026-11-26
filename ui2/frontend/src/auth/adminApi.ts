@@ -2506,10 +2506,10 @@ export interface PolicyHygienePage {
     split?: { class: string; cell: string; status: string; type: string; nativeType: string; partialPrior: boolean | "UNKNOWN"; blockers: number; blockedRules: number }[] };
 }
 /** Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the closed vocabularies the service sends. */
-export type InsightType = "I1" | "I2" | "I3" | "I4" | "I7" | "I8" | "I9" | "I10" | "I11" | "I12";
+export type InsightType = "I1" | "I2" | "I3" | "I4" | "I5" | "I7" | "I8" | "I9" | "I10" | "I11" | "I12";
 export type InsightGrade = "PROVEN" | "SUPPORTED" | "INDICATED" | "NOT_ESTABLISHED" | "NOT_EVALUABLE";
 export type InsightNeeds = "NONE" | "TRAFFIC_LOGS" | "COUNTER_SAMPLES" | "NEW_COLLECTION" | "VENDOR_REPORT" | "NOT_RESOLVABLE";
-export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "overlapping" | "promoteAbove" | "crossed" | "UNKNOWN" }
+export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "overlapping" | "promoteAbove" | "crossed" | "merged" | "UNKNOWN" }
 export interface PolicyInsight {
   insightId: string; insightType: InsightType; evidenceGrade: InsightGrade; insightScope: "package" | "domain";
   rules: InsightRuleRef[]; objectIds: string[];
@@ -2551,6 +2551,10 @@ export interface PolicyInsightsPage {
   unionCover?: { evaluated: number; covered: number; notProven: number; notEvaluable: { unionReason: string; rules: number }[] };
   /** Phase P2b: the I4 partial-shadow pass in numbers. Absent from an older service. */
   partialShadow?: { evaluated: number; partial: number; differentAction: number; notProven: number; notEvaluable: { partialReason: string; rules: number }[] };
+  /** Phase P2c-2a: the I5 adjacent-merge pass in numbers. Absent from an older service. */
+  merge?: { evaluated: number; candidates: number; alreadyShadowed: number; differsInSeveralCells: number;
+    differentEffect: number; differentInstallOn: number; anchorBlocked: number; notProven: number;
+    notEvaluable: { mergeReason: string; rules: number }[] };
   /** Phase P2c-1: the I7 safe-reorder pass in numbers (one move per I4 rule). Absent from an older service. */
   safeReorder?: { evaluated: number; safe: number; safeInspectionChanges: number; unsafeDifferentEffect: number; anchorBlocked: number; crossesSection: number;
     notProven: number; notEvaluable: { reorderReason: string; rules: number }[] };

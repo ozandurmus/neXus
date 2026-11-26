@@ -215,7 +215,8 @@ const reorderPage: PolicyInsightsPage = { ...page, insights: [promote, promoteIn
   safeReorder: { evaluated: 9, safe: 1, safeInspectionChanges: 1, unsafeDifferentEffect: 2, anchorBlocked: 3, crossesSection: 1, notProven: 1,
     notEvaluable: [{ reorderReason: "rule not resolved", rules: 2 }] } };
 it("lists I7 after I4 with both wordings, offers it as a type filter, states the reorder numbers and shows no green chip", async () => {
-  expect(INSIGHT_TYPES.indexOf("I7")).toBe(INSIGHT_TYPES.indexOf("I4") + 1);
+  expect(INSIGHT_TYPES.indexOf("I5")).toBe(INSIGHT_TYPES.indexOf("I4") + 1);
+  expect(INSIGHT_TYPES.indexOf("I7")).toBe(INSIGHT_TYPES.indexOf("I5") + 1);
   expect(TYPE_SUGGESTION.I7).toBe("Promote this rule above the broad rule it overlaps. Stage 1 of the reorganisation; no command is generated.");
   expect(I7_INSPECTION_SUGGESTION).toContain("verdict-safe, inspection changes: review the profile and log differences first".replace("verdict", "Verdict"));
   const { fetchMock } = mount({ list: reorderPage });

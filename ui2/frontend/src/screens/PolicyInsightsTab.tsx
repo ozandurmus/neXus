@@ -11,9 +11,9 @@ import { m3 } from "../theme/m3Theme";
 
 export { COVER_ACTION_WORDS, INSTALL_CAVEAT, TYPE_LABEL, TYPE_SUGGESTION, raiseText } from "./policyInsightActions";
 
-/** Policy Insights phases P1, P2a, P2b and P2c-1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
+/** Policy Insights phases P1, P2a, P2b, P2c-1 and P2c-2a (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the Check Point Insights tab. Read-only, stored evidence only. */
 const n = (value: number) => value.toLocaleString("en-US");
-export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I4", "I7", "I8", "I9", "I10", "I11", "I12"];
+export const INSIGHT_TYPES: readonly InsightType[] = ["I1", "I2", "I3", "I4", "I5", "I7", "I8", "I9", "I10", "I11", "I12"];
 export const INSIGHT_GRADES: readonly InsightGrade[] = ["PROVEN", "SUPPORTED", "INDICATED", "NOT_ESTABLISHED", "NOT_EVALUABLE"];
 const reasonClassWords = { LOGS: "traffic logs could decide", COLLECTION: "a new collection could decide", NOT_RESOLVABLE: "nothing in this design can decide" } as const;
 
@@ -134,6 +134,13 @@ export function PolicyInsightsTab({ policy, policyName, openRule, openObject = (
         I4 partial shadow: {n(data.partialShadow.evaluated)} rules checked against the earlier rules of their layer · {n(data.partialShadow.partial)} partly shadowed, same action
         · {n(data.partialShadow.differentAction)} overlap an earlier rule with another action (counted, no insight) · {n(data.partialShadow.notProven)} not proven (work budget){data.partialShadow.notEvaluable.length > 0
           ? ` · not evaluated: ${data.partialShadow.notEvaluable.map(r => `${n(r.rules)} ${r.partialReason}`).join(", ")}` : ""}</Typography>}
+      {data.merge && <Typography variant="caption" display="block" aria-label="Merge analysis" sx={{ color: m3.onSurfaceVar }}>
+        I5 merge (adjacent rules): {n(data.merge.evaluated)} adjacent pairs checked · {n(data.merge.candidates)} merge candidates
+        · {n(data.merge.alreadyShadowed)} already shadowed · {n(data.merge.differsInSeveralCells)} differ in two or more cells
+        · {n(data.merge.differentEffect)} differ in effect or log setting · {n(data.merge.differentInstallOn)} differ in install-on
+        · {n(data.merge.anchorBlocked)} blocked by an anchor (counted, no insight)
+        · {n(data.merge.notProven)} not proven (work budget){data.merge.notEvaluable.length > 0
+          ? ` · not evaluated: ${data.merge.notEvaluable.map(r => `${n(r.rules)} ${r.mergeReason}`).join(", ")}` : ""}</Typography>}
       {data.safeReorder && <Typography variant="caption" display="block" aria-label="Reorder analysis" sx={{ color: m3.onSurfaceVar }}>
         I7 reorder (promote): {n(data.safeReorder.evaluated)} promote moves checked (one per I4 rule) · {n(data.safeReorder.safe)} no behaviour change
         · {n(data.safeReorder.safeInspectionChanges)} verdict-safe, inspection changes · {n(data.safeReorder.unsafeDifferentEffect)} cross a rule with another verdict
