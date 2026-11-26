@@ -13,6 +13,8 @@ java HealthControllerTest
 # Vitest files that failed in a full run and passed alone (flaky-tests.log 2026-11-24)
 vitest tests/ConfigurationClusterDetail.test.tsx
 vitest tests/DevicesReview.test.tsx
+# 2026-11-26: failed 3 pretests under Mac load (one a docs-only ship, D20261126-32); Estate work is paused (PO 2026-11-23)
+vitest tests/EstateEvidenceGuardsMore.test.tsx
 vitest tests/FleetSummary.test.tsx
 vitest tests/PolicyLiveShapes.test.tsx
 vitest tests/PolicyScreen.test.tsx
