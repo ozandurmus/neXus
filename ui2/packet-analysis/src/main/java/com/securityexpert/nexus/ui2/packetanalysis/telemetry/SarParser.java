@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * {@code sar} text reports. Blocks are told apart by their column names: CPU ({@code %user}/{@code %usr}, {@code %system}/
@@ -18,6 +19,7 @@ final class SarParser extends Sysstat {
     enum Block { CPU, QUEUE, TASK, DEV, TCP, ETCP, OTHER }
 
     static final int MAX_INTERFACES = 64;
+    private static final Pattern COLUMN_NAME = Pattern.compile("^[A-Za-z%][A-Za-z0-9_%-]*(?:/s)?$");
 
     private Block block;
     private String[] columns = new String[0];
@@ -31,6 +33,9 @@ final class SarParser extends Sysstat {
 
     /** The block a header's columns belong to, or {@code null} when the line is not a sar header. */
     static Block classify(String[] columns) {
+        if (nonNumeric(columns, 0) < 2) {
+            return null;
+        }
         List<String> cols = Arrays.asList(columns);
         if (cols.contains("CPU") && (cols.contains("%user") || cols.contains("%usr"))) {
             return Block.CPU;
@@ -50,17 +55,35 @@ final class SarParser extends Sysstat {
         if (cols.contains("atmptf/s") || cols.contains("retrans/s") && cols.contains("estres/s")) {
             return Block.ETCP;
         }
-        return Block.OTHER;
+        return isOtherHeader(columns) ? Block.OTHER : null;
+    }
+
+    private static boolean isOtherHeader(String[] columns) {
+        for (String c : columns) {
+            if (c.startsWith("%") || c.endsWith("/s") || c.endsWith("-sz") || c.equals("CPU") || c.equals("IFACE")) {
+                return true;
+            }
+        }
+        if (columns[0].equals("all") || nonNumeric(columns, 0) < columns.length) {
+            return false;
+        }
+        for (String c : columns) {
+            if (!COLUMN_NAME.matcher(c).matches()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** True for a header of one of the blocks this parser reads (used to recognise the format). */
     static boolean isKnownHeader(String line) {
         String[] tokens = split(line);
         Timed t = timed(tokens);
-        if (t == null || t.timeOfDay < 0 || nonNumeric(t.rest, 0) < 2 || line.contains("RESTART")) {
+        if (t == null || t.timeOfDay < 0 || line.contains("RESTART")) {
             return false;
         }
-        return classify(t.rest) != Block.OTHER;
+        Block b = classify(t.rest);
+        return b != null && b != Block.OTHER;
     }
 
     @Override
@@ -88,15 +111,16 @@ final class SarParser extends Sysstat {
             out.ignored();
             return;
         }
-        if (nonNumeric(t.rest, 0) >= 2) {
-            header(t.rest);
+        Block next = classify(t.rest);
+        if (next != null) {
+            header(next, t.rest);
             return;
         }
         row(t);
     }
 
-    private void header(String[] cols) {
-        block = classify(cols);
+    private void header(Block next, String[] cols) {
+        block = next;
         columns = cols;
         positions = index(cols);
         markSectionStart(Arrays.asList(cols));

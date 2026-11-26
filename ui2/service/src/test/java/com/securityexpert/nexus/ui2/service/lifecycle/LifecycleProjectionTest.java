@@ -400,4 +400,45 @@ class LifecycleProjectionTest {
             assertEquals("Not applicable", panHwCat.get("end_of_support"));
         }
     }
+
+    @Test void fortiGateAutoupdateSubscriptionPinsContractExpiredDatedAndUndatedRows() {
+        // LIFECYCLE_LICENSE_STORAGE_CONTRACT section 2: state is written as VALID with expires_on when the device gives
+        // a date (the view decides "expired" and "expiring" from the date); section 4: License problems: an item that is
+        // EXPIRED, ... or whose date has passed, marks the device.
+        var expiredResult = projectStored("fortinet",
+                new LicenseItem[]{item("fgt_autoupdate_versions", "SUBSCRIPTION", "AV Engine", "VALID", TODAY.minusDays(5), null, "DIRECT_DEVICE")},
+                new Read[]{read("fgt_autoupdate_versions", "COLLECTED")}, new LivePatchItem[0], null);
+        var expiredRow = rows(expiredResult).getFirst();
+        assertEquals("EXPIRED", expiredRow.get("status"));
+        assertEquals(TODAY.minusDays(5).toString(), expiredRow.get("expiry"));
+        assertEquals(-5L, expiredRow.get("days_remaining"));
+        assertEquals("SUBSCRIPTION", expiredRow.get("category"));
+        assertEquals("fgt_autoupdate_versions", expiredRow.get("source"));
+        assertEquals(true, expiredResult.get("license_problem"));
+        assertEquals(List.of(Map.of("label", "AV Engine", "status", "EXPIRED")), expiredResult.get("license_problems"));
+
+        var futureResult = projectStored("fortinet",
+                new LicenseItem[]{item("fgt_autoupdate_versions", "SUBSCRIPTION", "Virus Definitions", "VALID", TODAY.plusDays(30), null, "DIRECT_DEVICE")},
+                new Read[]{read("fgt_autoupdate_versions", "COLLECTED")}, new LivePatchItem[0], null);
+        var futureRow = rows(futureResult).getFirst();
+        assertEquals("DATED", futureRow.get("status"));
+        assertEquals(TODAY.plusDays(30).toString(), futureRow.get("expiry"));
+        assertEquals(30L, futureRow.get("days_remaining"));
+        assertEquals(false, futureResult.get("license_problem"));
+        assertEquals(List.of(), futureResult.get("license_problems"));
+
+        // LIFECYCLE_LICENSE_STORAGE_CONTRACT section 2: "VALID with expires_on when it gives a date ...; UNKNOWN when a
+        // line is understood but its date or status is not." Today LifecycleProjection.storedLicense leaves a non-Smart-Licensing
+        // VALID row with null expires_on as status="VALID" (not DATED, no expiry, not flagged in license_problems).
+        var undatedResult = projectStored("fortinet",
+                new LicenseItem[]{item("fgt_autoupdate_versions", "SUBSCRIPTION", "Botnet Domain Database", "VALID", null, null, "DIRECT_DEVICE")},
+                new Read[]{read("fgt_autoupdate_versions", "COLLECTED")}, new LivePatchItem[0], null);
+        var undatedRow = rows(undatedResult).getFirst();
+        assertNotEquals("DATED", undatedRow.get("status"));
+        assertEquals("VALID", undatedRow.get("status"));
+        assertNull(undatedRow.get("expiry"));
+        assertNull(undatedRow.get("days_remaining"));
+        assertEquals(false, undatedResult.get("license_problem"));
+        assertNull(undatedResult.get("nearest_license"));
+    }
 }

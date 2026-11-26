@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.LicenseItem;
@@ -127,7 +126,8 @@ class FortiGateParsersTest {
         assertEquals(LocalDate.of(2027, 5, 11), virus.expiresOn(), "the first contract line of a block is the block's");
         assertEquals("Updates Installed", virus.detail());
         LicenseItem ips = byLabel(parsed.items(), "IPS Attack Engine");
-        assertEquals("UNKNOWN", ips.state());
+        assertEquals("UNKNOWN", ips.state(),
+                "LIFECYCLE_LICENSE_STORAGE_CONTRACT section 2 (fgt_autoupdate_versions): a block with n/a is UNKNOWN");
         assertNull(ips.expiresOn());
         assertEquals("Unauthorized", ips.detail());
         noLeak(parsed.items(), "192.0.2.7", "Botnet");
@@ -156,27 +156,32 @@ class FortiGateParsersTest {
         String raw = AUTOUPDATE.replace("Contract Expiry Date: Mon May 11 2027\nLast Updated using manual",
                 "Contract Expiry Date: Fri Jan  3 2020\nLast Updated using manual");
         LicenseItem engine = byLabel(FortiGateAutoupdateParser.parse(raw).items(), "AV Engine");
+        assertEquals("VALID", engine.state(),
+                "LIFECYCLE_LICENSE_STORAGE_CONTRACT section 2: state is written as VALID with expires_on when the device gives a date (the view decides expired and expiring from the date)");
         assertEquals(LocalDate.of(2020, 1, 3), engine.expiresOn(), "the date is kept; the view decides EXPIRED from it");
         assertEquals("No Updates", engine.detail());
     }
 
     @Test
-    @Disabled("Parser contradicts the brief: an expired date gives state VALID with expires_on (LIFECYCLE_LICENSE_STORAGE_CONTRACT " +
-            "section 2, the view decides EXPIRED). Open issue for the Product Owner; parser not changed in this lane.")
-    void autoupdateWithAnExpiredDateIsNeverValidState() {
-        String raw = AUTOUPDATE.replace("Contract Expiry Date: Mon May 11 2027\nLast Updated using manual",
-                "Contract Expiry Date: Fri Jan  3 2020\nLast Updated using manual");
-        assertEquals("EXPIRED", byLabel(FortiGateAutoupdateParser.parse(raw).items(), "AV Engine").state());
+    void autoupdateBlockWithoutAContractLineYieldsNoItemAndIsNotSkipped() {
+        LicenseParse parsed = FortiGateAutoupdateParser.parse(AUTOUPDATE);
+        assertEquals(ParseOutcome.COLLECTED, parsed.outcome());
+        assertEquals(0, parsed.skipped(),
+                "LIFECYCLE_LICENSE_STORAGE_CONTRACT section 2 (fgt_autoupdate_versions): one SUBSCRIPTION per block with a date; blocks without a contract line yield no item and are not skipped");
+        assertTrue(parsed.items().stream().noneMatch(i -> i.label().equals("Botnet Domain Database") || i.label().equals("FDS Address")));
+        assertEquals("UNKNOWN", byLabel(parsed.items(), "IPS Attack Engine").state(),
+                "LIFECYCLE_LICENSE_STORAGE_CONTRACT section 2 (fgt_autoupdate_versions): a block with n/a is UNKNOWN");
     }
 
     @Test
-    @Disabled("Parser contradicts the brief: a block without a Contract Expiry Date line produces no item at all " +
-            "(only blocks with a contract line are SUBSCRIPTION items), not an UNKNOWN item. " +
-            "Open issue; parser not changed in this lane.")
-    void autoupdateBlockWithoutAContractLineIsUnknown() {
-        LicenseItem botnet = byLabel(FortiGateAutoupdateParser.parse(AUTOUPDATE).items(), "Botnet Domain Database");
-        assertEquals("UNKNOWN", botnet.state());
-        assertNull(botnet.expiresOn());
+    void autoupdateBlockWhoseTitleCannotBeLabelledIsCountedInSkipped() {
+        String raw = AUTOUPDATE.replace("AV Engine", "Unlabellable[Title]");
+        LicenseParse parsed = FortiGateAutoupdateParser.parse(raw);
+        assertEquals(ParseOutcome.COLLECTED, parsed.outcome());
+        assertEquals(1, parsed.skipped(),
+                "LIFECYCLE_LICENSE_STORAGE_CONTRACT section 1: a block with a contract line whose title cannot produce a clean label is counted in skipped and not stored");
+        assertEquals(2, parsed.items().size(), parsed.items().toString());
+        assertTrue(parsed.items().stream().noneMatch(i -> i.label().contains("Unlabellable")));
     }
 
     @Test

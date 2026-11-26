@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -936,29 +937,106 @@ class ScriptRunBrokerTest {
                 exit "${1:-0}"
                 """, StandardCharsets.UTF_8);
 
+        // Behavioural part runs only with the sed the execution pod uses (GNU sed, UBI9 image). macOS BSD `sed -u` makes
+        // stdout _IONBF and writes a line's text and its newline in two write(2) calls, so the O-sed and the E-sed
+        // interleave inside one pod-log line (measured 2026-11-26: up to ~2% of iterations under load, 0 with one write
+        // per line); GNU sed `-u` ends each line with one fflush. See docs/reviews/SCRIPT_RUN_LAUNCHER_RACE_2026_11_22.md.
+        Assumptions.assumeTrue(gnuSedOnPath(),
+                "launcher behaviour needs GNU sed (pod image); host sed is BSD sed, whose -u splits one line into two writes");
+
         Process p0 = new ProcessBuilder("/bin/bash", launcherFile.toString(), "/bin/bash", childScript.toString(), "0")
                 .redirectErrorStream(true)
                 .start();
         byte[] raw0 = p0.getInputStream().readAllBytes();
         int rc0 = p0.waitFor();
-        assertEquals(0, rc0, "script writing to stderr must not die with SIGPIPE (141) or leak fd 3 (99)");
         ScriptRunLog.Split split0 = ScriptRunLog.split(raw0, false);
+        String shape0 = launcherRunShape(rc0, raw0, split0);
+        assertEquals(0, rc0, () -> "script writing to stderr must not die with SIGPIPE (141) or leak fd 3 (99); " + shape0);
         // Compare by equals() and report only the shape: assertEquals would print the raw body and the log line is cut at ~240 bytes.
         assertTrue("stdout-line-1\nstdout-line-2\n".equals(split0.stdout()),
-                () -> stdoutShapeMessage(split0.stdout(), "stdout-line-1", "stdout-line-2"));
-        assertFalse(split0.stdout().contains("forged-on-fd3"), "child must not be able to write to fd 3");
-        assertTrue(split0.stderr().contains("stderr-line-1\n"), "stderr line 1 captured: " + split0.stderr());
-        assertTrue(split0.stderr().contains("stderr-line-2\n"), "stderr line 2 captured: " + split0.stderr());
-        assertTrue(split0.stderr().contains("3: Bad file descriptor"), "fd 3 is closed in child: " + split0.stderr());
+                () -> stdoutShapeMessage(split0.stdout(), "stdout-line-1", "stdout-line-2") + "; " + shape0);
+        assertFalse(split0.stdout().contains("forged-on-fd3"), () -> "child must not be able to write to fd 3; " + shape0);
+        assertTrue(split0.stderr().contains("stderr-line-1\n"), () -> "stderr line 1 captured (exit 0 run); " + shape0);
+        assertTrue(split0.stderr().contains("stderr-line-2\n"), () -> "stderr line 2 captured (exit 0 run); " + shape0);
+        assertTrue(split0.stderr().contains("3: Bad file descriptor"), () -> "fd 3 is closed in child; " + shape0);
 
         Process p7 = new ProcessBuilder("/bin/bash", launcherFile.toString(), "/bin/bash", childScript.toString(), "7")
                 .redirectErrorStream(true)
                 .start();
         byte[] raw7 = p7.getInputStream().readAllBytes();
         int rc7 = p7.waitFor();
-        assertEquals(7, rc7, "launcher must exit with the child script's own non-zero exit code");
         ScriptRunLog.Split split7 = ScriptRunLog.split(raw7, false);
-        assertTrue(split7.stderr().contains("stderr-line-1\n"));
+        String shape7 = launcherRunShape(rc7, raw7, split7);
+        assertEquals(7, rc7, () -> "launcher must exit with the child script's own non-zero exit code; " + shape7);
+        assertTrue(split7.stderr().contains("stderr-line-1\n"), () -> "stderr line 1 captured (exit 7 run); " + shape7);
+    }
+
+    @Test
+    void launcherRunShapeNamesTheInterleaveMeasuredWithBsdSedWithoutEchoingTheLog() {
+        // The byte shape measured on macOS BSD sed (2026-11-26): the O-sed wrote "O|stdout-line-1", the E-sed then wrote
+        // "E|stderr-line-1\n", then the O-sed wrote its own "\n". One pod-log line carries both tags.
+        byte[] raw = "O|stdout-line-1E|stderr-line-1\n\nE|stderr-line-2\nO|stdout-line-2\n".getBytes(StandardCharsets.UTF_8);
+        ScriptRunLog.Split split = ScriptRunLog.split(raw, false);
+        assertFalse(split.stderr().contains("stderr-line-1\n"), "the interleaved line is filed as stdout, not stderr");
+        String shape = launcherRunShape(7, raw, split);
+        assertEquals("run shape: rc=7 bytes=" + raw.length + " O_lines=2 E_lines=1 untagged_lines=0 empty_lines=2"
+                + " lines_with_mid_line_tag=1 missing=[stdout-line-1, stderr-line-1]", shape);
+        assertFalse(shape.contains("O|") || shape.contains("E|"), "the shape message never echoes log bytes");
+    }
+
+    /** True when {@code sed} on PATH (the one the launcher resolves) is GNU sed, as in the execution pod image. */
+    static boolean gnuSedOnPath() {
+        try {
+            Process p = new ProcessBuilder("sed", "--version").redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            return p.waitFor() == 0 && out.contains("GNU sed");
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
+     * Shape of one launcher run for a failure message: exit code, byte count, tagged/untagged line counts, and which of
+     * the synthetic expected lines are missing. Never the raw log, which in production would be script output.
+     */
+    static String launcherRunShape(int rc, byte[] raw, ScriptRunLog.Split split) {
+        String text = new String(raw, StandardCharsets.UTF_8);
+        int oLines = 0;
+        int eLines = 0;
+        int untagged = 0;
+        int empty = 0;
+        int midLineTags = 0;
+        for (String line : text.split("\n", -1)) {
+            if (line.startsWith("O|")) {
+                oLines++;
+            } else if (line.startsWith("E|")) {
+                eLines++;
+            } else if (line.isEmpty()) {
+                empty++;
+            } else {
+                untagged++;
+            }
+            if (line.indexOf("O|", 1) > 0 || line.indexOf("E|", 1) > 0) {
+                midLineTags++;
+            }
+        }
+        List<String> missing = new ArrayList<>();
+        for (String expected : List.of("stdout-line-1", "stdout-line-2")) {
+            if (!split.stdout().contains(expected + "\n")) {
+                missing.add(expected);
+            }
+        }
+        for (String expected : List.of("stderr-line-1", "stderr-line-2")) {
+            if (!split.stderr().contains(expected + "\n")) {
+                missing.add(expected);
+            }
+        }
+        return "run shape: rc=" + rc + " bytes=" + raw.length + " O_lines=" + oLines + " E_lines=" + eLines
+                + " untagged_lines=" + untagged + " empty_lines=" + empty + " lines_with_mid_line_tag=" + midLineTags
+                + " missing=" + missing;
     }
 
     @Test
