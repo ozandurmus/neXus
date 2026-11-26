@@ -157,6 +157,12 @@ test('export_reference.sql covers the P1 tables with the right categories', () =
     'USER zone_matrix_revision.actor', 'ADDR static_route_preview.destination_cidr', 'ADDR static_route_preview.nexthop_ip',
     'ADDR static_route_preview.representative_host', 'USER static_route_preview.requested_by',
     'CLUSTER static_route_preview.unit_id',
+    // Script Execution, SNMP polling, log detection, failover actor authority, failover runs and settings screens
+    'HOST script.name', 'USER script_version.created_by', 'USER script_run.requested_by',
+    'USER snmp_polling_settings.updated_by', 'USER snmp_polling_override.updated_by', 'USER log_detection_settings.updated_by',
+    'USER log_finding.review_by', 'USER log_finding_action.actor', 'USER failover_actor_authority.actor',
+    'CLUSTER failover_run.cluster_ref', 'USER failover_run.requested_by', 'USER failover_approval.approved_by',
+    'USER ldap_settings.updated_by', 'USER policy_change_evidence.admin_name', 'HOST grid_member.host_name',
     // pre-P1 sources stay
     'HOST devices.observed_hostname', 'ADDR endpoints.address_ref', 'SERIAL ha_pair_identity.unit_serial_low',
   ]) assert.ok(plain.has(expected), `plain source ${expected}`);
@@ -164,6 +170,8 @@ test('export_reference.sql covers the P1 tables with the right categories', () =
     'ADDR cutover_segment.blocks elements', 'ADDR cutover_segment.peer_blocks elements',
     'ADDR cutover_assessment_flow.flow flow_addresses', 'HOST zone_matrix_version.content zone_names',
     'ADDR zone_matrix_version.content zone_blocks',
+    'HOST script.egress host_port_array', 'HOST script_run.egress_declared host_port_array',
+    'HOST ldap_settings.servers host_port_array',
   ]) assert.ok(json.has(expected), `JSON source ${expected}`);
   for (const source of [...plain, ...json]) assert.ok(CATEGORIES.includes(source.split(' ')[0]), `category of ${source}`);
   // JSON shapes read only named keys, and invalid JSON is skipped rather than raising.
@@ -171,6 +179,10 @@ test('export_reference.sql covers the P1 tables with the right categories', () =
   for (const key of ["''zones''", "''blocks''", "''name''", "''flowSource''", "''flowDestination''", "''flowSources''", "''sourceRange''"]) {
     assert.ok(SQL_CODE.includes(key), `reads ${key}`);
   }
+  // The host:port array shape reads TEXT[] columns only, cuts the port, and splits IP literals (ADDR) from names (HOST).
+  assert.match(SQL_CODE, /c\.data_type = 'ARRAY'/);
+  assert.match(SQL_CODE, /LATERAL unnest\(t\.%I\) e\(v\)/);
+  assert.match(SQL_CODE, /THEN ''ADDR'' ELSE ''HOST'' END AS cat/);
   // A block also yields its address part, trimmed the way the probe tokenizes.
   assert.match(SQL_CODE, /regexp_replace\(split_part\(n, '\/', 1\), '\[\._:@-\]\+\$', ''\)/);
 });

@@ -738,7 +738,10 @@ def test_board_projects_close_outcome_and_preserves_full_objective(tmp_path, mon
     row = dash.build_board(state_dir, relay_dir, tmp_path, 2)["closed"][0]
     assert row["terminal_outcome"] == "DONE"
     assert row["objective"].endswith(" searchable tail")
-    assert row["ended_at"] == json.loads(relay_file.read_text())["entries"][-1]["timestamp"]
+    # ended_at is the SESSION_CLOSE entry's own timestamp; a later entry (the relay's
+    # own close) may fall in the next second, so never compare against entries[-1].
+    close_entry = [e for e in json.loads(relay_file.read_text())["entries"] if e.get("marker") == "SESSION_CLOSE"][-1]
+    assert row["ended_at"] == close_entry["timestamp"]
     archive_row = dash._relay_archive_rows(relay_dir, set())[0]
     assert archive_row["terminal_outcome"] == "DONE"
     assert archive_row["archived"] is True
