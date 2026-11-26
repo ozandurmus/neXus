@@ -28,9 +28,12 @@ export const CANONICAL_BLOCK_NOTE =
 /** The line next to the Show blocks action and the lookup: both are written to the audit log by the server. */
 export const AUDIT_LINE = "Viewing blocks is recorded in the audit log";
 
+/** Maximum overlapping-block rows rendered before printing "+N more". */
+export const REDUNDANT_BLOCKS_CAP = 50;
+
 /** The label of one version as the tab names it. */
 export function versionLabel(version: { readonly state: string; readonly number: number | null; readonly revision: number }): string {
-  return version.state === "DRAFT" ? `Draft r${version.revision}` : `Version ${version.number ?? "?"}`;
+  return version.state === "DRAFT" ? `Draft r${version.revision}` : `Version ${version.number ?? "UNKNOWN"}`;
 }
 
 const CHANGE_WORD: Record<string, string> = { ADDED: "Added in draft", CHANGED: "Changed in draft" };
@@ -71,7 +74,8 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify, reading }: ZoneT
 
   const changes = useMemo(() => new Map<string, ZoneDiffRow>((diff?.zones ?? []).map((row) => [row.zone_id, row])), [diff]);
   const showChanges = editable && draft !== null && changes.size > 0;
-  const showBlockList = viewed !== null && viewed.zones.some((z) => z.blocks !== null);
+  // Raw CIDR blocks are shown only with zone_matrix_zones_read (`can.view_blocks`) when the user asked for blocks.
+  const showBlockList = can.view_blocks && data.blocks && viewed !== null && viewed.zones.some((z) => z.blocks !== null);
 
   const remove = async (zone: ZoneView) => {
     setBusy(true);
@@ -95,9 +99,10 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify, reading }: ZoneT
       </Box>
     ) },
     { key: "role", header: "Role", width: 150, render: (z) => zoneRoleLabel(z.role) },
-    { key: "count", header: "Blocks", width: 80, align: "right", render: (z) => z.block_count },
-    { key: "v4", header: "IPv4 addresses", width: 150, align: "right", title: (z) => z.effective_addresses.IPV4, render: (z) => addressCount(z.effective_addresses.IPV4) },
-    { key: "v6", header: "IPv6 addresses", width: 190, align: "right", title: (z) => z.effective_addresses.IPV6, render: (z) => addressCount(z.effective_addresses.IPV6) },
+    { key: "count", header: "Block count", width: 105, align: "right",
+      render: (z) => (typeof z.block_count === "number" && Number.isFinite(z.block_count) && z.block_count >= 0 ? z.block_count : "UNKNOWN") },
+    { key: "v4", header: "IPv4 addresses", width: 150, align: "right", title: (z) => z.effective_addresses?.IPV4, render: (z) => addressCount(z.effective_addresses?.IPV4) },
+    { key: "v6", header: "IPv6 addresses", width: 190, align: "right", title: (z) => z.effective_addresses?.IPV6, render: (z) => addressCount(z.effective_addresses?.IPV6) },
     ...(showChanges ? [{ key: "change", header: "Against the active version", width: 170, title: () => undefined,
       render: (z: ZoneView) => (changes.get(z.zone_id) ? <StatusChip dense tone="attn" label={CHANGE_WORD[changes.get(z.zone_id)!.change] ?? "Changed in draft"} /> : <span>Unchanged</span>) }] : []),
     ...(showBlockList ? [{ key: "blocks", header: "Blocks", width: 230, wrap: true, mono: true, title: () => undefined,
@@ -154,9 +159,9 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify, reading }: ZoneT
           emptyText="This version has no zones. Every address is unassigned." />
         <Box data-testid="unassigned-space" sx={{ ...panelSx, py: 1.25, flexDirection: "row", flexWrap: "wrap", gap: 2, alignItems: "baseline" }}>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>Unassigned</Typography>
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Addresses that no zone holds. A state, not a zone and not "internet".</Typography>
-          <Typography variant="body2" title={viewed.unassigned_addresses.IPV4}>IPv4 {addressCount(viewed.unassigned_addresses.IPV4)}</Typography>
-          <Typography variant="body2" title={viewed.unassigned_addresses.IPV6}>IPv6 {addressCount(viewed.unassigned_addresses.IPV6)}</Typography>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Addresses that no zone holds. A state, not a zone and not &quot;internet&quot;.</Typography>
+          <Typography variant="body2" title={viewed.unassigned_addresses?.IPV4}>IPv4 {addressCount(viewed.unassigned_addresses?.IPV4)}</Typography>
+          <Typography variant="body2" title={viewed.unassigned_addresses?.IPV6}>IPv6 {addressCount(viewed.unassigned_addresses?.IPV6)}</Typography>
         </Box>
         {needsActiveBlocks ? (
           <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
@@ -165,8 +170,8 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify, reading }: ZoneT
           </Stack>
         ) : null}
         {activeFailure ? <Typography variant="body2" role="alert" sx={{ color: m3.error }}>{activeFailure}</Typography> : null}
-        <RedundantBlocks value={viewed.redundant_blocks} />
-        {can.view_blocks ? <AddressLookup version={viewed} /> : null}
+        <RedundantBlocks value={viewed.redundant_blocks} showBlocks={can.view_blocks && data.blocks} />
+        {can.view_blocks ? <AddressLookup key={viewed.version_id} version={viewed} /> : null}
       </>}
 
       {editing !== null ? (
@@ -192,22 +197,72 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify, reading }: ZoneT
   );
 }
 
-/** Blocks that repeat or sit inside another block of the same zone: accepted, shown as a warning (contract 3.2). */
-function RedundantBlocks({ value }: { readonly value: ZoneVersionDetail["redundant_blocks"] }) {
-  const count = typeof value === "number" ? value : value.length;
+/** Blocks that repeat or sit inside another block of the same zone: accepted, shown as a warning (contract 3.2, 7.1). */
+function RedundantBlocks({ value, showBlocks }: {
+  readonly value: ZoneVersionDetail["redundant_blocks"] | null | undefined;
+  readonly showBlocks: boolean;
+}) {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0) {
+      return (
+        <Box data-testid="redundant-blocks" sx={panelSx}>
+          <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+            <StatusChip dense tone="unknown" label="UNKNOWN" />
+            <Typography variant="body2">Overlap warnings: UNKNOWN (overlap check is not available for this version).</Typography>
+          </Stack>
+        </Box>
+      );
+    }
+    if (value === 0) return null;
+    return (
+      <Box data-testid="redundant-blocks" sx={panelSx}>
+        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+          <StatusChip dense tone="warn" label="Overlap warning" />
+          <Typography variant="body2">
+            Overlap warning: {value} {value === 1 ? "block repeats or sits" : "blocks repeat or sit"} inside another block of the same zone. This changes no zone&apos;s addresses.
+          </Typography>
+        </Stack>
+      </Box>
+    );
+  }
+  if (!Array.isArray(value)) {
+    return (
+      <Box data-testid="redundant-blocks" sx={panelSx}>
+        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+          <StatusChip dense tone="unknown" label="UNKNOWN" />
+          <Typography variant="body2">Overlap warnings: UNKNOWN (overlap check is not available for this version).</Typography>
+        </Stack>
+      </Box>
+    );
+  }
+  const count = value.length;
   if (count === 0) return null;
+  const rows = showBlocks ? value.slice(0, REDUNDANT_BLOCKS_CAP) : [];
+  const more = showBlocks && value.length > REDUNDANT_BLOCKS_CAP ? value.length - REDUNDANT_BLOCKS_CAP : 0;
   return (
-    <Box data-testid="redundant-blocks">
-      <Typography variant="body2">
-        Overlap warning: {count} {count === 1 ? "block repeats or sits" : "blocks repeat or sit"} inside another block of the same zone. This changes no zone's addresses.
-      </Typography>
-      {typeof value === "number" ? null : (
-        <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-          {value.map((r, index) => (
-            <li key={index}><Typography variant="body2">{r.zone}: <Box component="span" sx={mono}>{r.block}</Box> is inside <Box component="span" sx={mono}>{r.within}</Box></Typography></li>
+    <Box data-testid="redundant-blocks" sx={panelSx}>
+      <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+        <StatusChip dense tone="warn" label="Overlap warning" />
+        <Typography variant="body2">
+          Overlap warning: {count} {count === 1 ? "block repeats or sits" : "blocks repeat or sit"} inside another block of the same zone. This changes no zone&apos;s addresses.
+        </Typography>
+      </Stack>
+      {rows.length > 0 ? (
+        <Box component="ul" aria-label="Overlapping blocks" sx={{ m: 0, pl: 2.5 }}>
+          {rows.map((r, index) => (
+            <li key={index}>
+              <Typography variant="body2">
+                {r.zone || "UNKNOWN"}: <Box component="span" sx={mono}>{r.block || "UNKNOWN"}</Box> is inside <Box component="span" sx={mono}>{r.within || "UNKNOWN"}</Box>
+              </Typography>
+            </li>
           ))}
         </Box>
-      )}
+      ) : null}
+      {more > 0 ? (
+        <Typography variant="body2" data-testid="redundant-blocks-more" sx={{ color: m3.onSurfaceVar }}>
+          +{more} more overlapping {more === 1 ? "block" : "blocks"} not shown.
+        </Typography>
+      ) : null}
     </Box>
   );
 }
@@ -230,7 +285,7 @@ function AddressLookup({ version }: { readonly version: ZoneVersionDetail }) {
       setBusy(false);
     }
   };
-  const under = version.state === "DRAFT" ? "the draft" : `version ${version.number ?? "?"}`;
+  const under = version.state === "DRAFT" ? "the draft" : `version ${version.number ?? "UNKNOWN"}`;
   return (
     <Box component="form" aria-label="Address lookup" onSubmit={(e) => { e.preventDefault(); void submit(); }} sx={panelSx}>
       <SectionTitle note={`Which zone holds one address under ${under}.`}>Address lookup</SectionTitle>
@@ -248,7 +303,8 @@ function AddressLookup({ version }: { readonly version: ZoneVersionDetail }) {
               : `${result.address} is in ${result.found.zone_name ?? "a zone that has no name in this view"}.`}
           </Typography>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-            {result.found.family === "IPV6" ? "IPv6" : "IPv4"}, {result.found.state === "DRAFT" ? "draft, not published" : `version ${result.found.number ?? "?"}`}
+            {result.found.family === "IPV6" ? "IPv6" : result.found.family === "IPV4" ? "IPv4" : "family UNKNOWN"},{" "}
+            {result.found.state === "DRAFT" ? "draft, not published" : `version ${result.found.number ?? "UNKNOWN"}`}
           </Typography>
         </Box>
       ) : null}

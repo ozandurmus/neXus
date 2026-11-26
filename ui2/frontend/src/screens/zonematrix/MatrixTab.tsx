@@ -13,7 +13,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
 import { DataTable, type DataColumn } from "../../shell/DataTable";
-import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { M3Button } from "../../shell/M3Widgets";
 import { StatePanel } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { RADIUS } from "../../theme/tokens";
@@ -23,10 +23,10 @@ import {
 } from "./MatrixCellDetail";
 import type { ZoneTabProps } from "./ZoneMatrixScreen";
 import type { ZoneSummaryHandle } from "./zoneMatrixSummaryUi";
-import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
+import { Hash, Hint, SectionTitle, isKnownStatement, knownSeverityWord, knownStatementWord, mono, panelSx } from "./zoneMatrixUi";
 import {
   DEFAULT_STATEMENTS, MATRIX_SEVERITIES, ZONE_ROLES, deleteServiceSet, getZoneVersion, matrixOf,
-  referenceStatusWord, saveServiceSet, setMatrixDefault, severityWord, statementWord, zoneErrorCode,
+  referenceStatusWord, saveServiceSet, setMatrixDefault, zoneErrorCode,
   zoneErrorLines, zoneRoleLabel, type DefaultStatement, type MatrixCellView, type MatrixSeverity,
   type MatrixStatement, type ServiceSetView, type ZoneVersionDetail,
 } from "./zoneMatrixApi";
@@ -42,10 +42,11 @@ const GRID_AXIS_PAGE = 25;
 const trimLines = (text: string): string[] =>
   text.split("\n").map((line) => line.trim()).filter((line) => line !== "");
 
-function cellSummaryLabel(statement: MatrixStatement, serviceCount: number): string {
+export function cellSummaryLabel(statement: MatrixStatement | string | null | undefined, serviceCount: number): string {
   if (statement === "DENY_ALL") return "Deny all";
   if (statement === "ALLOW_ANY") return "Allow any";
-  return serviceCount > 0 ? `Allow listed (${serviceCount})` : "Allow listed (empty list)";
+  if (statement === "ALLOW_LISTED") return serviceCount > 0 ? `Allow listed (${serviceCount})` : "Allow listed (empty list)";
+  return "Statement UNKNOWN";
 }
 
 export interface MatrixTabProps extends ZoneTabProps {
@@ -65,10 +66,14 @@ function OpenViolations({ line, testId }: { readonly line: OpenViolationsLine; r
 }
 
 export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations }: MatrixTabProps) {
-  const { can, draft } = data.draft;
+  const { can, draft: rawDraft } = data.draft;
+  // Contract 7.1: on the Matrix tab the draft is shown only to editors, labelled "draft, not evaluated".
+  const draft = can.edit ? rawDraft : null;
   const active = data.active;
   const [selectedVersion, setSelectedVersion] = useState<string>(() => (active ? active.version_id : (draft ? "draft" : "active")));
   const [retiredCache, setRetiredCache] = useState<Record<string, ZoneVersionDetail>>({});
+  const [retiredErrors, setRetiredErrors] = useState<Record<string, string>>({});
+  const [retiredRetrySeq, setRetiredRetrySeq] = useState(0);
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [filterText, setFilterText] = useState("");
   const [filterRole, setFilterRole] = useState("");
@@ -84,27 +89,38 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
 
   useEffect(() => {
     if (selectedVersion === "draft" && !draft && active) setSelectedVersion(active.version_id);
+    else if (selectedVersion === "draft" && !draft && !active) setSelectedVersion("active");
     else if (selectedVersion === "active" && active) setSelectedVersion(active.version_id);
-    else if (!active && draft && selectedVersion !== "draft") setSelectedVersion("draft");
+    else if (!active && draft && selectedVersion === "active") setSelectedVersion("draft");
   }, [active, draft, selectedVersion]);
 
+  const onDraft = selectedVersion === "draft" && draft !== null;
+  const onActive = active !== null && (selectedVersion === active.version_id || selectedVersion === "active");
+  const wantingRetired = !onDraft && !onActive && selectedVersion !== "draft" && selectedVersion !== "active";
+
   useEffect(() => {
-    if (selectedVersion === "draft" || selectedVersion === "active") return;
-    if (active && selectedVersion === active.version_id) return;
-    if (retiredCache[selectedVersion]) return;
+    if (!wantingRetired) return undefined;
+    if (retiredCache[selectedVersion] || retiredErrors[selectedVersion]) return undefined;
+    let cancelled = false;
     setLoadingVersion(true);
     getZoneVersion(selectedVersion, false)
-      .then((detail) => setRetiredCache((prev) => ({ ...prev, [selectedVersion]: detail })))
-      .catch((err) => notify({ kind: "refused", lines: zoneErrorLines(err) }))
-      .finally(() => setLoadingVersion(false));
-  }, [selectedVersion, active, retiredCache, notify]);
+      .then((detail) => {
+        if (cancelled) return;
+        setRetiredCache((prev) => ({ ...prev, [selectedVersion]: detail }));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const lines = zoneErrorLines(err);
+        setRetiredErrors((prev) => ({ ...prev, [selectedVersion]: lines.join(" ") }));
+        notify({ kind: "refused", lines });
+      })
+      .finally(() => { if (!cancelled) setLoadingVersion(false); });
+    return () => { cancelled = true; };
+  }, [wantingRetired, selectedVersion, retiredCache, retiredErrors, retiredRetrySeq, notify]);
 
-  const onDraft = selectedVersion === "draft" && draft !== null;
   const viewed: ZoneVersionDetail | null = onDraft
     ? draft
-    : (active && (selectedVersion === active.version_id || selectedVersion === "active")
-      ? active
-      : (retiredCache[selectedVersion] ?? active ?? draft));
+    : (onActive ? active : (wantingRetired ? (retiredCache[selectedVersion] ?? null) : (active ?? draft)));
 
   // Open-violation counts belong to the active version only: never to a draft or a retired version.
   const viewingActive = viewed !== null && viewed.state === "ACTIVE";
@@ -120,6 +136,48 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
     setSelectedVersion("draft");
     refresh();
   };
+
+  const versionSelectControl = (publishedVersions.length > 0 || draft !== null) ? (
+    <TextField select size="small" label="Version shown" value={onDraft ? "draft" : (viewed ? viewed.version_id : selectedVersion)}
+      onChange={(e) => { setAxisOffset(0); setSelectedVersion(e.target.value); }} sx={{ minWidth: 250 }}>
+      {publishedVersions.map((v) => (
+        <MenuItem key={v.version_id} value={v.version_id}>
+          Version {v.number ?? "UNKNOWN"} ({v.state === "ACTIVE" ? "active" : "retired"})
+        </MenuItem>
+      ))}
+      {viewed && !publishedVersions.some((v) => v.version_id === viewed.version_id) && viewed.state !== "DRAFT" ? (
+        <MenuItem value={viewed.version_id}>Version {viewed.number ?? "UNKNOWN"} (active)</MenuItem>
+      ) : null}
+      {draft ? (
+        <MenuItem value="draft">Draft r{draft.revision} (draft, not evaluated)</MenuItem>
+      ) : null}
+    </TextField>
+  ) : null;
+
+  if (wantingRetired && viewed === null) {
+    const retiredError = retiredErrors[selectedVersion];
+    return (
+      <Stack gap={2}>
+        <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
+          {versionSelectControl}
+        </Stack>
+        {retiredError ? (
+          <StatePanel variant="unknown" announce="none" title="Selected published version could not be read"
+            body={`Statements for this published version are UNKNOWN until it can be read: ${retiredError}`}
+            action={(
+              <M3Button emphasis="outlined" onClick={() => {
+                setRetiredErrors((prev) => { const next = { ...prev }; delete next[selectedVersion]; return next; });
+                setRetiredRetrySeq((n) => n + 1);
+              }}>
+                Retry version read
+              </M3Button>
+            )} />
+        ) : (
+          <StatePanel variant="empty" title="Reading selected version…" announce="status" />
+        )}
+      </Stack>
+    );
+  }
 
   if (viewed === null) {
     return (
@@ -167,7 +225,7 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
   const listColumns: DataColumn<MatrixCellView>[] = [
     { key: "pair", header: "Pair", wrap: true, render: (c) => `${c.source_name} -> ${c.destination_name}` },
     { key: "statement", header: "Statement", width: 200, render: (c) => <><StatementShape statement={c.statement} />{cellSummaryLabel(c.statement, c.services.length)}</> },
-    { key: "severity", header: "Severity", width: 120, render: (c) => severityWord(c.severity) },
+    { key: "severity", header: "Severity", width: 120, render: (c) => knownSeverityWord(c.severity) },
     { key: "ref", header: "Reference status", width: 150, render: (c) => referenceStatusWord(c.reference_status) },
     ...(viewingActive ? [{
       key: "open-violations", header: "Open violations", width: 230, wrap: true,
@@ -187,7 +245,7 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
         </Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
           Version default: <StatementShape statement={matrix.default_statement} />
-          <strong>{statementWord(matrix.default_statement)}</strong> ({matrix.default_statement}), severity <strong>{severityWord(matrix.default_severity)}</strong>
+          <strong>{knownStatementWord(matrix.default_statement)}</strong> ({isKnownStatement(matrix.default_statement) ? matrix.default_statement : "UNKNOWN"}), severity <strong>{knownSeverityWord(matrix.default_severity)}</strong>
         </Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
           UNASSIGNED {"->"} UNASSIGNED: {matrix.unassigned_to_unassigned}
@@ -200,23 +258,10 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
       </Box>
 
       <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
-        <TextField select size="small" label="Version shown" value={onDraft ? "draft" : viewed.version_id}
-          onChange={(e) => { setAxisOffset(0); setSelectedVersion(e.target.value); }} sx={{ minWidth: 250 }}>
-          {publishedVersions.map((v) => (
-            <MenuItem key={v.version_id} value={v.version_id}>
-              Version {v.number ?? "?"} ({v.state === "ACTIVE" ? "active" : "retired"})
-            </MenuItem>
-          ))}
-          {!publishedVersions.some((v) => v.version_id === viewed.version_id) && viewed.state !== "DRAFT" ? (
-            <MenuItem value={viewed.version_id}>Version {viewed.number ?? "?"} (active)</MenuItem>
-          ) : null}
-          {draft ? (
-            <MenuItem value="draft">Draft r{draft.revision} (draft, not evaluated)</MenuItem>
-          ) : null}
-        </TextField>
+        {versionSelectControl}
 
-        {draft ? (
-          <M3Button emphasis={onDraft ? "tonal" : "outlined"} onClick={() => setSelectedVersion(onDraft && active ? active.version_id : "draft")}>
+        {draft && active ? (
+          <M3Button emphasis={onDraft ? "tonal" : "outlined"} onClick={() => setSelectedVersion(onDraft ? active.version_id : "draft")}>
             {onDraft ? `Viewing draft r${draft.revision} (draft, not evaluated)` : `Switch to draft r${draft.revision} (draft, not evaluated)`}
           </M3Button>
         ) : null}
@@ -243,8 +288,8 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
 
       <SectionTitle note={viewed.state === "DRAFT"
         ? "Draft, not evaluated. Changes apply after another person publishes the draft."
-        : <>Published version {viewed.number ?? "?"} (<Hash value={viewed.content_sha256} />).</>}>
-        {viewed.state === "DRAFT" ? `Draft r${viewed.revision} (draft, not evaluated)` : `Version ${viewed.number ?? "?"}`}
+        : <>Published version {viewed.number ?? "UNKNOWN"} (<Hash value={viewed.content_sha256} />).</>}>
+        {viewed.state === "DRAFT" ? `Draft r${viewed.revision} (draft, not evaluated)` : `Version ${viewed.number ?? "UNKNOWN"}`}
       </SectionTitle>
 
       {filteredEndpoints.length > GRID_AXIS_PAGE && layout === "grid" ? (
@@ -302,7 +347,7 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
                             <StatementShape statement={st} />{label}
                           </Typography>
                           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                            {severityWord(sev)} · {explicit ? `explicit (${referenceStatusWord(explicit.reference_status).toLowerCase()})` : "default"}
+                            {knownSeverityWord(sev)} · {explicit ? `explicit (${referenceStatusWord(explicit.reference_status).toLowerCase()})` : "default"}
                           </Typography>
                           {viewingActive ? <OpenViolations line={lineOf(row.id, col.id)} testId={`open-violations-${row.id}-${col.id}`} /> : null}
                         </Box>
@@ -364,7 +409,7 @@ function VersionDefaultSection({
     setBusy(true); notify(null);
     try {
       await setMatrixDefault(revision, statement, severity);
-      notify({ kind: "done", lines: [`Version default saved as ${statementWord(statement)} (${severityWord(severity)}).`] });
+      notify({ kind: "done", lines: [`Version default saved as ${knownStatementWord(statement)} (${knownSeverityWord(severity)}).`] });
       onRefresh();
     } catch (err) {
       notify({ kind: "refused", lines: zoneErrorLines(err) });
