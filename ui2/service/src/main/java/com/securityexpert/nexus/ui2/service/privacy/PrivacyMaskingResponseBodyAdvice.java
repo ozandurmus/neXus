@@ -536,11 +536,13 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         "target_device_id", "member_device_id", "memberDeviceId",
                         "case_id", "point_id", "capture_id", "interface_id",
                         "ingress_interface_id", "egress_interface_id",
-                        "policy_id", "rule_id", "section_id", "nat_point_a", "nat_point_b" -> {
+                        "policy_id", "rule_id", "section_id", "nat_point_a", "nat_point_b",
+                        "previous_request_id", "retry_request_id" -> {
                     // Opaque internal UUIDs preserved for seamless frontend routing
                     result.put(key, value);
                 }
-                case "status", "inventory_status", "policy_status", "action", "proto", "side" ->
+                case "status", "inventory_status", "policy_status", "action", "proto", "side",
+                        "hold_reasons", "retry_outcome", "not_started_summary", "collection_window_ends_at" ->
                     result.put(key, value);
                 // V271: a Management Center's managed-device health. The state is a closed vocabulary; the texts are vendor
                 // text the worker already scrubbed once (addresses, hostnames, identifiers), masked here a second time.

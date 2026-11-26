@@ -51,6 +51,8 @@ class SupportBundleCliTest {
             assertEquals(0, cli.run(new String[] {"support-bundle", ID}));
             assertEquals(0, cli.run(new String[] {"--business-hours-ack", "support-bundle-request", "dev-1", "cp_gaia_extras,cp_hcp_latest",
                     "TAC case preparation", "--at", "2026-11-16T01:00:00Z", "--case", "CASE-1"}));
+            assertEquals(0, cli.run(new String[] {"support-bundle-request", "dev-1", "cp_cpinfo",
+                    "Re-request after busy expiry", "--previous", ID, "--vs", "1,2", "--domain", "dom-a"}));
             assertEquals(0, cli.run(new String[] {"support-bundle-cancel", ID, "Not needed any more"}));
             assertEquals(0, cli.run(new String[] {"support-bundle-download", ID, "Attach to the case", dest.toString(), "--sanitized"}));
             assertEquals(0, cli.run(new String[] {"support-bundle-delete", ID, "Downloaded and attached"}));
@@ -59,15 +61,18 @@ class SupportBundleCliTest {
                     "GET /api/v2/devices/dev-1/support-bundles?state=COMPLETED&limit=5",
                     "GET /api/v2/support-bundles/" + ID,
                     "POST /api/v2/devices/dev-1/support-bundles",
+                    "POST /api/v2/devices/dev-1/support-bundles",
                     "POST /api/v2/support-bundles/" + ID + "/cancel",
                     "POST /api/v2/support-bundles/" + ID + "/download",
                     "POST /api/v2/support-bundles/" + ID + "/delete"),
                     seen.stream().map(s -> s.method() + " " + s.path()).toList());
             assertEquals("{\"kinds\":[\"cp_gaia_extras\",\"cp_hcp_latest\"],\"reason\":\"TAC case preparation\","
                     + "\"run_at\":\"2026-11-16T01:00:00Z\",\"case_ref\":\"CASE-1\"}", seen.get(3).body());
+            assertEquals("{\"kinds\":[\"cp_cpinfo\"],\"reason\":\"Re-request after busy expiry\","
+                    + "\"previous_request_id\":\"" + ID + "\",\"vs_ids\":[1,2],\"domain_ref\":\"dom-a\"}", seen.get(4).body());
             assertEquals("true", seen.get(3).ack());
             assertEquals("csrf-9", seen.get(3).csrf());
-            assertEquals("{\"reason\":\"Attach to the case\",\"mode\":\"sanitized\"}", seen.get(5).body());
+            assertEquals("{\"reason\":\"Attach to the case\",\"mode\":\"sanitized\"}", seen.get(6).body());
             assertTrue(Files.exists(dest), "the download streams to the file");
         } finally {
             server.stop(0);

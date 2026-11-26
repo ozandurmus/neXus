@@ -245,4 +245,184 @@ class SupportBundleServiceTest {
         when(store.virtualSystemIds("dev-cp")).thenReturn(java.util.stream.IntStream.range(1, 20).boxed().toList());
         refused(ask("dev-cp", List.of("cp_hcp_run", "cp_cpinfo"), Optional.empty(), "TAC case preparation"), 409, "TOO_MANY_ITEMS");
     }
+
+    // ------------------------------------------------------------------ V274: quiet hour, Request again, why not started, and one auto-retry
+
+    @Test
+    void nextQuietHourAvoidsCollectionWindowsAndBackupsAndPicksEveningOrFourAm() {
+        // 23:46 Istanbul (20:46Z): after 23:30 slot -> 04:00 next morning (01:00Z), avoiding 00:00 window and 02:00 backups
+        assertEquals(Instant.parse("2026-11-26T01:00:00Z"),
+                SupportBundleService.nextQuietHour(Instant.parse("2026-11-25T20:46:00Z")));
+        // 02:46 Istanbul (23:46Z, when 23:46 expired after 3 hours) -> 04:00 same morning (01:00Z)
+        assertEquals(Instant.parse("2026-11-26T01:00:00Z"),
+                SupportBundleService.nextQuietHour(Instant.parse("2026-11-25T23:46:00Z")));
+        // 04:00 Istanbul (01:00Z) -> 20:00 same evening (17:00Z), skipping 06:00, 12:00, 18:00 windows and 08:00-20:00 business hours
+        assertEquals(Instant.parse("2026-11-26T17:00:00Z"),
+                SupportBundleService.nextQuietHour(Instant.parse("2026-11-26T01:00:00Z")));
+        // 11:00 Istanbul (08:00Z) -> 20:00 same evening (17:00Z)
+        assertEquals(Instant.parse("2026-11-26T17:00:00Z"),
+                SupportBundleService.nextQuietHour(Instant.parse("2026-11-26T08:00:00Z")));
+        // 20:00 Istanbul (17:00Z) -> 21:00 same evening (18:00Z)
+        assertEquals(Instant.parse("2026-11-26T18:00:00Z"),
+                SupportBundleService.nextQuietHour(Instant.parse("2026-11-26T17:00:00Z")));
+        // 23:10 Istanbul (20:10Z) -> 23:30 same evening (20:30Z)
+        assertEquals(Instant.parse("2026-11-26T20:30:00Z"),
+                SupportBundleService.nextQuietHour(Instant.parse("2026-11-26T20:10:00Z")));
+    }
+
+    @Test
+    void requestAgainLinksPreviousRequestAndPreservesVsIdsAndDomainRef() {
+        UUID prevId = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+        RequestRow prev = new RequestRow(prevId, "dev-cp", "check_point", "cp_gaia_gateway", "NOW", NIGHT,
+                "CASE-9", "Earlier busy run", "ACTOR-ALPHA", NIGHT, null, NIGHT, NIGHT.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-old", "{}", "FAILED", "NOT_STARTED_DEVICE_BUSY");
+        when(store.find(prevId)).thenReturn(Optional.of(prev));
+        when(store.virtualSystemIds("dev-cp")).thenReturn(List.of(1, 2, 3));
+
+        Instant quiet = Instant.parse("2026-11-16T01:00:00Z"); // 04:00 Istanbul
+        var o = service.request("dev-cp", List.of("cp_gaia_extras", "cp_cpinfo"), Optional.of(quiet), "CASE-9",
+                "Re-request for TAC case", "ACTOR-ALPHA", prevId, List.of(2), "dom-retail");
+        assertTrue(o instanceof SupportBundleService.Outcome.Accepted, String.valueOf(o));
+
+        var rowCap = ArgumentCaptor.forClass(RequestRow.class);
+        @SuppressWarnings("unchecked")
+        var specCap = ArgumentCaptor.forClass(List.class);
+        verify(store).insert(rowCap.capture(), specCap.capture());
+        assertEquals(prevId, rowCap.getValue().previousRequestId());
+        assertFalse(rowCap.getValue().autoRetry());
+        List<JooqSupportBundleStore.ItemSpec> specs = specCap.getValue();
+        assertEquals(2, specs.size());
+        assertEquals(new JooqSupportBundleStore.ItemSpec("cp_gaia_extras", null, "dom-retail"), specs.get(0));
+        assertEquals(new JooqSupportBundleStore.ItemSpec("cp_cpinfo", 2, "dom-retail"), specs.get(1));
+
+        // Wrong device or unknown previous_request_id or unverified VSID is refused
+        refused(service.request("dev-asa", List.of("asa_crashinfo"), Optional.empty(), null,
+                "Re-request for TAC case", "ACTOR-ALPHA", prevId, null, null), 400, "PREVIOUS_DEVICE_MISMATCH");
+        refused(service.request("dev-cp", List.of("cp_gaia_extras"), Optional.empty(), null,
+                "Re-request for TAC case", "ACTOR-ALPHA", UUID.randomUUID(), null, null), 404, "PREVIOUS_REQUEST_NOT_FOUND");
+        refused(service.request("dev-cp", List.of("cp_cpinfo"), Optional.empty(), null,
+                "Re-request for TAC case", "ACTOR-ALPHA", prevId, List.of(99), null), 400, "INVALID_VS_ID");
+    }
+
+    @Test
+    void expiredBusyRequestGetsExactlyOneAutomaticRetryAtNextQuietHourAsOriginalRequester() {
+        // Expired at 2026-11-26 02:46 Istanbul (2026-11-25T23:46:00Z) -> next quiet hour is 04:00 Istanbul (2026-11-26T01:00:00Z)
+        Instant expiredAt = Instant.parse("2026-11-25T23:46:00Z");
+        Instant expectedQuiet = Instant.parse("2026-11-26T01:00:00Z");
+        var retrySvc = new SupportBundleService(devices, admission, store, Clock.fixed(expiredAt, ZoneOffset.UTC),
+                new BusinessHours(LocalTime.of(8, 0), LocalTime.of(20, 0)));
+
+        UUID origId = UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+        RequestRow expired = new RequestRow(origId, "dev-cp", "check_point", "cp_gaia_gateway", "NOW",
+                expiredAt.minus(Duration.ofHours(3)), "CASE-42", "Initial night bundle", "ACTOR-ORIG",
+                expiredAt.minus(Duration.ofHours(3)), null, expiredAt, expiredAt.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-exp", "{}", "FAILED", "NOT_STARTED_DEVICE_BUSY",
+                null, false, List.of("MODULE_DRAIN", "COLLECTION_WINDOW", "DEVICE_JOB_RUNNING"), null);
+
+        when(store.autoRetryCandidates(20)).thenReturn(List.of(expired)).thenReturn(List.of());
+        when(store.claimAutoRetryEvaluation(origId)).thenReturn(true);
+        when(store.hasFollowUp(origId)).thenReturn(false);
+        when(store.items(origId)).thenReturn(List.of(
+                new JooqSupportBundleStore.ItemRow(UUID.randomUUID(), origId, 1, "cp_gaia_extras", null, null,
+                        "CANCELLED", "NOT_STARTED_DEVICE_BUSY", null, null, null, null, null, "none", List.of(), null, expiredAt),
+                new JooqSupportBundleStore.ItemRow(UUID.randomUUID(), origId, 2, "cp_cpinfo", 2, "dom-a",
+                        "CANCELLED", "NOT_STARTED_DEVICE_BUSY", null, null, null, null, null, "none", List.of(), null, expiredAt)));
+        when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString(), any()))
+                .thenReturn(new AdmissionResult.Admitted("job-retry-1"));
+
+        assertEquals(1, retrySvc.retryExpiredBusy());
+        assertEquals(0, retrySvc.retryExpiredBusy(), "second pass creates nothing");
+
+        var rowCap = ArgumentCaptor.forClass(RequestRow.class);
+        @SuppressWarnings("unchecked")
+        var specCap = ArgumentCaptor.forClass(List.class);
+        verify(store).insert(rowCap.capture(), specCap.capture());
+        RequestRow created = rowCap.getValue();
+        assertEquals("AT", created.runMode());
+        assertEquals(expectedQuiet, created.runAt());
+        assertEquals("ACTOR-ORIG", created.requestedBy());
+        assertEquals("automatic retry of " + origId, created.reason());
+        assertEquals("CASE-42", created.caseRef());
+        assertEquals(origId, created.previousRequestId());
+        assertTrue(created.autoRetry());
+        assertEquals("QUEUED", created.state());
+
+        List<JooqSupportBundleStore.ItemSpec> specs = specCap.getValue();
+        assertEquals(List.of(
+                new JooqSupportBundleStore.ItemSpec("cp_gaia_extras", null, null),
+                new JooqSupportBundleStore.ItemSpec("cp_cpinfo", 2, "dom-a")), specs);
+        verify(store).attachJob(created.id(), "job-retry-1", "ACTOR-ORIG");
+        verify(store).deferJob("job-retry-1", expectedQuiet, "ACTOR-ORIG");
+        verify(store).finishAutoRetryEvaluation(origId, "ACTOR-ORIG", "RETRY_SCHEDULED");
+    }
+
+    @Test
+    void neverRetriesARetryOrAPersonsCancelOrAcrossBusinessHours() {
+        Instant expiredAt = Instant.parse("2026-11-25T23:46:00Z");
+        UUID parentId = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+        UUID retryOfRetryId = UUID.fromString("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+        UUID cancelledByPersonId = UUID.fromString("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+
+        // 1. An auto-retry that itself expired busy: never retried again
+        RequestRow expiredRetry = new RequestRow(retryOfRetryId, "dev-cp", "check_point", "cp_gaia_gateway", "AT",
+                expiredAt.minus(Duration.ofHours(3)), null, "automatic retry of " + parentId, "ACTOR-ALPHA",
+                expiredAt.minus(Duration.ofHours(3)), null, expiredAt, expiredAt.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-r1", "{}", "FAILED", "NOT_STARTED_DEVICE_BUSY",
+                parentId, true, List.of("DEVICE_JOB_RUNNING"), null);
+        // 2. Cancelled by a person: never retried
+        RequestRow personCancelled = new RequestRow(cancelledByPersonId, "dev-cp", "check_point", "cp_gaia_gateway", "NOW",
+                expiredAt.minus(Duration.ofMinutes(10)), null, "Operator cancelled", "ACTOR-ALPHA",
+                expiredAt.minus(Duration.ofMinutes(10)), null, expiredAt, expiredAt.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-c1", "{}", "CANCELLED", "CANCELLED",
+                null, false, List.of(), null);
+
+        var nightSvc = new SupportBundleService(devices, admission, store, Clock.fixed(expiredAt, ZoneOffset.UTC),
+                new BusinessHours(LocalTime.of(8, 0), LocalTime.of(20, 0)));
+        when(store.autoRetryCandidates(20)).thenReturn(List.of(expiredRetry, personCancelled));
+        assertEquals(0, nightSvc.retryExpiredBusy());
+        verify(store, never()).insert(any(), any());
+        verify(admission, never()).submit(anyString(), anyString(), anyString(), anyString(), anyString(), any());
+
+        // 3. When business hours cover the evaluation/quiet window, skip automatic retry instead of bypassing human ack
+        UUID bhBlockedId = UUID.fromString("ffffffff-ffff-4fff-8fff-ffffffffffff");
+        RequestRow bhCandidate = new RequestRow(bhBlockedId, "dev-cp", "check_point", "cp_gaia_gateway", "NOW",
+                expiredAt.minus(Duration.ofHours(3)), null, "TAC bundle", "ACTOR-ALPHA",
+                expiredAt.minus(Duration.ofHours(3)), null, expiredAt, expiredAt.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-bh", "{}", "FAILED", "NOT_STARTED_DEVICE_BUSY",
+                null, false, List.of("MODULE_DRAIN"), null);
+        var allDayBusiness = new SupportBundleService(devices, admission, store, Clock.fixed(expiredAt, ZoneOffset.UTC),
+                new BusinessHours(LocalTime.of(0, 0), LocalTime.of(23, 59)));
+        when(store.autoRetryCandidates(20)).thenReturn(List.of(bhCandidate));
+        when(store.claimAutoRetryEvaluation(bhBlockedId)).thenReturn(true);
+        when(store.hasFollowUp(bhBlockedId)).thenReturn(false);
+
+        assertEquals(0, allDayBusiness.retryExpiredBusy());
+        verify(store, never()).insert(any(), any());
+        verify(store).finishAutoRetryEvaluation(bhBlockedId, JooqSupportBundleStore.SYSTEM_RETRY_ACTOR, "SKIPPED_BUSINESS_HOURS");
+    }
+
+    @Test
+    void notStartedSummaryUsesClosedVocabularyAndExpiryStampOnly() {
+        Instant fin = Instant.parse("2026-11-26T02:46:00Z");
+        UUID id = UUID.randomUUID();
+        RequestRow held = new RequestRow(id, "dev-cp", "check_point", "cp_gaia_gateway", "NOW",
+                fin.minus(Duration.ofHours(3)), "CASE-SECRET", "free text reason", "ACTOR-ALPHA",
+                fin.minus(Duration.ofHours(3)), null, fin, fin.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-1", "{}", "FAILED", "NOT_STARTED_DEVICE_BUSY",
+                null, false, List.of("DEVICE_JOB_RUNNING", "MODULE_DRAIN", "COLLECTION_WINDOW"), null);
+        assertEquals("Did not start: held by a module drain, a collection window, and another job on the device; "
+                + "expired at 2026-11-26T02:46:00Z.", SupportBundleService.notStartedSummary(held));
+
+        RequestRow unknownHold = new RequestRow(id, "dev-cp", "check_point", "cp_gaia_gateway", "NOW",
+                fin.minus(Duration.ofHours(3)), null, "reason text", "ACTOR-ALPHA",
+                fin.minus(Duration.ofHours(3)), null, fin, fin.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-1", "{}", "FAILED", "NOT_STARTED_DEVICE_BUSY");
+        assertEquals("Did not start: device remained busy for 3 hours; expired at 2026-11-26T02:46:00Z.",
+                SupportBundleService.notStartedSummary(unknownHold));
+
+        RequestRow completed = new RequestRow(id, "dev-cp", "check_point", "cp_gaia_gateway", "NOW",
+                fin, null, "reason text", "ACTOR-ALPHA", fin, fin, fin, fin.plus(Duration.ofDays(14)),
+                null, null, 0, null, null, "job-1", "{}", "COMPLETED", "COMPLETED");
+        assertEquals(null, SupportBundleService.notStartedSummary(completed));
+    }
 }
