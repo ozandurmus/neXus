@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-26T09:24:07Z
+Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-26T13:23:38Z
 
 ## Now
 - NXS-LOCAL-0422 — Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening (automated_validated)
@@ -16,6 +16,7 @@ Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-26T09:24:07Z
 - P1/in_progress zone_matrix_step_4b2 — Zone matrix step 4b-2: run lifecycle, triggers, routes and
 - P1/planned cyberark_archive_key_custody
 - P1/planned enterprise_phase0_logging_monitoring_scans
+- P1/planned policy_change_event_trigger
 - P1/planned recertification_council
 - P1/planned verify_first_scheduled_mds_export_and_asa_saved_state
 - P2/in_progress aiview_masked_readonly_admin

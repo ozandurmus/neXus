@@ -745,6 +745,15 @@
       "priority": "P2",
       "target": "docs/design/POLICY_INSIGHTS_COUNTER_SAMPLES_STORAGE_CONTRACT_2026_11_26.md",
       "note": ""
+    },
+    {
+      "id": "policy_change_event_trigger",
+      "category": "policy",
+      "title": "Policy change event trigger: collect a policy minutes after a policy-installed syslog event (DRAFT design, PO questions open)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/POLICY_CHANGE_EVENT_TRIGGER_DESIGN_2026_11_26.md",
+      "note": ""
     }
   ]
 }
