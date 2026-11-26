@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Box, Button, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
-import { getPolicyInsight, type InsightRuleRef, type InsightType, type PolicyInsight, type PolicyInsightDetail, type PolicyObject, type PolicyRule } from "../auth/adminApi";
+import { getPolicyInsight, type InsightCrossedProof, type InsightRuleRef, type InsightType, type PolicyInsight, type PolicyInsightDetail, type PolicyObject, type PolicyRule } from "../auth/adminApi";
 import { CellEntries, ObjectChip, actionWord, policyFailureText, scheduleLabel } from "./PolicyRuleViewer";
-import { CHANGE_LIST_NOTICE, COVER_ACTION_WORDS, GRADE_EXPLAIN, INSTALL_CAVEAT, TYPE_LABEL, coverReasons, gradeColor, insightHeadline, raiseText, suggestedActions,
+import { CHANGE_LIST_NOTICE, COVER_ACTION_WORDS, CROSSED_REASON_WORDS, GRADE_EXPLAIN, INSTALL_CAVEAT, REORDER_CAVEAT, REORDER_RESULT_WORDS, TYPE_LABEL, coverReasons,
+  insightGradeColor, insightHeadline, raiseText, suggestedActions,
   type ChangeItem, type SuggestedAction } from "./policyInsightActions";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
@@ -25,23 +26,28 @@ function coverFields(insight: PolicyInsight): Readonly<Record<string, Cover>> {
       return coverAction === "DIFFERENT" || coverAction === "INLINE_LAYER" ? { ...SHADOW_COVER, action: "differs" } : SHADOW_COVER;
     }
     case "I4": return insight.evidenceGrade === "NOT_EVALUABLE" ? {} : SHADOW_COVER;
+    // I7: the cells the move's proof rests on; the track / log row differs in the inspection-change variant.
+    case "I7": return insight.evidenceGrade === "NOT_EVALUABLE" ? {} : { ...SHADOW_COVER, log: insight.counter?.reorderResult === "SAFE" ? "holds" : "differs" };
     case "I8": return { enabled: "holds" };
     case "I9": return { schedule: "holds" };
     default: return {};
   }
 }
 const ROLE_TAG: Readonly<Record<InsightType, string>> = {
-  I1: "Never reached", I2: "Never reached", I3: "Never reached", I4: "Partly shadowed",
+  I1: "Never reached", I2: "Never reached", I3: "Never reached", I4: "Partly shadowed", I7: "Promoted",
   I8: "Disabled", I9: "Time-limited", I10: "No recent hits", I11: "", I12: "",
 };
 const sectionTitle = { fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: m3.onSurfaceVar, display: "block", mt: 2.5, mb: 0.75 } as const;
 const plain = (text: string) => <Typography variant="body2" component="span">{text}</Typography>;
 
-const roleRank = (role: InsightRuleRef["insightRole"]) => role === "covering" || role === "overlapping" ? 0 : 1;
+const EARLIER_ROLES: ReadonlySet<InsightRuleRef["insightRole"]> = new Set(["covering", "overlapping", "promoteAbove", "crossed"]);
+const roleRank = (role: InsightRuleRef["insightRole"]) => EARLIER_ROLES.has(role) ? 0 : 1;
 const roleLabel = (insight: PolicyInsight, role: InsightRuleRef["insightRole"]) => {
   if (role === "covering") return "Decides first";
   if (role === "overlapping") return "Overlapping earlier rule";
-  if (insight.evidenceGrade === "NOT_EVALUABLE" && (insight.insightType === "I3" || insight.insightType === "I4")) return "Not proven";
+  if (role === "promoteAbove") return "Decides first today";
+  if (role === "crossed") return "Crossed rule";
+  if (insight.evidenceGrade === "NOT_EVALUABLE" && (insight.insightType === "I3" || insight.insightType === "I4" || insight.insightType === "I7")) return "Not proven";
   return ROLE_TAG[insight.insightType] || "Rule";
 };
 
@@ -73,6 +79,7 @@ function RuleComparison({ insight, detail, days, openRule, openObject }: { insig
   const fill = (kind: Cover | undefined) => kind === "holds" ? m3.primaryContainer : kind === "differs" ? m3.warningContainer : undefined;
   const reasons = coverReasons(insight, detail);
   const moreOverlapping = insight.insightType === "I4" ? Number(insight.counter?.moreOverlapping ?? 0) : 0;
+  const moreCrossed = insight.insightType === "I7" ? Number(insight.counter?.moreCrossed ?? 0) : 0;
   return <>
     <Typography component="h3" sx={sectionTitle}>{columns.length > 1 ? "Rules side by side" : "Rule"}</Typography>
     <Box sx={{ overflowX: "auto" }}><Table size="small" aria-label="Rule comparison" sx={{ tableLayout: "fixed", minWidth: columns.length > 1 ? Math.max(560, 132 + columns.length * 210) : 0 }}>
@@ -80,9 +87,12 @@ function RuleComparison({ insight, detail, days, openRule, openObject }: { insig
         <TableCell sx={{ width: 132 }} />
         {columns.map(({ ref, rule }) => {
           const earlier = ref.insightRole === "covering" || ref.insightRole === "overlapping";
+          // A reorder is never shown in a green state: its rules carry the neutral container.
+          const reorder = insight.insightType === "I7";
           return <TableCell key={ref.ruleId} data-role={ref.insightRole} sx={{ verticalAlign: "bottom" }}>
             <Chip size="small" data-role-tag={ref.insightRole} label={roleLabel(insight, ref.insightRole)}
-              sx={{ fontWeight: 700, bgcolor: earlier ? m3.successContainer : m3.warningContainer, color: earlier ? m3.onSuccessContainer : m3.onWarningContainer }} />
+              sx={{ fontWeight: 700, bgcolor: reorder ? m3.primaryContainer : earlier ? m3.successContainer : m3.warningContainer,
+                color: reorder ? m3.onPrimaryContainer : earlier ? m3.onSuccessContainer : m3.onWarningContainer }} />
             <Button size="small" onClick={() => openRule(ref.ruleId, days)} title="Open this rule" sx={{ display: "block", textAlign: "left", px: 0, textTransform: "none", overflowWrap: "anywhere" }}>
               #{(rule?.number ?? ref.number) || "?"} · {(rule?.name ?? ref.name) || "Unnamed rule"}</Button>
           </TableCell>;
@@ -96,6 +106,8 @@ function RuleComparison({ insight, detail, days, openRule, openObject }: { insig
     </Table></Box>
     {moreOverlapping > 0 && <Typography variant="caption" display="block" sx={{ mt: 0.5, color: m3.onSurfaceVar }}>
       Showing {columns.filter(c => c.ref.insightRole === "overlapping").length} of {String(insight.counter?.overlappingRules ?? "?")} overlapping earlier rules (+{moreOverlapping} more not listed).</Typography>}
+    {moreCrossed > 0 && <Typography variant="caption" display="block" sx={{ mt: 0.5, color: m3.onSurfaceVar }}>
+      Showing {columns.filter(c => c.ref.insightRole === "crossed").length} of {String(insight.counter?.crossedRules ?? "?")} crossed rules (+{moreCrossed} more not listed).</Typography>}
     {Object.keys(cover).length > 0 && <Typography variant="caption" display="block" sx={{ mt: 0.75, color: m3.onSurfaceVar }}>
       <Box component="span" aria-hidden sx={{ display: "inline-block", width: 10, height: 10, mr: 0.5, borderRadius: "2px", bgcolor: m3.primaryContainer, border: `1px solid ${m3.outlineVar}` }} />
       Highlighted cells are the ones this insight rests on.</Typography>}
@@ -148,7 +160,7 @@ export function InsightDetail({ policy, insightId, days, openRule, openObject, p
   const actions = suggestedActions(insight, detail);
   return <>
     {header(`${insight.insightType} · ${TYPE_LABEL[insight.insightType] ?? "UNKNOWN"}`,
-      <Chip size="small" color={gradeColor(insight.evidenceGrade)} label={insight.evidenceGrade} title={GRADE_EXPLAIN[insight.evidenceGrade]} />)}
+      <Chip size="small" color={insightGradeColor(insight.insightType, insight.evidenceGrade)} label={insight.evidenceGrade} title={GRADE_EXPLAIN[insight.evidenceGrade]} />)}
     <Typography data-insight-headline sx={{ mt: 1.5, fontSize: 15, fontWeight: 600, lineHeight: 1.45 }}>{insightHeadline(insight, detail)}</Typography>
     <Typography variant="caption" display="block" sx={{ mt: 0.5, color: m3.onSurfaceVar }}>{insight.evidenceGrade}: {GRADE_EXPLAIN[insight.evidenceGrade] ?? "UNKNOWN"} Raise to: {raiseText(insight)}.</Typography>
     {insight.insightCaveats.includes("INSTALL_STATE_NOT_VERIFIED") && <Typography role="note" variant="caption" display="block" sx={{ mt: 0.5, color: m3.warningInk }}>{INSTALL_CAVEAT}</Typography>}
@@ -193,7 +205,40 @@ export function InsightDetail({ policy, insightId, days, openRule, openObject, p
         {" "}Overlapping earlier rules: {counter.overlappingRules}{Number(counter.moreOverlapping) > 0 ? ` (+${counter.moreOverlapping} more not listed)` : ""}.</Typography>}
       {counter.partialReason !== undefined && <Typography variant="body2">Not proven: {String(counter.partialReason)}. The rule may or may not overlap earlier rules; nothing is claimed.</Typography>}
     </Box>}
+    {insight.insightType === "I7" && <ReorderEvidence insight={insight} detail={detail} />}
   </>;
+}
+
+/** I7: the move's proof as data -- the result in its fixed words, the symbolic check, and why each crossed rule is harmless. */
+function ReorderEvidence({ insight, detail }: { insight: PolicyInsight; detail: PolicyInsightDetail }) {
+  const counter = insight.counter ?? {};
+  // The proof list is the one counter entry that is not a scalar; the service sends it under a closed vocabulary.
+  const raw: unknown = (counter as Record<string, unknown>).crossedProof;
+  const proof = Array.isArray(raw) ? raw as InsightCrossedProof[] : [];
+  const position = (id: string) => {
+    const rule = detail.rules.find(r => r.id === id), ref = insight.rules.find(r => r.ruleId === id);
+    const number = rule?.number ?? ref?.number ?? 0;
+    return number > 0 ? `#${number}` : "#?";
+  };
+  const roleOf = (id: string) => insight.rules.find(r => r.ruleId === id)?.insightRole;
+  return <Box aria-label="Reorder evidence" sx={{ mt: 1 }}>
+    {counter.reorderReason !== undefined && <Typography variant="body2">Not proven: {String(counter.reorderReason)}. The move may or may not change a verdict; nothing is claimed.</Typography>}
+    {counter.reorderResult !== undefined && <>
+      <Typography variant="body2" data-reorder-result={String(counter.reorderResult)} sx={{ fontWeight: 600 }}>
+        {REORDER_RESULT_WORDS[String(counter.reorderResult)] ?? "UNKNOWN"}.{" "}
+        {counter.equivalence === "EQUIVALENT"
+          ? "Symbolic check: every packet whose deciding rule changes keeps its action, profile and log setting."
+          : `Symbolic check: changes in ${String(counter.changedBoxes ?? "?")} regions decided today by ${String(counter.changedRules ?? "?")} rules with another profile or log setting (regions not listed).`}</Typography>
+      <Typography variant="body2">Rules deciding part of this rule's match today: {String(counter.decidingRules ?? "?")}.
+        {" "}Crossed rules: {String(counter.crossedRules ?? 0)}{Number(counter.moreCrossed) > 0 ? ` (+${counter.moreCrossed} more not listed)` : ""}.</Typography>
+      {proof.length > 0 && <Box component="ul" aria-label="Move proof" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
+        {proof.map(p => <li key={p.ruleId} data-crossed-reason={p.crossedReason}><Typography variant="body2">
+          {position(p.ruleId)}{roleOf(p.ruleId) === "promoteAbove" ? " (decides first today)" : ""}: {CROSSED_REASON_WORDS[p.crossedReason] ?? "UNKNOWN"}
+          {p.inspectionChanges ? "; another profile or log setting" : ""}.</Typography></li>)}
+      </Box>}
+    </>}
+    <Typography role="note" variant="caption" display="block" sx={{ mt: 0.5, color: m3.warningInk }}>{REORDER_CAVEAT}</Typography>
+  </Box>;
 }
 
 /** The package's planned changes in plain words. The list lives in this browser only; export is a file the user carries into their change window. */
@@ -217,7 +262,7 @@ export function ChangeListPanel({ items, remove, exportText, exportCsv, back, cl
       {items.map((item, index) => <Box component="li" key={item.insightId} data-change={item.kind} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.25, bgcolor: m3.scLowest }}>
         <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
           <Typography variant="subtitle2" sx={{ mr: "auto" }}>{index + 1}. {item.label}</Typography>
-          <Chip size="small" label={`${item.insightType} · ${item.evidenceGrade}`} color={gradeColor(item.evidenceGrade)} />
+          <Chip size="small" label={`${item.insightType} · ${item.evidenceGrade}`} color={insightGradeColor(item.insightType, item.evidenceGrade)} />
           <Button size="small" aria-label={`Remove from list: ${item.label}, change ${index + 1}`} onClick={() => remove(item.insightId)}>Remove from list</Button>
         </Stack>
         <Typography variant="body2" sx={{ mt: 0.5 }}>{item.plan}</Typography>

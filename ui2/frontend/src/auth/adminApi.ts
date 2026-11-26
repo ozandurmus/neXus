@@ -2506,10 +2506,10 @@ export interface PolicyHygienePage {
     split?: { class: string; cell: string; status: string; type: string; nativeType: string; partialPrior: boolean | "UNKNOWN"; blockers: number; blockedRules: number }[] };
 }
 /** Policy Insights phase P1 (POLICY_INSIGHTS_DESIGN_2026_11_24.md): the closed vocabularies the service sends. */
-export type InsightType = "I1" | "I2" | "I3" | "I4" | "I8" | "I9" | "I10" | "I11" | "I12";
+export type InsightType = "I1" | "I2" | "I3" | "I4" | "I7" | "I8" | "I9" | "I10" | "I11" | "I12";
 export type InsightGrade = "PROVEN" | "SUPPORTED" | "INDICATED" | "NOT_ESTABLISHED" | "NOT_EVALUABLE";
 export type InsightNeeds = "NONE" | "TRAFFIC_LOGS" | "COUNTER_SAMPLES" | "NEW_COLLECTION" | "VENDOR_REPORT" | "NOT_RESOLVABLE";
-export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "overlapping" | "UNKNOWN" }
+export interface InsightRuleRef { ruleId: string; number: number; name: string; insightRole: "subject" | "covering" | "overlapping" | "promoteAbove" | "crossed" | "UNKNOWN" }
 export interface PolicyInsight {
   insightId: string; insightType: InsightType; evidenceGrade: InsightGrade; insightScope: "package" | "domain";
   rules: InsightRuleRef[]; objectIds: string[];
@@ -2518,7 +2518,10 @@ export interface PolicyInsight {
   /**
    * I10: the counter evidence (hits, first/last hit, source, collection time, window); I11/I12: counts; I3: coveringRules
    * and coverAction (SAME | DIFFERENT | INLINE_LAYER), or unionReason when the work budget ran out; I4: overlappingRules and
-   * moreOverlapping (the overlapping rules listed are capped at 10), or partialReason when the work budget ran out.
+   * moreOverlapping (the overlapping rules listed are capped at 10), or partialReason when the work budget ran out; I7:
+   * reorderResult (SAFE | SAFE_INSPECTION_CHANGES), equivalence (EQUIVALENT | CHANGES | NOT_PROVEN), crossedRules,
+   * moreCrossed, decidingRules, changedRules, changedBoxes and crossedProof (per rule: ruleId, crossedReason, inspectionChanges),
+   * or reorderReason when the work budget ran out.
    */
   counter: Record<string, string | number | boolean | string[] | null>;
 }
@@ -2529,6 +2532,8 @@ export interface PolicyInsightWaiting {
   reasonClass: "LOGS" | "COLLECTION" | "NOT_RESOLVABLE";
   rules: number;
 }
+/** I7: why one rule the promote crosses (or the broad rule itself) is harmless, and whether its profile or log setting differs. */
+export interface InsightCrossedProof { ruleId: string; crossedReason: "disjoint" | "same verdict effect" | "UNKNOWN"; inspectionChanges: boolean }
 export interface PolicyInsightCounts {
   rules: number; decided: number; upToWithLogs: number; logResolvable: number; collectionResolvable: number; notResolvable: number;
   notReadable?: number; waiting?: number;
@@ -2546,6 +2551,9 @@ export interface PolicyInsightsPage {
   unionCover?: { evaluated: number; covered: number; notProven: number; notEvaluable: { unionReason: string; rules: number }[] };
   /** Phase P2b: the I4 partial-shadow pass in numbers. Absent from an older service. */
   partialShadow?: { evaluated: number; partial: number; differentAction: number; notProven: number; notEvaluable: { partialReason: string; rules: number }[] };
+  /** Phase P2c-1: the I7 safe-reorder pass in numbers (one move per I4 rule). Absent from an older service. */
+  safeReorder?: { evaluated: number; safe: number; safeInspectionChanges: number; unsafeDifferentEffect: number; anchorBlocked: number; crossesSection: number;
+    notProven: number; notEvaluable: { reorderReason: string; rules: number }[] };
   total?: number; page?: number; pageSize?: number; days?: number; collectedAt?: string; complete?: boolean;
 }
 export interface PolicyInsightDetail {

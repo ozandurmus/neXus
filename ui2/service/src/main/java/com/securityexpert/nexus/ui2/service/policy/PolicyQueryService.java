@@ -932,6 +932,7 @@ public final class PolicyQueryService {
         body.put("collectedAt", report.collectedAt()); body.put("complete", report.complete());
         body.put("counts", map(report.counts())); body.put("byType", report.byType()); body.put("byGrade", report.byGrade());
         body.put("unionCover", map(report.unionCover())); body.put("partialShadow", map(report.partialShadow()));
+        body.put("safeReorder", map(report.safeReorder()));
         body.put("insights", rows.stream().skip((long) page * 200).limit(200).map(this::insightRow).toList());
         return new PolicyResponse(body);
     }
@@ -964,7 +965,30 @@ public final class PolicyQueryService {
     private PolicyInsights.Report insightReport(PolicySnapshot snapshot, int days) {
         var hygiene = analysis(snapshot, days);
         var union = unionCover(snapshot, hygiene);
-        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, union, partialShadow(snapshot, hygiene, union));
+        var partial = partialShadow(snapshot, hygiene, union);
+        return PolicyInsights.analyze(snapshot, hygiene, inventoryIndex(snapshot), Map.of(), days, union, partial, reorder(snapshot, partial));
+    }
+    private record CachedReorder(PolicySnapshot snapshot, PolicyReorder.Result result) {}
+    private final Map<String, CachedReorder> reorderCache = new LinkedHashMap<>(8, 0.75f, true);
+    /**
+     * The I7 pass ({@link PolicyReorder}) of one snapshot instance, cached exactly like {@link #unionCover} and
+     * {@link #partialShadow}: it reads only the snapshot and the I4 result, neither of which depends on the unused threshold
+     * or the clock.
+     */
+    private PolicyReorder.Result reorder(PolicySnapshot snapshot, PolicyPartialShadow.Result partial) {
+        String id = snapshot.metadata().id();
+        synchronized (reorderCache) {
+            var cached = reorderCache.get(id);
+            if (cached != null && cached.snapshot() == snapshot) return cached.result();
+        }
+        PolicyReorder.Result result;
+        hygieneSlots.acquireUninterruptibly();
+        try { result = PolicyReorder.analyze(snapshot, partial); } finally { hygieneSlots.release(); }
+        synchronized (reorderCache) {
+            reorderCache.put(id, new CachedReorder(snapshot, result));
+            if (reorderCache.size() > 4) reorderCache.remove(reorderCache.keySet().iterator().next());
+        }
+        return result;
     }
     private record CachedPartialShadow(PolicySnapshot snapshot, PolicyPartialShadow.Result result) {}
     private final Map<String, CachedPartialShadow> partialShadowCache = new LinkedHashMap<>(8, 0.75f, true);

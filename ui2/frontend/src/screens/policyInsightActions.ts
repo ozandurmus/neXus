@@ -14,7 +14,7 @@ export const CHANGE_LIST_NOTICE = "Nothing is sent to the firewall. Apply these 
 export const INSTALL_CAVEAT = "Proven for the stored management policy, not for what is installed on a gateway (INSTALL_STATE_NOT_VERIFIED).";
 
 export const TYPE_LABEL: Readonly<Record<InsightType, string>> = {
-  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I4: "Partly shadowed",
+  I1: "Fully shadowed, same action", I2: "Fully shadowed, different action", I3: "Shadowed by several rules together", I4: "Partly shadowed", I7: "Promote (proven reorder)",
   I8: "Disabled rule", I9: "Expired or expiring schedule", I10: "Zero or old hits", I11: "Unused object", I12: "Duplicate objects",
 };
 /** What the user does, one sentence per type; a grade other than PROVEN adds its own limit below the sentence. */
@@ -23,12 +23,33 @@ export const TYPE_SUGGESTION: Readonly<Record<InsightType, string>> = {
   I2: "Decide which rule is right: an earlier rule with a different action decides every packet this rule matches. Never removed automatically.",
   I3: "Remove: earlier rules of this layer together decide every packet this rule matches; the covering set is listed. If one of them has another action, decide which rule is right first.",
   I4: "Review: earlier rules of this layer with the same action already decide part of this rule's match. Nothing here shows what changing the order would do.",
+  I7: "Promote this rule above the broad rule it overlaps. Stage 1 of the reorganisation; no command is generated.",
   I8: "Remove after your team's holding period.",
   I9: "Remove or renew the rule.",
   I10: "Review: the stored counters show no recent use. This does not prove the rule is unused.",
   I11: "Remove the object or tighten the group that holds it.",
   I12: "Consolidate: these objects have the same type and the same values.",
 };
+/** I7 (design 4, decision record Q2): the inspection-change variant of the suggestion, and the one for a move the budget left unproven. */
+export const I7_INSPECTION_SUGGESTION = `${TYPE_SUGGESTION.I7} Verdict-safe, inspection changes: review the profile and log differences first.`;
+export const I7_NOT_PROVEN_SUGGESTION = "Not proven (work budget): whether this rule can move above the broad rule it overlaps is UNKNOWN.";
+/** The suggestion sentence of one insight: the type's own, except the two I7 variants. */
+export function insightSuggestion(insight: PolicyInsight): string {
+  if (insight.insightType === "I7") {
+    if (insight.evidenceGrade === "NOT_EVALUABLE") return I7_NOT_PROVEN_SUGGESTION;
+    if (insight.counter?.reorderResult !== "SAFE") return I7_INSPECTION_SUGGESTION;
+  }
+  return TYPE_SUGGESTION[insight.insightType] ?? "UNKNOWN";
+}
+/** I7 results in words: "no behaviour change" only for SAFE; never a bare "safe". */
+export const REORDER_RESULT_WORDS: Readonly<Record<string, string>> = {
+  SAFE: "No behaviour change", SAFE_INSPECTION_CHANGES: "Verdict-safe, inspection changes",
+};
+export const CROSSED_REASON_WORDS: Readonly<Record<string, string>> = {
+  disjoint: "Disjoint: it matches none of this rule's packets on its install-on",
+  "same verdict effect": "Same verdict effect: same action and inline layer",
+};
+export const REORDER_CAVEAT = "One move against the stored order; moves are not combined. No command is generated: apply it in your own change window.";
 export const GRADE_EXPLAIN: Readonly<Record<InsightGrade, string>> = {
   PROVEN: "Follows from the stored policy by set semantics.",
   SUPPORTED: "Proven on the policy side, plus dated runtime evidence with a known window.",
@@ -52,6 +73,9 @@ export const raiseText = (insight: PolicyInsight) => {
 };
 export const gradeColor = (grade: InsightGrade): "success" | "info" | "warning" | "default" =>
   grade === "PROVEN" ? "success" : grade === "SUPPORTED" ? "info" : grade === "INDICATED" ? "warning" : "default";
+/** The grade chip of one insight: a reorder (I7) is never shown in a green state, whatever its grade. */
+export const insightGradeColor = (type: InsightType, grade: InsightGrade): "success" | "info" | "warning" | "default" =>
+  type === "I7" && grade === "PROVEN" ? "info" : gradeColor(grade);
 
 interface Party { id: string; number: number; name: string; action?: string }
 const position = (p: Party | undefined) => p && p.number > 0 ? `#${p.number}` : "#?";
@@ -68,14 +92,15 @@ const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const withAction = (p: Party | undefined) => p?.action ? ` (${actionWord(p.action)})` : "";
 
 /** The rules of an insight by role. The detail, once loaded, carries the real position and action; the list row is the fallback. */
-export function insightParties(insight: PolicyInsight, detail?: PolicyInsightDetail | null): { subject?: Party; covering?: Party; coverings: Party[]; overlapping: Party[] } {
-  const collect = (role: "subject" | "covering" | "overlapping"): Party[] =>
+export function insightParties(insight: PolicyInsight, detail?: PolicyInsightDetail | null): { subject?: Party; covering?: Party; coverings: Party[]; overlapping: Party[];
+  above?: Party; crossed: Party[] } {
+  const collect = (role: "subject" | "covering" | "overlapping" | "promoteAbove" | "crossed"): Party[] =>
     insight.rules.filter(r => r.insightRole === role).map(ref => {
       const full = detail?.rules.find(r => r.id === ref.ruleId);
       return { id: ref.ruleId, number: full?.number ?? ref.number, name: full?.name ?? ref.name, action: full?.action };
     });
   const coverings = collect("covering");
-  return { subject: collect("subject")[0], covering: coverings[0], coverings, overlapping: collect("overlapping") };
+  return { subject: collect("subject")[0], covering: coverings[0], coverings, overlapping: collect("overlapping"), above: collect("promoteAbove")[0], crossed: collect("crossed") };
 }
 const objectNames = (insight: PolicyInsight, detail?: PolicyInsightDetail | null) =>
   (detail?.objects ?? []).filter(o => insight.objectIds.includes(o.uid)).map(o => o.name).filter(Boolean);
@@ -112,6 +137,18 @@ export function insightHeadline(insight: PolicyInsight, detail?: PolicyInsightDe
       const more = Number(insight.counter?.moreOverlapping ?? 0);
       const set = ruleSetWords(overlapping, more);
       return `${Subject} is partly shadowed by ${set}: part of what ${s} matches is decided earlier with the same action${withAction(subject)}, which can explain a zero or low hit counter.`;
+    }
+    case "I7": {
+      const { above } = insightParties(insight, detail);
+      if (insight.evidenceGrade === "NOT_EVALUABLE") {
+        const reason = String(insight.counter?.reorderReason ?? "UNKNOWN");
+        return `Moving ${ruleWords(subject)} above ${ruleWords(above)} could not be checked (${reason}): whether it changes a verdict is UNKNOWN.`;
+      }
+      const crossedCount = Number(insight.counter?.crossedRules ?? 0);
+      const across = crossedCount > 0 ? `, across ${crossedCount} ${crossedCount === 1 ? "rule" : "rules"} in between,` : "";
+      return insight.counter?.reorderResult === "SAFE"
+        ? `${Subject} can move above ${ruleWords(above)}${across} with no verdict or log setting change for any packet (profile settings are not collected for Check Point).`
+        : `${Subject} can move above ${ruleWords(above)}${across} without changing a verdict. Verdict-safe, inspection changes: a crossed rule that overlaps its match has another profile or log setting, or that setting was not collected.`;
     }
     case "I8": return `${Subject} is disabled: it decides no packet while it stays disabled.`;
     case "I9":
@@ -173,6 +210,19 @@ export function coverReasons(insight: PolicyInsight, detail?: PolicyInsightDetai
       `Nothing here checks the rules between ${s} and ${set} for reordering.`,
     ];
   }
+  if (insight.insightType === "I7" && insight.evidenceGrade !== "NOT_EVALUABLE") {
+    const { above, crossed } = insightParties(insight, detail);
+    const b = above && above.number > 0 ? position(above) : "the broad rule";
+    const crossedCount = Number(insight.counter?.crossedRules ?? crossed.length);
+    return [
+      `${b} is the first earlier rule of the same layer and section that overlaps ${s}; both have the same action, inline layer and install-on.`,
+      crossedCount === 0 ? `No enabled rule lies between ${b} and ${s}.`
+        : `Each of the ${crossedCount} enabled ${crossedCount === 1 ? "rule" : "rules"} between them is disjoint from ${s} or has its verdict effect; none is an anchor (user, application or time constraint, unresolved object, Apply Layer).`,
+      insight.counter?.equivalence === "EQUIVALENT"
+        ? "Symbolic check: every packet whose deciding rule changes keeps its action, profile and log setting."
+        : `Symbolic check: every packet whose deciding rule changes keeps its action; ${String(insight.counter?.changedRules ?? "?")} of the rules deciding it today differ in profile or log setting (${String(insight.counter?.changedBoxes ?? "?")} regions, not listed).`,
+    ];
+  }
   return [];
 }
 
@@ -187,8 +237,12 @@ export type ChangeKind =
   | "DISABLE_ONE_WINDOW"
   | "REMOVE_OBJECT"
   | "MERGE_OBJECTS";
-/** Design section 4: only a PROVEN I1 or PROVEN same-action I3 enters a proposal as "no behaviour change"; a review changes nothing by itself. */
-export type ChangeEffect = "No behaviour change" | "Behaviour may change" | "Review only";
+/**
+ * Design section 4: only a PROVEN I1, a PROVEN same-action I3 or a PROVEN SAFE I7 enters a proposal as "no behaviour change";
+ * an I7 whose verdicts hold but whose profile or log setting changes is "verdict-safe, inspection changes" (Q2); a review
+ * changes nothing by itself.
+ */
+export type ChangeEffect = "No behaviour change" | "Verdict-safe, inspection changes" | "Behaviour may change" | "Review only";
 export interface SuggestedAction {
   kind: ChangeKind; label: string;
   /** The action the insight speaks for: the main button when the grade is PROVEN, shown with a warning otherwise. */
@@ -270,6 +324,12 @@ export function suggestedActions(insight: PolicyInsight, detail?: PolicyInsightD
           `Move ${rule} above ${set} so ${s} collects its own hits directly.`, "Behaviour may change",
           `Not yet verified by safe-reorder (I7): rules between ${s} and ${set}, as well as logging and inspection profiles, are not checked here.`),
       ];
+    }
+    case "I7": {
+      const { above } = insightParties(insight, detail);
+      const effect: ChangeEffect = !proven ? "Behaviour may change" : insight.counter?.reorderResult === "SAFE" ? "No behaviour change" : "Verdict-safe, inspection changes";
+      return [action("REORDER_RULE", "Promote above broad rule", true, `Move ${rule} above ${ruleWords(above)}.`, effect,
+        effect === "Verdict-safe, inspection changes" ? `Review the profile and log differences first. ${REORDER_CAVEAT}` : REORDER_CAVEAT)];
     }
     case "I8": return [action("REMOVE_RULE", "Remove disabled rule", true, `Remove disabled ${rule}.`, "Behaviour may change", "Keep it for your team's holding period first.")];
     case "I9": {
