@@ -329,6 +329,13 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 // V184: an interface's virtual router and a route's table name the same routing instance: one "vrf"
                 // pseudonym for both (as the IP search's route_table), so aiview can still relate them and neither
                 // field leaks the raw name.
+                // The bare virtual-system / virtual-context name of a topology link-override end, graph node or conflict
+                // (TopologyView). Keyed on the body shape, not on the key alone: other bodies carry a bare "context"
+                // that a controller already masked once (a second pass would give a different pseudonym) or that is a
+                // fixed structural plane name the Inventory and Path screens read ("physical"). Same "context" pseudonym
+                // kind as the composite element path, so one name has one pseudonym everywhere.
+                case "context" -> result.put(key, value instanceof String ctx && isTopologyContextBody(map)
+                        ? maskContext(ctx) : maskObject(value, clusterRef));
                 case "routing_context", "table" ->
                     result.put(key, value instanceof String vrf ? topologyPseudonymizer.maskPolicyName("vrf", vrf) : value);
                 case "interface_name", "ingress_interface_name", "egress_interface_name", "vendor_interface",
@@ -582,6 +589,22 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return true;
         }
         return map.get("grid_members") instanceof List<?> members && !members.isEmpty();
+    }
+
+    /**
+     * The three bodies {@code TopologyView} builds with a bare {@code context}: a link-override end ({@code device_id},
+     * {@code context}, {@code interface_name} and nothing else), a graph node ({@code node_id} + {@code node_kind}) and a
+     * conflict ({@code conflict_id} + {@code conflict_kind}).
+     */
+    static boolean isTopologyContextBody(Map<?, ?> map) {
+        if (map.containsKey("node_id") && map.containsKey("node_kind")) {
+            return true;
+        }
+        if (map.containsKey("conflict_id") && map.containsKey("conflict_kind")) {
+            return true;
+        }
+        return map.size() == 3 && map.containsKey("device_id") && map.containsKey("context")
+                && map.containsKey("interface_name");
     }
 
     /** {@code aa:bb:cc:dd:ee:ff} to {@code aa:bb:cc:**:**:**}; anything else is withheld entirely. */
