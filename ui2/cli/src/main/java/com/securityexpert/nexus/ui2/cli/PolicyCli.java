@@ -50,6 +50,7 @@ final class PolicyCli {
             new Command("policy-hygiene", "/policies/{id}/hygiene", "policyId", 0, new String[] {"page", "findingClass", "severity", "days"}, "one page of hygiene findings of a policy"),
             new Command("policy-insights", "/policies/{id}/insights", "policyId", 0, new String[] {"page", "type", "grade", "days"}, "package overview and one page of the insight list"),
             new Command("policy-insight", "/policies/{id}/insight", "policyId", 1, new String[] {"insightId", "days"}, "one insight"),
+            new Command("policy-proposal", "/policies/{id}/proposal", "policyId", 0, new String[] {"days"}, "reorder-only proposal of a policy"),
             new Command("policy-rule", "/policies/{id}/rules", "policyId", 1, new String[] {"ruleId", "days"}, "one rule with its findings and hits"),
             new Command("policy-hygiene-csv", "/policies/{id}/hygiene.csv", "policyId", 0, new String[] {"findingClass", "severity", "days"}, "hygiene findings as CSV (printed as received)"),
             new Command("policy-tree", "/tree", null, 0, new String[] {"source", "container", "device"}, "the policy tree"),

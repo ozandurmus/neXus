@@ -70,6 +70,13 @@ public final class PolicyController {
         return heavy.run(() -> policies.find(id).flatMap(s -> policies.insightDetail(s, insightId, days)).<ResponseEntity<?>>map(PolicyController::ok)
             .orElseGet(() -> error(HttpStatus.NOT_FOUND)));
     }
+    /** Policy Insights phase P2 step c-2c: the read-only reorder-only proposal over stored Check Point management intent. */
+    @GetMapping("/api/v2/policy/policies/{id}/proposal")
+    public ResponseEntity<?> proposal(@PathVariable String id, @RequestParam(defaultValue = "90") int days) {
+        if (!validInsight("", "", days)) return error(HttpStatus.BAD_REQUEST);
+        return heavy.run(() -> policies.find(id).<ResponseEntity<?>>map(s -> ok(policies.proposal(s, days)))
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND)));
+    }
     private static boolean validInsight(String type, String grade, int days) {
         return (type.isEmpty() || PolicyInsights.TYPES.contains(type)) && (grade.isEmpty() || PolicyInsights.GRADES.contains(grade)) && days >= 1 && days <= 36500;
     }

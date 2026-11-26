@@ -57,6 +57,8 @@ public final class PolicyPrivacy {
                             || PolicyRuleMetrics.FIXED_REASONS.contains(s))).toList(),
                     metric.get("score") instanceof Number n ? n : 0);
         }
+        if (key.equals("refused") && value instanceof Map<?, ?> refused) return PolicyProposalView.maskRefused(refused);
+        if (key.equals("order") && value instanceof List<?> sections) return PolicyProposalView.maskOrder(sections);
         if (value instanceof Map<?, ?> row && row.containsKey("blockedRules") && row.containsKey("partialPrior")) return blockerSplitRow(row);
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
@@ -79,6 +81,8 @@ public final class PolicyPrivacy {
                     else if (field.equals("reason")) out.put(field, objectUsageReason(text));
                     else out.put(field, mask(v, field, names, ips));
                 }
+                else if (field.equals("reason") && map.containsKey("crossedRules") && v instanceof String text)
+                    out.put(field, PolicyProposal.BUDGET.equals(text) ? text : "UNKNOWN");
                 else out.put(field, mask(v, field, names, ips));
             });
             return out;
@@ -112,6 +116,14 @@ public final class PolicyPrivacy {
         if (key.equals("verdict")) return Set.of("ALLOWED", "DENIED", "PARTIAL", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("lookupReason")) return PolicyLookup.REASONS.contains(text) || HYGIENE_REASONS.contains(text) ? text : "unsupported rule constraint";
         if (key.equals("limitations")) return PolicyLookup.LIMITATIONS.equals(text) ? text : "Withheld in AIView";
+        if (key.equals("caveat")) return PolicyProposalView.CAVEAT.equals(text) ? text : "Withheld in AIView";
+        if (key.equals("packageVerdict")) return PolicyProposal.VERDICTS.contains(text) ? text : PolicyReorder.NOT_PROVEN;
+        if (key.equals("label")) return PolicyProposalView.LABELS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("emptyReason")) return PolicyProposalView.EMPTY_REASONS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("result")) return PolicyProposalView.STEP_RESULTS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("refused") || key.equals("refusal")) return PolicyProposal.REFUSALS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("notTriedNote")) return text.matches("\\+[0-9]+ more not tried") ? text : "UNKNOWN";
+        if (key.equals("ruleName")) return "UNKNOWN".equals(text) ? "UNKNOWN" : names.maskPolicyName("rule", text);
         // Lookup addresses are user-entered or bounded subdivisions in the viewer's address space.
         if (key.equals("querySource") || key.equals("queryDestination")) return text.matches("[0-9./-]{7,35}") ? text : "Withheld in AIView";
         if (key.equals("queryService")) return text.matches("any|(?:tcp|udp)/[0-9]{1,5}") ? text : "UNKNOWN";
@@ -167,7 +179,7 @@ public final class PolicyPrivacy {
         if (key.equals("part")) return text.equals("NAT") ? text : "UNKNOWN";
         if (key.equals("reasonCode")) return com.securityexpert.nexus.ui2.policy.PolicySnapshot.UNKNOWN_PART_REASONS.contains(text) ? text : "UNKNOWN";
         if (key.equals("natUidProbe")) return com.securityexpert.nexus.ui2.policy.PolicySnapshot.NAT_UID_PROBE_OUTCOMES.contains(text) ? text : "UNKNOWN";
-        if (key.equals("reason")) return text.equals("COLLECTION_SKIPPED") ? text : safeReason(text);
+        if (key.equals("reason")) return text.equals("COLLECTION_SKIPPED") || text.equals(PolicyProposal.BUDGET) ? text : safeReason(text);
         if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt", "publishTime", "hitsCollectedAt", "rangeStart", "rangeEnd").contains(key)) {
             try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return null; }
         }

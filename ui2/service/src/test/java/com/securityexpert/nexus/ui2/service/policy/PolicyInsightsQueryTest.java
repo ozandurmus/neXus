@@ -62,6 +62,34 @@ class PolicyInsightsQueryTest {
         assertFalse(body.path("supported").asBoolean());
         assertFalse(body.has("insights")); assertFalse(body.has("counts"));
         assertTrue(query.insightDetail(pan, "x", 90).isEmpty());
+        var proposal = json(query.proposal(pan, 90).body());
+        assertFalse(proposal.path("supported").asBoolean());
+        assertFalse(proposal.has("steps"));
+    }
+    @Test void proposalControllerValidatesDaysUsesHeavyGuardAndProjectsForAiview() {
+        var snapshot = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "host", "any"), cp("r2", 2, "Accept", "host", "any"),
+            PolicyInsightsTest.withHits(cp("r3", 3, "Accept", "net", "any"), 0L, null)));
+        var mocked = mock(PolicyQueryService.class);
+        when(mocked.find("p1")).thenReturn(Optional.of(snapshot));
+        when(mocked.proposal(snapshot, 90)).thenAnswer(inv -> query.proposal(snapshot, 90));
+        var controller = new com.securityexpert.nexus.ui2.service.api.PolicyController(mocked);
+        assertEquals(400, controller.proposal("p1", 0).getStatusCode().value());
+        assertEquals(400, controller.proposal("p1", 36501).getStatusCode().value());
+        assertEquals(404, controller.proposal("missing", 90).getStatusCode().value());
+        var ok = controller.proposal("p1", 90);
+        assertEquals(200, ok.getStatusCode().value());
+        var body = json(((PolicyResponse) ok.getBody()).body());
+        assertTrue(body.path("supported").asBoolean());
+        assertEquals(1, body.path("accepted").asInt());
+        assertEquals("EQUIVALENT", body.path("packageVerdict").asText());
+        var projected = masked(((PolicyResponse) ok.getBody()).body());
+        assertFalse(projected.toString().contains("OBJ-RULE-"));
+        assertEquals(PolicyProposalView.CAVEAT, projected.path("caveat").asText());
+        // Saturated bulkhead answers 503 POLICY_BUSY.
+        var saturated = new PolicyBulkhead(1, 0);
+        try (var ignored = saturated.tryEnter()) {
+            assertEquals(503, new com.securityexpert.nexus.ui2.service.api.PolicyController(mocked, saturated).proposal("p1", 90).getStatusCode().value());
+        }
     }
     @Test void theAiviewProjectionKeepsGradesAndCountsAndMasksRuleNames() {
         var snapshot = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "host", "any"), cp("r2", 2, "Accept", "host", "any"),
