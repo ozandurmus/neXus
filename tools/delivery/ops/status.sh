@@ -14,6 +14,7 @@ aged_list() {
   echo "$label $n${items:+: ${items%, }}"
 }
 if command -v launchctl >/dev/null 2>&1; then runners=$(launchctl list 2>/dev/null | grep -cE 'overwatch\.(lane|ship)-runner'); else runners=0; fi
+[ -e "$LQ/AGY_ONLY" ] && echo "AGY_ONLY on"
 echo "runners: $runners/2  paused: $(ls "$SQ/PAUSED" "$LQ/PAUSED" 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')"
 echo "lanes running $(cnt "$LQ"/started/*.brief)  lane briefs $(cnt "$LQ"/*.brief)  ship queue $(cnt "$SQ"/*.ship)  held $(cnt "$SQ"/held/*.ship)  failed $(cnt "$SQ"/failed/*.ship)  inflight $(cnt -d "$SQ"/inflight/*/)"
 aged_list "ship failed" "$SQ"/failed/*.ship

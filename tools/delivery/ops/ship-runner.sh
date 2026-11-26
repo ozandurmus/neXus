@@ -22,6 +22,44 @@ log() { ops_log "$@"; }
 GUARD='^(\.github/|\.githooks/|deploy/|scripts/|tools/delivery/|security/|ui2/service/src/main/resources/db/migration/|ui2/capability-registry/src/main/resources/capabilities/|ui2/sanitizer/)|^ui2/[^/]+/src/(main|test)/java/.*/(transport|credential|failover|authz|redaction|security|lease|admission)/|Allowlist\.java$|GateRegistry'
 # Rendered files: on conflict take the current tree's copy and re-render after all lanes are applied.
 GEN='^(docs/design/DECISION_RECORD_SUCCESSOR_INDEX\.md|ui2/service/src/test/resources/authorization/route-authorization-decision-table\.golden\.txt|tools/security/aiview_leak_audit/routes\.json|project/QUEUE\.md)$'
+# AGY_ONLY mode (PO decision record 2026-11-26): while lane-queue/AGY_ONLY exists a held guarded-path item gets an external
+# Neon review (scripts/consult_argon.py) instead of waiting for the Claude PO session.
+agy_only() { [ -e "$LQ/AGY_ONLY" ]; }
+# Always held for a person, whatever the review says: a db/migration/V*.sql added or changed (the live BEGIN/ROLLBACK dry-run is
+# a PO-session duty), anything under deploy/ or .github/, and any change to the AGY_ONLY logic itself.
+AGY_ALWAYS_HELD='(^|/)db/migration/V[^/]*\.sql$|^(deploy|\.github)/'
+# agy_only_person_needed <mb> <br> <files>: 0 (and the reason on stdout) when the diff must stay held for a person.
+agy_only_person_needed() {
+  local mb=$1 br=$2 files=$3 hit
+  hit=$(echo "$files" | grep -E "$AGY_ALWAYS_HELD" | head -3 | tr '\n' ' ')
+  [ -n "$hit" ] && { echo "migration/deploy/.github path ($hit)"; return 0; }
+  hit=$({ git diff --name-only -G'AGY_ONLY' "$mb" "$br"; echo "$files" | grep -E 'PO_DECISION_RECORD_.*AGY_ONLY'; } | sort -u | head -3 | tr '\n' ' ')
+  [ -n "$hit" ] && { echo "change to the AGY_ONLY logic ($hit)"; return 0; }
+  return 1
+}
+# agy_only_guard_review <name> <ship-entry> <branch> <merge-base> <files>: run from inside the ship worktree. 0 = the Neon review
+# said PASS and the entry now carries allow_paths=1 and the approval line; 1 = stays held.
+agy_only_guard_review() {
+  local n=$1 f=$2 br=$3 mb=$4 files=$5 why dir prompt out guarded
+  if why=$(agy_only_person_needed "$mb" "$br" "$files"); then log "AGY_ONLY: $n stays held for a person: $why"; return 1; fi
+  guarded=$(echo "$files" | grep -E "$GUARD" | tr '\n' ' ')
+  dir=$(pwd)/docs/.agy-only-review; mkdir -p "$dir"; out=$dir/review-$n.md; prompt=$dir/brief-$n.md
+  { echo "You are the external reviewer of a change that touches guarded paths of a bank firewall-operations product, written by a small"
+    echo "model. The pipeline would hold it for a person; you decide whether it may ship. Look only for concrete defects: wrong behaviour,"
+    echo "a broken invariant, a security or privacy regression, a weakened or deleted test, swallowed errors, real-looking hostnames, IPs,"
+    echo "serials or secret-shaped literals. A change that loosens a guard, a gate, an allowlist or an authorization check is a BLOCK."
+    echo "Ignore style. End with exactly one line: 'VERDICT: PASS' or 'VERDICT: BLOCK'."
+    echo "Guarded paths this change touches: $guarded"
+    echo; echo "The change (git diff against origin/main, truncated at 60000 characters):"
+    git diff "$mb" "$br" -- . ':(exclude)*.lock' | head -c 60000; } > "$prompt"
+  python3 "${NEXUS_CONSULT_ARGON:-$(pwd)/scripts/consult_argon.py}" --brief "$prompt" --output "$out" --model gemini-4-neon-xhigh --effort xhigh >/dev/null 2>&1
+  if grep -qE '^VERDICT: PASS$' "$out" 2>/dev/null && ! grep -qE '^VERDICT: BLOCK' "$out"; then
+    echo "allow_paths=1" >> "$f"; echo "approved=agy-neon-xhigh AGY_ONLY exception PO 2026-11-26" >> "$f"
+    cp "$out" "$L/review-guarded-$n.md" 2>/dev/null; rm -rf "$dir"; log "AGY_ONLY: Neon xhigh PASS for guarded paths of $n; released"; return 0
+  fi
+  cp "$out" "$L/review-guarded-$n.md" 2>/dev/null; rm -rf "$dir"
+  log "AGY_ONLY: Neon review of $n gave no PASS ($(grep -E '^VERDICT' "$L/review-guarded-$n.md" 2>/dev/null | tail -1 || true)); stays held"; return 1
+}
 # Another ship or deploy (a peer session's chain included); agent prompts that only mention the names do not count.
 busy() {
   for p in $(pgrep -f 'shipq3[.]sh|ship-after[.]sh|hosta_deploy[.]sh|module_deploy[.]py|standalone_orchestrate[.]py ship|hosta_e2e[.]sh'); do
@@ -48,6 +86,8 @@ finish_batch() {
     # State sync used to queue a Sonnet lane here after every 2 shipped batches (13 lanes/day, 18 % of all lane starts on
     # 2026-11-24). The records are now folded deterministically from what merged (a later lane); until then this is a no-op.
     record_fold_hook "${names[*]}"
+    # A shipped change to the runner scripts takes effect once no batch is in flight (self_update_if_idle).
+    git -C "$REPO" diff --name-only "batch/$ID~1" "batch/$ID" 2>/dev/null | grep -q '^tools/delivery/ops/' && SELF_UPDATE=1
     rm -rf "$D"; return 0
   fi
   # Back into the queue (mv keeps the mtime, so the order holds); the decisions below annotate or move them there.
@@ -109,14 +149,35 @@ check, fix it in this branch's changes (not by weakening the test), run that tes
 # the deterministic record fold (build_history, backlog, CURRENT_STATE from the merged commits) comes in a later lane.
 record_fold_hook() { :; }
 
-infra=0
+infra=0; SELF_UPDATE=0
+# The checkout the runner scripts run from.
+runner_checkout() { git -C "$OPS_DIR" rev-parse --show-toplevel 2>/dev/null; }
+# runner_reexec: replace this process with the new script (a function so tests can stub it).
+runner_reexec() { exec /bin/bash "$SHIP_SELF" "$BATCH0"; }
+# self_update_if_idle: after a SHIPPED batch touched tools/delivery/ops/, update the runner checkout to origin/main and
+# re-exec, but only when no batch is in flight (a re-exec never orphans a ship in progress). Same with or without AGY_ONLY.
+self_update_if_idle() {
+  [ "$SELF_UPDATE" = 1 ] || return 0
+  [ "$(ls -d "$SQ"/inflight/*/ 2>/dev/null | wc -l | tr -d ' ')" -eq 0 ] || return 0
+  local co; co=$(runner_checkout) || return 0
+  [ -n "$co" ] || return 0
+  if git -C "$co" fetch -q origin main 2>/dev/null; then :; fi
+  chmod -R u+w "$co/tools/delivery/ops" 2>/dev/null
+  if git -C "$co" checkout -q --detach origin/main 2>/dev/null; then
+    chmod -R a-w "$co/tools/delivery/ops" 2>/dev/null; SELF_UPDATE=0; log "runner checkout updated to origin/main -> re-executing"; runner_reexec
+  else
+    chmod -R a-w "$co/tools/delivery/ops" 2>/dev/null; log "ALERT runner checkout update failed; keeping the running scripts"; SELF_UPDATE=0
+  fi
+}
 ship_main() {
   set -u
   BATCH=${1:-3}; BATCH0=$BATCH
+  SHIP_SELF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")
   mkdir -p "$SQ/done" "$SQ/failed" "$SQ/held" "$SQ/inflight" "$J/batches"
   log "ship-runner started (batch $BATCH)"
   while true; do
     for d in "$SQ"/inflight/*/; do [ -d "$d" ] && finish_batch "$(basename "$d")"; done
+    self_update_if_idle
     [ -e "$SQ/PAUSED" ] && { sleep 60; continue; }
     # Pipelined ships (PO 2026-11-22): at most two batches in flight; a new one starts only once the one in flight has
     # merged, so its preview and unit tests run during that batch's deploy and prod e2e, and it merges after it ends.
@@ -164,6 +225,9 @@ ship_main() {
       git rev-parse -q --verify "$br" >/dev/null || { log "FAILED $n: branch $br missing"; mv "$f" "$SQ/failed/"; continue; }
       mb=$(git merge-base "$br" origin/main); files=$(git diff --name-only "$mb" "$br")
       [ -z "$files" ] && { log "nothing to ship for $n (already on main)"; mv "$f" "$SQ/done/"; rm_lane_wt "$n"; continue; }
+      if ! grep -q '^allow_paths=1' "$f" && echo "$files" | grep -qE "$GUARD" && agy_only; then
+        agy_only_guard_review "$n" "$f" "$br" "$mb" "$files"
+      fi
       if ! grep -q '^allow_paths=1' "$f" && echo "$files" | grep -qE "$GUARD"; then
         log "HELD $n: touches guarded paths ($(echo "$files" | grep -E "$GUARD" | head -3 | tr '\n' ' ')); needs a person"; mv "$f" "$SQ/held/"; continue
       fi
