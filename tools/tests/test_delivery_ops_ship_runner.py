@@ -239,3 +239,13 @@ def test_a_reply_without_a_verdict_is_unavailable_not_a_block(ops):
     log = decide(ops, "You've hit your 5-hour limit \u00b7 resets 2:20am\n")
     assert (ops.sq / "held" / f"{LANE}.ship").exists() and "B-REVIEW UNAVAILABLE" in log
     assert list(ops.lq.glob("*fix-blocked*.brief")) == [] and not (ops.sq / "returned" / f"{LANE}.ship").exists()
+
+
+def test_queue_md_is_a_rendered_file_re_rendered_after_a_conflict():
+    # project/QUEUE.md is rendered from project/*.json (GOV.ORCH.5); a conflict on it alone must not need a port lane.
+    src = (OPS / "ship-runner.sh").read_text()
+    gen = re.search(r"^GEN='([^']+)'", src, re.M).group(1)
+    assert re.search(gen, "project/QUEUE.md")
+    assert not re.search(gen, "project/backlog.json")
+    block = src[src.index('if [ "$G" = 1 ]; then'):]
+    assert "project_queue.py render" in block[:block.index("\n    fi\n")]
