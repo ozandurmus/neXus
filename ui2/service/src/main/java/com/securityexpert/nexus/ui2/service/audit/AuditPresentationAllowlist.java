@@ -261,7 +261,9 @@ public final class AuditPresentationAllowlist {
             // V230 support bundles: ids, enums, counts, timestamps and references audited in full; reason, case_ref,
             // deleted_reason, work_dir_path and outcome_detail are redacted.
             Map.entry("support_bundle_request", Set.of(
-                    "deleted_at", "deleted_by", "device_id", "download_count", "downloaded_at", "downloaded_by", "expires_at", "expiry_warned_at", "finished_at", "id", "job_id", "outcome", "platform_role", "precheck_json", "requested_at", "requested_by", "run_at", "run_mode", "started_at", "state", "vendor", "work_dir_cleaned", "cleanup_job_id", "cleanup_outcome", "cleanup_requested_at", "cleanup_requested_by", "cleanup_state")),
+                    "deleted_at", "deleted_by", "device_id", "download_count", "downloaded_at", "downloaded_by", "expires_at", "expiry_warned_at", "finished_at", "id", "job_id", "outcome", "platform_role", "precheck_json", "requested_at", "requested_by", "run_at", "run_mode", "started_at", "state", "vendor", "work_dir_cleaned", "cleanup_job_id", "cleanup_outcome", "cleanup_requested_at", "cleanup_requested_by", "cleanup_state",
+                    // V274: the linked request id, a boolean and two closed vocabularies (CHECK constraints); no free text.
+                    "previous_request_id", "auto_retry", "hold_reasons", "retry_outcome")),
             // V240 vendor upload: ids, enums, counters, timestamps and the digest audited in full; reason, case_ref, remote_user,
             // destination_host, remote_name, remote_status, error_detail and host_key_fingerprint are redacted. No credential column exists.
             Map.entry("support_bundle_upload_host_key", Set.of(

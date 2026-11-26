@@ -181,4 +181,90 @@ class SupportBundleClaimConcurrencyTest {
             assertEquals(false, store.multiDomainServer(device));
         }
     }
+
+    @Test
+    void holdReasonsFollowUpLinksAndSingleAutoRetryConstraintHoldInPostgres() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("support_bundle_v274")) {
+            fixture.runFlyway();
+            String device;
+            try (Connection db = fixture.migrateConnection()) {
+                // V274 is repeatable inside BEGIN/ROLLBACK
+                String v274;
+                try (var in = getClass().getResourceAsStream("/db/migration/V274__support_bundle_request_again_and_busy_retry.sql")) {
+                    v274 = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                }
+                db.setAutoCommit(false);
+                try (var st = db.createStatement()) { st.execute(v274); st.execute(v274); }
+                db.rollback();
+                db.setAutoCommit(true);
+
+                device = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");
+                exec(db, "UPDATE module_runtime_control SET drain_requested = true, drain_requested_at = now() WHERE module = 'general'");
+            }
+            var store = new JooqSupportBundleStore(new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+            assertTrue(store.isSupportBundleModuleDraining());
+
+            // 23:46 Istanbul (20:46Z) -> 02:46 Istanbul (23:46Z): crosses 00:00 collection window, module drain, and busy job
+            Instant runAt = Instant.parse("2026-11-25T20:46:00Z");
+            Instant giveUpAt = Instant.parse("2026-11-25T23:47:00Z");
+            String staleJob;
+            try (Connection db = fixture.migrateConnection()) {
+                job(db, device, "EXECUTING", "read", "TIMESTAMPTZ '2026-11-25T22:00:00Z'");
+                staleJob = job(db, device, "REQUESTED", "recovery-write", "TIMESTAMPTZ '2026-11-25T20:46:00Z'");
+            }
+            UUID origId = UUID.randomUUID();
+            store.insert(new RequestRow(origId, device, "check_point", "cp_gaia_gateway", "NOW", runAt, "CASE-1",
+                    "Night support bundle", ADMIN, runAt, null, null, runAt.plusSeconds(14 * 86400),
+                    null, null, 0, null, null, null, "{}", "QUEUED", null, null, false, List.of(), null),
+                    List.of(new ItemSpec("cp_cpinfo", 2, "dom-1")));
+            store.attachJob(origId, staleJob, ADMIN);
+
+            assertEquals(1, store.giveUpStale(giveUpAt));
+            RequestRow expired = store.find(origId).orElseThrow();
+            assertEquals("FAILED", expired.state());
+            assertEquals("NOT_STARTED_DEVICE_BUSY", expired.outcome());
+            assertEquals(List.of("MODULE_DRAIN", "COLLECTION_WINDOW", "DEVICE_JOB_RUNNING"), expired.holdReasons());
+            assertEquals("dom-1", store.items(origId).get(0).domainRef());
+
+            // Candidate selection + one-shot claim + unique auto-retry index + cancellable retry
+            assertEquals(List.of(origId), store.autoRetryCandidates(10).stream().map(RequestRow::id).toList());
+            assertTrue(store.claimAutoRetryEvaluation(origId));
+            assertEquals(List.of(), store.autoRetryCandidates(10));
+
+            UUID retryId = UUID.randomUUID();
+            String retryJob;
+            try (Connection db = fixture.migrateConnection()) {
+                retryJob = job(db, device, "REQUESTED", "recovery-write", "now()");
+            }
+            Instant quiet = Instant.parse("2026-11-26T01:00:00Z");
+            store.insert(new RequestRow(retryId, device, "check_point", "cp_gaia_gateway", "AT", quiet, "CASE-1",
+                    "automatic retry of " + origId, ADMIN, giveUpAt, null, null, quiet.plusSeconds(14 * 86400),
+                    null, null, 0, null, null, null, "{}", "QUEUED", null, origId, true, List.of(), null),
+                    List.of(new ItemSpec("cp_cpinfo", 2, "dom-1")));
+            store.attachJob(retryId, retryJob, ADMIN);
+            store.finishAutoRetryEvaluation(origId, ADMIN, "RETRY_SCHEDULED");
+
+            assertTrue(store.hasFollowUp(origId));
+            assertEquals(retryId, store.followUps(List.of(origId)).get(origId));
+            assertEquals(origId, store.find(retryId).orElseThrow().previousRequestId());
+            assertTrue(store.find(retryId).orElseThrow().autoRetry());
+
+            // Cancelling the queued automatic retry cancels both the request and its REQUESTED job; a second auto-retry is blocked by unique index
+            assertTrue(store.cancelQueued(retryId, ADMIN));
+            try (Connection db = fixture.migrateConnection()) {
+                assertEquals("CANCELLED", value(db, "select state from jobs where job_id = '" + retryJob + "'"));
+            }
+            org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> store.insert(
+                    new RequestRow(UUID.randomUUID(), device, "check_point", "cp_gaia_gateway", "AT", quiet, null,
+                            "automatic retry of " + origId, ADMIN, giveUpAt, null, null, quiet.plusSeconds(14 * 86400),
+                            null, null, 0, null, null, null, "{}", "QUEUED", null, origId, true, List.of(), null),
+                    List.of(new ItemSpec("cp_gaia_extras", null))));
+
+            // Closed hold_reasons constraint rejects arbitrary strings
+            try (Connection db = fixture.migrateConnection()) {
+                org.junit.jupiter.api.Assertions.assertThrows(SQLException.class, () ->
+                        exec(db, "UPDATE support_bundle_request SET hold_reasons = ARRAY['RAW_FREE_TEXT'] WHERE id = '" + origId + "'"));
+            }
+        }
+    }
 }

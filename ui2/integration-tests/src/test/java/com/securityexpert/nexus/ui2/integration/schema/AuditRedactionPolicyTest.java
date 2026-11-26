@@ -89,6 +89,8 @@ class AuditRedactionPolicyTest {
             "support_bundle_request.cleanup_job_id", "support_bundle_request.cleanup_outcome",
             "support_bundle_request.cleanup_requested_at", "support_bundle_request.cleanup_requested_by",
             "support_bundle_request.cleanup_state",
+            "support_bundle_request.previous_request_id", "support_bundle_request.auto_retry",
+            "support_bundle_request.hold_reasons", "support_bundle_request.retry_outcome",
             "support_bundle_upload_host_key.id", "support_bundle_upload_host_key.port", "support_bundle_upload_host_key.key_type",
             "support_bundle_upload_host_key.first_seen_at", "support_bundle_upload_host_key.last_seen_at",
             // support_bundle_upload (V240): no credential column exists; free text and remote identifiers are redacted

@@ -211,7 +211,7 @@ public final class WorkerClaimLoop {
             com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.HEAVY_FLEET_CAP);
         if (decision instanceof com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.ClaimDecision.Defer defer) {
             LOGGER.log(System.Logger.Level.INFO, "support bundle job deferred: " + defer.reason());
-            return !supportBundleAdmission.deferClaimed(claimed.jobId(), claimed.leaseEpoch(), defer.until());
+            return !supportBundleAdmission.deferClaimed(claimed.jobId(), claimed.leaseEpoch(), defer.until(), defer.reason());
         }
         if (decision instanceof com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.ClaimDecision.GiveUp) {
             return !supportBundleAdmission.giveUpClaimed(claimed.jobId(), claimed.leaseEpoch());
