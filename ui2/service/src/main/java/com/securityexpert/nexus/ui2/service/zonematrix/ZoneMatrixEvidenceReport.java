@@ -588,7 +588,8 @@ public final class ZoneMatrixEvidenceReport {
                     Cell.time(l == null ? null : l.firstObservedAnyVersion()),
                     Cell.time(l == null ? null : l.lastObservedAt()),
                     Cell.time(l == null ? null : l.resolvedAt()),
-                    Cell.text(l == null || l.resolutionReason() == null ? "" : l.resolutionReason().name()),
+                    Cell.text(l == null ? "" : l.resolutionReason() != null ? l.resolutionReason().name()
+                            : l.status() == Status.RESOLVED ? UNKNOWN : ""),
                     Cell.status(r.inclusion() == Inclusion.UNDECIDABLE
                             ? "KEPT (dates cannot decide period membership)" : "IN_PERIOD")));
         }

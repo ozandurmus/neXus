@@ -249,3 +249,12 @@ def test_queue_md_is_a_rendered_file_re_rendered_after_a_conflict():
     assert not re.search(gen, "project/backlog.json")
     block = src[src.index('if [ "$G" = 1 ]; then'):]
     assert "project_queue.py render" in block[:block.index("\n    fi\n")]
+
+
+def test_a_named_preview_e2e_failure_is_the_lanes_fault_not_infrastructure():
+    # G778 (2026-11-26): a preview e2e that names a failing test cancels the security pregate; that must not count as an
+    # infrastructure failure, or two lane failures in a row pause the whole runner.
+    src = (OPS / "ship-runner.sh").read_text()
+    i = src.index("infra=$((infra + 1))")
+    guard = src[src.rindex("if ", 0, i):i]
+    assert "PREVIEW E2E FAILED TEST:" in guard and "! grep -q" in guard
