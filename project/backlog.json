@@ -216,15 +216,6 @@
       "status": "in_progress"
     },
     {
-      "id": "policy_insights_design_followups",
-      "category": "engineering",
-      "title": "Policy Insights design follow-ups: missing hygiene-modes design file the code cites, stale work-budget figure",
-      "status": "planned",
-      "priority": "P3",
-      "target": "POLICY_INSIGHTS_DESIGN_2026_11_24.md section 11",
-      "note": ""
-    },
-    {
       "id": "nspm_wave1_acceptance",
       "category": "engineering",
       "title": "Policy hygiene wave 1: PO acceptance, next UNKNOWN levers",

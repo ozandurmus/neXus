@@ -36,7 +36,7 @@ quota_hit() {
 # Markers (looked for in the lane's log): a permission the headless agent was refused, and transient infrastructure errors
 # near the end of the log (start errors, connection and gateway errors).
 PERM_RE='auto-denied|\[argon\] FAILED: a permission'
-INFRA_RE='failed to start conversation|empty conversation id|ECONNRESET|connection reset|connection refused|service unavailable|overloaded_error|bad gateway|network is unreachable|could not resolve host|TLS handshake timeout'
+INFRA_RE='failed to start conversation|empty conversation id|ECONNRESET|connection reset|connection refused|service unavailable|overloaded_error|bad gateway|network is unreachable|could not resolve host|TLS handshake timeout|^error: interrupted$'
 
 # lane_outcome <nohup-log>: one word for how a lane ended. RUNNING = no "[argon] exit=" line yet.
 lane_outcome() {

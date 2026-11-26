@@ -45,7 +45,12 @@ session within step 1's scope:
   rule with `any` zones would match (ACI-4 taken literally).
 - Segment blocks are shown raw to every non-replay role that holds `cutover_assessment_read`, as Rule object usage
   shows observed addresses; a separate raw-view right for blocks is not added in step 1.
-- Retention (Q7) is not enforced yet.
+- Retention (Q7) for assessment flows is enforced (status read from source 2026-11-26): `CutoverFlowRetention` runs every
+  hour and removes the flow rows (and missing-rule rows) of assessments older than 90 days in bounded passes (at most 50
+  assessments, one transaction each, no new assessment started once 50,000 rows were removed in the pass). The assessment
+  row, its verdict and its summary counts are kept, and the flows read then answers `flowsExpired` (with `retentionDays`).
+  The janitor is switched off with `ui2.cutover.flow-retention.enabled=false`. Retention of watch records waits for
+  watch records to exist.
 
 ## 1. Context and goal
 

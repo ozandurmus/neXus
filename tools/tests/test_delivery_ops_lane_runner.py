@@ -32,6 +32,8 @@ def outcome(ops, text):
     ('the "run_command" permission was auto-denied\n[argon] exit=3 head=abc x\n', "PERMISSION_DENIED"),
     ("backend returned an empty conversation id\n[argon] exit=1 head=abc x\n", "INFRA_ERROR"),
     ("read tcp: connection reset by peer\n[argon] exit=3 head=abc x\n", "INFRA_ERROR"),
+    ("error: interrupted\n\n[argon] exit=1 head=abc x\n", "INFRA_ERROR"),
+    ("the run was interrupted by a test\n[argon] exit=1 head=abc x\n", "FAILED"),
     ("RESOURCE_EXHAUSTED: quota\n[argon] exit=1 head=abc x\n", "QUOTA"),
     ("some failure\n[argon] exit=1 head=abc x\n", "FAILED"),
     ("some failure\n[argon] exit=2 head=abc x\n", "FAILED"),
