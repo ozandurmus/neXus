@@ -344,7 +344,10 @@ describe("Zone matrix step 3: Evaluate tab", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Evaluate policy" }));
     const headline = await screen.findByTestId("evaluation-headline");
+    expect(headline).toHaveAttribute("data-proven", "no");
+    expect(headline.querySelector('[data-pill="ok"]')).toBeNull();
     expect(headline).toHaveTextContent("no proven violations in evaluated rules");
     expect(headline.textContent ?? "").not.toContain("0 rules violate");
+    expect(screen.getByTestId("evaluation-counts")).toHaveTextContent("Violations: at least 0");
   });
 });
