@@ -14,7 +14,9 @@ final class PolicyRuleMetrics {
     static Time time(Rule rule, Map<String, PolicyObject> objects, Instant now, String vendor, int[] budget) {
         List<String> refs = new ArrayList<>(rule.extras().getOrDefault("time", List.of()));
         refs.addAll(rule.extras().getOrDefault("schedule", List.of()));
-        if (refs.isEmpty()) return new Time((vendor.equals("CP") || rule.extras().containsKey("time-uncollected")) ? "unknown" : "always", List.of(), false);
+        // A0-FG-5: a FortiGate policy whose schedule was not collected has no default schedule; it is never read as "always".
+        boolean scheduleMissing = rule.extras().getOrDefault("fgt-missing-default", List.of()).contains("schedule");
+        if (refs.isEmpty()) return new Time((vendor.equals("CP") || rule.extras().containsKey("time-uncollected") || scheduleMissing) ? "unknown" : "always", List.of(), false);
         List<PolicySchedule> schedules = new ArrayList<>();
         boolean known = true, any = false;
         for (String id : refs) {

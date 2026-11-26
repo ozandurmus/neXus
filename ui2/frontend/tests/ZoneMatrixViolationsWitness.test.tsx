@@ -183,3 +183,53 @@ describe("Zone matrix Violations: Show witness", () => {
     expect(witnessGets(s)).toEqual([]);
   });
 });
+
+describe("Zone matrix Violations: Open in Trace", () => {
+  const hostWitness = (over: Record<string, string> = {}) => (id: string) => ({ status: 200, body: {
+    ...witnessBody(id), cells: [{ source_zone_id: "z1", destination_zone_id: "z2", nat_view: "ORIGINAL",
+      witness: { source_range: "198.51.100.17", destination_range: "198.51.100.200", protocol: "tcp", port: "22", service: "tcp/22", ...over } }] } });
+  const show = async () => {
+    const table = await openViolations();
+    const row = rowOf(table, /RULE-ECHO/);
+    fireEvent.click(within(row).getByRole("button", { name: "Show witness" }));
+    return { row, shown: await within(row).findByTestId("witness-shown") };
+  };
+
+  it("links single IPv4 hosts over tcp/udp with a fragment tuple and no query-string addresses", async () => {
+    serve(summary(), hostWitness({ protocol: "udp", port: "53" }));
+    const { shown } = await show();
+    const link = within(shown).getByTestId("witness-trace-link");
+    expect(link).toHaveTextContent("Open in Trace");
+    expect(link.getAttribute("href")).toBe("?screen=trace&mode=path#tuple=198.51.100.17,198.51.100.200,udp,53");
+    expect(link.getAttribute("href")!.split("#")[0]).not.toContain("198.51.100");
+    expect(within(shown).getByTestId("witness-tuple")).toBeInTheDocument();
+  });
+
+  it("offers no link for ranges, other protocols, any/UNKNOWN or bad ports, only the copyable text", async () => {
+    const cases: Array<Record<string, string>> = [
+      { source_range: SOURCE_RANGE }, { destination_range: "198.51.100.0/24" }, { protocol: "icmp" }, { protocol: "any" },
+      { protocol: "UNKNOWN", port: "UNKNOWN" }, { port: "any" }, { port: "0" }, { port: "65536" }, { source_range: "UNKNOWN" },
+    ];
+    for (const over of cases) {
+      serve(summary(), hostWitness(over));
+      const { shown } = await show();
+      expect(within(shown).queryByTestId("witness-trace-link")).toBeNull();
+      expect(within(shown).getByTestId("witness-tuple")).toBeInTheDocument();
+      document.body.innerHTML = "";
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("never offers the witness, hence no link, to a masked or blocks-less session", async () => {
+    for (const body of [summary({ masked: true }), summary({ can: NO_BLOCKS })]) {
+      const s = serve(body, hostWitness());
+      const table = await openViolations();
+      expect(within(table).queryByTestId("witness-trace-link")).toBeNull();
+      expect(within(table).queryByRole("button", { name: /Show witness/ })).toBeNull();
+      expect(document.body.textContent).not.toContain("198.51.100.17");
+      expect(witnessGets(s)).toEqual([]);
+      document.body.innerHTML = "";
+      vi.unstubAllGlobals();
+    }
+  });
+});
