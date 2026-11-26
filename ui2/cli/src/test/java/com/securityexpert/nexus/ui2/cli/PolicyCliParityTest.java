@@ -48,6 +48,7 @@ class PolicyCliParityTest {
         table.put("GET /policies/{id}/hygiene", new String[] {"policy-hygiene", POLICY});
         table.put("GET /policies/{id}/insights", new String[] {"policy-insights", POLICY});
         table.put("GET /policies/{id}/insight", new String[] {"policy-insight", POLICY, INSIGHT});
+        table.put("GET /policies/{id}/proposal", new String[] {"policy-proposal", POLICY});
         table.put("GET /policies/{id}/rules", new String[] {"policy-rule", POLICY, "RULE-1"});
         table.put("GET /policies/{id}/hygiene.csv", new String[] {"policy-hygiene-csv", POLICY});
         table.put("GET /tree", new String[] {"policy-tree"});
@@ -119,7 +120,7 @@ class PolicyCliParityTest {
     void everyScreenRouteHasACliCommand(@TempDir Path home) throws Exception {
         Map<String, String[]> table = commands();
         List<String> routes = controllerRoutes();
-        assertEquals(20, routes.size(), "the controller's mapping count changed; extend PolicyCli and this table: " + routes);
+        assertEquals(21, routes.size(), "the controller's mapping count changed; extend PolicyCli and this table: " + routes);
         assertEquals(routes.size(), new TreeSet<>(routes).size(), "a route is mapped twice: " + routes);
         for (String route : routes) {
             assertTrue(table.containsKey(route), "the controller route " + route + " has no PolicyCli command in this test's mapping table");
@@ -146,6 +147,9 @@ class PolicyCliParityTest {
             assertEquals("page=1&type=T&grade=G&days=7", one(cli, seen, "policy-insights", POLICY, "1", "T", "G", "7").query());
             assertEquals("insightId=" + INSIGHT, one(cli, seen, "policy-insight", POLICY, INSIGHT).query());
             assertEquals("insightId=" + INSIGHT + "&days=14", one(cli, seen, "policy-insight", POLICY, INSIGHT, "14").query());
+            assertNull(one(cli, seen, "policy-proposal", POLICY).query());
+            assertEquals("days=30", one(cli, seen, "policy-proposal", POLICY, "30").query());
+            assertNull(one(cli, seen, "policy-proposal", POLICY, "-").query());
             assertEquals("ruleId=a%26b%3Dc", one(cli, seen, "policy-rule", POLICY, "a&b=c").query());
             assertEquals("ruleId=R1&days=5", one(cli, seen, "policy-rule", POLICY, "R1", "5").query());
             assertEquals("findingClass=SHADOWED&days=9", one(cli, seen, "policy-hygiene-csv", POLICY, "SHADOWED", "-", "9").query());
@@ -183,6 +187,9 @@ class PolicyCliParityTest {
                 new String[] {"policy-hygiene", POLICY, "1", "a", "b", "30", "extra"},
                 new String[] {"policy-insight", POLICY},
                 new String[] {"policy-insight", POLICY, "-"},
+                new String[] {"policy-proposal"},
+                new String[] {"policy-proposal", "not-an-id"},
+                new String[] {"policy-proposal", POLICY, "30", "extra"},
                 new String[] {"policy-rule", POLICY},
                 new String[] {"policy-device"},
                 new String[] {"policy-device", "not-an-id"},

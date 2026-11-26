@@ -64,6 +64,7 @@ import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
  *   <tr><th>Route</th><th>Plane</th><th>Status</th></tr>
  *   <tr><td>GET /api/v2/policy/policies/{id}/insights</td><td>Policy Insights overview and list</td><td>COVERED</td></tr>
  *   <tr><td>GET /api/v2/policy/policies/{id}/insight?insightId=</td><td>Policy Insights detail</td><td>COVERED</td></tr>
+ *   <tr><td>GET /api/v2/policy/policies/{id}/proposal</td><td>Policy Insights reorder-only proposal</td><td>COVERED</td></tr>
  *   <tr><td>GET /api/v2/policy/policies/{id}/offline-analyses</td><td>Offline analyses of a policy</td><td>COVERED</td></tr>
  *   <tr><td>GET /api/v2/policy/offline-analyses/{id}</td><td>One offline analysis (rule and object usage)</td><td>COVERED</td></tr>
  *   <tr><td>GET /api/v2/path-analysis/validate/{validationId}</td><td>Path validation run and hops</td><td>COVERED</td></tr>
@@ -105,6 +106,7 @@ class AiviewInsightsOfflineTopologySweepTest {
 
     private static final String INSIGHTS = "GET /api/v2/policy/policies/{id}/insights";
     private static final String INSIGHT = "GET /api/v2/policy/policies/{id}/insight";
+    private static final String PROPOSAL = "GET /api/v2/policy/policies/{id}/proposal";
     private static final String OFFLINE_LIST = "GET /api/v2/policy/policies/{id}/offline-analyses";
     private static final String OFFLINE_ONE = "GET /api/v2/policy/offline-analyses/{id}";
     private static final String VALIDATION = "GET /api/v2/path-analysis/validate/{validationId}";
@@ -117,7 +119,7 @@ class AiviewInsightsOfflineTopologySweepTest {
     private static final String SANITIZE_DOWNLOAD = "GET /api/v2/sanitize/jobs/{jobId}/download";
     private static final String SANITIZE_REVERT = "GET /api/v2/sanitize/reverts/{revertId}";
 
-    private static final List<String> COVERED = List.of(INSIGHTS, INSIGHT, OFFLINE_LIST, OFFLINE_ONE, VALIDATION, OVERRIDES,
+    private static final List<String> COVERED = List.of(INSIGHTS, INSIGHT, PROPOSAL, OFFLINE_LIST, OFFLINE_ONE, VALIDATION, OVERRIDES,
             SOURCES, HCP, SPIKE, SANITIZE_JOBS);
     private static final List<String> REFUSED = List.of(SANITIZE_JOB, SANITIZE_DOWNLOAD, SANITIZE_REVERT);
 
@@ -219,8 +221,9 @@ class AiviewInsightsOfflineTopologySweepTest {
     /** Every planted raw value, generated per run. */
     record Estate(Device cpA, Device cpB, Device pan, Device mgmt, String principal, String v6, String transit,
             String policyName, String policyId, String domainId, String domainName, String packageLayer, String sectionName,
-            String objectAName, String objectBName, String objectNetName, String objectAddress, String netAddress,
-            String ruleOne, String ruleTwo, String ruleThree, String ruleFour, String zoneA, String zoneB,
+            String objectAName, String objectBName, String objectNetName, String objectWideName,
+            String objectAddress, String netAddress, String wideAddress,
+            String ruleOne, String ruleTwo, String ruleThree, String ruleFour, String ruleFive, String zoneA, String zoneB,
             String virtualRouter, String ifaceA, String ifaceB, String contextA, String contextB, String subnet,
             String uploadName, String spikeDirectory, String note, Map<String, ValueClass> raw) {
 
@@ -239,8 +242,10 @@ class AiviewInsightsOfflineTopologySweepTest {
             int net = base % 150 + 1;
             String v6 = "2001:db8:" + hex(2) + "::" + (1 + RANDOM.nextInt(200));
             String transit = "198.51.100." + (net + 2);
+            int blockBase = ((net + 8) / 8) * 8;
             String objectAddress = "198.51.100." + net;
-            String netAddress = "203.0.113." + (net + 3);
+            String wideAddress = "203.0.113." + blockBase;
+            String netAddress = "203.0.113." + (blockBase + 3);
             String policyName = "pkg-" + tag() + "-branches";
             String domainName = "dom-" + tag() + "-retail";
             String layer = "lyr-" + tag() + "-access";
@@ -248,10 +253,12 @@ class AiviewInsightsOfflineTopologySweepTest {
             String objectA = "h-" + tag() + "-dbsrv";
             String objectB = "h-" + tag() + "-dbsrv-copy";
             String objectNet = "n-" + tag() + "-cardnet";
+            String objectWide = "n-" + tag() + "-cardsupernet";
             String r1 = "allow-" + tag() + "-payroll";
             String r2 = "again-" + tag() + "-payroll";
             String r3 = "deny-" + tag() + "-legacy";
             String r4 = "idle-" + tag() + "-vendor";
+            String r5 = "promote-" + tag() + "-vendorsubnet";
             String zoneA = "zn-" + tag() + "-cardholder";
             String zoneB = "zn-" + tag() + "-corebank";
             String vr = "vr-" + tag() + "-wan";
@@ -275,6 +282,7 @@ class AiviewInsightsOfflineTopologySweepTest {
             raw.put(transit, ValueClass.ADDRESS);
             raw.put(objectAddress, ValueClass.ADDRESS);
             raw.put(netAddress, ValueClass.ADDRESS);
+            raw.put(wideAddress, ValueClass.ADDRESS);
             raw.put(principal, ValueClass.PRINCIPAL);
             raw.put(policyName, ValueClass.POLICY_NAME);
             raw.put(domainName, ValueClass.LAYER_OR_DOMAIN_NAME);
@@ -283,16 +291,17 @@ class AiviewInsightsOfflineTopologySweepTest {
             raw.put(objectA, ValueClass.OBJECT_NAME);
             raw.put(objectB, ValueClass.OBJECT_NAME);
             raw.put(objectNet, ValueClass.OBJECT_NAME);
-            for (String rule : List.of(r1, r2, r3, r4)) raw.put(rule, ValueClass.RULE_NAME);
+            raw.put(objectWide, ValueClass.OBJECT_NAME);
+            for (String rule : List.of(r1, r2, r3, r4, r5)) raw.put(rule, ValueClass.RULE_NAME);
             for (String name : List.of(zoneA, zoneB, vr, ifaceA, ifaceB, contextA, contextB)) {
                 raw.put(name, ValueClass.CONTEXT_OR_INTERFACE);
             }
             raw.put(upload, ValueClass.FILE_OR_DIRECTORY_NAME);
             raw.put(spike, ValueClass.FILE_OR_DIRECTORY_NAME);
             return new Estate(a, b, pan, mgmt, principal, v6, transit, policyName, "policy-" + UUID.randomUUID(),
-                    "domain-" + UUID.randomUUID(), domainName, layer, section, objectA, objectB, objectNet, objectAddress,
-                    netAddress, r1, r2, r3, r4, zoneA, zoneB, vr, ifaceA, ifaceB, contextA, contextB, subnet, upload, spike,
-                    note, Map.copyOf(raw));
+                    "domain-" + UUID.randomUUID(), domainName, layer, section, objectA, objectB, objectNet, objectWide,
+                    objectAddress, netAddress, wideAddress, r1, r2, r3, r4, r5, zoneA, zoneB, vr, ifaceA, ifaceB,
+                    contextA, contextB, subnet, upload, spike, note, Map.copyOf(raw));
         }
 
         List<Device> devices() {
@@ -354,12 +363,15 @@ class AiviewInsightsOfflineTopologySweepTest {
         String objectA = "obj-" + UUID.randomUUID();
         String objectB = "obj-" + UUID.randomUUID();
         String objectNet = "obj-" + UUID.randomUUID();
+        String objectWide = "obj-" + UUID.randomUUID();
         Map<String, PolicySnapshot.PolicyObject> objects = new LinkedHashMap<>();
         objects.put("any", new PolicySnapshot.PolicyObject("any", "Any", "any", List.of(), List.of(), "RESOLVED"));
         objects.put(objectA, address(objectA, e.objectAName(), e.objectAddress()));
         objects.put(objectB, address(objectB, e.objectBName(), e.objectAddress()));
         objects.put(objectNet, new PolicySnapshot.PolicyObject(objectNet, e.objectNetName(), "address", List.of(),
                 List.of("ip-netmask: " + e.netAddress() + "/32"), "RESOLVED"));
+        objects.put(objectWide, new PolicySnapshot.PolicyObject(objectWide, e.objectWideName(), "address", List.of(),
+                List.of("ip-netmask: " + e.wideAddress() + "/29"), "RESOLVED"));
         Map<String, List<String>> extras = Map.of("time", List.of("any"), "install-on", List.of("any"),
                 "layer-name", List.of(e.packageLayer()), "last-modifier", List.of(e.principal()));
         String comment = "requested by " + e.principal() + " for " + e.cpA().hostname() + " (" + e.v6() + ")";
@@ -372,12 +384,16 @@ class AiviewInsightsOfflineTopologySweepTest {
         var r4 = new PolicySnapshot.Rule("rule-" + UUID.randomUUID(), UUID.randomUUID().toString(), 4, e.ruleFour(), true,
                 cell(objectNet), cell("any"), cell("any"), cell("any"), "Accept", "Log", "vendor access from " + e.transit(), extras)
                 .withHitCounts(new PolicySnapshot.HitCounts(0L, null, null, "mds", Instant.now().toString(), "zero", List.of()));
+        // r5 (/29) partly overlaps earlier r4 (/32 inside the /29) with the same Accept/Log signature and no rule between:
+        // yields an accepted SAFE move in GET /api/v2/policy/policies/{id}/proposal.
+        var r5 = new PolicySnapshot.Rule("rule-" + UUID.randomUUID(), UUID.randomUUID().toString(), 5, e.ruleFive(), true,
+                cell(objectWide), cell("any"), cell("any"), cell("any"), "Accept", "Log", "subnet of " + e.objectWideName(), extras);
         var metadata = new PolicySnapshot.Metadata(e.policyId(), e.mgmt().id(), e.mgmt().hostname(), "CP", e.domainId(),
                 e.domainName(), e.policyName(), Instant.now().toString(), null,
                 List.of(new PolicySnapshot.Target(e.cpA().id(), e.cpA().hostname(), "", "IN_SYNC"),
                         new PolicySnapshot.Target(e.cpB().id(), e.cpB().hostname(), "", "IN_SYNC")));
         var snapshot = new PolicySnapshot(metadata,
-                List.of(new PolicySnapshot.Section("section-1", e.sectionName(), "CP access layer", null, List.of(r1, r2, r3, r4))),
+                List.of(new PolicySnapshot.Section("section-1", e.sectionName(), "CP access layer", null, List.of(r1, r2, r3, r4, r5))),
                 objects);
         audited(c, e.principal(), Ui2Rows.ACTION, () -> exec(c,
                 "insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) values (?, now(), ?::jsonb, ?::jsonb)",
@@ -742,6 +758,15 @@ class AiviewInsightsOfflineTopologySweepTest {
         JsonNode detail = tree(responses.get(INSIGHT));
         assertFalse(detail.path("insight").isMissingNode() || detail.path("insight").isEmpty(), "insight detail is non-empty");
         assertTrue(detail.path("rules").size() > 0 && detail.path("ruleObjects").size() > 0, "insight detail names rules and objects");
+
+        targets.put(PROPOSAL, policy + "/proposal");
+        responses.put(PROPOSAL, get(targets.get(PROPOSAL), cookie));
+        assertEquals(200, responses.get(PROPOSAL).status(), PROPOSAL);
+        JsonNode proposal = tree(responses.get(PROPOSAL));
+        assertTrue(proposal.path("supported").asBoolean(), "proposal route supports Check Point");
+        assertTrue(proposal.path("accepted").asInt() >= 1 && proposal.path("steps").size() >= 1,
+                "seeded Check Point package yields at least one accepted move");
+        assertTrue(proposal.path("order").size() >= 1, "proposal order includes the moved section");
 
         targets.put(OFFLINE_LIST, policy + "/offline-analyses");
         responses.put(OFFLINE_LIST, get(targets.get(OFFLINE_LIST), cookie));

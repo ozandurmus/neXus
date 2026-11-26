@@ -1099,6 +1099,9 @@ public final class PolicyQueryService {
         if (text.matches("(?s)^[\\s]*[=+@-].*")) text = "'" + text;
         return "\"" + text.replace("\"", "\"\"") + "\"";
     }
+    private final PolicyProposalView proposals = new PolicyProposalView(hygieneSlots);
+    /** Policy Insights phase P2 step c-2c: the read-only reorder proposal of one Check Point package (cached per snapshot). */
+    public PolicyResponse proposal(PolicySnapshot snapshot, int days) { return proposals.response(snapshot, days); }
 
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked) {
         return page(snapshot, page, query, masked, "", 90, "", "");

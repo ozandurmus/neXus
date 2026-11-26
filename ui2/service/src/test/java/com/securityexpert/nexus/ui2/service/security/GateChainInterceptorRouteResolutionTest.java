@@ -83,6 +83,8 @@ class GateChainInterceptorSecurityTest {
             assertEquals(route.getValue(), method.invoke(interceptor, parts[0], parts[1].replace("*", "synthetic-ref")),
                     route.getKey());
         }
+        assertEquals(ActionRegistry.POLICY_READ,
+                method.invoke(interceptor, "GET", "/api/v2/policy/policies/synthetic-ref/proposal"));
     }
 
     /** The interceptor wildcards one segment at a time: a two-"*" route never matches (V64, 2026-09-24). */
