@@ -903,7 +903,7 @@ def _board_row(record: dict, summary: dict, state_dir: Path) -> dict:
     started_at = record.get("started_at")
     started_epoch = _parse_iso(started_at)
     ended_at = summary.get("terminal_at") if summary.get("relay_status") == "CLOSED" else None
-    if summary.get("phase") in orch.TERMINAL_PHASES:
+    if ended_at is None and summary.get("phase") in orch.TERMINAL_PHASES:
         ended_at = _record_mtime_iso(state_dir, summary["movement_id"])
     ended_epoch = _parse_iso(ended_at)
     duration_s = None

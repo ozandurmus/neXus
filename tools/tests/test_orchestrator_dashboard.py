@@ -747,6 +747,32 @@ def test_board_projects_close_outcome_and_preserves_full_objective(tmp_path, mon
     assert archive_row["archived"] is True
 
 
+@pytest.mark.parametrize("initial_phase", [orch.PHASE_RUNNING, orch.PHASE_DONE])
+def test_board_ended_at_uses_session_close_timestamp_over_later_record_mtime(tmp_path, initial_phase):
+    state_dir, relay_dir = tmp_path / "state", tmp_path / "relay"
+    relay_file = _make_relay_named(tmp_path, "ended-at-deterministic")
+    movement_id = _relay_id_of(relay_file)
+    lr.main(["append", "--file", str(relay_file), "--role", "engineer", "--marker", "SESSION_CLOSE",
+             "--report", str(_write_close_report(tmp_path)), "--outcome", "DONE"])
+
+    t1 = "2026-09-11T10:05:00Z"
+    t2 = "2026-09-11T10:05:05Z"
+    relay_obj = json.loads(relay_file.read_text(encoding="utf-8"))
+    relay_obj["entries"][-1]["timestamp"] = t1
+    relay_obj["updated_at"] = t2
+    relay_file.write_text(json.dumps(relay_obj), encoding="utf-8")
+
+    _save_minimal_record(state_dir, movement_id, phase=initial_phase, started_at="2026-09-11T10:00:00Z")
+    t2_epoch = dash._parse_iso(t2)
+    assert t2_epoch is not None
+    state_path = orch._state_path(state_dir, movement_id)
+    os.utime(state_path, (t2_epoch, t2_epoch))
+
+    row = dash.build_board(state_dir, relay_dir, tmp_path, 2)["closed"][0]
+    assert row["ended_at"] == t1
+    assert row["duration_s"] == 300.0
+
+
 def test_dashboard_http_auth_and_origin_remain_enforced(tmp_path):
     from http.client import HTTPConnection
     from http.server import ThreadingHTTPServer
