@@ -200,6 +200,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return topologyPseudonymizer.maskText(ipMasker.maskText(text));
         }
         if (obj instanceof JobEvent jobEvent) {
+            // The target name first: masking it registers the row's own raw name, so the reason text below cannot
+            // carry that name through unmasked on a cold pseudonymizer.
+            String maskedTarget = maskJobTargetName(jobEvent);
             String maskedReason = jobEvent.terminalReason() != null
                     ? topologyPseudonymizer.maskText(ipMasker.maskText(jobEvent.terminalReason()))
                     : null;
@@ -207,7 +210,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.jobId(),
                     jobEvent.jobType(),
                     jobEvent.targetDeviceId(),
-                    maskJobTargetName(jobEvent),
+                    maskedTarget,
                     jobEvent.state(),
                     jobEvent.outcome(),
                     maskedReason,

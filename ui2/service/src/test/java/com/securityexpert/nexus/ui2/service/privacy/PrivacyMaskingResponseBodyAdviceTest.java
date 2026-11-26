@@ -411,6 +411,33 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(result.items().get(0).deviceName()).isNotEqualTo("real-gateway-name-7");
     }
 
+    /**
+     * Pins the masked Operations > Jobs backup page the e2e probe "aiview: a listed backup job transcript GET is
+     * forbidden with HTTP 403" depends on, under the round 6 delimiter-wide name masking: the job id and job type pass
+     * through verbatim (the probe reads the listed id), a delimited hostname in the reason is masked, and the transcript
+     * flag is stripped so the list never offers a transcript affordance aiview cannot open (the content route stays 403).
+     */
+    @Test
+    void maskedBackupJobPageKeepsTheOpaqueJobIdAndOffersNoTranscript() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        String jobId = "5f0c2a8e-1b7d-4c3e-9a41-0d2b6e8f7a10";
+        JobEvent event = new JobEvent(jobId, "backup", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "synthetic-gw-backup", "COMPLETED", "SUCCESS", "archive_synthetic-gw-backup_2026.tgz stored",
+                Instant.now(), Instant.now(), 1_000L, true);
+        var page = new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(List.of(event), 1, 50, 1);
+
+        var result = (com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage)
+                advice.beforeBodyWrite(page, null, null, null, serverRequest, null);
+
+        JobEvent masked = result.items().get(0);
+        assertThat(masked.jobId()).isEqualTo(jobId);
+        assertThat(masked.jobType()).isEqualTo("backup");
+        assertThat(masked.hasTranscript()).isFalse();
+        assertThat(masked.deviceName()).isNotEqualTo("synthetic-gw-backup");
+        assertThat(masked.terminalReason()).doesNotContain("synthetic-gw-backup");
+        assertThat(result.canCancel()).isFalse();
+    }
+
     @Test
     void masksJobEventsForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);

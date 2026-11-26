@@ -14,6 +14,12 @@ J=$OPS_STATE; SQ=$J/ship-queue; L=$J/logs; R=$OPS_REPO
 # review_decide <name> <ship-entry> <branch> <review-file>: act on the verdict in the review file.
 review_decide() {
   local n=$1 f=$2 br=$3 out=$4 desc
+  # No verdict at all is "review unavailable", never a BLOCK: hold it for a person with an ALERT.
+  if ! grep -qE '^VERDICT: (PASS|BLOCK)' "$out"; then
+    mkdir -p "$SQ/held"; mv "$f" "$SQ/held/"
+    echo "$(date '+%F %T') ALERT B-REVIEW UNAVAILABLE $n: no verdict after retries; held, see $out" >> "$L/ship-runner.log"
+    return 0
+  fi
   if grep -qE '^VERDICT: PASS$' "$out" || { grep -qE '^VERDICT: PASS' "$out" && ! grep -q 'BLOCK (Neon)' "$out"; }; then
     sed_inplace '/^review=pending$/d' "$f"; echo "reviewed=sonnet" >> "$f"
     echo "$(date '+%F %T') B-REVIEW PASS $n" >> "$L/ship-runner.log"
@@ -63,16 +69,24 @@ review_main() {
     echo "VERDICT: BLOCK (diff of $lines lines is too large for a pre-merge review)" > "$out"
   else
     wt=$OPS_CODO/nexus-q-$n; [ -d "$wt" ] || wt=$R
-    (cd "$wt" && claude -p "You review one change before it is merged to main of a bank firewall-operations product (Java/React).
-It was written by a small model without human review. Look only for concrete defects that matter: wrong behaviour, a
-broken invariant, UNKNOWN or missing data shown as OK/zero/green, a security or privacy regression (credentials,
-device commands, authorization, masking), a weakened or deleted test, concurrency/transaction mistakes, error paths that
-swallow failures, real-looking hostnames/IPs/serials or secret-shaped literals. Read surrounding code in this worktree
-when needed. Ignore style. End with exactly one line: 'VERDICT: PASS' or 'VERDICT: BLOCK' and, for BLOCK, the defects
-with file:line above it.
-
-The change (git diff against main):
-$diff" --model sonnet --effort medium --permission-mode plan --output-format text) > "$out" 2>&1
+    # A reply without a VERDICT line (2026-11-26: "You've hit your 5-hour limit" was read as BLOCK and sent two good
+    # lanes back) is not a review: try again after NEXUS_REVIEW_RETRY_S (default 20 min), at most twice more.
+    local attempt
+    for attempt in 1 2 3; do
+          (cd "$wt" && claude -p "You review one change before it is merged to main of a bank firewall-operations product (Java/React).
+      It was written by a small model without human review. Look only for concrete defects that matter: wrong behaviour, a
+      broken invariant, UNKNOWN or missing data shown as OK/zero/green, a security or privacy regression (credentials,
+      device commands, authorization, masking), a weakened or deleted test, concurrency/transaction mistakes, error paths that
+      swallow failures, real-looking hostnames/IPs/serials or secret-shaped literals. Read surrounding code in this worktree
+      when needed. Ignore style. End with exactly one line: 'VERDICT: PASS' or 'VERDICT: BLOCK' and, for BLOCK, the defects
+      with file:line above it.
+      
+      The change (git diff against main):
+      $diff" --model sonnet --effort medium --permission-mode plan --output-format text) > "$out" 2>&1
+      grep -qE '^VERDICT: (PASS|BLOCK)' "$out" && break
+      echo "$(date '+%F %T') B-REVIEW UNAVAILABLE $n (attempt $attempt): $(head -c 160 "$out" | tr '\n' ' ')" >> "$L/ship-runner.log"
+      [ "$attempt" -lt 3 ] && sleep "${NEXUS_REVIEW_RETRY_S:-1200}"
+    done
   fi
   [ -e "$f" ] || exit 0
   # Two eyes from two model families (PO 2026-11-23 "çift göz analiz değerli"): a lane written by Claude also gets a
