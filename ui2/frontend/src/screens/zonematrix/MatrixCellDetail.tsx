@@ -15,10 +15,10 @@ import { m3 } from "../../theme/m3Theme";
 import { TYPE } from "../../theme/tokens";
 import type { ZoneNotice } from "./ZoneMatrixScreen";
 import { headlineProven } from "./ViolationsTab";
-import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
+import { Hash, Hint, SectionTitle, isKnownStatement, knownSeverityWord, knownStatementWord, mono, panelSx } from "./zoneMatrixUi";
 import {
   MATRIX_SEVERITIES, MATRIX_STATEMENTS, clearMatrixCell, confirmCellReference, getZoneMatrixTemplate,
-  importMatrixTemplate, referenceStatusWord, setMatrixCell, severityWord, statementWord, zoneErrorCode,
+  importMatrixTemplate, referenceStatusWord, setMatrixCell, zoneErrorCode,
   zoneErrorLines, type MatrixCellView, type MatrixSeverity, type MatrixStatement, type TemplateRow,
   type ZoneMatrixSummaryResponse, type ZoneMatrixTemplateResponse, type ZoneMatrixView,
 } from "./zoneMatrixApi";
@@ -29,9 +29,15 @@ export const CONFIRM_PARTICIPANT_NOTE =
   "Confirming makes you an editor of this draft; another person must publish it.";
 export const HIDDEN_MASKED_TEXT = "hidden in the masked view";
 
-export function StatementShape({ statement }: { readonly statement: MatrixStatement }) {
-  const shape = statement === "DENY_ALL" ? "closed-bar" : statement === "ALLOW_LISTED" ? "list-mark" : "open-mark";
-  const symbol = statement === "DENY_ALL" ? "\u25AC" : statement === "ALLOW_LISTED" ? "\u2261" : "\u25C7";
+export function StatementShape({ statement }: { readonly statement: MatrixStatement | string | null | undefined }) {
+  const shape = statement === "DENY_ALL" ? "closed-bar"
+    : statement === "ALLOW_LISTED" ? "list-mark"
+    : statement === "ALLOW_ANY" ? "open-mark"
+    : "unknown-mark";
+  const symbol = statement === "DENY_ALL" ? "\u25AC"
+    : statement === "ALLOW_LISTED" ? "\u2261"
+    : statement === "ALLOW_ANY" ? "\u25C7"
+    : "?";
   return (
     <Box component="span" aria-hidden="true" data-shape={shape} sx={{ fontWeight: 700, mr: 0.5 }}>
       {symbol}
@@ -51,8 +57,8 @@ export interface OpenViolationsLine {
 
 /**
  * The open-violation count of one pair of the version being viewed, from the stored summary (contract 7.1, 7.2). A count
- * is a lower bound unless the server says it is exact; zero is printed only when the headline is proven and the list is not
- * capped; a pair missing from a capped list is "not in top N cells", never 0.
+ * is a lower bound unless the server says it is exact and proven; zero is printed only when the headline is proven and the
+ * list is not capped; a pair missing from a capped list is "not in top N cells", never 0.
  */
 export function openViolationsLine(
   data: ZoneMatrixSummaryResponse | null, viewedVersionId: string, sourceId: string, destinationId: string,
@@ -63,17 +69,18 @@ export function openViolationsLine(
   const counts = data.cell_counts;
   if (!counts) return { text: "Open violations: UNKNOWN (no per-cell counts stored)", tone: "neutral" };
   const exact = data.cell_counts_exact === true;
+  const proven = exact && data.headline !== null && headlineProven(data, data.headline);
   const entry = counts.find((c) => c.source_zone_id === sourceId && c.destination_zone_id === destinationId);
   if (entry && (entry.headline_rules > 0 || entry.outside_headline_rules > 0)) {
     const n = entry.headline_rules;
-    const base = `${exact ? `${n}` : `at least ${n}`} open violation${n === 1 ? "" : "s"}`;
+    const base = `${proven ? `${n}` : `at least ${n}`} open violation${n === 1 ? "" : "s"}`;
     const outside = entry.outside_headline_rules > 0 ? ` +${entry.outside_headline_rules} outside headline` : "";
     return { text: `${base}${outside}`, tone: "bad" };
   }
   if (data.cell_counts_capped === true) {
     return { text: `not in top ${data.cell_counts_returned ?? counts.length} cells`, tone: "neutral" };
   }
-  if (exact && data.headline !== null && headlineProven(data, data.headline)) return { text: "0 open violations", tone: "neutral" };
+  if (proven) return { text: "0 open violations", tone: "neutral" };
   return { text: "at least 0 open violations (coverage incomplete)", tone: "neutral" };
 }
 
@@ -115,8 +122,8 @@ export function CellDetailPanel({
     : (isUnassignedSelf ? "DENY_ALL" : matrix.default_statement);
   const effectiveSeverity: MatrixSeverity = explicitCell ? explicitCell.severity : matrix.default_severity;
 
-  const [statement, setStatement] = useState<MatrixStatement>(effectiveStatement);
-  const [severity, setSeverity] = useState<MatrixSeverity>(effectiveSeverity);
+  const [statement, setStatement] = useState<MatrixStatement>(isKnownStatement(effectiveStatement) ? effectiveStatement : "DENY_ALL");
+  const [severity, setSeverity] = useState<MatrixSeverity>(MATRIX_SEVERITIES.some((s) => s.value === effectiveSeverity) ? effectiveSeverity : "MEDIUM");
   const [servicesText, setServicesText] = useState((explicitCell?.services ?? []).map((s) => s.entry).join("\n"));
   const [rationale, setRationale] = useState(explicitCell?.rationale ?? "");
   const [reference, setReference] = useState(explicitCell?.regulation_reference ?? "");
@@ -124,8 +131,8 @@ export function CellDetailPanel({
   const [errors, setErrors] = useState<readonly string[]>([]);
 
   useEffect(() => {
-    setStatement(effectiveStatement);
-    setSeverity(effectiveSeverity);
+    setStatement(isKnownStatement(effectiveStatement) ? effectiveStatement : "DENY_ALL");
+    setSeverity(MATRIX_SEVERITIES.some((s) => s.value === effectiveSeverity) ? effectiveSeverity : "MEDIUM");
     setServicesText((explicitCell?.services ?? []).map((s) => s.entry).join("\n"));
     setRationale(explicitCell?.rationale ?? "");
     setReference(explicitCell?.regulation_reference ?? "");
@@ -203,9 +210,11 @@ export function CellDetailPanel({
       <Stack direction="row" gap={2} flexWrap="wrap">
         <Typography variant="body2">
           Statement: <StatementShape statement={effectiveStatement} />
-          <strong>{statementWord(effectiveStatement)}</strong> ({effectiveStatement})
+          <strong>{knownStatementWord(effectiveStatement)}</strong> ({isKnownStatement(effectiveStatement) ? effectiveStatement : "UNKNOWN"})
         </Typography>
-        <Typography variant="body2">Severity: <strong>{severityWord(effectiveSeverity)}</strong> ({effectiveSeverity})</Typography>
+        <Typography variant="body2">
+          Severity: <strong>{knownSeverityWord(effectiveSeverity)}</strong> ({MATRIX_SEVERITIES.some((s) => s.value === effectiveSeverity) ? effectiveSeverity : "UNKNOWN"})
+        </Typography>
         <Typography variant="body2">Cell mode: <strong>{explicitCell ? "Explicit" : "Default"}</strong></Typography>
       </Stack>
 
@@ -246,8 +255,10 @@ export function CellDetailPanel({
           Reference status: <strong>{referenceStatusWord(statusDisplay)}</strong> ({statusDisplay})
         </Typography>
         <Typography variant="body2">
-          Confirmed: {explicitCell?.confirmed_by
-            ? <><strong>{actorLabel(explicitCell.confirmed_by).label}</strong> <Ts at={explicitCell.confirmed_at} /></>
+          Confirmed: {explicitCell?.reference_status === "CONFIRMED"
+            ? (explicitCell.confirmed_by
+              ? <><strong>{actorLabel(explicitCell.confirmed_by).label}</strong> {explicitCell.confirmed_at ? <Ts at={explicitCell.confirmed_at} /> : "time UNKNOWN"}</>
+              : "UNKNOWN")
             : "Not confirmed"}
         </Typography>
       </Stack>
@@ -354,8 +365,8 @@ export function TemplateDialog({
 
   const columns: DataColumn<TemplateRow>[] = [
     { key: "row", header: "Role pair", wrap: true, render: (r) => r.row },
-    { key: "statement", header: "Statement", width: 170, render: (r) => <><StatementShape statement={r.statement} />{statementWord(r.statement)} ({r.statement})</> },
-    { key: "severity", header: "Severity", width: 130, render: (r) => `${severityWord(r.severity)} (${r.severity})` },
+    { key: "statement", header: "Statement", width: 170, render: (r) => <><StatementShape statement={r.statement} />{knownStatementWord(r.statement)} ({isKnownStatement(r.statement) ? r.statement : "UNKNOWN"})</> },
+    { key: "severity", header: "Severity", width: 130, render: (r) => `${knownSeverityWord(r.severity)} (${MATRIX_SEVERITIES.some((s) => s.value === r.severity) ? r.severity : "UNKNOWN"})` },
   ];
 
   return (

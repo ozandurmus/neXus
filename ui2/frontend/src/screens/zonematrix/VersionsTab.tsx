@@ -6,23 +6,26 @@ import Typography from "@mui/material/Typography";
 
 import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
-import { StatePanel, Ts } from "../../shell/States";
+import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../../shell/States";
 import { plural } from "../../shell/plural";
 import { actorLabel } from "../../shell/presenters";
 import type { Tone } from "../../shell/tone";
 import { m3 } from "../../theme/m3Theme";
+import { CONFIRM_PARTICIPANT_NOTE, HIDDEN_MASKED_TEXT, StatementShape } from "./MatrixCellDetail";
 import type { ZoneNotice, ZoneTabProps } from "./ZoneMatrixScreen";
-import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
-import { useEnsureSummary, type ZoneSummaryHandle } from "./zoneMatrixSummaryUi";
+import { Hash, Hint, SectionTitle, knownSeverityWord, knownStatementWord, mono, panelSx } from "./zoneMatrixUi";
+import { SummaryReadFailure, useEnsureSummary, type ZoneSummaryHandle } from "./zoneMatrixSummaryUi";
 import {
-  PUBLISH_FINAL_TEXT, addressCount, discardZoneDraft, publishCheckText, publishZoneDraft, referenceStatusWord,
-  severityWord, statementWord, zoneErrorLines, zoneRoleLabel,
-  type CellDiffRow, type CellDiffSide, type FamilySizes, type LooseningRow, type PublishCheck, type ZoneDiff,
-  type SummaryResolvedByVersion, type ZoneDiffRow, type ZoneMove, type ZoneRevision, type ZoneVersionDetail,
-  type ZoneVersionState, type ZoneVersionSummary,
+  PUBLISH_FINAL_TEXT, addressCount, confirmCellReference, discardZoneDraft, matrixOf, publishCheckText, publishZoneDraft,
+  referenceStatusWord, zoneErrorCode, zoneErrorLines, zoneRoleLabel,
+  type CellDiffRow, type CellDiffSide, type FamilySizes, type LooseningRow, type MatrixCellView, type PublishCheck,
+  type SummaryResolvedByVersion, type SummaryResolvedFinding, type ZoneDiff, type ZoneDiffRow, type ZoneMove,
+  type ZoneRevision, type ZoneVersionDetail, type ZoneVersionState, type ZoneVersionSummary,
 } from "./zoneMatrixApi";
 
 export const RATIONALE_LIMIT = 2000;
+/** Maximum explicit cells rendered in the reference-confirmation table before printing "+N more". */
+export const REF_CELLS_CAP = 50;
 
 const STATE_WORD: Record<ZoneVersionState, { readonly word: string; readonly tone: Tone }> = {
   DRAFT: { word: "Draft", tone: "attn" },
@@ -69,7 +72,7 @@ function cellSideText(side: CellDiffSide | null): string {
   const mode = side.explicit ? "explicit" : "default";
   const services = side.services.length > 0 ? `: ${side.services.join(", ")}` : "";
   const ref = side.reference_status ? ` · reference ${referenceStatusWord(side.reference_status).toLowerCase()}` : "";
-  return `${statementWord(side.statement)} (${severityWord(side.severity)}, ${mode})${services}${ref}`;
+  return `${knownStatementWord(side.statement)} (${knownSeverityWord(side.severity)}, ${mode})${services}${ref}`;
 }
 
 /** One changed zone as a headline and its detail lines (the sizes have their own columns). */
@@ -95,16 +98,20 @@ const sizeChange = (before: string | undefined, after: string | undefined) =>
 const sizesText = (sizes: FamilySizes | undefined) => `IPv4 ${addressCount(sizes?.IPV4)}, IPv6 ${addressCount(sizes?.IPV6)}`;
 
 /**
- * The Versions tab: first the draft for review (its changes, the publish panel, discard, its revisions) for the people
- * the server shows it to, then the history of published versions.
+ * The Versions tab (contract 7.1): first the draft for review (its diff with loosening changes and moved addresses, the
+ * publish panel, discard, its revisions) for the people the server shows it to, reference confirmation for compliance,
+ * the history of published versions, and the per-version lists of findings resolved by a matrix version change.
  */
 export function VersionsTab({ data, refresh, notify, summary }: ZoneTabProps & { readonly summary: ZoneSummaryHandle }) {
-  // The resolved-by-version counts come from the stored summary; it is read once, here or by another summary tab.
+  // The resolved-by-version counts and lists come from the stored summary; it is read once, here or by another summary tab.
   useEnsureSummary(summary);
   const resolved = summary.data !== null && summary.data.state === "READY" ? summary.data.resolved_by_version_change : null;
   const { can, draft, diff, publish_check: publishCheck, draft_exists: exists } = data.draft;
+  const refTarget = draft ?? data.active;
+  const canConfirmRef = Boolean(can.confirm_reference) && !(exists && draft === null);
   return (
     <Stack gap={3}>
+      <SummaryReadFailure summary={summary} />
       {draft === null ? (
         // A reader the server withholds the draft from is told so above the tabs; nothing else to say here.
         exists ? null : (
@@ -123,8 +130,257 @@ export function VersionsTab({ data, refresh, notify, summary }: ZoneTabProps & {
           <Revisions revisions={draft.revisions} />
         </Stack>
       )}
+      {refTarget ? (
+        <ReferenceConfirmationSection version={refTarget} revision={draft ? draft.revision : null}
+          canConfirm={canConfirmRef} draftWithheld={Boolean(exists && draft === null)} refresh={refresh} notify={notify} />
+      ) : null}
       <History versions={data.versions} resolved={resolved} />
+      <ResolvedByVersionLists summary={summary} />
     </Stack>
+  );
+}
+
+const isPublishedState = (state: ZoneVersionState | string): boolean => state === "ACTIVE" || state === "RETIRED";
+
+const refStatusSpec = (status: string | null | undefined): { readonly label: string; readonly tone: Tone } => {
+  switch (status) {
+    case "CONFIRMED": return { label: "Confirmed", tone: "brand" };
+    case "PROPOSED": return { label: "Proposed", tone: "attn" };
+    case "EMPTY": return { label: "Empty", tone: "neutral" };
+    default: return { label: "UNKNOWN", tone: "unknown" };
+  }
+};
+
+function ReferenceConfirmationSection({ version, revision, canConfirm, draftWithheld, refresh, notify }: {
+  readonly version: ZoneVersionDetail;
+  readonly revision: number | null;
+  readonly canConfirm: boolean;
+  readonly draftWithheld: boolean;
+  readonly refresh: (hideBlocks?: boolean) => void;
+  readonly notify: (notice: ZoneNotice | null) => void;
+}) {
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const matrix = matrixOf(version);
+  const proposedCount = matrix.cells.filter((c) => c.reference_status === "PROPOSED").length;
+  const shownCells = matrix.cells.slice(0, REF_CELLS_CAP);
+  const moreCells = Math.max(0, matrix.cells.length - shownCells.length);
+
+  const confirmOne = async (cell: MatrixCellView) => {
+    const key = `${cell.source}->${cell.destination}`;
+    setBusyKey(key);
+    notify(null);
+    try {
+      await confirmCellReference(revision, cell.source, cell.destination, cell.cell_sha256);
+      notify({ kind: "done", lines: [`Reference confirmed for ${cell.source_name} -> ${cell.destination_name}.`] });
+      refresh();
+    } catch (err) {
+      notify({ kind: "refused", lines: zoneErrorLines(err) });
+      if (zoneErrorCode(err) === "REQUEST_CHANGED") refresh();
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const columns: DataColumn<MatrixCellView>[] = [
+    { key: "pair", header: "Cell", wrap: true, render: (c) => `${c.source_name || "UNKNOWN"} -> ${c.destination_name || "UNKNOWN"}` },
+    {
+      key: "statement", header: "Statement and severity", width: 230, wrap: true,
+      render: (c) => <><StatementShape statement={c.statement} />{knownStatementWord(c.statement)} · {knownSeverityWord(c.severity)}</>,
+    },
+    {
+      key: "reference", header: "Regulation reference", wrap: true,
+      render: (c) => (c.regulation_reference === null ? HIDDEN_MASKED_TEXT : (c.regulation_reference || "None")),
+    },
+    {
+      key: "status", header: "Reference status", width: 150,
+      render: (c) => {
+        const spec = refStatusSpec(c.reference_status);
+        return <StatusChip dense tone={spec.tone} label={spec.label} />;
+      },
+    },
+    {
+      key: "confirmed", header: "Confirmed by", width: 230, wrap: true,
+      render: (c) => (c.reference_status === "CONFIRMED"
+        ? (c.confirmed_by
+          ? <>{actorLabel(c.confirmed_by).label}{c.confirmed_at ? <> · <Ts at={c.confirmed_at} /></> : " · time UNKNOWN"}</>
+          : "UNKNOWN")
+        : "Not confirmed"),
+    },
+    ...(canConfirm ? [{
+      key: "action", header: "Confirm", width: 170, title: () => undefined,
+      render: (c: MatrixCellView) => (c.reference_status === "PROPOSED" ? (
+        <M3Button emphasis="tonal" disabled={busyKey !== null} onClick={() => { void confirmOne(c); }}>
+          Confirm reference
+        </M3Button>
+      ) : (
+        <span>{c.reference_status === "CONFIRMED" ? "Already confirmed" : c.reference_status === "EMPTY" ? "No reference" : "UNKNOWN"}</span>
+      )),
+    } satisfies DataColumn<MatrixCellView>] : []),
+  ];
+
+  const scopeNote = version.state === "DRAFT"
+    ? `Explicit cells in draft r${version.revision} (draft, not evaluated). Only a compliance administrator confirms a proposed regulation reference.`
+    : draftWithheld
+      ? `A draft is being prepared; the cells below are from active version ${version.number ?? "UNKNOWN"}.`
+      : `Explicit cells in active version ${version.number ?? "UNKNOWN"}.`;
+
+  return (
+    <Box component="section" aria-label="Reference confirmation" data-testid="versions-reference-confirmation" sx={panelSx}>
+      <SectionTitle note={scopeNote}>Reference confirmation</SectionTitle>
+      <Typography variant="body2" data-testid="versions-reference-summary" sx={{ fontWeight: 600 }}>
+        {matrix.cells_confirmed} of {matrix.cells_total} explicit {matrix.cells_total === 1 ? "cell" : "cells"} confirmed by compliance
+        {` (${matrix.cells_with_reference} with regulation reference, ${proposedCount} proposed).`}
+      </Typography>
+      {canConfirm && proposedCount > 0 ? <Hint>{CONFIRM_PARTICIPANT_NOTE}</Hint> : null}
+      <DataTable ariaLabel="Cell reference confirmations" columns={columns} rows={shownCells}
+        rowKey={(c) => `${c.source}->${c.destination}`}
+        emptyText="No explicit cells in this version; every pair follows the version default." />
+      {moreCells > 0 ? (
+        <Typography variant="body2" data-testid="versions-reference-more" sx={{ color: m3.onSurfaceVar }}>
+          +{moreCells} more explicit {moreCells === 1 ? "cell" : "cells"} not shown.
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
+export interface ResolvedVersionGroup {
+  readonly versionKey: string;
+  readonly versionId: string | null;
+  readonly versionNumber: number | null;
+  readonly allTimeCount: number | null;
+  readonly findings: readonly SummaryResolvedFinding[];
+}
+
+/** Groups `resolved_by_version_change` per resolving matrix version, combining `by_version` counts and `last_7_days` rows. */
+export function buildResolvedByVersionGroups(resolved: SummaryResolvedByVersion): readonly ResolvedVersionGroup[] {
+  const groups = new Map<string, {
+    versionKey: string;
+    versionId: string | null;
+    versionNumber: number | null;
+    allTimeCount: number | null;
+    findings: SummaryResolvedFinding[];
+  }>();
+
+  for (const row of resolved.by_version) {
+    if (row.count <= 0) continue;
+    const key = row.version_id || "UNKNOWN";
+    groups.set(key, {
+      versionKey: key,
+      versionId: row.version_id || null,
+      versionNumber: row.version_number,
+      allTimeCount: row.count,
+      findings: [],
+    });
+  }
+
+  for (const f of resolved.last_7_days) {
+    const key = f.resolved_in_version_id
+      ?? (f.resolved_in_version_number !== null ? `num:${f.resolved_in_version_number}` : "UNKNOWN");
+    const existing = groups.get(key);
+    if (existing) {
+      if (existing.versionNumber === null && f.resolved_in_version_number !== null) {
+        existing.versionNumber = f.resolved_in_version_number;
+      }
+      existing.findings.push(f);
+    } else {
+      groups.set(key, {
+        versionKey: key,
+        versionId: f.resolved_in_version_id,
+        versionNumber: f.resolved_in_version_number,
+        allTimeCount: null,
+        findings: [f],
+      });
+    }
+  }
+
+  return [...groups.values()].sort((a, b) => {
+    if (a.versionNumber !== null && b.versionNumber !== null && a.versionNumber !== b.versionNumber) {
+      return b.versionNumber - a.versionNumber;
+    }
+    if (a.versionNumber !== null && b.versionNumber === null) return -1;
+    if (a.versionNumber === null && b.versionNumber !== null) return 1;
+    return a.versionKey.localeCompare(b.versionKey);
+  });
+}
+
+function resolvedRuleLabel(f: { readonly rule_number: number | null; readonly rule_name: string | null; readonly rule_uid: string }): string {
+  const num = f.rule_number === null ? "#?" : `#${f.rule_number}`;
+  return `${num} ${f.rule_name || f.rule_uid || "UNKNOWN"}`;
+}
+
+function ResolvedByVersionLists({ summary }: { readonly summary: ZoneSummaryHandle }) {
+  const { data, error, rawError } = summary;
+  return (
+    <Box component="section" aria-label="Resolved-by-version lists" data-testid="versions-resolved-lists" sx={panelSx}>
+      <SectionTitle note="Findings resolved because a published matrix version replaced an earlier one, grouped by the resolving matrix version.">
+        Resolved-by-version lists
+      </SectionTitle>
+      {data === null ? (
+        error === null ? (
+          <Typography variant="body2" role="status">Reading stored summary for resolved-by-version lists…</Typography>
+        ) : isRestricted(rawError) ? (
+          <RestrictedPanel area="Resolved-by-version lists" />
+        ) : (
+          <StatePanel variant="unknown" announce="none" title="Resolved-by-version lists cannot be read" body={error}
+            action={<M3Button emphasis="outlined" onClick={summary.reload}>Retry summary read</M3Button>} />
+        )
+      ) : data.state !== "READY" ? (
+        <StatePanel variant="unknown" announce="none" title="Resolved-by-version lists not available yet"
+          body={`Stored summary state: ${data.state_text}. An unavailable summary does not mean zero findings were resolved by a version change.`} />
+      ) : (() => {
+        const r = data.resolved_by_version_change;
+        const groups = buildResolvedByVersionGroups(r);
+        return (
+          <Stack gap={1.25}>
+            <Typography variant="body2" data-testid="versions-resolved-window-count">
+              {r.total_last_7_days === 0 && groups.length === 0
+                ? `0 findings resolved by a matrix version change (all time and in the recent ${r.window_days}-day window).`
+                : `${r.total_last_7_days} finding${r.total_last_7_days === 1 ? "" : "s"} resolved by a matrix version change in the recent ${r.window_days}-day window (${r.returned} returned${r.capped ? `, +${r.more} more not shown` : ""}).`}
+            </Typography>
+            {groups.map((group) => {
+              const unreturned = group.allTimeCount !== null && group.allTimeCount > group.findings.length
+                ? group.allTimeCount - group.findings.length
+                : 0;
+              return (
+                <Box key={group.versionKey} data-testid={`resolved-version-group-${group.versionKey}`}
+                  sx={{ borderTop: `1px solid ${m3.outlineVar}`, pt: 1.25, display: "flex", flexDirection: "column", gap: 0.75 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Version {group.versionNumber ?? "UNKNOWN"}:{" "}
+                    {group.allTimeCount !== null
+                      ? `${group.allTimeCount} ${group.allTimeCount === 1 ? "finding" : "findings"} resolved in total (all time)`
+                      : "all-time total UNKNOWN"}
+                    {`; ${group.findings.length} returned from the recent ${r.window_days}-day window.`}
+                  </Typography>
+                  {group.findings.length > 0 ? (
+                    <Box component="ul" aria-label={`Findings resolved by version ${group.versionNumber ?? "UNKNOWN"}`} sx={{ m: 0, pl: 2.5 }}>
+                      {group.findings.map((f, idx) => (
+                        <li key={`${f.policy_source_id}/${f.rule_uid}/${idx}`}>
+                          <Typography variant="body2">
+                            <strong>{resolvedRuleLabel(f)}</strong>
+                            {" · "}{f.policy_name || "UNKNOWN"}
+                            {" · "}{f.violated_pairs.length > 0
+                              ? f.violated_pairs.map((p) => `${p.source_name || "UNKNOWN"} -> ${p.destination_name || "UNKNOWN"}`).join("; ")
+                              : "UNKNOWN pairs"}
+                            {" · "}version {f.resolved_from_version_number ?? "UNKNOWN"} {"->"} version {f.resolved_in_version_number ?? "UNKNOWN"}
+                            {" · "}{f.resolved_at ? <Ts at={f.resolved_at} /> : <Unknown reason="Resolved time is not recorded" />}
+                          </Typography>
+                        </li>
+                      ))}
+                    </Box>
+                  ) : null}
+                  {unreturned > 0 ? (
+                    <Typography variant="body2" data-testid={`resolved-version-more-${group.versionKey}`} sx={{ color: m3.onSurfaceVar }}>
+                      +{unreturned} more resolved by version {group.versionNumber ?? "UNKNOWN"} (outside the {r.window_days}-day detail window or server cap; individual rows older than {r.window_days} days are not returned by the summary route).
+                    </Typography>
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Stack>
+        );
+      })()}
+    </Box>
   );
 }
 
@@ -150,8 +406,9 @@ function History({ versions, resolved }: { readonly versions: readonly ZoneVersi
     { key: "state", header: "State", width: 130, render: (v) => <StatusChip dense tone={STATE_WORD[v.state]?.tone ?? "neutral"} label={STATE_WORD[v.state]?.word ?? v.state} /> },
     { key: "hash", header: "Content hash", width: 170, title: (v) => v.content_sha256, render: (v) => <Hash value={v.content_sha256} /> },
     { key: "by", header: "Published by", width: 220, title: (v) => (v.published_by ? actorLabel(v.published_by).raw ?? v.published_by : undefined),
-      render: (v) => (v.published_by ? actorLabel(v.published_by).label : "Not published") },
-    { key: "at", header: "Published at", title: () => undefined, render: (v) => (v.published_at ? <Ts at={v.published_at} /> : "Not published") },
+      render: (v) => (v.published_by ? actorLabel(v.published_by).label : (isPublishedState(v.state) ? "UNKNOWN" : "Not published")) },
+    { key: "at", header: "Published at", title: () => undefined,
+      render: (v) => (v.published_at ? <Ts at={v.published_at} /> : (isPublishedState(v.state) ? "UNKNOWN" : "Not published")) },
     { key: "resolved", header: "Resolved by this matrix version (all time)", width: 230, wrap: true,
       title: () => "Findings that stopped being a finding because this matrix version replaced an earlier one",
       render: (v) => <span data-testid={`resolved-by-${v.version_id}`}>{resolvedCount(v)}</span> },
@@ -254,8 +511,8 @@ function DraftChanges({ diff }: { readonly diff: ZoneDiff }) {
 
       {defaultChanged && diff.default ? (
         <Typography variant="body2" data-testid="default-diff">
-          Version default: {statementWord(diff.default.statement_before)} ({severityWord(diff.default.severity_before)}) before;{" "}
-          {statementWord(diff.default.statement_after)} ({severityWord(diff.default.severity_after)}) after.
+          Version default: {knownStatementWord(diff.default.statement_before)} ({knownSeverityWord(diff.default.severity_before)}) before;{" "}
+          {knownStatementWord(diff.default.statement_after)} ({knownSeverityWord(diff.default.severity_after)}) after.
         </Typography>
       ) : null}
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-DRAFT — 2026-11-26. Run sheet only: decides nothing and authorizes nothing; a run is authorized only by the Product Owner session that starts it. Checked against `origin/main` at `77422e86`.
+DRAFT — 2026-11-26. Run sheet only: decides nothing and authorizes nothing; a run is authorized only by the Product Owner session that starts it. Checked against `origin/main` at `77422e86`; section 3 is checked against `fcc6af14` plus the zone matrix scale harness port branch (the harness is not on `origin/main` until that branch merges).
 
 Controlling text:
 
@@ -142,43 +142,64 @@ Closes the live engine-attribution measurement of `policy_collection_gaps` (and 
 
 ### Purpose
 
-Feeds backlog item `zone_matrix_delivery` acceptance criteria `ZM-12` (`docs/design/ZONE_MATRIX_CONTRACT.md` sections 9 and 10.2: performance budget on the 10 largest stored policies) and `ZM-39` (sections 9 and 10.2: measured heap ceiling and interactive-policy p95 during a fleet re-evaluation on the dedicated run pool).
+Feeds backlog item `zone_matrix_delivery` acceptance criteria `ZM-12` (`docs/design/ZONE_MATRIX_CONTRACT.md` sections 9 and 10.2: performance budget on the 10 largest stored policies) and the heap part of `ZM-39` (sections 9 and 10.2). The harness measures the evaluation time and additional heap of the ten largest stored policies against a synthetic 500-zone, 200,000-block version built in memory. **It does not measure the interactive-policy p95 or the run-pool separation of `ZM-39`; those need a loaded pod and stay open.**
 
 ### Preconditions
 
-- **Not on `origin/main` at `77422e86`:** `git ls-files | grep -i -E "zone.?matrix.*(scale|measure)|measurement/zone"` returns only `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md` and `ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/zonematrix/ZoneMatrixScaleMeasurementTest.java`. The in-pod harness of lane G615 (`zm-scale-measure-harness-inpod`) is **not** on `origin/main` at `77422e86`.
-- Before a PO session can execute this live measurement, the in-pod harness of lane G615 (`zm-scale-measure-harness-inpod`) must merge to `origin/main`, its README command must be verified against that commit, and the running `ui2-service` pod must include the Zone Matrix evaluation engine and step-4 run pool (`V216`, `V220`, `V228`, `V267`).
+- `scripts/measurement/zone_matrix_scale/` (`README.md`, `ZoneMatrixScaleMeasure.java`, `selftest.sh`, `measure_run.sh`, `run_in_pod.sh`, `show_safe.sh`) is present on `origin/main` once branch `lane/q-20261126-0804-G756-D37-p1-zm-scale-harness-port-to-main` has merged (it was not on `origin/main` at `77422e86`). Its harness was written and self-tested on lane G615 and has not been run against any environment.
+- The running `deploy/ui2-service` pod includes the Zone Matrix evaluator (`ZoneMatrixEvaluator`, `ZoneMatrixContent`, `ZoneBlock`); per `scripts/measurement/zone_matrix_scale/README.md`, an older pod makes `measure_run.sh` stop at the compile step (exit 5) or the run end in `fatal noclassdeffounderror`.
+- The harness does not merge Check Point domain objects into a snapshot (`ZoneMatrixPolicyBridge.withDomainObjects` is not applied), so a snapshot that depends on them can show more `NOT_EVALUABLE` rules than the screen does; read the verdict counts as how the evaluator reacts to a synthetic matrix, not as stored-policy compliance.
+- Operator host configuration (`~/.config/nexus/hosta`) and cluster `kubectl -n ui2` access exist on the operator workstation as read by `measure_run.sh`.
+- No deploy rollout or `hosta_e2e.sh` run is active (`measure_run.sh` refuses to start while `hosta_e2e.sh` runs, and `/app/tmp` is lost on a pod rollout).
+- Explicit Product Owner session go-ahead before executing `measure_run.sh`.
 
 ### Steps
 
-- **Not verified:** in-pod scale-measurement command of lane G615 (`zm-scale-measure-harness-inpod`) — absent from `origin/main` at `77422e86` and left out rather than invented.
-- What exists on `origin/main` at `77422e86` is synthetic automated verification only, documented in `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md` and implemented in `ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/zonematrix/ZoneMatrixScaleMeasurementTest.java` (run locally in `ui2` inside `./gradlew :service:test` over 10 synthetic policies up to 16,500 rules against 500 synthetic zones and 200,000 `/30` blocks, with no pod or stored estate data).
-- Once lane G615 (`zm-scale-measure-harness-inpod`) lands on `origin/main`, update this section with its exact README self-test and in-pod commands before starting a PO-session run.
+Copied verbatim from `scripts/measurement/zone_matrix_scale/README.md`:
+
+Local self-test (no pod, no database, no device; expects `show_safe	ok` and `selftest	ok`):
+
+```sh
+cd ui2 && ./gradlew --no-daemon :service:classes :persistence:classes :platform-core:classes :worker:classes
+bash scripts/measurement/zone_matrix_scale/selftest.sh
+```
+
+PO-session in-pod run (`measure_run.sh` copies the pod's own service jar, compiles only the harness against it, stages `zmscale-<tag>` into `/app/tmp`, runs `run_in_pod.sh` (`java -Xmx2g` through `PropertiesLauncher`, 30 minute timeout), waits for `done` or `fatal` (up to 30 minutes), writes the `show_safe.sh`-filtered output into `zmscale-<tag>.tsv`, and removes the stage directory):
+
+```sh
+MEASURE_WORK_DIR=<scratch dir> bash scripts/measurement/zone_matrix_scale/measure_run.sh <tag>
+```
 
 ### Evidence to record
 
-Once the in-pod harness is on `origin/main` and run, record only anonymous ordinals, counts, durations, and heap deltas matching `docs/design/ZONE_MATRIX_CONTRACT.md` section 9 and `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md`:
+`measure.out` is tab-separated, four fields per line (`kind id key value`), every field `[a-z0-9_.]+`; `show_safe.sh` drops any other line and reports `filtered_lines`. Record these tokens and nothing else:
 
-- Per-policy ordinal (`1`..`10`), vendor token (`CP` / `PAN`), rule count, total evaluation `ms`, hygiene `ms`, additional JVM heap `MB`, verdict/flag counts (`VIOLATION`, `COMPLIANT`, `NOT_EVALUABLE`, `UNKNOWN`, `NOT_APPLICABLE`, `COVERED_BY_EARLIER_DENY`, `IDENTITY_IGNORED`, `TIME_IGNORED`), and count of rules hitting the per-rule work budget (`UNKNOWN`).
-- Fleet summary figures: 500-zone / 200,000-block compile `ms`, largest stored policy wall-clock `ms` and additional heap `MB`, sequential 10-policy wall-clock `ms`, empirical peak heap delta for the `ZM-39` heap ceiling, and interactive-policy p95 latency check during fleet re-evaluation.
+- `scope fleet <counter> n`: `snapshots_total`, `snapshots_parse_failed`, `snapshots_with_failures_skipped`, `snapshots_vendor_not_evaluated`, `snapshots_analysable`, `snapshots_ranked` (at most 10), `ranked_reread_failed`, `evaluation_failed`.
+- `version synthetic <key> n`: `zones`, `blocks`, `cells` (expect 500, 200000, 1200), `compile_ms`, `retained_heap_mb`.
+- Per ranked policy `p01`..`p10` (ordinal by security-rule count, `p01` the largest): `package pNN vendor cp|pan`, `security_rules`, `rules_total`; `eval pNN duration_ms`, `hygiene_ms`, `heap_before_mb`, `heap_peak_mb`, `heap_additional_mb`, `coverage_complete`, `hygiene_budget_reached`; `outcome pNN violation|compliant|not_evaluable|unknown|not_applicable n`; `reason pNN not_evaluable.<slug>` and `unknown.<slug>` counts (closed vocabulary, zero included).
+- `sum fleet evaluated_policies`, `security_rules`, `duration_ms`.
+- `budget fleet largest_within_30s`, `largest_within_512mb`, `all_ten_within_180s`, each `true`, `false` or `not_measured`.
+- The final `done` line (a `fatal <exception class>` line instead means the run failed) and the `filtered_lines` count.
 
 ### How to read the result
 
-Per `docs/design/ZONE_MATRIX_CONTRACT.md` section 9 (`ZM-12`, `ZM-39`), `docs/design/ZONE_MATRIX_STEP3_SCALE_MEASUREMENT.md`, and `docs/history/backlog/zone_matrix_delivery.md`:
+Per `docs/design/ZONE_MATRIX_CONTRACT.md` section 9 (`ZM-12`, heap part of `ZM-39`) and `scripts/measurement/zone_matrix_scale/README.md`:
 
 | Outcome | Meaning | Follow-up it opens |
 | --- | --- | --- |
-| In-pod harness absent from `origin/main` (state at `77422e86`) | Synthetic scaling is proven in `ZoneMatrixScaleMeasurementTest`, but live stored-policy scaling (`ZM-12`) and empirical heap/p95 (`ZM-39`) are unmeasured | Wait for lane G615 (`zm-scale-measure-harness-inpod`) on `origin/main`, verify its README command, and run in a subsequent PO session |
-| Largest stored policy <= `30,000 ms` and <= `512 MB` additional heap; all 10 largest stored policies <= `180,000 ms`; interactive policy p95 holds during fleet re-evaluation | `ZM-12` budget gates hold on real stored policies and empirical heap numbers are available for `ZM-39` | Attach the counts-only MEASUREMENT RECORD to close the open real-environment half of `ZM-12`, and feed the measured heap ceiling into the `ZM-39` code check (`docs/history/backlog/zone_matrix_delivery.md` notes no heap-ceiling value exists in code until measured) |
-| Largest stored policy > `30,000 ms` or > `512 MB` additional heap, 10 policies > `180,000 ms`, or interactive policy p95 degrades | Real estate object/group/NAT shapes exceed the section 9 budget or contend with interactive reads | Keep `ZM-12` / `ZM-39` `PARTIAL` and open an engine/pool/block-cap tuning lane (`ZONE_MATRIX_CONTRACT.md` section 9) |
+| `largest_within_30s true` and `largest_within_512mb true` (`p01` at most 30,000 ms and at most 512 MB additional heap) and `all_ten_within_180s true` (the ten durations sum to at most 180,000 ms) | The section 9 budget holds on the ten largest stored policies against the 500-zone version at the block cap, for this one cold-ish single evaluation per policy | The PO session writes the counts-only MEASUREMENT RECORD; the real-environment half of `ZM-12` and the measured additional-heap input of `ZM-39` are then evidenced. `ZM-39` stays `PARTIAL` for its interactive-p95 and pool-separation parts, which this harness does not measure |
+| Any budget token `false` | A stored policy shape exceeds the section 9 budget | Keep `ZM-12` / `ZM-39` `PARTIAL` and open an engine, pool or block-cap tuning lane (`ZONE_MATRIX_CONTRACT.md` section 9); repeat the run first if a figure is near a limit (the pod is shared, the JVM is cold) |
+| Any budget token `not_measured`, or `snapshots_ranked` below 10, `ranked_reread_failed` or `evaluation_failed` above 0 | The run is incomplete (`all_ten_within_180s` is `not_measured` unless exactly ten policies were ranked, re-read and evaluated; `largest_*` is `not_measured` when `p01` could not be evaluated) | Nothing is evidenced; the matching `scope` counter says why. Do not record a budget claim |
+
+Limits of the figures: heap is a 20 ms sampling estimate of the harness JVM's own used heap, not a profiler and not the serving JVM; wall-clock is shared with whatever else the pod and node are doing; the harness does not prove that the hard time limit or heap ceiling of section 5.1 are enforced in the service. The interactive p95 of `ZM-39` is **not** measured by this harness.
 
 ### Never record
 
-Raw `policy_snapshot` or `zone_matrix_version` rows, policy IDs or package/device-group names, rule UIDs or rule names, zone names, CIDR blocks, witness tuples or NAT addresses, usernames, or bank identifiers.
+Raw `policy_snapshot` or `zone_matrix_version` rows, policy IDs or package/device-group names, rule UIDs or rule names, zone names, CIDR blocks, witness tuples or NAT addresses, usernames, or bank identifiers. Only the counted tokens above, taken from `zmscale-<tag>.tsv`, are recorded.
 
 ### Closes
 
-Closes nothing at `77422e86` because the in-pod harness is not yet on `origin/main`. Once that harness merges and passes cleanly in the pod, the PO session may mark the open real-environment measurement half of `ZM-12` and the empirical measurement input of `ZM-39` in `zone_matrix_delivery`. Automated tests (`ZoneMatrixScaleMeasurementTest`) and the in-pod stored-policy run are separate gates; `zone_matrix_delivery` reaches `REAL_ENV_VALIDATED` only after its remaining delivery steps and a clean live run complete.
+Closes nothing by itself and decides nothing. The harness is on `origin/main` after the merge and has been self-tested only; it has not been run, so `ZM-12` and `ZM-39` stay `PARTIAL`. After a clean, complete PO-session run (all three `budget` tokens `true`, a `done` line, no `fatal`), the PO session may record the real-environment measurement half of `ZM-12` and the heap part of `ZM-39` in `zone_matrix_delivery`; the interactive-p95 part of `ZM-39` remains open. Automated tests (`ZoneMatrixScaleMeasurementTest`, the harness self-test) and the in-pod stored-policy run are separate gates; `zone_matrix_delivery` reaches `REAL_ENV_VALIDATED` only after its remaining delivery steps and a clean live run complete.
 
 ---
 
