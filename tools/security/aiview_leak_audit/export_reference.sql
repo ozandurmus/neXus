@@ -19,13 +19,19 @@
 -- (ADDR) from the canonical version content, static-route preview destinations, next hops and representative hosts
 -- (ADDR), requesters (USER) and units (CLUSTER).  A block "a/n" also yields its address part "a" (ADDR, trailing
 -- separators removed the way the probe tokenizes) so a block printed as text is found by its network address.
+-- Later planes (V251 - V272 and older actor columns): Script Execution script names and declared egress host:port
+-- targets and the LDAP servers (HOST, or ADDR for an IP literal), failover / cluster-run references (CLUSTER),
+-- Infoblox grid member and notification / support-upload hosts (HOST, ADDR), and the person or principal columns of older
+-- migrations (USER).  Opaque ids, actor fingerprints, device-id lists and closed enums are not sources.
 \set ON_ERROR_STOP on
 BEGIN READ ONLY;
 
 -- Source columns that exist in this schema (column names only; a missing one is skipped and shows as absent in the meta lines).
 -- Plain columns are read as text.  JSON sources (shape = elements / zone_names / zone_blocks / flow_addresses) read
 -- text out of a JSONB column or a TEXT column holding JSON; a value that is not valid JSON, or not of the expected
--- shape, contributes nothing (never an error).  Every table and column name is checked against
+-- shape, contributes nothing (never an error).  The shape host_port_array reads a TEXT[] column of host:port items:
+-- the port is cut off, an IP literal (digits and dots, or any value with a colon left) is exported as ADDR and
+-- anything else as HOST (the row's category is only the label of the source; the column must be of type ARRAY).  Every table and column name is checked against
 -- information_schema.columns before any dynamic SQL is built, so an older schema runs cleanly.
 WITH plain(cat, tbl, col) AS (VALUES
     ('HOST',    'devices',                  'observed_hostname'),
@@ -71,25 +77,121 @@ WITH plain(cat, tbl, col) AS (VALUES
     ('ADDR',    'static_route_preview',     'nexthop_ip'),
     ('ADDR',    'static_route_preview',     'representative_host'),
     ('USER',    'static_route_preview',     'requested_by'),
-    ('CLUSTER', 'static_route_preview',     'unit_id')
+    ('CLUSTER', 'static_route_preview',     'unit_id'),
+    -- Script Execution (V251, V258): operator-chosen script name, version author, run requester.
+    ('HOST',    'script',                   'name'),
+    ('USER',    'script_version',           'created_by'),
+    ('USER',    'script_run',               'requested_by'),
+    -- SNMP polling (V268), log detection (V272), failover actor authority (V260): the people and principals who acted.
+    ('USER',    'snmp_polling_settings',    'updated_by'),
+    ('USER',    'snmp_polling_override',    'updated_by'),
+    ('USER',    'log_detection_settings',   'updated_by'),
+    ('USER',    'log_finding',              'review_by'),
+    ('USER',    'log_finding_action',       'actor'),
+    ('USER',    'failover_actor_authority', 'actor'),
+    -- Failover runs, approvals, schedules, resumes, sequences and config sync (V31, V101, V137, V170, V178, V256):
+    -- cluster_ref is the cluster reference also stored in devices.cluster_member_ref; the *_by columns are principals.
+    ('CLUSTER', 'failover_run',             'cluster_ref'),
+    ('CLUSTER', 'failover_approval',        'cluster_ref'),
+    ('CLUSTER', 'failover_schedules',       'cluster_ref'),
+    ('CLUSTER', 'failover_quarantine',      'cluster_ref'),
+    ('CLUSTER', 'failover_resume',          'cluster_ref'),
+    ('CLUSTER', 'failover_sequence',        'cluster_ref'),
+    ('CLUSTER', 'pan_config_sync',          'cluster_ref'),
+    ('CLUSTER', 'cluster_member_diff',      'cluster_ref'),
+    ('USER',    'failover_run',             'requested_by'),
+    ('USER',    'failover_approval',        'approved_by'),
+    ('USER',    'failover_approval',        'revoked_by'),
+    ('USER',    'failover_approval',        'initiated_by'),
+    ('USER',    'failover_quarantine',      'acknowledged_by'),
+    ('USER',    'failover_resume',          'initiated_by'),
+    ('USER',    'failover_resume',          'approved_by'),
+    ('USER',    'failover_resume',          'approval_ack_by'),
+    ('USER',    'failover_resume',          'business_hours_ack_by'),
+    ('USER',    'failover_schedules',       'cancelled_by'),
+    ('USER',    'failover_sequence',        'initiated_by'),
+    ('USER',    'pan_config_sync',          'initiated_by'),
+    ('USER',    'ha_pair_identity',         'recorded_by'),
+    ('USER',    'jobs',                     'diagnostic_viewed_by'),
+    ('USER',    'jobs',                     'business_hours_ack_by'),
+    ('USER',    'job_reconciliation',       'recorded_by'),
+    -- Trust-store authorizations (V24, V35, V112).
+    ('USER',    'management_endpoint_ssh_trust',      'authorized_by'),
+    ('USER',    'management_endpoint_pan_cert_trust', 'authorized_by'),
+    ('USER',    'https_endpoint_cert_trust',          'authorized_by'),
+    -- Settings screens (V51, V100, V160, V203, V204, V223, V225, V236, V241): who last changed them.
+    ('USER',    'notification_settings',    'updated_by'),
+    ('USER',    'notification_routes',      'updated_by'),
+    ('USER',    'system_log_settings',      'updated_by'),
+    ('USER',    'scheduled_job_family',     'changed_by'),
+    ('USER',    'ldap_settings',            'updated_by'),
+    ('USER',    'local_password_policy_settings', 'updated_by'),
+    ('USER',    'artefact_store_quota',     'updated_by'),
+    ('USER',    'local_auth_mode_settings', 'updated_by'),
+    ('USER',    'saml_settings',            'updated_by'),
+    -- Packet Analysis, data sanitizer, reports, path analysis, support bundles, lifecycle catalog, backups.
+    ('USER',    'packet_analysis_case',     'created_by'),
+    ('USER',    'packet_analysis_capture',  'uploaded_by'),
+    ('USER',    'packet_analysis_run',      'requested_by'),
+    ('USER',    'packet_analysis_host_telemetry', 'uploaded_by'),
+    ('USER',    'packet_analysis_host_telemetry', 'aligned_by'),
+    ('USER',    'sanitize_job',             'created_by'),
+    ('USER',    'sanitize_revert_job',      'created_by'),
+    ('USER',    'report_run',               'requested_by'),
+    ('USER',    'path_validation',          'submitted_by'),
+    ('USER',    'topology_link_override',   'created_by'),
+    ('USER',    'topology_link_override',   'revoked_by'),
+    ('USER',    'topology_snapshot',        'built_by'),
+    ('USER',    'support_bundle_request',   'requested_by'),
+    ('USER',    'support_bundle_request',   'downloaded_by'),
+    ('USER',    'support_bundle_request',   'deleted_by'),
+    ('USER',    'support_bundle_request',   'cleanup_requested_by'),
+    ('USER',    'support_bundle_upload',    'requested_by'),
+    ('USER',    'lifecycle_catalog',        'imported_by'),
+    ('USER',    'lifecycle_catalog_upload', 'uploaded_by'),
+    ('USER',    'backup_deviation_record',  'resolved_by'),
+    -- Zone Matrix access log and reference confirmations (V216, V220), policy change author names (V208), identity names.
+    ('USER',    'zone_matrix_access_log',   'actor'),
+    ('USER',    'zone_matrix_reference_confirmation', 'confirmed_by'),
+    ('USER',    'policy_change_evidence',   'admin_name'),
+    ('USER',    'actor_authz_state',        'directory_display_name'),
+    ('USER',    'local_credentials',        'local_identity_name'),
+    -- Hosts and addresses named in settings: Infoblox grid members (V72), notification targets (V51),
+    -- support-bundle upload destinations (V240).  (directory_profiles.host of V26 was dropped with the table in V204.)
+    ('HOST',    'grid_member',              'host_name'),
+    ('ADDR',    'grid_member',              'vip_address'),
+    ('HOST',    'notification_settings',    'syslog_host'),
+    ('HOST',    'notification_settings',    'smtp_host'),
+    ('HOST',    'support_bundle_upload',    'destination_host'),
+    ('HOST',    'support_bundle_upload_host_key', 'host')
 ),
 json(cat, tbl, col, shape) AS (VALUES
     ('ADDR',    'cutover_segment',          'blocks',      'elements'),
     ('ADDR',    'cutover_segment',          'peer_blocks', 'elements'),
     ('ADDR',    'cutover_assessment_flow',  'flow',        'flow_addresses'),
     ('HOST',    'zone_matrix_version',      'content',     'zone_names'),
-    ('ADDR',    'zone_matrix_version',      'content',     'zone_blocks')
+    ('ADDR',    'zone_matrix_version',      'content',     'zone_blocks'),
+    -- Script Execution (V251, V258): declared egress host:port targets (TEXT[]), exported without the port.
+    ('HOST',    'script',                   'egress',          'host_port_array'),
+    ('HOST',    'script_run',               'egress_declared', 'host_port_array'),
+    -- Directory service (V204): the configured LDAP servers (TEXT[], bare host names or addresses; the port is its own column).
+    ('HOST',    'ldap_settings',            'servers',         'host_port_array')
 ),
 -- One SELECT per source: plain columns as text; JSON sources parse each row's value (NULL when it is not valid JSON,
 -- pg_input_is_valid is PostgreSQL 16) and read the named elements out of it.
 s AS (
-    SELECT p.cat, p.tbl, p.col, p.tbl || '.' || p.col AS label,
+    SELECT p.cat, p.tbl, p.col, NULL::text AS shape, p.tbl || '.' || p.col AS label,
            format('SELECT %L::text AS cat, t.%I::text AS v FROM public.%I t', p.cat, p.col, p.tbl) AS q
     FROM plain p
     UNION ALL
-    SELECT j.cat, j.tbl, j.col, j.tbl || '.' || j.col || CASE j.shape
+    SELECT j.cat, j.tbl, j.col, j.shape, j.tbl || '.' || j.col || CASE j.shape
                WHEN 'elements' THEN '[]' WHEN 'zone_names' THEN '.zones[].name'
-               WHEN 'zone_blocks' THEN '.zones[].blocks[]' ELSE '{addresses}' END,
+               WHEN 'zone_blocks' THEN '.zones[].blocks[]' WHEN 'host_port_array' THEN '[]{host}' ELSE '{addresses}' END,
+           CASE WHEN j.shape = 'host_port_array' THEN
+           format('SELECT CASE WHEN x.h ~ ''^[0-9.]+$'' OR x.h LIKE ''%%:%%'' THEN ''ADDR'' ELSE ''HOST'' END AS cat, x.h AS v '
+                  || 'FROM public.%I t, LATERAL unnest(t.%I) e(v), '
+                  || 'LATERAL (SELECT btrim(regexp_replace(btrim(e.v), '':[0-9]{1,5}$'', ''''), ''[]'') AS h) x', j.tbl, j.col)
+           ELSE
            format('SELECT %L::text AS cat, x.v FROM public.%I t, LATERAL (SELECT CASE WHEN pg_input_is_valid(t.%I::text, ''jsonb'') '
                   || 'THEN t.%I::text::jsonb END AS j) d, LATERAL (%s) x(v)',
                   j.cat, j.tbl, j.col, j.col, CASE j.shape
@@ -108,6 +210,7 @@ s AS (
                           || 'UNION ALL SELECT e FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(d.j->''flowSources'') = ''array'' '
                           || 'THEN d.j->''flowSources'' ELSE ''[]''::jsonb END) e'
                   END)
+           END
     FROM json j
 )
 SELECT string_agg(s.q, ' UNION ALL ') AS src,
@@ -116,6 +219,7 @@ SELECT string_agg(s.q, ' UNION ALL ') AS src,
 FROM s
 JOIN information_schema.columns c
   ON c.table_schema = 'public' AND c.table_name = s.tbl AND c.column_name = s.col
+ AND (s.shape IS DISTINCT FROM 'host_port_array' OR c.data_type = 'ARRAY')
 \gset
 
 -- Meta lines: which sources exist and how many non-null rows each has (counts only).

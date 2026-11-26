@@ -11,7 +11,10 @@ Files:
   identities, cluster references, policy-change authors and credential user names, Check Point server/domain names)
   and of the P1 planes where their tables exist (ACI cutover segment names, blocks, peer blocks and assessment flow
   addresses; Zone Matrix zone names and blocks from the version content; static-route preview destinations, next hops,
-  representative hosts, requesters and units; segment, assessment and zone-matrix actors).
+  representative hosts, requesters and units; segment, assessment and zone-matrix actors) and of the planes and
+  actor columns added after them (Script Execution names, declared egress hosts and run requesters; failover and
+  cluster-run references and actors; the LDAP, notification, Infoblox and support-upload hosts; the person or principal
+  column of each settings, Packet Analysis, report, support-bundle, path-analysis, log-detection and SNMP-polling table).
 - `probe.mjs` + `core.mjs` -- zero-dependency Node probe; opens a machine session as aiview, walks `routes.json`,
   hashes every token of every response body and header with the same salt and normalization, counts matches.
 - `routes.json` -- the 157 GET routes the golden decision table lets replay_viewer call (PERMIT), static/health/SAML
@@ -79,14 +82,23 @@ skipped and shows as absent in the `#src` lines):
 
 | Category | Columns |
 | --- | --- |
-| HOST | `devices.observed_hostname`, `discovery_candidate.display_name`, `cp_domain_server_placement.*_name`, `cutover_segment.name`, `zone_matrix_version.content` `zones[].name` |
-| ADDR | endpoint, interface, discovery and trust-store addresses; `cutover_segment.blocks[]` and `peer_blocks[]`; `cutover_assessment_flow.flow` `flowSource`, `flowDestination`, `flowSources[]`, `sourceRange`; `zone_matrix_version.content` `zones[].blocks[]`; `static_route_preview.destination_cidr`, `nexthop_ip`, `representative_host` |
+| HOST | `devices.observed_hostname`, `discovery_candidate.display_name`, `cp_domain_server_placement.*_name`, `cutover_segment.name`, `zone_matrix_version.content` `zones[].name`; `script.name`; the host part of `script.egress[]`, `script_run.egress_declared[]` and `ldap_settings.servers[]` (items that are IP literals go to ADDR); `grid_member.host_name`, `notification_settings.syslog_host`/`smtp_host`, `support_bundle_upload.destination_host`, `support_bundle_upload_host_key.host` |
+| ADDR | endpoint, interface, discovery and trust-store addresses; `cutover_segment.blocks[]` and `peer_blocks[]`; `cutover_assessment_flow.flow` `flowSource`, `flowDestination`, `flowSources[]`, `sourceRange`; `zone_matrix_version.content` `zones[].blocks[]`; `static_route_preview.destination_cidr`, `nexthop_ip`, `representative_host`; `grid_member.vip_address` |
 | SERIAL | platform serials, recorded and presented identities, discovery stable identifiers, Panorama serials, `ha_pair_identity` unit serials |
-| CLUSTER | `devices.cluster_member_ref`, `devices.ha_pair_claim`, `discovery_candidate.cluster_reference`, `static_route_preview.unit_id` |
-| USER | `policy_rule_history.changed_by`, `credentials.username`, `cutover_segment.created_by`/`updated_by`, `cutover_assessment.actor`, `zone_matrix_version.created_by`/`updated_by`/`published_by`, `zone_matrix_revision.actor`, `static_route_preview.requested_by` |
+| CLUSTER | `devices.cluster_member_ref`, `devices.ha_pair_claim`, `discovery_candidate.cluster_reference`, `static_route_preview.unit_id`; `cluster_ref` of `failover_run`, `failover_approval`, `failover_schedules`, `failover_quarantine`, `failover_resume`, `failover_sequence`, `pan_config_sync` and `cluster_member_diff` |
+| USER | `policy_rule_history.changed_by`, `credentials.username`, `cutover_segment.created_by`/`updated_by`, `cutover_assessment.actor`, `zone_matrix_version.created_by`/`updated_by`/`published_by`, `zone_matrix_revision.actor`, `static_route_preview.requested_by`; Script Execution (`script_version.created_by`, `script_run.requested_by`), SNMP polling (`snmp_polling_settings`/`snmp_polling_override` `updated_by`), log detection (`log_detection_settings.updated_by`, `log_finding.review_by`, `log_finding_action.actor`), `failover_actor_authority.actor`, the failover `*_by` columns (`failover_run`, `failover_approval`, `failover_quarantine`, `failover_resume`, `failover_schedules`, `failover_sequence`, `pan_config_sync`, `ha_pair_identity.recorded_by`), `jobs.diagnostic_viewed_by`/`business_hours_ack_by`, `job_reconciliation.recorded_by`, the trust-store `authorized_by` columns, the settings `updated_by` / `changed_by` columns (notification, system log, scheduled job family, LDAP, local password policy, artefact store quota, local auth mode, SAML), Packet Analysis, sanitizer, report, path-analysis, support-bundle, lifecycle-catalog and backup-deviation actor columns, `zone_matrix_access_log.actor`, `zone_matrix_reference_confirmation.confirmed_by`, `policy_change_evidence.admin_name`, `actor_authz_state.directory_display_name`, `local_credentials.local_identity_name` |
+
+The exact list is the `plain(...)` / `json(...)` VALUES blocks of `export_reference.sql`. A source the schema does not
+have is skipped silently at run time, so `tools/tests/test_aiview_leak_audit_routes.py` checks every listed table and
+column against the migration files (CREATE TABLE, ADD / RENAME / DROP COLUMN, DROP TABLE replayed in version order)
+and the category against `CATEGORIES` in `core.mjs`: a typo or a renamed column fails that test instead of showing up
+as a clean zero. The test proves the column exists in a migration, not that the database the probe runs against has it
+(the `#src` lines show that).
 
 The ACI cutover plane is stored as `cutover_segment` (name, `blocks`, `peer_blocks`) and `cutover_assessment_flow.flow`
-(JSONB); there is no `aci_segment` table and no flow address column. The zone-matrix version content is TEXT holding
+(JSONB); there is no `aci_segment` table and no flow address column. `script.egress`, `script_run.egress_declared` and `ldap_settings.servers` are `TEXT[]` and are read item by item
+(shape `host_port_array`): the `:port` is cut off, `[` `]` are stripped, an IP literal is exported as ADDR and any other
+value as HOST; a column that is not of type ARRAY is skipped. The zone-matrix version content is TEXT holding
 canonical JSON and is parsed per row (`pg_input_is_valid`, PostgreSQL 16); a value that is not valid JSON or not of the
 expected shape contributes nothing. A block `a/n` is also exported as its address part `a` (ADDR, with trailing
 separators removed as the probe tokenizes), so a block printed as text is found by its network address (IPv4 also by
@@ -104,3 +116,12 @@ policy rule/object names, Zone Matrix finding rule/section names and witness tup
 descriptions, cell rationale and regulation references, which the system-log catalog and the in-process sweep
 `AiviewRawVersusMaskedSweepTest` cover separately) and binary payloads (scanned as text).
 Multi-word user names are matched word by word (NAME_WORD), not as a phrase.
+
+Still not in the reference set, by class: opaque ids and fingerprints (`*_actor_fingerprint`, `actor_id` / `requester_id`
+of `failover_schedules`, `admin_ref`, `hostname_fingerprint`, device-id lists such as `egress_device_targets`) because
+they are not raw identities; MAC addresses (`device_interface.mac_address`) and interface names, which no category
+covers; `member_ref` / `unit_ref` / `virtual_system_ref` and other `*_ref` columns whose content is not proven to be a
+cluster or device name; credential `display_name` and other operator-chosen labels; Check Point object, rule and
+section names, which the in-process sweeps cover; free text (messages, rationale, comments, output tails); and
+person names that appear only inside JSON or free-text columns. No part of this extension has been run against the
+real environment.
