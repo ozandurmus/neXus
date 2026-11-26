@@ -33,8 +33,15 @@ export function packageNumbers(counts: PolicyInsightCounts): PackageNumbers {
     sentence: `${n(counts.decided)} of ${n(counts.rules)} rules decided from the policy alone${pct(counts.decided)} · up to ${n(counts.upToWithLogs)} with traffic logs${pct(counts.upToWithLogs)} · ${n(notDecidable)} not decidable by logs` };
 }
 
+const MAX_WAITING_ROWS = 10;
+
 function PackageOverview({ counts, complete, collectedAt }: { counts: PolicyInsightCounts; complete: boolean | undefined; collectedAt: string | undefined }) {
   const p = packageNumbers(counts);
+  const waitingRules = counts.waitingRules ?? [];
+  const notReadable = counts.notReadable ?? counts.notDecidable.reduce((sum, b) => sum + b.rules, 0);
+  const waiting = counts.waiting ?? waitingRules.reduce((sum, w) => sum + w.rules, 0);
+  const shownWaiting = waitingRules.slice(0, MAX_WAITING_ROWS), restWaiting = waitingRules.slice(MAX_WAITING_ROWS);
+  const restWaitingRules = restWaiting.reduce((sum, w) => sum + w.rules, 0);
   const segments = [
     { key: "decided", label: "Decided from the policy alone", value: counts.decided, color: m3.primary },
     { key: "logs", label: "Could be decided with traffic logs (upper bound)", value: counts.logResolvable, color: m3.warningInk },
@@ -54,9 +61,17 @@ function PackageOverview({ counts, complete, collectedAt }: { counts: PolicyInsi
       {segments.map(s => <Box component="li" key={s.key} data-count={s.key} sx={{ fontSize: 12, display: "flex", gap: 1 }}>
         <Box component="span" sx={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, minWidth: 48, textAlign: "right" }}>{n(s.value)}</Box><span>{s.label}</span></Box>)}
     </Box>
+    {(notReadable > 0 || waiting > 0) && <Typography variant="caption" display="block" data-undecided-split sx={{ mt: 1, color: m3.onSurfaceVar }}>
+      Undecided split: <b>{n(notReadable)}</b> {notReadable === 1 ? "rule" : "rules"} not readable · <b>{n(waiting)}</b> {waiting === 1 ? "rule" : "rules"} readable, {waiting === 1 ? "waits" : "wait"} behind an earlier rule</Typography>}
     {counts.notDecidable.length > 0 && <Box component="ul" aria-label="Not decidable by reason" sx={{ m: 0, mt: 1, p: 0, listStyle: "none", display: "grid", gap: 0.25 }}>
       {counts.notDecidable.map(b => <Box component="li" key={`${b.shadowReason}:${b.reasonClass}`} data-reason-class={b.reasonClass} sx={{ fontSize: 12 }}>
-        <b>{n(b.rules)}</b> {b.rules === 1 ? "rule" : "rules"} · {b.shadowReason} <Box component="span" sx={{ color: m3.onSurfaceVar }}>({reasonClassWords[b.reasonClass] ?? "UNKNOWN"})</Box></Box>)}
+        <b>{n(b.rules)}</b> {b.rules === 1 ? "rule" : "rules"} not readable · {b.shadowReason} <Box component="span" sx={{ color: m3.onSurfaceVar }}>({reasonClassWords[b.reasonClass] ?? "UNKNOWN"})</Box></Box>)}
+    </Box>}
+    {shownWaiting.length > 0 && <Box component="ul" aria-label="Readable rules waiting behind an earlier rule" sx={{ m: 0, mt: 1, p: 0, listStyle: "none", display: "grid", gap: 0.25 }}>
+      {shownWaiting.map(w => <Box component="li" key={`${w.blockingRuleId ?? "?"}:${w.blockingRuleNumber ?? 0}:${w.shadowReason}`} data-waiting-class={w.reasonClass} sx={{ fontSize: 12 }}>
+        <b>{n(w.rules)}</b> {w.rules === 1 ? "rule" : "rules"} readable, {w.rules === 1 ? "waits" : "wait"} behind {w.blockingRuleNumber ? `rule #${w.blockingRuleNumber}` : "an earlier rule"} · {w.shadowReason} <Box component="span" sx={{ color: m3.onSurfaceVar }}>({reasonClassWords[w.reasonClass] ?? "UNKNOWN"})</Box></Box>)}
+      {restWaitingRules > 0 && <Box component="li" sx={{ fontSize: 12, color: m3.onSurfaceVar }}>
+        +{n(restWaitingRules)} {restWaitingRules === 1 ? "rule" : "rules"} readable, waiting behind {n(restWaiting.length)} other {restWaiting.length === 1 ? "rule" : "rules"}</Box>}
     </Box>}
     <Typography variant="caption" display="block" sx={{ mt: 1, color: m3.onSurfaceVar }}>
       Over {n(counts.rules)} enabled security rules. {n(counts.disabledRules)} disabled and {n(counts.outsideSecurityRules)} NAT rules are left out; the Hygiene tab counts all of them.

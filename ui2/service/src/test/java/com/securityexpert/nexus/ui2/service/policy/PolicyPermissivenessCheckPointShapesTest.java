@@ -139,7 +139,7 @@ class PolicyPermissivenessCheckPointShapesTest {
         var snapshot = new PolicySnapshot(meta, List.of(new Section("l1", "OBJ-LAYER-01", "CP access layer", null, List.of(roleRule))), objects);
         var assessment = PolicyHygiene.analyze(snapshot, 90, Instant.parse("2026-10-20T12:00:00Z"), 250_000).rules().get("r1");
         assertEquals("UNKNOWN", assessment.shadowStatus());
-        assertEquals("unresolved object", assessment.shadowReason());
+        assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, assessment.shadowReason());
         assertEquals("Low", assessment.permissiveness().get("level"));
     }
 

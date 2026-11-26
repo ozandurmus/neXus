@@ -80,16 +80,84 @@ class PolicyInsightsTest {
         assertEquals(List.of(new PolicyInsights.Blocked("unresolved object", PolicyInsights.NOT_RESOLVABLE, 1)), counts.notDecidable());
     }
     @Test void aUserConstraintIsLogResolvableAndRaisesOnlyTheCeiling() {
-        var user = edit(cp("r2", 2, "Accept", "host", "any"), cell("host"), Map.of("source-user", List.of("OBJ-USER-01")));
-        // r3 is held back by r2 (an earlier rule it cannot be proven against) and takes r2's own reason.
-        var snapshot = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "net", "any"), user, cp("r3", 3, "Drop", "host", "any")));
+        var user = edit(cp("r2", 2, "Accept", "net", "any"), cell("net"), Map.of("source-user", List.of("OBJ-USER-01")));
+        // r3 is held back by r2 (an earlier rule it cannot be proven against): r2 is not readable, r3 waits behind rule #2.
+        var snapshot = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "host", "any"), user, cp("r3", 3, "Drop", "net", "any")));
         var counts = report(snapshot).counts();
         assertEquals(3, counts.rules());
+        assertEquals(1, counts.decided());
+        assertEquals(1, counts.notReadable());
+        assertEquals(1, counts.waiting());
         assertEquals(counts.decided() + counts.logResolvable(), counts.upToWithLogs());
         assertEquals(3, counts.decided() + counts.logResolvable() + counts.collectionResolvable() + counts.notResolvable());
         assertTrue(counts.logResolvable() >= 1);
         assertTrue(counts.upToWithLogs() > counts.decided(), "the ceiling is above what the policy alone decides");
-        assertTrue(counts.notDecidable().stream().allMatch(b -> b.reasonClass().equals(PolicyInsights.LOGS)));
+        assertEquals(List.of(new PolicyInsights.Blocked("user or category constraint", PolicyInsights.LOGS, 1)), counts.notDecidable(),
+            "cascade-blocked r3 is not folded into r2's own not-readable reason");
+        assertEquals(List.of(new PolicyInsights.Waiting("r2", 2, "user or category constraint", PolicyInsights.LOGS, 1)), counts.waitingRules());
+    }
+    @Test void accessRoleIsLogResolvableWhileDnsUpdatableAndDynamicObjectsAreNotResolvable() {
+        var objects = new HashMap<>(cpObjects());
+        objects.put("role-dyn", new PolicyObject("role-dyn", "OBJ-ROLE-01", "access-role", List.of(), List.of(), "DYNAMIC"));
+        objects.put("dns-dyn", new PolicyObject("dns-dyn", "OBJ-DNS-01", "dns-domain", List.of(), List.of(), "DYNAMIC"));
+        objects.put("upd-dyn", new PolicyObject("upd-dyn", "OBJ-UPD-01", "updatable-object", List.of(), List.of(), "DYNAMIC"));
+        objects.put("dyn-obj", new PolicyObject("dyn-obj", "OBJ-DYN-01", "dynamic-object", List.of(), List.of(), "DYNAMIC"));
+        objects.put("other-net", new PolicyObject("other-net", "OBJ-NET-02", "network", List.of(), List.of("ip-netmask: 198.51.100.0/24"), "RESOLVED"));
+        var base = cpSnapshot(cpSection("s1", null,
+            cp("r1", 1, "Accept", "role-dyn", "net"),
+            cp("r2", 2, "Drop", "host", "net"),
+            cp("r3", 3, "Accept", "dns-dyn", "other-net"),
+            cp("r4", 4, "Accept", "upd-dyn", "other-net"),
+            cp("r5", 5, "Accept", "dyn-obj", "other-net"),
+            cp("r6", 6, "Drop", "any", "other-net")));
+        var snapshot = new PolicySnapshot(base.metadata(), base.sections(), objects);
+        var counts = report(snapshot).counts();
+        assertEquals(PolicyInsights.LOGS, PolicyInsights.reasonClass(PolicyHygiene.ACCESS_ROLE_CONSTRAINT));
+        assertEquals(6, counts.rules());
+        assertEquals(0, counts.decided());
+        assertEquals(4, counts.notReadable());
+        assertEquals(2, counts.waiting());
+        assertEquals(2, counts.logResolvable(), "r1 (access-role) and r2 (waiting solely behind r1) raise the log ceiling");
+        assertEquals(2, counts.upToWithLogs());
+        assertEquals(4, counts.notResolvable(), "dns-domain, updatable-object, dynamic-object and r6 waiting behind r3");
+        assertEquals(List.of(
+            new PolicyInsights.Blocked("dynamic or unsupported object type", PolicyInsights.NOT_RESOLVABLE, 3),
+            new PolicyInsights.Blocked(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, PolicyInsights.LOGS, 1)), counts.notDecidable());
+        assertEquals(List.of(
+            new PolicyInsights.Waiting("r1", 1, PolicyHygiene.ACCESS_ROLE_CONSTRAINT, PolicyInsights.LOGS, 1),
+            new PolicyInsights.Waiting("r3", 3, "dynamic or unsupported object type", PolicyInsights.NOT_RESOLVABLE, 1)), counts.waitingRules());
+    }
+    @Test void provenI3CountsAmongDecidedEvenBehindAnUnreadableRuleWhileBudgetI3DoesNot() {
+        var objects = new HashMap<>(cpObjects());
+        objects.put("role-dyn", new PolicyObject("role-dyn", "OBJ-ROLE-01", "access-role", List.of(), List.of(), "DYNAMIC"));
+        objects.put("half-a", new PolicyObject("half-a", "OBJ-NET-A", "network", List.of(), List.of("ip-netmask: 192.0.2.0/25"), "RESOLVED"));
+        objects.put("half-b", new PolicyObject("half-b", "OBJ-NET-B", "network", List.of(), List.of("ip-netmask: 192.0.2.128/25"), "RESOLVED"));
+        // r1 is an access-role (unreadable); r2 + r3 together cover r4 (192.0.2.0/24). Single-rule hygiene marks r4
+        // UNKNOWN (earlier rule has unsupported constraints behind r1), while PolicyUnionCover proves r4 COVERED (I3 PROVEN).
+        var base = cpSnapshot(cpSection("s1", null,
+            cp("r1", 1, "Accept", "role-dyn", "any"),
+            cp("r2", 2, "Accept", "half-a", "any"),
+            cp("r3", 3, "Accept", "half-b", "any"),
+            cp("r4", 4, "Accept", "net", "any")));
+        var snapshot = new PolicySnapshot(base.metadata(), base.sections(), objects);
+        var hygiene = PolicyHygiene.analyze(snapshot, 90, NOW, 250_000);
+        assertEquals("UNKNOWN", hygiene.rules().get("r4").shadowStatus());
+        var provenReport = PolicyInsights.analyze(snapshot, hygiene, null, Map.of(), 90);
+        assertEquals(List.of("PROVEN"), of(provenReport, "I3").stream().map(PolicyInsights.Insight::grade).toList());
+        var provenCounts = provenReport.counts();
+        assertEquals(4, provenCounts.rules());
+        assertEquals(1, provenCounts.decided(), "r4 is PROVEN I3 and therefore counted in decided");
+        assertEquals(1, provenCounts.notReadable());
+        assertEquals(2, provenCounts.waiting(), "only r2 and r3 remain waiting behind rule #1");
+        assertEquals(4, provenCounts.decided() + provenCounts.logResolvable() + provenCounts.collectionResolvable() + provenCounts.notResolvable());
+
+        // When I3 runs out of budget (NOT_EVALUABLE), r4 is not PROVEN and stays in waiting.
+        var budgetUnion = PolicyUnionCover.analyze(snapshot, hygiene, 0, 0);
+        var budgetReport = PolicyInsights.analyze(snapshot, hygiene, null, Map.of(), 90, budgetUnion);
+        assertFalse(of(budgetReport, "I3").isEmpty());
+        assertTrue(of(budgetReport, "I3").stream().allMatch(i -> i.grade().equals("NOT_EVALUABLE")));
+        assertEquals(0, budgetReport.counts().decided());
+        assertEquals(3, budgetReport.counts().waiting());
     }
     @Test void everyBlockingReasonIsClassifiedOnceAndAnUnlistedReasonIsNotResolvable() {
         assertEquals(PolicyInsights.LOGS, PolicyInsights.reasonClass("user or category constraint"));
