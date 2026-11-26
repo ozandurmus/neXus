@@ -26,7 +26,13 @@ codes = open(seq_file).read().split()
 rc = int(codes.pop(0)) if codes else 0
 open(seq_file, "w").write(" ".join(codes))
 report = args[args.index("--report") + 1]
-checks = [{"id": "java_scoped", "status": "fail", "detail": "FooTest.bar failed"}] if rc == 10 else []
+checks_file = os.path.join(state, "checks.json")
+if rc == 10 and os.path.exists(checks_file):
+    checks = json.load(open(checks_file))
+elif rc == 10:
+    checks = [{"id": "java_scoped", "status": "fail", "detail": "FooTest.bar failed"}]
+else:
+    checks = []
 json.dump({"exit_code": rc, "checks": checks}, open(report, "w"))
 print("stub exit", rc)
 sys.exit(rc)
@@ -183,9 +189,34 @@ def test_first_check_failure_queues_one_repair_turn_under_a_standard_name(ops):
     assert name.split("-")[0].isdigit() and "-G" in name and "-D" in name   # standard lane name (lanename.sh)
     text = briefs[0].read_text()
     assert text.startswith("# Task: sample") and "## Repair turn (lane harness" in text and "java_scoped: FooTest.bar failed" in text
+    assert "All failure output is inlined above; do NOT call read_file on paths outside your worktree." in text
+    assert str(ops.logs) not in text
     meta = fields(ops.lq / f"{name}.meta")
     assert meta["base"] == f"lane/q-{LANE}" and meta["repair_of"] == LANE and meta["allow_paths"] == "1"
     assert f"repair turn queued ({name})" in log
+
+
+def test_repair_turn_inlines_bounded_output_tail_and_avoids_external_paths(ops):
+    done_lane(ops, meta="base=origin/main\nengine=agy\n")
+    set_codes(ops, 10)
+    long_lines = "\n".join(f"line-{i:03d}" for i in range(60))
+    wide_tail = "X" * 3000 + "\nKEEP-TAIL-MARKER"
+    checks = [
+        {"id": "passed_check", "status": "pass", "detail": "ok", "output_tail": "SHOULD_NOT_APPEAR"},
+        {"id": "pytest_check", "status": "fail", "detail": "1 failed", "output_tail": long_lines},
+        {"id": "lint_check", "status": "error", "detail": "crashed", "output_tail": wide_tail},
+    ]
+    (ops.stub_dir / "checks.json").write_text(json.dumps(checks))
+    gate(ops)
+    text = repair_briefs(ops)[0].read_text()
+    assert "SHOULD_NOT_APPEAR" not in text
+    assert "pytest_check: 1 failed" in text
+    assert "line-059" in text and "line-020" in text and "line-019" not in text
+    assert "lint_check: crashed" in text and "KEEP-TAIL-MARKER" in text
+    # wide_tail (3017 chars) is bounded to 2500 chars per check
+    assert text.count("X") < 2500
+    assert "All failure output is inlined above; do NOT call read_file on paths outside your worktree." in text
+    assert str(ops.logs) not in text and f"harness-{LANE}" not in text
 
 
 def test_a_failure_after_a_repair_turn_is_held_for_the_po_session(ops):
