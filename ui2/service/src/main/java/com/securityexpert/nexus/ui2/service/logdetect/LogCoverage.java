@@ -62,6 +62,11 @@ public final class LogCoverage {
         if (indexStatuses.containsKey("PRUNED")) return new State(NOT_COLLECTED, "EVIDENCE_PRUNED_BEFORE_INDEX");
         if (indexStatuses.containsKey("NOT_APPLICABLE")) return new State(UNSUPPORTED, "DEVICE_NOT_APPLICABLE");
         if (lines > 0 && (double) unparsed / lines > UNPARSED_SHARE_LIMIT) return new State(UNPARSED_HIGH, "UNPARSED_OVER_5_PERCENT");
+        return historyState(historyDays);
+    }
+
+    /** The history-tier coverage state once collection, masking and parsing checks have passed. */
+    public static State historyState(int historyDays) {
         if (historyDays < NOT_EVALUABLE_BELOW_DAYS) return new State(NOT_EVALUABLE, "HISTORY_UNDER_7_DAYS");
         if (historyDays < BASELINE_LEARNING_BELOW_DAYS) return new State(BASELINE_LEARNING, "HISTORY_7_TO_13_DAYS");
         return new State(EVALUATED, "LAYER_A_ONLY");

@@ -154,8 +154,8 @@ describe("Zone matrix step 5 acceptance pins: ZM-26", () => {
   const notEvaluableOnly = serverSummary({
     headline: serverHeadline({
       exact: false, not_evaluable_findings: 1, count_text: "at least 0", text: "no proven violations in evaluated rules",
-      // ZoneMatrixSummaryView.project emits staleness_headline from ZoneMatrixStaleness.headline(0, [CURRENT+COMPLETE]):
-      staleness_headline: { count: 0, exact: true, text: "0" },
+      // Corrected server answer (ZoneMatrixStaleness.withUndecided): undecided findings make the staleness headline non-exact.
+      staleness_headline: { count: 0, exact: false, text: "at least 0" },
     }),
     policies: [policy()],
     findings: [notEvaluableFinding()],
@@ -185,6 +185,7 @@ describe("Zone matrix step 5 acceptance pins: ZM-26", () => {
     ["combined incomplete + stale + NOT_EVALUABLE fixture", combinedImperfect],
     ["incomplete coverage alone", incompleteOnly],
     ["stale policy alone", staleOnly],
+    ["one NOT_EVALUABLE rule alone", notEvaluableOnly],
   ])("zm26: Violations tab headline never renders '0' or green for %s", async (_label, fixture) => {
     serveSummary(fixture);
     const { unmount } = render(<ZoneMatrixScreen />);
@@ -201,18 +202,46 @@ describe("Zone matrix step 5 acceptance pins: ZM-26", () => {
     unmount();
   });
 
-  it.skip(
-    "DEFECT: ZM-26 - Violations tab headline renders staleness_headline.text ('0') inside summary-headline when one NOT_EVALUABLE rule sits on a CURRENT and COMPLETE policy",
-    async () => {
-      serveSummary(notEvaluableOnly);
-      render(<ZoneMatrixScreen />);
-      fireEvent.click(await screen.findByRole("tab", { name: "Violations" }));
-      const headlineBox = await screen.findByTestId("summary-headline");
-      expect(headlineBox).toHaveAttribute("data-proven", "no");
-      expect(headlineBox.querySelector('[data-pill="ok"]')).toBeNull();
-      expect(within(headlineBox).queryByText("0")).toBeNull();
-    },
-  );
+  it.each([
+    ["one NOT_EVALUABLE rule alone", { not_evaluable_findings: 1 }],
+    ["one UNKNOWN finding alone", { unknown_findings: 1 }],
+    ["one became-undecided finding alone", { became_undecided_findings: 1 }],
+  ])("zm26: Violations and Coverage tabs never print a bare '0' for %s, even if a response claims an exact staleness headline", async (_label, counts) => {
+    const staleServerAnswer = serverSummary({
+      ...notEvaluableOnly,
+      headline: serverHeadline({
+        exact: false, not_evaluable_findings: 0, count_text: "at least 0", text: "no proven violations in evaluated rules",
+        staleness_headline: { count: 0, exact: true, text: "0" }, ...counts,
+      }),
+    });
+    serveSummary(staleServerAnswer);
+    const { unmount } = render(<ZoneMatrixScreen />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Violations" }));
+    const headlineBox = await screen.findByTestId("summary-headline");
+    expect(headlineBox).toHaveAttribute("data-proven", "no");
+    expect(headlineBox.querySelector('[data-pill="ok"]')).toBeNull();
+    expect(within(headlineBox).queryByText("0")).toBeNull();
+    expect(within(headlineBox).getByTestId("staleness-headline")).toHaveTextContent("at least 0");
+    fireEvent.click(await screen.findByRole("tab", { name: "Coverage" }));
+    const coverageLine = await screen.findByTestId("staleness-headline");
+    expect(coverageLine).toHaveTextContent("at least 0");
+    expect(coverageLine.textContent?.trim()).not.toBe("0");
+    unmount();
+  });
+
+  it("zm26: a proven exact headline still prints the bare staleness number on both tabs (positive control)", async () => {
+    serveSummary(serverSummary({
+      headline: serverHeadline(),
+      policies: [policy()],
+      findings: [],
+      total_findings: 0, unfiltered_findings: 0, returned: 0,
+    }));
+    render(<ZoneMatrixScreen />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Violations" }));
+    const headlineBox = await screen.findByTestId("summary-headline");
+    expect(headlineBox).toHaveAttribute("data-proven", "yes");
+    expect(within(headlineBox).getByTestId("staleness-headline")).toHaveTextContent(/^0$/);
+  });
 });
 
 describe("Zone matrix step 5 acceptance pins: ZM-35", () => {

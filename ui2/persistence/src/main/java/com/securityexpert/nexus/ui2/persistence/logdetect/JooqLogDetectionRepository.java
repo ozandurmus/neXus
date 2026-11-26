@@ -98,7 +98,7 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
                         + "and s.masking_rule_set = {0} and s.marker_list_version = {1} "
                         + "and (s.status not in ('MASKING_UNAVAILABLE', 'STORE_UNAVAILABLE', 'UNREADABLE') "
                         + "or s.indexed_at > now() - interval '15 minutes')) "
-                        + "order by c.collected_at, c.chunk_id limit {2}", maskingRuleSet, markerListVersion, bounded)
+                        + "order by c.log_day desc, c.collected_at, c.chunk_id limit {2}", maskingRuleSet, markerListVersion, bounded)
                 .map(r -> new PendingChunk(r.get("chunk_id", String.class), r.get("device_id", String.class),
                         r.get("source_key", String.class), r.get("job_id", String.class),
                         LocalDate.parse(r.get("log_day", String.class)))));
@@ -198,13 +198,34 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
         });
     }
 
+    private static final String COMPLETE_DAY_SQL = "not exists (select 1 from system_log_chunk c "
+            + "where c.device_id = s.device_id and c.source_key = s.source_key and c.log_day = s.log_day "
+            + "and c.pruned_at is null "
+            + "and exists (select 1 from system_log_run r where r.device_id = c.device_id and r.job_id = c.job_id) "
+            + "and not exists (select 1 from log_index_state s2 where s2.chunk_id = c.chunk_id "
+            + "and s2.masking_rule_set = s.masking_rule_set and s2.marker_list_version = s.marker_list_version "
+            + "and s2.status = 'INDEXED'))";
+
+    private static boolean hasUnprocessedHistory(DSLContext dsl, String deviceId, String sourceKey, LocalDate day) {
+        return Boolean.TRUE.equals(dsl.fetchOne("select exists (select 1 from system_log_chunk c "
+                + "where c.device_id = {0} and c.source_key = {1} and c.pruned_at is null "
+                + "and c.log_day >= cast({2} as date) - 28 and c.log_day < cast({2} as date) "
+                + "and exists (select 1 from system_log_run r where r.device_id = c.device_id and r.job_id = c.job_id) "
+                + "and not exists (select 1 from log_index_state s where s.chunk_id = c.chunk_id)) as pending",
+                deviceId, sourceKey, day.toString()).get("pending", Boolean.class));
+    }
+
     @Override
     public Baseline baseline(String deviceId, String sourceKey, String markerId, LocalDate day) {
         return transactions.inTransaction(dsl -> {
+            if (hasUnprocessedHistory(dsl, deviceId, sourceKey, day)) {
+                return new Baseline(0, 0, List.of());
+            }
             List<LocalDate> usable = dsl.fetch(
                     "select distinct s.log_day as d from log_index_state s where s.device_id = {0} and s.source_key = {1} "
                             + "and s.status = 'INDEXED' and s.log_day < cast({2} as date) and s.log_day >= cast({2} as date) - 28 "
-                            + "and not exists (select 1 from system_log_gap g where g.device_id = s.device_id "
+                            + "and " + COMPLETE_DAY_SQL
+                            + " and not exists (select 1 from system_log_gap g where g.device_id = s.device_id "
                             + "and g.source_key = s.source_key and cast(g.created_at at time zone 'Europe/Istanbul' as date) = s.log_day) "
                             + "order by d", deviceId, sourceKey, day.toString())
                     .map(r -> r.get("d", java.sql.Date.class).toLocalDate());
@@ -229,6 +250,53 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
         return transactions.inTransaction(dsl -> dsl.fetchOne(
                 "select count(distinct log_day) as n from log_index_state where device_id = {0} and source_key = {1} "
                         + "and status = 'INDEXED'", deviceId, sourceKey).get("n", Integer.class));
+    }
+
+    @Override
+    public int historyDays(String deviceId, String sourceKey, LocalDate day) {
+        return transactions.inTransaction(dsl -> {
+            if (hasUnprocessedHistory(dsl, deviceId, sourceKey, day)) {
+                return dsl.fetchOne("select count(distinct s.log_day) as n from log_index_state s "
+                        + "where s.device_id = {0} and s.source_key = {1} and s.status = 'INDEXED' "
+                        + "and s.log_day = cast({2} as date) and " + COMPLETE_DAY_SQL,
+                        deviceId, sourceKey, day.toString()).get("n", Integer.class);
+            }
+            return dsl.fetchOne("select count(distinct s.log_day) as n from log_index_state s "
+                    + "where s.device_id = {0} and s.source_key = {1} and s.status = 'INDEXED' "
+                    + "and s.log_day <= cast({2} as date) and " + COMPLETE_DAY_SQL,
+                    deviceId, sourceKey, day.toString()).get("n", Integer.class);
+        });
+    }
+
+    @Override
+    public List<CoverageRow> readyCoverageAfter(String deviceId, String sourceKey, LocalDate afterDay) {
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select c.device_id, c.source_key, c.job_id, cast(c.window_day as text) as window_day, c.state, c.reason, c.history_days "
+                        + "from log_coverage c where c.device_id = {0} and c.source_key = {1} and c.window_day > cast({2} as date) "
+                        + "and c.state in ('NOT_EVALUABLE', 'BASELINE_LEARNING', 'EVALUATED') "
+                        + "and not exists (select 1 from system_log_chunk ch where ch.device_id = c.device_id "
+                        + "and ch.source_key = c.source_key and ch.pruned_at is null "
+                        + "and ch.log_day >= c.window_day - 28 and ch.log_day < c.window_day "
+                        + "and exists (select 1 from system_log_run r where r.device_id = ch.device_id and r.job_id = ch.job_id) "
+                        + "and not exists (select 1 from log_index_state s where s.chunk_id = ch.chunk_id)) "
+                        + "order by c.window_day, c.job_id", deviceId, sourceKey, afterDay.toString())
+                .map(r -> new CoverageRow(r.get("device_id", String.class), r.get("source_key", String.class),
+                        r.get("job_id", String.class), LocalDate.parse(r.get("window_day", String.class)),
+                        r.get("state", String.class), r.get("reason", String.class), r.get("history_days", Integer.class))));
+    }
+
+    @Override
+    public List<LocalDate> readyEvidenceDaysAfter(String deviceId, String sourceKey, LocalDate fromDay) {
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select distinct cast(e.bucket_start as date) as d from log_event_count e "
+                        + "where e.device_id = {0} and e.source_key = {1} and e.bucket_start >= cast({2} as date) "
+                        + "and not exists (select 1 from system_log_chunk ch where ch.device_id = e.device_id "
+                        + "and ch.source_key = e.source_key and ch.pruned_at is null "
+                        + "and ch.log_day >= cast(e.bucket_start as date) - 28 and ch.log_day < cast(e.bucket_start as date) "
+                        + "and exists (select 1 from system_log_run r where r.device_id = ch.device_id and r.job_id = ch.job_id) "
+                        + "and not exists (select 1 from log_index_state s where s.chunk_id = ch.chunk_id)) "
+                        + "order by d", deviceId, sourceKey, fromDay.toString())
+                .map(r -> r.get("d", java.sql.Date.class).toLocalDate()));
     }
 
     @Override

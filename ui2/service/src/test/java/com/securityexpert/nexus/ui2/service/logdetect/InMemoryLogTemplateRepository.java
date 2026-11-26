@@ -143,7 +143,26 @@ class InMemoryLogTemplateRepository implements LogTemplateRepository {
     public List<PendingChunk> pendingChunks(String version, String rules, String normaliser, Collection<String> sources, int limit) {
         onlineCalls++;
         return pending.stream().filter(c -> sources.contains(c.sourceKey()) && !states.containsKey(c.chunkId() + "|" + version))
+                .sorted(Comparator.comparing(PendingChunk::logDay).reversed())
                 .limit(limit).toList();
+    }
+
+    @Override
+    public boolean hasUnprocessedHistory(String version, String rules, String normaliser, String deviceId, String sourceKey,
+            LocalDate from, LocalDate toExclusive) {
+        return pending.stream().anyMatch(c -> c.deviceId().equals(deviceId) && c.sourceKey().equals(sourceKey)
+                && !c.logDay().isBefore(from) && c.logDay().isBefore(toExclusive)
+                && !states.containsKey(c.chunkId() + "|" + version));
+    }
+
+    @Override
+    public List<LocalDate> readyCountDaysAfter(String version, String rules, String normaliser, String deviceId,
+            String sourceKey, LocalDate fromDay) {
+        return counts.stream().filter(c -> c.catalogVersion().equals(version) && c.deviceId().equals(deviceId)
+                && c.sourceKey().equals(sourceKey) && !c.bucketStart().toLocalDate().isBefore(fromDay)
+                && !hasUnprocessedHistory(version, rules, normaliser, deviceId, sourceKey,
+                        c.bucketStart().toLocalDate().minusDays(28), c.bucketStart().toLocalDate()))
+                .map(c -> c.bucketStart().toLocalDate()).distinct().sorted().toList();
     }
 
     @Override

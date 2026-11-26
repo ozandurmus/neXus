@@ -2,8 +2,10 @@ package com.securityexpert.nexus.ui2.service.logdetect;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -80,6 +82,7 @@ public final class LogDetectionService {
         Set<String[]> touchedWindows = new LinkedHashSet<>();
         Set<String> seenWindows = new LinkedHashSet<>();
         Set<LocalDate> touchedDays = new java.util.TreeSet<>();
+        Map<String, LocalDate> earliestIndexed = new LinkedHashMap<>();
         int indexed = 0;
         int refused = 0;
         for (PendingChunk chunk : pending) {
@@ -91,6 +94,8 @@ public final class LogDetectionService {
             }
             if ("INDEXED".equals(state.status())) {
                 touchedDays.addAll(repository.daysOfJob(chunk.deviceId(), chunk.jobId()));
+                earliestIndexed.merge(chunk.deviceId() + "\u0000" + chunk.sourceKey(), chunk.logDay(),
+                        (a, b) -> a.isBefore(b) ? a : b);
             }
         }
         // Windows whose evaluation failed in an earlier pass: their chunks are no longer pending, so they are taken up here.
@@ -103,6 +108,30 @@ public final class LogDetectionService {
         int coverageRows = 0;
         for (String[] w : touchedWindows) {
             if (writeCoverage(w[0], w[1], w[2], LocalDate.parse(w[3]))) coverageRows++;
+        }
+        // Newest-first backfill: when an older day of (device, source) finishes indexing and completes the 28-day history
+        // window of an already-indexed newer day, refresh that newer window's coverage and re-evaluate the device-day.
+        Set<String> deviceDaysToReevaluate = new LinkedHashSet<>();
+        for (var entry : earliestIndexed.entrySet()) {
+            int nul = entry.getKey().indexOf('\u0000');
+            String dev = entry.getKey().substring(0, nul);
+            String src = entry.getKey().substring(nul + 1);
+            LocalDate earliest = entry.getValue();
+            for (CoverageRow c : repository.readyCoverageAfter(dev, src, earliest)) {
+                int history = repository.historyDays(dev, src, c.windowDay());
+                LogCoverage.State next = LogCoverage.historyState(history);
+                if (!next.state().equals(c.state()) || !next.reason().equals(c.reason()) || history != c.historyDays()) {
+                    repository.upsertCoverage(new CoverageRow(dev, src, c.jobId(), c.windowDay(), next.state(), next.reason(), history));
+                    coverageRows++;
+                    if (LogCoverage.NOT_EVALUABLE.equals(c.state()) && !LogCoverage.NOT_EVALUABLE.equals(next.state())) {
+                        touchedDays.add(c.windowDay());
+                        touchedDays.add(c.windowDay().minusDays(1));
+                    }
+                }
+            }
+            for (LocalDate d : repository.readyEvidenceDaysAfter(dev, src, earliest)) {
+                deviceDaysToReevaluate.add(dev + "\u0000" + d);
+            }
         }
         // Findings are evaluated only after the whole batch is indexed and its coverage written, and every device that has
         // evidence on a touched day is evaluated again, not only the devices of this batch: the fleet-background input
@@ -123,6 +152,17 @@ public final class LogDetectionService {
                 } catch (RuntimeException e) {
                     recordEvaluationFailure(deviceId, day, e);
                 }
+            }
+        }
+        for (String key : deviceDaysToReevaluate) {
+            int nul = key.indexOf('\u0000');
+            String dev = key.substring(0, nul);
+            LocalDate day = LocalDate.parse(key.substring(nul + 1));
+            if (touchedDays.contains(day)) continue;
+            try {
+                findings += evaluator.evaluate(dev, day);
+            } catch (RuntimeException e) {
+                recordEvaluationFailure(dev, day, e);
             }
         }
         return new PassSummary(true, "OK", indexed, refused, coverageRows, findings);
@@ -216,7 +256,7 @@ public final class LogDetectionService {
         int indexedChunks = statuses.values().stream().mapToInt(Integer::intValue).sum();
         if (run.chunks() > indexedChunks) return false; // part of the window is still pending: no verdict yet
         long[] counts = repository.lineCounts(deviceId, sourceKey, jobId);
-        int history = repository.historyDays(deviceId, sourceKey);
+        int history = repository.historyDays(deviceId, sourceKey, day);
         LogCoverage.State state = LogCoverage.of(LogEvidenceExtractor.ANALYSED_SOURCES.contains(sourceKey), run, statuses,
                 counts[0], counts[1], history);
         repository.upsertCoverage(new CoverageRow(deviceId, sourceKey, jobId, day, state.state(), state.reason(), history));

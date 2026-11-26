@@ -256,10 +256,13 @@ public final class ZoneMatrixSummaryView {
         out.put("count_text", h.countText());
         out.put("text", h.text());
         out.put("outside_headline_text", h.outsideHeadlineText());
+        // Fail closed on read (ZM-26): a headline carrying undecided findings is never projected as exact.
+        var shown = ZoneMatrixStaleness.withUndecided(h.stalenessHeadline(),
+                h.notEvaluableFindings() + h.unknownFindings() + h.becameUndecidedFindings());
         Map<String, Object> staleness = new LinkedHashMap<>();
-        staleness.put("count", h.stalenessHeadline().count());
-        staleness.put("exact", h.stalenessHeadline().exact());
-        staleness.put("text", h.stalenessHeadline().text());
+        staleness.put("count", shown.count());
+        staleness.put("exact", shown.exact());
+        staleness.put("text", shown.text());
         out.put("staleness_headline", staleness);
         return out;
     }

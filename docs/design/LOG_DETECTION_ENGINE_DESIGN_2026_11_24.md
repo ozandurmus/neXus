@@ -602,6 +602,14 @@ A device shows "no findings" only together with its coverage, for example "No fi
 Recommendation: (a) now, moved to (b) when the analysis container ships, on measured load. The worker's part is only
 to enqueue the job on window close. PO question 2.
 
+**Pass order (2026-11-26).** Both online indexers (P1 and P2) pull pending closed-window chunks newest `log_day` first
+(`log_day DESC, collected_at, chunk_id`), then backfill older days within the same per-pass chunk and time bounds so
+current days reach shadow and operator review first. History counts and 28-day baselines never look ahead past the
+evaluated day, and while a `(device, source)` pair still has unprocessed closed chunks inside `[day - 28, day)` its
+coverage stays `NOT_EVALUABLE` (`HISTORY_UNDER_7_DAYS`) with baselines withheld rather than guessing chronic or
+statistical verdicts from a newest-only slice; once later passes index those older days, the newer windows' coverage and
+device-day findings are recomputed.
+
 ### 8.2 Masking before mining
 
 The only text the miner and the matcher ever see is masked and normalised (§4.1). Concretely:

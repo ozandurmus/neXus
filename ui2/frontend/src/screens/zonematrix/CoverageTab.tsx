@@ -8,6 +8,7 @@ import { StatusChip } from "../../shell/M3Widgets";
 import { StatePanel, Ts, Unknown } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { Hint, SectionTitle, panelSx } from "./zoneMatrixUi";
+import { stalenessHeadlineText } from "./ViolationsTab";
 import {
   SummaryReadFailure, ThresholdNote, ageText, flagWords, stalenessReasonWords, summaryGate, useEnsureSummary,
   type ZoneSummaryHandle,
@@ -98,7 +99,7 @@ export function CoverageTab({ summary }: { readonly summary: ZoneSummaryHandle }
       <SummaryReadFailure summary={summary} />
       <Typography variant="body2" data-testid="summary-state-text" sx={{ color: m3.onSurfaceVar }}>{data.state_text}</Typography>
       <ThresholdNote threshold={data.staleness_threshold} />
-      {data.headline ? <Typography variant="body2" data-testid="staleness-headline">{data.headline.staleness_headline.text}</Typography> : null}
+      {data.headline ? <Typography variant="body2" data-testid="staleness-headline">{stalenessHeadlineText(data, data.headline)}</Typography> : null}
       {data.masked ? <Hint>Names are shown as the server masked them.</Hint> : null}
 
       <Box sx={panelSx}>

@@ -124,14 +124,30 @@ public final class LogDetectionP2Service {
         List<PendingChunk> pending = repository.pendingChunks(m.catalogVersion(), LogMasking.RULE_SET, LogTemplateNormaliser.VERSION,
                 LogEvidenceExtractor.ANALYSED_SOURCES, maxChunks);
         Set<String> touched = new TreeSet<>(); // source|day
+        Map<String, LocalDate> earliestIndexed = new LinkedHashMap<>();
         int indexed = 0;
         int refused = 0;
         for (PendingChunk chunk : pending) {
             if (nanoClock.get() > deadline) break;
             Set<LocalDate> days = new TreeSet<>();
             String status = indexIsolated(chunk, m, days);
-            if ("INDEXED".equals(status)) indexed++; else refused++;
+            if ("INDEXED".equals(status)) {
+                indexed++;
+                earliestIndexed.merge(chunk.deviceId() + "|" + chunk.sourceKey(), chunk.logDay(),
+                        (a, b) -> a.isBefore(b) ? a : b);
+            } else {
+                refused++;
+            }
             for (LocalDate d : days) touched.add(chunk.sourceKey() + "|" + d);
+        }
+        for (var entry : earliestIndexed.entrySet()) {
+            int bar = entry.getKey().indexOf('|');
+            String dev = entry.getKey().substring(0, bar);
+            String src = entry.getKey().substring(bar + 1);
+            for (LocalDate d : repository.readyCountDaysAfter(m.catalogVersion(), LogMasking.RULE_SET,
+                    LogTemplateNormaliser.VERSION, dev, src, entry.getValue())) {
+                touched.add(src + "|" + d);
+            }
         }
         int deviceDays = 0;
         int raised = 0;
@@ -366,17 +382,22 @@ public final class LogDetectionP2Service {
             templates.add(new LayerBEvaluator.TemplateDay(id, c.provisional(), text(m, id, provisionalTexts), weight.get(id)[0],
                     c.markerId(), lines, peak, t[0], t[1], pointers.get(id)));
         }
-        // the device's history and the templates it already knew
+        // the device's history and the templates it already knew (never looking ahead past day)
         Optional<LogTemplateRepository.DeviceWindowRow> window = repository.deviceWindow(version, deviceId, source);
+        boolean catalogPrecedesDay = window.isPresent() && window.get().lastDay().isBefore(day);
         List<DeviceStatRow> stats = repository.deviceStats(version, deviceId, source);
         Set<String> known = new HashSet<>(repository.templatesBefore(version, deviceId, source, day));
         Map<String, LocalDate> deviceFirstSeen = new HashMap<>();
         for (DeviceStatRow s : stats) {
-            known.add(s.templateId());
-            deviceFirstSeen.put(s.templateId(), s.firstSeen());
+            if (s.firstSeen().isBefore(day)) {
+                known.add(s.templateId());
+                deviceFirstSeen.put(s.templateId(), s.firstSeen());
+            }
         }
         for (var e : earliest.entrySet()) deviceFirstSeen.putIfAbsent(e.getKey(), e.getValue());
-        int history = Math.max(window.map(LogTemplateRepository.DeviceWindowRow::usableDays).orElse(0),
+        boolean historyPending = repository.hasUnprocessedHistory(version, LogMasking.RULE_SET, LogTemplateNormaliser.VERSION,
+                deviceId, source, from, day);
+        int history = historyPending ? 0 : Math.max(catalogPrecedesDay ? window.get().usableDays() : 0,
                 repository.indexedDays(version, deviceId, source, day.minusDays(HISTORY_LOOKBACK_DAYS), day).size());
         // baseline: rolling (28 usable days before the day) when it has 7 days, else the catalog's training window
         Set<LocalDate> gaps = repository.gapDays(List.of(source), from, day).getOrDefault(deviceId + "|" + source, Set.of());
@@ -385,7 +406,7 @@ public final class LogDetectionP2Service {
         Map<String, LayerBEvaluator.Baseline> baselines = new TreeMap<>();
         int baselineDays;
         boolean fromCatalog;
-        if (usable.size() >= LogSeverity.MIN_BASELINE_DAYS) {
+        if (!historyPending && usable.size() >= LogSeverity.MIN_BASELINE_DAYS) {
             baselineDays = usable.size();
             fromCatalog = false;
             Map<String, Map<LocalDateTime, Long>> base = new TreeMap<>();
@@ -410,7 +431,7 @@ public final class LogDetectionP2Service {
                         Math.min(1.0, (double) values.length / buckets), presence.get(e.getKey()).size(),
                         text(m, e.getKey(), provisionalTexts), c.severityWeight(), c.markerId()));
             }
-        } else if (window.isPresent() && window.get().usableDays() >= LogSeverity.MIN_BASELINE_DAYS) {
+        } else if (!historyPending && catalogPrecedesDay && window.get().usableDays() >= LogSeverity.MIN_BASELINE_DAYS) {
             baselineDays = window.get().usableDays();
             fromCatalog = true;
             for (DeviceStatRow s : stats) {

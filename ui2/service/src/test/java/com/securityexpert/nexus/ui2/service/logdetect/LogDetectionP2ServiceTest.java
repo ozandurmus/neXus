@@ -160,4 +160,47 @@ class LogDetectionP2ServiceTest {
         assertNull(scoreA.get("score"));
         assertFalse(shownA.containsKey("layer_b"));
     }
+
+    @Test
+    void p2IndexesNewestDaysFirstWithholdsVerdictWhileHistoryIsPendingAndReevaluatesOnceBackfilled(@TempDir Path dir)
+            throws Exception {
+        LayerBG1GoldenTest.Rig rig = new LayerBG1GoldenTest.Rig(dir);
+        rig.storeTraining();
+        rig.catalogs().build("actor", LayerBG1GoldenTest.TRAIN_FROM, LayerBG1GoldenTest.TRAIN_FROM.plusDays(13),
+                LogCatalogBuilder.Params.defaults());
+        rig.catalogs().freeze("actor", "cat-1");
+
+        var priorDay = LayerBG1GoldenTest.DAY.minusDays(1);
+        String novelLine = "ntpd[410]: clock step offset stabilized\n";
+        String priorText = LayerBTestPool.raw(priorDay.atTime(3, 15), novelLine.strip());
+        String currentText = LayerBG1GoldenTest.g1DayText()
+                + LayerBTestPool.raw(LayerBG1GoldenTest.DAY.atTime(22, 15), novelLine.strip()) + "\n";
+
+        // Insert older day first, then newer day: pendingChunks must offer DAY before DAY - 1.
+        rig.storeDay("g1-prior", LayerBTestPool.TANGO, priorText + "\n", priorDay);
+        rig.storeDay("g1-day", LayerBTestPool.TANGO, currentText, LayerBG1GoldenTest.DAY);
+
+        LogDetectionP2Service p2 = rig.p2();
+        PassSummary first = p2.runOnce(1, Duration.ofMinutes(1));
+        assertEquals(1, first.chunksIndexed());
+        assertTrue(rig.repo.states.containsKey("g1-day|cat-1"), "newest log day is indexed first");
+        assertFalse(rig.repo.states.containsKey("g1-prior|cat-1"));
+        assertTrue(rig.p1.findings.isEmpty(),
+                "statistical findings on DAY wait until unprocessed history in [DAY - 28, DAY) is indexed");
+
+        PassSummary second = p2.runOnce(1, Duration.ofMinutes(1));
+        assertEquals(1, second.chunksIndexed());
+        assertTrue(rig.repo.states.containsKey("g1-prior|cat-1"));
+
+        List<FindingRow> priorFindings = rig.p1.findings.values().stream()
+                .filter(f -> f.layerB() != null && f.windowDay().equals(priorDay)).toList();
+        List<FindingRow> dayFindings = rig.p1.findings.values().stream()
+                .filter(f -> f.layerB() != null && f.windowDay().equals(LayerBG1GoldenTest.DAY)).toList();
+        assertTrue(priorFindings.stream().anyMatch(f -> f.layerB().kinds().contains("NEW_ON_DEVICE")
+                && f.layerB().templateText().contains("ntpd")), "the novel template is NEW_ON_DEVICE on DAY - 1");
+        assertTrue(dayFindings.stream().noneMatch(f -> f.layerB().templateText().contains("ntpd")),
+                "after DAY - 1 is indexed, DAY is re-evaluated and does not duplicate NEW_ON_DEVICE for an unchanged line");
+        assertTrue(dayFindings.stream().anyMatch(f -> f.layerB().templateText().contains("EDAC")),
+                "DAY is re-evaluated once history completes and raises its EDAC finding");
+    }
 }

@@ -174,7 +174,7 @@ public interface LogDetectionRepository {
     /** Audited write of both switches (security_admin), one row, one audit path (V272 trigger). */
     Settings writeSettings(String actorFingerprint, boolean enabled, Instant shadowUntil, boolean p2Enabled);
 
-    /** Chunks not yet processed under these versions, oldest first; pruned chunks are not offered. */
+    /** Chunks not yet processed under these versions, newest log day first (then collection order); pruned chunks are not offered. */
     List<PendingChunk> pendingChunks(String maskingRuleSet, String markerListVersion, int limit);
 
     /** In one transaction: removes the chunk's earlier evidence rows, writes {@code events} and the index state. */
@@ -191,11 +191,40 @@ public interface LogDetectionRepository {
 
     List<DayEvidence> dayEvidence(String deviceId, LocalDate day);
 
-    /** Distinct usable days (indexed chunk, no gap record that day) with at most 28 days before {@code day}. */
+    /**
+     * Distinct usable days (every closed chunk of the day indexed, no gap record that day) in {@code [day - 28, day)},
+     * or empty while an earlier closed chunk in that window is still unprocessed.
+     */
     Baseline baseline(String deviceId, String sourceKey, String markerId, LocalDate day);
 
     /** Distinct days with at least one indexed chunk, all time. */
     int historyDays(String deviceId, String sourceKey);
+
+    /**
+     * Distinct complete indexed days on or before {@code day} once {@code [day - 28, day)} has no unprocessed closed chunk;
+     * while an earlier closed chunk in {@code [day - 28, day)} is still unprocessed, at most {@code day} itself (0 or 1), so
+     * a newer day evaluated before its history arrives stays {@code NOT_EVALUABLE} ({@code HISTORY_UNDER_7_DAYS}) and an
+     * older day never counts newer days as its history.
+     */
+    default int historyDays(String deviceId, String sourceKey, LocalDate day) {
+        return historyDays(deviceId, sourceKey);
+    }
+
+    /**
+     * Evaluated coverage rows ({@code NOT_EVALUABLE}, {@code BASELINE_LEARNING}, {@code EVALUATED}) of {@code (deviceId, sourceKey)}
+     * after {@code afterDay} whose {@code [window_day - 28, window_day)} history has no unprocessed closed chunks left.
+     */
+    default List<CoverageRow> readyCoverageAfter(String deviceId, String sourceKey, LocalDate afterDay) {
+        return List.of();
+    }
+
+    /**
+     * Distinct device-local days on or after {@code fromDay} on which {@code (deviceId, sourceKey)} has evidence rows and
+     * {@code [day - 28, day)} has no unprocessed closed chunks left.
+     */
+    default List<LocalDate> readyEvidenceDaysAfter(String deviceId, String sourceKey, LocalDate fromDay) {
+        return List.of();
+    }
 
     /** Devices with an evaluable coverage row for the source on the day. */
     int cohortSize(String sourceKey, LocalDate day);

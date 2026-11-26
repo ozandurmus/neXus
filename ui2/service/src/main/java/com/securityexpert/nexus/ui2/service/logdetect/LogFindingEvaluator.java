@@ -85,7 +85,7 @@ public final class LogFindingEvaluator {
         boolean exemptFleet = marker != null ? marker.exemptFromFleetBackground() : weight >= 1.0;
 
         Baseline baseline = repository.baseline(deviceId, e.sourceKey(), e.markerId(), day);
-        int history = repository.historyDays(deviceId, e.sourceKey());
+        int history = repository.historyDays(deviceId, e.sourceKey(), day);
         int cohort = repository.cohortSize(e.sourceKey(), day);
         int prevalence = repository.prevalence(e.sourceKey(), e.markerId(), day);
 

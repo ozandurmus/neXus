@@ -50,7 +50,9 @@ class InMemoryLogDetectionRepository implements LogDetectionRepository {
 
     @Override
     public List<PendingChunk> pendingChunks(String rules, String markers, int limit) {
-        return pending.stream().filter(c -> !states.containsKey(c.chunkId())).limit(limit).toList();
+        return pending.stream().filter(c -> !states.containsKey(c.chunkId()))
+                .sorted(Comparator.comparing(PendingChunk::logDay).reversed())
+                .limit(limit).toList();
     }
 
     @Override
@@ -115,9 +117,54 @@ class InMemoryLogDetectionRepository implements LogDetectionRepository {
         return out;
     }
 
+    private boolean hasUnprocessedHistory(String deviceId, String sourceKey, LocalDate day) {
+        LocalDate from = day.minusDays(28);
+        return pending.stream().anyMatch(c -> c.deviceId().equals(deviceId) && c.sourceKey().equals(sourceKey)
+                && !c.logDay().isBefore(from) && c.logDay().isBefore(day) && !states.containsKey(c.chunkId()));
+    }
+
+    private boolean isDayComplete(String deviceId, String sourceKey, LocalDate d) {
+        return pending.stream().filter(c -> c.deviceId().equals(deviceId) && c.sourceKey().equals(sourceKey) && c.logDay().equals(d))
+                .allMatch(c -> states.containsKey(c.chunkId()) && "INDEXED".equals(states.get(c.chunkId()).status()));
+    }
+
+    private boolean hasGapOnDay(String deviceId, String sourceKey, LocalDate d) {
+        for (PendingChunk c : pending) {
+            if (!c.deviceId().equals(deviceId) || !c.sourceKey().equals(sourceKey) || !c.logDay().equals(d)) continue;
+            RunFacts r = runs.get(deviceId + "|" + sourceKey + "|" + c.jobId());
+            if (r != null && (!r.gapKinds().isEmpty() || "GAP".equals(r.outcome()) || "BACKLOG".equals(r.outcome()))) return true;
+        }
+        return false;
+    }
+
     @Override
     public Baseline baseline(String deviceId, String sourceKey, String markerId, LocalDate day) {
-        return baselines.getOrDefault(sourceKey + "|" + markerId, new Baseline(0, 0, List.of()));
+        Baseline configured = baselines.get(sourceKey + "|" + markerId);
+        if (configured != null) return configured;
+        if (hasUnprocessedHistory(deviceId, sourceKey, day)) return new Baseline(0, 0, List.of());
+        LocalDate from = day.minusDays(28);
+        List<LocalDate> usable = states.values().stream()
+                .filter(s -> s.deviceId().equals(deviceId) && s.sourceKey().equals(sourceKey)
+                        && "INDEXED".equals(s.status()) && !s.logDay().isBefore(from) && s.logDay().isBefore(day)
+                        && isDayComplete(deviceId, sourceKey, s.logDay()) && !hasGapOnDay(deviceId, sourceKey, s.logDay()))
+                .map(IndexState::logDay).distinct().sorted().toList();
+        if (usable.isEmpty()) return new Baseline(0, 0, List.of());
+        Map<LocalDate, Long> counts = new LinkedHashMap<>();
+        for (EventRow e : events) {
+            LocalDate d = e.bucketStart().toLocalDate();
+            if (e.deviceId().equals(deviceId) && e.sourceKey().equals(sourceKey) && e.markerId().equals(markerId)
+                    && !d.isBefore(from) && d.isBefore(day)) {
+                counts.merge(d, (long) e.lineCount(), Long::sum);
+            }
+        }
+        List<Long> perDay = new ArrayList<>();
+        int present = 0;
+        for (LocalDate d : usable) {
+            long n = counts.getOrDefault(d, 0L);
+            perDay.add(n);
+            if (n > 0) present++;
+        }
+        return new Baseline(usable.size(), present, perDay);
     }
 
     @Override
@@ -125,6 +172,35 @@ class InMemoryLogDetectionRepository implements LogDetectionRepository {
         if (historyOverride != null) return historyOverride;
         return (int) states.values().stream().filter(s -> s.deviceId().equals(deviceId) && s.sourceKey().equals(sourceKey)
                 && s.status().equals("INDEXED")).map(IndexState::logDay).distinct().count();
+    }
+
+    @Override
+    public int historyDays(String deviceId, String sourceKey, LocalDate day) {
+        if (historyOverride != null) return historyOverride;
+        if (hasUnprocessedHistory(deviceId, sourceKey, day)) {
+            return (int) states.values().stream().filter(s -> s.deviceId().equals(deviceId) && s.sourceKey().equals(sourceKey)
+                    && "INDEXED".equals(s.status()) && s.logDay().equals(day) && isDayComplete(deviceId, sourceKey, day))
+                    .map(IndexState::logDay).distinct().count();
+        }
+        return (int) states.values().stream().filter(s -> s.deviceId().equals(deviceId) && s.sourceKey().equals(sourceKey)
+                && "INDEXED".equals(s.status()) && !s.logDay().isAfter(day) && isDayComplete(deviceId, sourceKey, s.logDay()))
+                .map(IndexState::logDay).distinct().count();
+    }
+
+    @Override
+    public List<CoverageRow> readyCoverageAfter(String deviceId, String sourceKey, LocalDate afterDay) {
+        return coverage.values().stream().filter(c -> c.deviceId().equals(deviceId) && c.sourceKey().equals(sourceKey)
+                && c.windowDay().isAfter(afterDay) && LogCoverage.evaluated(c.state())
+                && !hasUnprocessedHistory(deviceId, sourceKey, c.windowDay()))
+                .sorted(Comparator.comparing(CoverageRow::windowDay).thenComparing(CoverageRow::jobId)).toList();
+    }
+
+    @Override
+    public List<LocalDate> readyEvidenceDaysAfter(String deviceId, String sourceKey, LocalDate fromDay) {
+        return events.stream().filter(e -> e.deviceId().equals(deviceId) && e.sourceKey().equals(sourceKey)
+                && !e.bucketStart().toLocalDate().isBefore(fromDay)
+                && !hasUnprocessedHistory(deviceId, sourceKey, e.bucketStart().toLocalDate()))
+                .map(e -> e.bucketStart().toLocalDate()).distinct().sorted().toList();
     }
 
     @Override
