@@ -75,7 +75,10 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
  * rule, object and policy names. The P1 planes are seeded too: a Zone Matrix ACTIVE and DRAFT version (raw zone names,
  * IPv4 and IPv6 blocks, cell rationale and regulation reference, the administrator as author and publisher), an ACI
  * cutover segment with one assessment and its flow rows (raw segment name, blocks, flow addresses, the seeded rule), and a
- * Cisco ASA failover pair (raw cluster reference, unit serials, stored running configurations in the test store).
+ * Cisco ASA failover pair (raw cluster reference, unit serials, stored running configurations in the test store); the
+ * seeded static-route preview uses a UUID {@code preview_id} (matching {@code StaticRoutePreviewService#submitPreview})
+ * so both {@code GET /api/v2/operations/static-route/preview} and {@code GET /api/v2/operations/static-route/preview/*}
+ * answer 200 with the seeded preview row.
  * Output names the route, the HTTP status and the value <em>class</em> with a count --
  * never a value. A surviving raw value fails the test unless the route and class are on {@link #KNOWN_LEAKS}, which
  * must match the findings exactly (an entry that stops leaking fails too, so the list only shrinks on purpose).</p>
@@ -85,7 +88,8 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
  * inline parent path, two violated cells with witness ranges and a NAT view; the earlier with one finding resolved by a
  * version change) -- and failover run history: one finished run per vendor family (Check Point and Palo Alto: a
  * failover run with its approval; Cisco ASA and FortiGate: a readiness run, their readiness switches switched on in this
- * test's application only) on pairs that carry raw cluster references, hostnames, serials, addresses and the
+ * test's application only, whereas {@code AiviewFailoverIncidentsSweepTest} leaves both switches at their default OFF)
+ * on pairs that carry raw cluster references, hostnames, serials, addresses and the
  * administrator. Not covered: failover approvals and runs of VSX virtual systems (units need real VSX inventory
  * contexts), the in-flight run states, dispatch intents and check results.</p>
  *
@@ -143,6 +147,7 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/system-logs/*/chunks", Set.of("log-chunk")),
             Map.entry("GET /api/v2/system-logs/chunks/*/text", Set.of("log-line")),
             Map.entry("GET /api/v2/operations/static-route/preview", Set.of("device", "static-route-preview")),
+            Map.entry("GET /api/v2/operations/static-route/preview/*", Set.of("device", "static-route-preview")),
             Map.entry("GET /api/v2/zone-matrix/versions", Set.of("zone-matrix-version")),
             Map.entry("GET /api/v2/zone-matrix/versions/*", Set.of("zone-matrix-version", "zone")),
             Map.entry("GET /api/v2/zone-matrix/draft", Set.of("zone-matrix-version")),
@@ -620,7 +625,7 @@ class AiviewRawVersusMaskedSweepTest {
                         JSON.writeValueAsString(List.of(Map.of("field", "name", "before", "old-" + tag(), "after", e.ruleName()))));
 
                 // A static-route preview on the cluster (the unit is the cluster), requested by the administrator.
-                String preview = "srp-" + UUID.randomUUID();
+                String preview = UUID.randomUUID().toString();
                 exec(c, "insert into static_route_preview(preview_id, idempotency_key, request_payload_sha256, requested_by, "
                         + "unit_id, target_device_id, vendor, routing_context, operation, destination_cidr, nexthop_ip, "
                         + "interface_name, route_name, device_comment, representative_host, state, verdict, pre_checks_json, "
@@ -1527,8 +1532,10 @@ class AiviewRawVersusMaskedSweepTest {
 
         List<String> uncovered = new ArrayList<>();
         COVERAGE.forEach((route, expected) -> {
-            if (!seen.getOrDefault(route, Set.of()).containsAll(expected)) {
-                uncovered.add(route + " expected " + expected + " saw " + seen.get(route));
+            if (!Integer.valueOf(200).equals(statusByRoute.get(route))
+                    || !seen.getOrDefault(route, Set.of()).containsAll(expected)) {
+                uncovered.add(route + " expected 200+" + expected + " saw " + seen.get(route)
+                        + " status " + statusByRoute.get(route));
             }
         });
         assertEquals(List.of(), uncovered, "seeded rows must reach these views, or a zero count proves nothing");

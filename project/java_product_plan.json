@@ -417,7 +417,8 @@
     "aiview_sweep_test_hosta_cause": "java_debt",
     "aiview_job_transcript_masked_read_decision": "java_feature",
     "policy_insights_onetime_hours_range_schedule": "java_feature",
-    "policy_insights_p3_counter_samples_contract_review": "java_feature"
+    "policy_insights_p3_counter_samples_contract_review": "java_feature",
+    "policy_change_event_trigger": "java_feature"
   },
   "converted_lessons": [
     {

@@ -59,7 +59,9 @@ import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
  * catalog row whose note and importer name a host and the administrator, an upload row), SNMP metric samples (raw,
  * hourly and poll state), configuration-override notifications (summary and paths in free text), backup size-anomaly
  * records (free-text summary), and a Palo Alto policy whose rules name raw zones with the stored virtual-system zone set
- * of its firewall. Notification settings and routes (syslog and mail hosts, recipients) and the audit rows (actor and
+ * of its firewall (read both on the policy views and on {@code GET /api/v2/operations/policy-install/status}, fired
+ * first on the cold process and keyed by the seeded PAN policy, target device and masked virtual-system row key).
+ * Notification settings and routes (syslog and mail hosts, recipients) and the audit rows (actor and
  * target text) are seeded too, but their only routes are {@code security_admin} reads aiview cannot reach: for those the
  * test asserts the refusal and that the refusal body carries no planted value.</p>
  *
@@ -97,6 +99,7 @@ class AiviewUnseededPlanesSweepTest {
             Map.entry("GET /api/v2/policy/policies/*/rules", Set.of("pan-rule")),
             Map.entry("GET /api/v2/policy/policies/*/hygiene", Set.of("pan-zone-verdict")),
             Map.entry("GET /api/v2/policy/devices", Set.of("pan-policy")),
+            Map.entry("GET /api/v2/operations/policy-install/status", Set.of("device", "pan-policy", "policy-install-row")),
             Map.entry("GET /api/v2/system-logs/health", Set.of("device", "snmp-metrics")));
 
     private static Ui2PostgresFixture fixture;
@@ -614,6 +617,7 @@ class AiviewUnseededPlanesSweepTest {
         markers.put("\"source\":\"SNMP\"", "snmp-metrics");
         markers.put(e.policyId(), "pan-policy");
         markers.put(e.ruleId(), "pan-rule");
+        markers.put("pan:" + e.policyId() + ":" + e.pan().id() + ":", "policy-install-row");
         // the later any-zone rule is REDUNDANT only because the stored zone set of the firewall proves the earlier rule covers it
         markers.put("\"shadowStatus\":\"REDUNDANT\"", "pan-zone-verdict");
 
@@ -649,8 +653,9 @@ class AiviewUnseededPlanesSweepTest {
 
         List<String> uncovered = new ArrayList<>();
         COVERAGE.forEach((route, expected) -> {
-            if (!seen.getOrDefault(route, Set.of()).containsAll(expected)) {
-                uncovered.add(route + " expected " + expected + " saw " + seen.get(route) + " status " + status.get(route));
+            if (!Integer.valueOf(200).equals(status.get(route))
+                    || !seen.getOrDefault(route, Set.of()).containsAll(expected)) {
+                uncovered.add(route + " expected 200+" + expected + " saw " + seen.get(route) + " status " + status.get(route));
             }
         });
         assertEquals(List.of(), uncovered, "seeded rows must reach these views, or a zero count proves nothing");
