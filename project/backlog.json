@@ -632,7 +632,7 @@
     {
       "id": "log_detection_engine_design_open_questions",
       "category": "engineering",
-      "title": "System-log detection engine: design FROZEN by the PO, P1 shipped in shadow (842ff7cb, V272); later phases open",
+      "title": "System-log detection engine: design FROZEN by the PO, P1 shipped in shadow (842ff7cb, V272), P2 shipped off (d2a95f34, V273); later phases open",
       "status": "planned",
       "priority": "P2",
       "target": "docs/design/LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md",
@@ -659,7 +659,7 @@
     {
       "id": "zone_matrix_step_7_remaining",
       "category": "policy",
-      "title": "Zone matrix step 7 remainder: ZM-12, ZM-26, ZM-30, ZM-36, ZM-40 stay PARTIAL (ZM-19, ZM-25, ZM-37 proven)",
+      "title": "Zone matrix step 7 remainder: ZM-12 real-environment measurement stays PARTIAL (ZM-19, ZM-25, ZM-26, ZM-30, ZM-36, ZM-37, ZM-40 proven by automated tests)",
       "status": "planned",
       "priority": "P2",
       "target": "0fd6a834",
@@ -717,6 +717,33 @@
       "status": "planned",
       "priority": "P3",
       "target": "b2aec1f5",
+      "note": ""
+    },
+    {
+      "id": "aiview_job_transcript_masked_read_decision",
+      "category": "engineering",
+      "title": "Job transcript for aiview: HTTP 403 stays by design; a masked transcript widens an authorization boundary and needs a PO decision",
+      "status": "planned",
+      "priority": "P3",
+      "target": "15753699",
+      "note": ""
+    },
+    {
+      "id": "policy_insights_onetime_hours_range_schedule",
+      "category": "policy",
+      "title": "Policy Insights Check Point mapper: one-time schedule with an hours-range left unchanged, reviewer question open for the PO",
+      "status": "planned",
+      "priority": "P3",
+      "target": "15753699",
+      "note": ""
+    },
+    {
+      "id": "policy_insights_p3_counter_samples_contract_review",
+      "category": "policy",
+      "title": "Policy Insights P3 counter-sample storage contract: DRAFT -- DO NOT FREEZE, 12 PO questions open; no migration or code authorized",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/POLICY_INSIGHTS_COUNTER_SAMPLES_STORAGE_CONTRACT_2026_11_26.md",
       "note": ""
     }
   ]
