@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 import org.junit.jupiter.api.Test;
 
@@ -429,17 +432,38 @@ class LogRedactorTest {
         String line = "word ".repeat(200_000) + "\n";
         assertEquals(line, red(line));
         String hot = ("password=abcdef " + "a-".repeat(1000)).repeat(500) + "\n";
+        String hot4x = ("password=abcdef " + "a-".repeat(1000)).repeat(2000) + "\n";
         red(hot); // warm-up
-        // Both lines are timed, as before; the minimum of five samples is load-robust
-        // (a busy build host can only stretch a sample, never shrink it).
+        // Thread CPU time, not wall clock: a loaded build host stretches wall time but not this thread's CPU time.
+        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
+        boolean cpuSupported = bean.isCurrentThreadCpuTimeSupported();
+        if (cpuSupported && !bean.isThreadCpuTimeEnabled()) {
+            bean.setThreadCpuTimeEnabled(true);
+        }
+        // Wall clock is only the fallback for JVMs that cannot report thread CPU time.
+        LongSupplier clock = cpuSupported ? bean::getCurrentThreadCpuTime : System::nanoTime;
+        // Minimum of five samples: a busy host can only stretch a sample, never shrink it.
         long minNanos = Long.MAX_VALUE;
         for (int i = 0; i < 5; i++) {
-            long t0 = System.nanoTime();
+            long t0 = clock.getAsLong();
             red(line);
             red(hot);
-            minNanos = Math.min(minNanos, System.nanoTime() - t0);
+            minNanos = Math.min(minNanos, clock.getAsLong() - t0);
         }
         assertTrue(minNanos / 1_000_000 < 5_000, "redaction must stay fast");
+        // Ratio guard, independent of machine speed: 4x input costs about 4x when linear, about 16x when quadratic.
+        long hotNanos = Long.MAX_VALUE;
+        long hot4xNanos = Long.MAX_VALUE;
+        for (int i = 0; i < 3; i++) {
+            long t0 = clock.getAsLong();
+            red(hot);
+            hotNanos = Math.min(hotNanos, clock.getAsLong() - t0);
+            t0 = clock.getAsLong();
+            red(hot4x);
+            hot4xNanos = Math.min(hot4xNanos, clock.getAsLong() - t0);
+        }
+        assertTrue(hot4xNanos < 10 * Math.max(1L, hotNanos),
+                "4x input must not cost 10x: " + hotNanos + " ns vs " + hot4xNanos + " ns");
     }
 
     private static byte[] concat(byte[]... parts) {
