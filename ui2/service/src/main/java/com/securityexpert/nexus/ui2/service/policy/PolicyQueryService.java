@@ -1084,11 +1084,14 @@ public final class PolicyQueryService {
         for (var section : snapshot.sections()) for (var rule : section.rules()) {
             var assessment = analysis.rules().get(rule.id());
             var identity = searchable(Map.of("name", rule.name(), "number", rule.number()), masked);
-            for (var finding : assessment.findings()) {
+            var safe = searchable(map(assessment), masked);
+            List<?> safeFindings = safe.get("findings") instanceof List<?> list ? list : List.of();
+            for (int i = 0; i < assessment.findings().size(); i++) {
+                var finding = assessment.findings().get(i);
                 if ((!cls.isEmpty() && !cls.equals(finding.findingClass())) || (!severity.isEmpty() && !severity.equals(finding.severity()))) continue;
-                var safe = searchable(map(assessment), masked);
-                var fields = Arrays.asList(identity.get("name"), rule.number(), finding.findingClass(), finding.severity(), finding.evidence(),
-                    assessment.coveringRuleId(), safe.get("counterWindow"), safe.get("hitSource"), safe.get("hitsCollectedAt"));
+                Map<?, ?> projected = i < safeFindings.size() && safeFindings.get(i) instanceof Map<?, ?> m ? m : Map.of();
+                var fields = Arrays.asList(identity.get("name"), rule.number(), projected.get("findingClass"), projected.get("severity"), projected.get("evidence"),
+                    safe.get("coveringRuleId"), safe.get("counterWindow"), safe.get("hitSource"), safe.get("hitsCollectedAt"));
                 csv.append(fields.stream().map(PolicyQueryService::csvCell).collect(java.util.stream.Collectors.joining(","))).append("\r\n");
             }
         }

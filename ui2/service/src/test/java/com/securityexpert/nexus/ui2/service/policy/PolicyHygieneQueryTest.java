@@ -3,6 +3,10 @@ package com.securityexpert.nexus.ui2.service.policy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
+import com.securityexpert.nexus.ui2.policy.asa.AsaConfigPolicyParser;
+import com.securityexpert.nexus.ui2.policy.asa.AsaPolicyMapper;
+import com.securityexpert.nexus.ui2.policy.fortigate.FortiGateConfigPolicyParser;
+import com.securityexpert.nexus.ui2.policy.fortigate.FortiGatePolicyMapper;
 import com.securityexpert.nexus.ui2.service.privacy.*;
 import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -147,5 +151,194 @@ class PolicyHygieneQueryTest {
         r = new Rule(r.id(), r.uuid(), 1, " =1+1", false, r.source(), r.destination(), r.service(), r.application(), r.action(), r.log(), "", r.extras());
         String csv = new String(query.hygieneCsv(PolicyHygieneTest.snapshot(List.of(r), PolicyHygieneTest.objects()), "disabled", "LOW", 90, false), StandardCharsets.UTF_8);
         assertTrue(csv.contains("\"' =1+1\"")); assertTrue(csv.contains("Rule is disabled.")); assertFalse(csv.contains("counter reset"));
+    }
+    @Test void hygieneCsvFailsClosedOnNonAllowlistedFindingFieldsInAiviewAndPreservesRawForAdmin() {
+        var service = new PolicyQueryService(mock(TransactionBoundary.class), mapper, names, null, ips);
+        var base = PolicyHygieneTest.rule("r1", "host", "port", "allow", true);
+        var r = new Rule(base.id(), base.uuid(), 7, "Synthetic rule 192.0.2.44", true, base.source(), base.destination(), base.service(), base.application(),
+            base.action(), base.log(), "", Map.of());
+        var snapshot = PolicyHygieneTest.snapshot(List.of(r), PolicyHygieneTest.objects());
+        service.setHygieneComputer((snap, days, now) -> new PolicyHygiene.Result(Map.of("r1",
+            new PolicyHygiene.Assessment("UNKNOWN", "Synthetic shadow reason 192.0.2.44", "r-cover-1",
+                List.of(
+                    new PolicyHygiene.Finding("custom_class", "CRITICAL", "Synthetic raw leak 192.0.2.44"),
+                    new PolicyHygiene.Finding("unused", "LOW", PolicyHygiene.ASA_ACL_NOT_REFERENCED)),
+                PolicyRuleMetrics.permissiveness("Unknown", List.of(), 0), "unknown", false,
+                "Synthetic window 192.0.2.44", "Synthetic source", "not-a-timestamp")), false));
+
+        String maskedCsv = new String(service.hygieneCsv(snapshot, "", "", 90, true), StandardCharsets.UTF_8);
+        assertFalse(maskedCsv.contains("Synthetic"));
+        assertFalse(maskedCsv.contains("192.0.2.44"));
+        assertFalse(maskedCsv.contains("custom_class"));
+        assertFalse(maskedCsv.contains("CRITICAL"));
+        assertTrue(maskedCsv.contains("\"" + names.maskPolicyName("rule", r.name())
+            + "\",\"7\",\"unknown\",\"LOW\",\"Evidence withheld in AIView.\",\"r-cover-1\",\"Counter window unknown.\",\"UNKNOWN\",\"\"\r\n"));
+        assertTrue(maskedCsv.contains("\"" + names.maskPolicyName("rule", r.name())
+            + "\",\"7\",\"unused\",\"LOW\",\"" + PolicyHygiene.ASA_ACL_NOT_REFERENCED + "\",\"r-cover-1\",\"Counter window unknown.\",\"UNKNOWN\",\"\"\r\n"));
+
+        String filteredMaskedCsv = new String(service.hygieneCsv(snapshot, "unused", "LOW", 90, true), StandardCharsets.UTF_8);
+        assertFalse(filteredMaskedCsv.contains("Evidence withheld in AIView."));
+        assertTrue(filteredMaskedCsv.contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED));
+
+        String adminCsv = new String(service.hygieneCsv(snapshot, "", "", 90, false), StandardCharsets.UTF_8);
+        assertTrue(adminCsv.contains("\"Synthetic rule 192.0.2.44\",\"7\",\"custom_class\",\"CRITICAL\",\"Synthetic raw leak 192.0.2.44\","
+            + "\"r-cover-1\",\"Synthetic window 192.0.2.44\",\"Synthetic source\",\"not-a-timestamp\"\r\n"));
+    }
+    @Test void hygieneCsvPreservesAllowlistedEvidenceAndShadowReasonsAndMasksAsaUnboundAclNames() {
+        String asaConfig = """
+                ASA Version 9.18(4)22
+                interface GigabitEthernet0/0
+                 nameif nif-cardholder-out
+                 security-level 0
+                access-list ACL-BOUND-192-0-2-55 extended permit tcp any host 198.51.100.20 eq 443 time-range TR-CORP
+                access-list ACL-ORPHAN-192-0-2-66 extended permit ip any any
+                access-group ACL-BOUND-192-0-2-55 in interface nif-cardholder-out
+                """;
+        var asaSnapshot = AsaPolicyMapper.map("dev-asa-1", "asa-raw-gw01", "2026-11-26T00:00:00Z", "artefact",
+            AsaConfigPolicyParser.parse(asaConfig));
+        String maskedAsaCsv = new String(query.hygieneCsv(asaSnapshot, "", "", 90, true), StandardCharsets.UTF_8);
+        assertFalse(maskedAsaCsv.contains("ACL-ORPHAN-192-0-2-66"));
+        assertFalse(maskedAsaCsv.contains("ACL-BOUND-192-0-2-55"));
+        assertFalse(maskedAsaCsv.contains("192-0-2-55"));
+        assertFalse(maskedAsaCsv.contains("192-0-2-66"));
+        assertFalse(maskedAsaCsv.contains("asa-raw-gw01"));
+        assertTrue(maskedAsaCsv.contains(names.maskPolicyName("rule", "ACL-ORPHAN-192-0-2-66")));
+        assertTrue(maskedAsaCsv.contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED));
+        assertTrue(maskedAsaCsv.contains("Shadowing: time or content constraint."));
+
+        var service = new PolicyQueryService(mock(TransactionBoundary.class), mapper, names, null, ips);
+        List<PolicyHygiene.Finding> allowlisted = new ArrayList<>();
+        for (String evidence : PolicyHygiene.EVIDENCE) allowlisted.add(new PolicyHygiene.Finding("unused", "LOW", evidence));
+        for (String reason : PolicyHygiene.REASONS) allowlisted.add(new PolicyHygiene.Finding("unknown", "LOW", "Shadowing: " + reason + "."));
+        var rule = PolicyHygieneTest.rule("r1", "host", "port", "allow", true);
+        var snapshot = PolicyHygieneTest.snapshot(List.of(rule), PolicyHygieneTest.objects());
+        service.setHygieneComputer((snap, days, now) -> new PolicyHygiene.Result(Map.of("r1",
+            new PolicyHygiene.Assessment("UNKNOWN", "analysis budget", null, allowlisted,
+                PolicyRuleMetrics.permissiveness("Unknown", List.of(), 0), "unknown", false,
+                "Counter window unknown.", "device", "2026-11-26T00:00:00Z")), false));
+        String allowlistedCsv = new String(service.hygieneCsv(snapshot, "", "", 90, true), StandardCharsets.UTF_8);
+        assertFalse(allowlistedCsv.contains("Evidence withheld in AIView."));
+        for (String evidence : PolicyHygiene.EVIDENCE) assertTrue(allowlistedCsv.contains(evidence), evidence);
+        for (String reason : PolicyHygiene.REASONS) assertTrue(allowlistedCsv.contains("Shadowing: " + reason + "."), reason);
+    }
+    @Test void fgtAndAsaLocalSnapshotsMaskAllRawValuesAcrossPageRuleHygieneAndCsv() throws Exception {
+        String asaConfig = """
+                ASA Version 9.18(4)22
+                hostname asa-edge-raw01
+                interface GigabitEthernet0/0
+                 nameif nif-raw-outside
+                 security-level 0
+                 ip address 203.0.113.20 255.255.255.0
+                interface GigabitEthernet0/1
+                 nameif nif-raw-inside
+                 security-level 100
+                object network asah-raw-app01
+                 host 203.0.113.21
+                access-list ACL-RAW-OUT remark approved by admraw.ops for asa-edge-raw01
+                access-list ACL-RAW-OUT extended permit tcp any object asah-raw-app01 eq 443 log
+                access-list ACL-RAW-OUT extended permit tcp any object asah-raw-app01 eq 443 log
+                access-list ACL-RAW-ORPHAN extended permit ip any any
+                access-group ACL-RAW-OUT in interface nif-raw-outside
+                """;
+        PolicySnapshot asa = AsaPolicyMapper.map("dev-asa-raw", "asa-edge-raw01", "2026-11-26T00:00:00Z", null,
+            AsaConfigPolicyParser.parse(asaConfig));
+        String asaBoundRuleId = asa.sections().get(0).rules().get(0).id();
+        String asaUnboundRuleId = asa.sections().stream().filter(s -> "ASA not evaluated".equals(s.name())).findFirst().orElseThrow()
+            .rules().get(0).id();
+        List<String> asaRaw = List.of("asa-edge-raw01", "nif-raw-outside", "nif-raw-inside", "203.0.113.20", "203.0.113.21",
+            "asah-raw-app01", "ACL-RAW-OUT", "ACL-RAW-ORPHAN", "admraw.ops");
+        for (var resp : List.of(query.page(asa, 0, "", true), query.rule(asa, asaUnboundRuleId, 90).orElseThrow(), query.hygiene(asa, 0, "", "", 90))) {
+            String json = mapper.writeValueAsString(PolicyPrivacy.mask(resp.body(), "", names, ips));
+            for (String secret : asaRaw) assertFalse(json.contains(secret), secret);
+        }
+        String asaHygieneJson = mapper.writeValueAsString(PolicyPrivacy.mask(query.hygiene(asa, 0, "", "", 90).body(), "", names, ips));
+        assertTrue(asaHygieneJson.contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED));
+        assertTrue(asaHygieneJson.contains("\"shadowStatus\":\"REDUNDANT\""));
+        assertTrue(asaHygieneJson.contains(asaBoundRuleId));
+        String asaCsv = new String(query.hygieneCsv(asa, "", "", 90, true), StandardCharsets.UTF_8);
+        assertTrue(asaCsv.contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED));
+        assertTrue(asaCsv.contains(asaBoundRuleId));
+        for (String secret : asaRaw) assertFalse(asaCsv.contains(secret), secret);
+
+        String fgtConfig = """
+                #config-version=FGVM64-7.4.8-FW-build2795-250521:opmode=0:vdom=0:user=admin
+                config system global
+                    set hostname "fgt-edge-raw01"
+                end
+                config system interface
+                    edit "if-raw-wan"
+                        set vdom "root"
+                        set ip 203.0.113.30 255.255.255.0
+                    next
+                    edit "if-raw-lan"
+                        set vdom "root"
+                    next
+                end
+                config firewall address
+                    edit "fgth-raw-src"
+                        set subnet 203.0.113.31 255.255.255.255
+                    next
+                    edit "fgth-raw-dst"
+                        set subnet 203.0.113.32 255.255.255.255
+                    next
+                end
+                config firewall service custom
+                    edit "HTTPS"
+                        set tcp-portrange 443
+                    next
+                end
+                config firewall policy
+                    edit 1
+                        set name "fgtpol-raw-allow"
+                        set srcintf "if-raw-wan"
+                        set dstintf "if-raw-lan"
+                        set srcaddr "fgth-raw-src"
+                        set dstaddr "fgth-raw-dst"
+                        set action accept
+                        set schedule "always"
+                        set service "HTTPS"
+                        set logtraffic all
+                        set comments "approved by fgtadm.sec on fgt-edge-raw01"
+                    next
+                    edit 2
+                        set name "fgtpol-raw-shadow"
+                        set srcintf "if-raw-wan"
+                        set dstintf "if-raw-lan"
+                        set srcaddr "fgth-raw-src"
+                        set dstaddr "fgth-raw-dst"
+                        set action accept
+                        set schedule "always"
+                        set service "HTTPS"
+                        set logtraffic all
+                        set comments "shadowed policy by fgtadm.sec"
+                    next
+                end
+                """;
+        PolicySnapshot mappedFgt = FortiGatePolicyMapper.map("dev-fgt-raw", "fgt-edge-raw01", "2026-11-26T00:00:00Z", null,
+            FortiGateConfigPolicyParser.parse(fgtConfig)).get(0);
+        List<Section> fgtSections = mappedFgt.sections().stream().map(s -> "FGT firewall policy".equals(s.source())
+            ? new Section(s.id(), s.name(), s.source(), s.parentRuleId(), s.rules().stream().map(r -> {
+                Map<String, List<String>> extras = new LinkedHashMap<>(r.extras());
+                extras.put("last-modifier", List.of("fgtadm.sec"));
+                return new Rule(r.id(), r.uuid(), r.number(), r.name(), r.enabled(), r.source(), r.destination(),
+                    r.service(), r.application(), r.action(), r.log(), r.comment(), extras);
+            }).toList()) : s).toList();
+        PolicySnapshot fgt = new PolicySnapshot(mappedFgt.metadata(), fgtSections, mappedFgt.objects(), mappedFgt.failures());
+        String fgtRuleId = fgt.sections().get(0).rules().get(0).id();
+        String fgtShadowRuleId = fgt.sections().get(0).rules().get(1).id();
+        List<String> fgtRaw = List.of("fgt-edge-raw01", "if-raw-wan", "if-raw-lan", "203.0.113.30", "203.0.113.31", "203.0.113.32",
+            "fgth-raw-src", "fgth-raw-dst", "fgtpol-raw-allow", "fgtpol-raw-shadow", "fgtadm.sec");
+        for (var resp : List.of(query.page(fgt, 0, "", true), query.rule(fgt, fgtShadowRuleId, 90).orElseThrow(), query.hygiene(fgt, 0, "", "", 90))) {
+            String json = mapper.writeValueAsString(PolicyPrivacy.mask(resp.body(), "", names, ips));
+            for (String secret : fgtRaw) assertFalse(json.contains(secret), secret);
+        }
+        String fgtHygieneJson = mapper.writeValueAsString(PolicyPrivacy.mask(query.hygiene(fgt, 0, "", "", 90).body(), "", names, ips));
+        assertTrue(fgtHygieneJson.contains("\"shadowStatus\":\"REDUNDANT\""));
+        assertTrue(fgtHygieneJson.contains(fgtRuleId));
+        String fgtCsv = new String(query.hygieneCsv(fgt, "", "", 90, true), StandardCharsets.UTF_8);
+        assertTrue(fgtCsv.contains("\"shadowed\""));
+        assertTrue(fgtCsv.contains("Earlier enabled rule fully covers this match with the same action."));
+        assertTrue(fgtCsv.contains(fgtRuleId));
+        for (String secret : fgtRaw) assertFalse(fgtCsv.contains(secret), secret);
     }
 }
