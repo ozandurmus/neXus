@@ -762,7 +762,7 @@ public final class ZoneMatrixPolicyBridge {
     static AddressBound resolveAddressCell(
             PolicySnapshot snapshot, Cell cell, boolean allowAccessRole, Budget budget) {
         if (cell.negated()) {
-            return new AddressBound(List.of(), List.of(), List.of(), List.of(), false, false, false, "negated selector");
+            return resolveNegatedAddressCell(snapshot, cell, budget);
         }
         if (cell.refs().isEmpty()) {
             return new AddressBound(List.of(), List.of(), List.of(), List.of(), false, false, false, "unresolved object");
@@ -811,6 +811,41 @@ public final class ZoneMatrixPolicyBridge {
                 accessRole,
                 dynamicAddr,
                 candidateReason);
+    }
+
+    /**
+     * Delivery step 7c ({@code docs/design/ZONE_MATRIX_CONTRACT.md} §§5.3, 5.4, 5.7 step 2, §10.1 item 7;
+     * {@code PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md} {@code A0-N1}, {@code A0-N2}): evaluates a negated
+     * source or destination cell by exact IPv4 complement when every referenced member resolves to a pure static IPv4
+     * address or group, while setting {@code hasIpv6 = true} because negating IPv4 objects still matches all IPv6
+     * packets on an unsegmented rule. Everything else fails closed to {@code "negated selector"}.
+     */
+    private static AddressBound resolveNegatedAddressCell(PolicySnapshot snapshot, Cell cell, Budget budget) {
+        if (cell.refs().isEmpty()) {
+            return negatedSelectorFailure();
+        }
+        List<IpRange> upper = new ArrayList<>();
+        for (String id : cell.refs()) {
+            budget.spend();
+            AddressPart part = resolveAddressObject(snapshot.objects(), id, false, new HashSet<>(), budget);
+            if (part.problem != null || part.accessRole || part.dynamicAddress || part.hasIpv6) {
+                return negatedSelectorFailure();
+            }
+            upper.addAll(part.upper);
+        }
+        List<IpRange> mergedPositive = mergeIpRanges(upper, budget);
+        if (mergedPositive.isEmpty()) {
+            return negatedSelectorFailure();
+        }
+        List<IpRange> comp = complementMergedIpv4(mergedPositive, budget);
+        if (comp.isEmpty()) {
+            return negatedSelectorFailure();
+        }
+        return new AddressBound(comp, comp, List.of(), List.of(), true, false, false, null);
+    }
+
+    private static AddressBound negatedSelectorFailure() {
+        return new AddressBound(List.of(), List.of(), List.of(), List.of(), false, false, false, "negated selector");
     }
 
     private record AddressPart(
@@ -1346,6 +1381,31 @@ public final class ZoneMatrixPolicyBridge {
                 }
             }
             out.add(r);
+        }
+        return List.copyOf(out);
+    }
+
+    /** Exact IPv4 complement {@code [0, 0xFFFF_FFFFL] \ excluded} (sorts and merges {@code excluded} first). */
+    public static List<IpRange> complementIpv4(List<IpRange> excluded) {
+        Budget budget = new Budget(Integer.MAX_VALUE);
+        return complementMergedIpv4(mergeIpRanges(excluded, budget), budget);
+    }
+
+    private static List<IpRange> complementMergedIpv4(List<IpRange> mergedExcluded, Budget budget) {
+        List<IpRange> out = new ArrayList<>(mergedExcluded.size() + 1);
+        long cursor = 0L;
+        for (IpRange r : mergedExcluded) {
+            budget.spend();
+            if (r.start() > cursor) {
+                out.add(new IpRange(cursor, r.start() - 1));
+            }
+            if (r.end() == IPV4_MAX_LONG) {
+                return List.copyOf(out);
+            }
+            cursor = r.end() + 1;
+        }
+        if (cursor <= IPV4_MAX_LONG) {
+            out.add(new IpRange(cursor, IPV4_MAX_LONG));
         }
         return List.copyOf(out);
     }
