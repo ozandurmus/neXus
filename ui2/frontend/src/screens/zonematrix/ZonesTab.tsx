@@ -20,6 +20,7 @@ import {
   ZONE_ROLES, addressCount, createZone, deleteZone, getZoneVersion, lookupZoneAddress, updateZone, zoneErrorCode, zoneErrorLines,
   zoneRoleLabel, type ZoneDiffRow, type ZoneLookupResult, type ZoneVersionDetail, type ZoneView,
 } from "./zoneMatrixApi";
+import { classifyBlockLine, decomposeIpRange, parseIpv4, parseIpv6, type DecomposedIpRange } from "./cidrDecomposition";
 
 export const CANONICAL_BLOCK_NOTE =
   "One block per line, in canonical CIDR form: the network address and its prefix length, for example 192.0.2.0/24. "
@@ -329,10 +330,74 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
   const [description, setDescription] = useState(zone?.description ?? "");
   const [role, setRole] = useState(zone?.role ?? "");
   const [blocks, setBlocks] = useState((zone?.blocks ?? []).join("\n"));
+  const [helperOpen, setHelperOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<readonly string[]>([]);
-  const lines = blockLines(blocks);
+
+  const lines = useMemo(() => blockLines(blocks), [blocks]);
+  const classifiedLines = useMemo(() => lines.map((line, index) => ({ index, ...classifyBlockLine(line) })), [lines]);
+  const rangeItems = useMemo(
+    () => classifiedLines.filter((item): item is { readonly index: number; readonly kind: "range"; readonly line: string; readonly decomposed: DecomposedIpRange } => item.kind === "range"),
+    [classifiedLines],
+  );
+  const invalidRangeItems = useMemo(
+    () => classifiedLines.filter((item): item is { readonly index: number; readonly kind: "invalid_range"; readonly line: string; readonly reason: string } => item.kind === "invalid_range"),
+    [classifiedLines],
+  );
+  const hasPendingDecomposition = rangeItems.length > 0 || invalidRangeItems.length > 0;
+  const totalDecomposedCidrs = useMemo(
+    () => rangeItems.reduce((sum, item) => sum + item.decomposed.cidrs.length, 0),
+    [rangeItems],
+  );
+
+  const trimmedStart = rangeStart.trim();
+  const trimmedEnd = rangeEnd.trim();
+  const helperState = useMemo(() => {
+    if (trimmedStart === "" && trimmedEnd === "") return { kind: "idle" as const };
+    if (trimmedStart !== "" && trimmedEnd !== "") {
+      const outcome = decomposeIpRange(trimmedStart, trimmedEnd);
+      return outcome.ok
+        ? { kind: "valid" as const, result: outcome.result }
+        : { kind: "error" as const, reason: outcome.reason };
+    }
+    const single = trimmedStart !== "" ? trimmedStart : trimmedEnd;
+    const which = trimmedStart !== "" ? "Start address" : "End address";
+    if (single.includes("/")) {
+      return { kind: "error" as const, reason: "Range endpoints must be plain IP addresses without a CIDR prefix length." };
+    }
+    if (parseIpv4(single) === null && parseIpv6(single) === null) {
+      return { kind: "error" as const, reason: `${which} "${single}" is not a valid IPv4 or IPv6 address.` };
+    }
+    return { kind: "partial" as const };
+  }, [trimmedStart, trimmedEnd]);
+
+  const applyDecomposition = () => {
+    if (invalidRangeItems.length > 0 || rangeItems.length === 0) return;
+    const expanded: string[] = [];
+    for (const item of classifiedLines) {
+      if (item.kind === "range") expanded.push(...item.decomposed.cidrs);
+      else expanded.push(item.line);
+    }
+    setBlocks(expanded.join("\n"));
+    if (errors.length > 0) setErrors([]);
+  };
+
+  const appendHelperCidrs = () => {
+    if (helperState.kind !== "valid") return;
+    const addition = helperState.result.cidrs.join("\n");
+    setBlocks((prev) => {
+      const base = prev.trimEnd();
+      return base === "" ? addition : `${base}\n${addition}`;
+    });
+    setRangeStart("");
+    setRangeEnd("");
+    if (errors.length > 0) setErrors([]);
+  };
+
   const save = async () => {
+    if (hasPendingDecomposition) return;
     const input = { name: name.trim(), description: description.trim() === "" ? null : description.trim(), role: role === "" ? null : role, blocks: lines };
     setBusy(true); setErrors([]);
     try {
@@ -361,8 +426,85 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
           <MenuItem value="">None</MenuItem>
           {ZONE_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
         </TextField>
-        <TextField label="Blocks" multiline minRows={6} maxRows={16} value={blocks} onChange={(e) => setBlocks(e.target.value)}
+        <TextField label="Blocks" multiline minRows={6} maxRows={16} value={blocks}
+          onChange={(e) => { setBlocks(e.target.value); if (errors.length > 0) setErrors([]); }}
           placeholder={"192.0.2.0/24\n2001:db8::/32"} helperText={`${lines.length} ${lines.length === 1 ? "block" : "blocks"}. ${CANONICAL_BLOCK_NOTE}`} InputProps={{ sx: mono }} />
+        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+          <M3Button emphasis="outlined" disabled={busy} onClick={() => setHelperOpen((open) => !open)}>Decompose IP range</M3Button>
+          <Hint>Convert an IPv4 or IPv6 range into exact canonical CIDR blocks before saving.</Hint>
+        </Stack>
+        {helperOpen ? (
+          <Box data-testid="range-helper-panel" sx={panelSx}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Decompose IP range</Typography>
+            <Stack direction="row" gap={1.5} flexWrap="wrap">
+              <TextField size="small" label="Start address" placeholder="192.0.2.10" value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)} InputProps={{ sx: mono }} sx={{ flex: 1, minWidth: 200 }} />
+              <TextField size="small" label="End address" placeholder="192.0.2.20" value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)} InputProps={{ sx: mono }} sx={{ flex: 1, minWidth: 200 }} />
+            </Stack>
+            {helperState.kind === "partial" ? (
+              <Hint>Enter both start and end addresses to preview exact CIDR blocks.</Hint>
+            ) : null}
+            {helperState.kind === "error" ? (
+              <Typography role="alert" variant="body2" sx={{ color: m3.error }}>{helperState.reason}</Typography>
+            ) : null}
+            {helperState.kind === "valid" ? (
+              <Stack gap={0.75}>
+                <Typography variant="body2">
+                  {helperState.result.family === "IPV6" ? "IPv6" : "IPv4"} &middot; {addressCount(helperState.result.addressCount.toString())}{" "}
+                  {helperState.result.addressCount === 1n ? "address" : "addresses"} &middot; {helperState.result.cidrs.length} canonical CIDR{" "}
+                  {helperState.result.cidrs.length === 1 ? "block" : "blocks"}
+                </Typography>
+                <Box component="ul" aria-label={`CIDR decomposition for ${trimmedStart} - ${trimmedEnd}`} sx={{ m: 0, pl: 2.5, ...mono }}>
+                  {helperState.result.cidrs.map((cidr) => <li key={cidr}>{cidr}</li>)}
+                </Box>
+              </Stack>
+            ) : null}
+            <Stack direction="row" justifyContent="flex-end">
+              <M3Button emphasis="tonal" disabled={busy || helperState.kind !== "valid"} onClick={appendHelperCidrs}>Add CIDRs to blocks</M3Button>
+            </Stack>
+          </Box>
+        ) : null}
+        {hasPendingDecomposition ? (
+          <Box data-testid="cidr-decomposition-preview" sx={panelSx}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Exact CIDR decomposition preview ({totalDecomposedCidrs} canonical CIDR {totalDecomposedCidrs === 1 ? "block" : "blocks"})
+            </Typography>
+            <Hint>
+              Non-CIDR ranges and single host addresses must be confirmed as exact canonical CIDR blocks before saving.
+            </Hint>
+            {invalidRangeItems.length > 0 ? (
+              <Box role="alert" sx={{ color: m3.error }}>
+                {invalidRangeItems.map((item) => (
+                  <Typography key={`${item.index}-${item.line}`} variant="body2">
+                    Line {item.index + 1} ({item.line}): {item.reason}
+                  </Typography>
+                ))}
+              </Box>
+            ) : null}
+            {rangeItems.map((item) => {
+              const familyText = item.decomposed.family === "IPV6" ? "IPv6" : "IPv4";
+              const countText = addressCount(item.decomposed.addressCount.toString());
+              const addrNoun = item.decomposed.addressCount === 1n ? "address" : "addresses";
+              const blockNoun = item.decomposed.cidrs.length === 1 ? "block" : "blocks";
+              return (
+                <Stack key={`${item.index}-${item.line}`} gap={0.5}>
+                  <Typography variant="body2">
+                    <Box component="span" sx={mono}>{item.line}</Box> &mdash; {familyText}, {countText} {addrNoun} ({item.decomposed.cidrs.length} CIDR {blockNoun}):
+                  </Typography>
+                  <Box component="ul" aria-label={`CIDR decomposition for ${item.line}`} sx={{ m: 0, pl: 2.5, ...mono }}>
+                    {item.decomposed.cidrs.map((cidr) => <li key={cidr}>{cidr}</li>)}
+                  </Box>
+                </Stack>
+              );
+            })}
+            <Stack direction="row" justifyContent="flex-end">
+              <M3Button emphasis="tonal" disabled={busy || invalidRangeItems.length > 0 || rangeItems.length === 0} onClick={applyDecomposition}>
+                Apply CIDR decomposition
+              </M3Button>
+            </Stack>
+          </Box>
+        ) : null}
         {errors.length > 0 ? (
           <Box role="alert" sx={{ color: m3.error }}>
             {errors.map((line, index) => <Typography key={index} variant="body2" sx={{ fontWeight: index === 0 ? 600 : 400 }}>{line}</Typography>)}
@@ -370,7 +512,7 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
         ) : null}
         <Stack direction="row" gap={1} justifyContent="flex-end">
           <M3Button emphasis="text" disabled={busy} onClick={onClose}>Cancel</M3Button>
-          <M3Button emphasis="filled" disabled={busy || name.trim() === ""} onClick={() => { void save(); }}>Save to draft</M3Button>
+          <M3Button emphasis="filled" disabled={busy || name.trim() === "" || hasPendingDecomposition} onClick={() => { void save(); }}>Save to draft</M3Button>
         </Stack>
       </DialogContent>
     </Dialog>
