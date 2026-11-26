@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -8,6 +8,7 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Link from "@mui/material/Link";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -28,7 +29,7 @@ import { PRODUCT_NAME } from "../brand/product";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { StatePanel } from "../shell/States";
 import { StatusPill } from "../shell/StatusPill";
-import { formatStamp } from "../shell/time";
+import { displayInputToIso, formatStamp, isoToDisplayInput } from "../shell/time";
 
 /**
  * Support bundles (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15), under Tools. An
@@ -59,20 +60,112 @@ export const bundleDevice = (d: { vendor_hint: string; role?: string }): boolean
 export const MDS_WARNING = "This is a Check Point management server or Multi-Domain Server. HCP and cpinfo are heavy on it, and a "
   + "Multi-Domain Server has crashed under a heavy backup before. They are not blocked. Run them outside business hours and watch the server.";
 const LOAD_NOTE: Record<string, string> = { none: "no device load", low: "light", medium: "medium load", high: "high load", unknown: "load not measured" };
+
 /** Times neXus itself works on devices (design 5.7): a hint when the picked hour collides, never a refusal. */
 export function collisionHint(local: string): string | null {
   const hour = Number(local.slice(11, 13));
-  if (hour === 2) return "02:00-02:59: scheduled backups and the MDS export run. 00:00 or 04:00 is quieter.";
-  if (hour === 3) return "About 03:00: the device's own HCP run. 00:00 or 04:00 is quieter.";
-  if (hour === 6) return "06:00: the system-log HCP copy runs. 00:00 or 04:00 is quieter.";
+  if (hour === 2) return "02:00-02:59: scheduled backups and the MDS export run. 20:00-23:30 or 04:00 is quieter.";
+  if (hour === 3) return "About 03:00: the device's own HCP run. 20:00-23:30 or 04:00 is quieter.";
+  if (hour === 6) return "06:00: the system-log HCP copy runs. 20:00-23:30 or 04:00 is quieter.";
   return null;
 }
+
+const QUIET_SLOT_HM: readonly (readonly [number, number])[] = [[4, 0], [20, 0], [21, 0], [22, 0], [23, 0], [23, 30]];
+
+/**
+ * Next quiet-hour `datetime-local` value in display time (Europe/Istanbul, GMT+3), matching `SupportBundleService.nextQuietHour`:
+ * avoids 00/06/12/18 collection windows and 02:00 backups; prefers 20:00-23:30 or 04:00, with at least a 5-minute lead.
+ */
+export function nextQuietHourLocal(now: Date = new Date()): string {
+  const minMs = now.getTime() + 5 * 60_000;
+  const baseLocal = isoToDisplayInput(now.toISOString()); // YYYY-MM-DDTHH:mm in Europe/Istanbul
+  const baseDate = baseLocal.slice(0, 10);
+  const [y, m, d] = baseDate.split("-").map(Number);
+  for (let dayOffset = 0; dayOffset <= 2; dayOffset++) {
+    const dayUtc = new Date(Date.UTC(y, m - 1, d + dayOffset));
+    const datePart = `${dayUtc.getUTCFullYear()}-${String(dayUtc.getUTCMonth() + 1).padStart(2, "0")}-${String(dayUtc.getUTCDate()).padStart(2, "0")}`;
+    for (const [hh, mm] of QUIET_SLOT_HM) {
+      const candidateLocal = `${datePart}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+      const iso = displayInputToIso(candidateLocal);
+      if (iso && new Date(iso).getTime() >= minMs) return candidateLocal;
+    }
+  }
+  return `${baseDate}T04:00`;
+}
+
+/** Pre-submit warning when a module drain is active or the start time falls inside a 00/06/12/18 collection window (design 5.13). */
+export function waitWarning(when: string, moduleDraining: boolean, windowOpen: boolean, windowEndsAt: string | null): string | null {
+  if (!when) {
+    if (moduleDraining && windowOpen) {
+      const until = windowEndsAt ? formatStamp(windowEndsAt) : "the collection window ends";
+      return `A module drain and a collection window are active; this will wait until the drain clears and ${until}.`;
+    }
+    if (moduleDraining) return "A module drain is active; this will wait until the drain clears.";
+    if (windowOpen) {
+      const until = windowEndsAt ? formatStamp(windowEndsAt) : "the collection window ends";
+      return `A collection window is active; this will wait until ${until} if the device is busy.`;
+    }
+    return null;
+  }
+  const hour = Number(when.slice(11, 13));
+  if (!Number.isNaN(hour) && (hour === 0 || hour === 6 || hour === 12 || hour === 18)) {
+    const hh = String(hour).padStart(2, "0");
+    const nextHh = String(hour + 1).padStart(2, "0");
+    return `${hh}:00-${hh}:59 is a scheduled collection window; this will wait until ${nextHh}:00 if the device is busy.`;
+  }
+  if (moduleDraining) {
+    return "A module drain is active; if it is still on at the chosen time, this will wait until the drain clears.";
+  }
+  return null;
+}
+
+const HOLD_LABELS: Readonly<Record<string, string>> = {
+  MODULE_DRAIN: "a module drain",
+  COLLECTION_WINDOW: "a collection window",
+  DEVICE_JOB_RUNNING: "another job on the device",
+  HA_PEER_RUNNING: "a bundle running on its HA peer",
+  FLEET_CAP: "the fleet heavy-bundle limit",
+};
+const HOLD_ORDER = ["MODULE_DRAIN", "COLLECTION_WINDOW", "DEVICE_JOB_RUNNING", "HA_PEER_RUNNING", "FLEET_CAP"] as const;
+
+/** Plain sentence for `NOT_STARTED_DEVICE_BUSY` built from closed values only (design 5.13). */
+export function notStartedSentence(r: Pick<SupportBundleRequest, "outcome" | "hold_reasons" | "finished_at" | "expires_at">): string | null {
+  if (r.outcome !== "NOT_STARTED_DEVICE_BUSY") return null;
+  const present = new Set(r.hold_reasons ?? []);
+  const labels = HOLD_ORDER.filter((code) => present.has(code)).map((code) => HOLD_LABELS[code]);
+  const expired = r.finished_at ? `expired ${formatStamp(r.finished_at)}` : "expired after 3 hours";
+  if (labels.length === 0) return `Did not start: device remained busy for 3 hours; ${expired}.`;
+  const joined = labels.length === 1 ? labels[0]
+    : labels.length === 2 ? `${labels[0]} and ${labels[1]}`
+    : `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+  return `Did not start: held by ${joined}; ${expired}.`;
+}
+
+/** True when a request never started and may be re-requested with one pre-filled click (PO 2026-11-26). */
+export const canRequestAgain = (r: SupportBundleRequest): boolean =>
+  (r.state === "FAILED" && r.outcome === "NOT_STARTED_DEVICE_BUSY") || (r.state === "CANCELLED" && !r.started_at);
+
+interface PrefillDraft {
+  readonly nonce: number;
+  readonly previousRequestId: string;
+  readonly deviceId: string;
+  readonly kinds: readonly string[];
+  readonly vsIds: readonly number[];
+  readonly domainRef: string | null;
+  readonly caseRef: string;
+  readonly when: string;
+}
+
 const sizeText = (bytes: number | null) => (bytes === null ? "" : bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB`);
 
 export function SupportBundlesScreen() {
   const [rows, setRows] = useState<readonly SupportBundleRequest[] | null>(null);
   const [kinds, setKinds] = useState<readonly SupportBundleKindRow[]>([]);
+  const [moduleDraining, setModuleDraining] = useState(false);
+  const [windowOpen, setWindowOpen] = useState(false);
+  const [windowEndsAt, setWindowEndsAt] = useState<string | null>(null);
   const [devices, setDevices] = useState<readonly DeviceSummary[]>([]);
+  const [prefill, setPrefill] = useState<PrefillDraft | null>(null);
   const [error, setError] = useState("");
   const reload = useCallback(() => {
     listSupportBundles().then((r) => { setRows(r.support_bundles); setError(""); })
@@ -80,29 +173,73 @@ export function SupportBundlesScreen() {
   }, []);
   useEffect(() => {
     reload();
-    getSupportBundleCatalogue().then((r) => setKinds(r.kinds)).catch(() => undefined);
+    getSupportBundleCatalogue().then((r) => {
+      setKinds(r.kinds);
+      setModuleDraining(Boolean(r.module_draining));
+      setWindowOpen(Boolean(r.collection_window_open));
+      setWindowEndsAt(r.collection_window_ends_at ?? null);
+    }).catch(() => undefined);
     listDevices().then((r) => setDevices(r.devices)).catch(() => undefined);
   }, [reload]);
+  const handleRequestAgain = useCallback((r: SupportBundleRequest) => {
+    const distinctKinds = [...new Set(r.items.map((i) => i.kind))];
+    const distinctVs = [...new Set(r.items.map((i) => i.vs_id).filter((v): v is number => typeof v === "number"))];
+    const domainRef = r.items.map((i) => i.domain_ref).find((d): d is string => typeof d === "string" && d.length > 0) ?? null;
+    setPrefill((prev) => ({
+      nonce: (prev?.nonce ?? 0) + 1,
+      previousRequestId: r.id,
+      deviceId: r.device_id,
+      kinds: distinctKinds,
+      vsIds: distinctVs,
+      domainRef,
+      caseRef: r.case_ref ?? "",
+      when: nextQuietHourLocal(),
+    }));
+  }, []);
   return (
     <ScreenRoot screenType="tool">
       <ScreenHeader title="Support bundles"
         subtitle={`Collect the files a vendor's support team usually asks for, then download them or send them to a vendor case. Nothing leaves ${PRODUCT_NAME} unless you start an upload.`} />
       {error && <Alert severity="error" data-fact="bundle-error">{error}</Alert>}
-      <NewRequest kinds={kinds} devices={devices} onDone={reload} />
-      <Requests rows={rows} onChange={reload} />
+      <NewRequest kinds={kinds} devices={devices} prefill={prefill}
+        moduleDraining={moduleDraining} windowOpen={windowOpen} windowEndsAt={windowEndsAt} onDone={reload} />
+      <Requests rows={rows} onChange={reload} onRequestAgain={handleRequestAgain} />
     </ScreenRoot>
   );
 }
 
-function NewRequest({ kinds, devices, onDone }: {
-  readonly kinds: readonly SupportBundleKindRow[]; readonly devices: readonly DeviceSummary[]; readonly onDone: () => void;
+function NewRequest({ kinds, devices, prefill, moduleDraining, windowOpen, windowEndsAt, onDone }: {
+  readonly kinds: readonly SupportBundleKindRow[];
+  readonly devices: readonly DeviceSummary[];
+  readonly prefill: PrefillDraft | null;
+  readonly moduleDraining: boolean;
+  readonly windowOpen: boolean;
+  readonly windowEndsAt: string | null;
+  readonly onDone: () => void;
 }) {
   const [deviceId, setDeviceId] = useState("");
   const [ticked, setTicked] = useState<ReadonlySet<string> | null>(null);
   const [when, setWhen] = useState("");
   const [caseRef, setCaseRef] = useState("");
   const [reason, setReason] = useState("");
+  const [previousRequestId, setPreviousRequestId] = useState<string | null>(null);
+  const [vsIds, setVsIds] = useState<readonly number[]>([]);
+  const [domainRef, setDomainRef] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [failure, setFailure] = useState("");
+  const reasonRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!prefill) return;
+    setDeviceId(prefill.deviceId);
+    setTicked(new Set(prefill.kinds));
+    setWhen(prefill.when);
+    setCaseRef(prefill.caseRef);
+    setPreviousRequestId(prefill.previousRequestId);
+    setVsIds(prefill.vsIds);
+    setDomainRef(prefill.domainRef);
+    setMessage("");
+    setFailure("");
+    reasonRef.current?.focus();
+  }, [prefill]);
   const device = devices.find((d) => d.device_id === deviceId);
   const vendor = device?.vendor_hint ?? "";
   const cpManagement = vendor === "check_point" && device?.role === "management_server";
@@ -110,16 +247,26 @@ function NewRequest({ kinds, devices, onDone }: {
   const selected = ticked ?? new Set(forVendor.filter((k) => k.enabled && k.default_ticked).map((k) => k.kind));
   const toggle = (kind: string) => { const next = new Set(selected); if (next.has(kind)) next.delete(kind); else next.add(kind); setTicked(next); };
   const hint = when ? collisionHint(when) : null;
+  const warning = waitWarning(when, moduleDraining, windowOpen, windowEndsAt);
   const submit = async () => {
     setBusy(true); setFailure(""); setMessage("");
     try {
+      const runAtIso = when ? (displayInputToIso(when) ?? new Date(when).toISOString()) : undefined;
       const accepted = await requestSupportBundle(deviceId, {
         kinds: [...selected], reason: reason.trim(),
-        ...(when ? { run_at: new Date(when).toISOString() } : {}), ...(caseRef.trim() ? { case_ref: caseRef.trim() } : {}),
+        ...(runAtIso ? { run_at: runAtIso } : {}),
+        ...(caseRef.trim() ? { case_ref: caseRef.trim() } : {}),
+        ...(previousRequestId ? { previous_request_id: previousRequestId } : {}),
+        ...(vsIds.length > 0 ? { vs_ids: vsIds } : {}),
+        ...(domainRef ? { domain_ref: domainRef } : {}),
       });
       setMessage((when ? "Scheduled. It starts at the chosen time." : "Started. It appears in the list below.")
         + (accepted?.mds_warning ? ` ${accepted.warning ?? MDS_WARNING}` : ""));
-      setReason(""); onDone();
+      setReason("");
+      setPreviousRequestId(null);
+      setVsIds([]);
+      setDomainRef(null);
+      onDone();
     } catch (e) {
       const body = (e as { body?: { reason?: string; error?: string } }).body;
       setFailure(body?.reason ?? body?.error ?? "The request was not accepted.");
@@ -128,9 +275,13 @@ function NewRequest({ kinds, devices, onDone }: {
   return <Box component="form" aria-label="New support bundle" onSubmit={(e) => { e.preventDefault(); void submit(); }}
     sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 760, my: 2 }}>
     <Typography variant="subtitle1" component="h2">New support bundle</Typography>
+    {previousRequestId && <Alert severity="info" data-fact="prefill-banner"
+      onClose={() => { setPreviousRequestId(null); setVsIds([]); setDomainRef(null); }}>
+      Pre-filled from request {previousRequestId.slice(0, 8)} for the next quiet hour. Type a reason and confirm.</Alert>}
     {failure && <Alert severity="error" data-fact="request-error">{failure}</Alert>}
     {message && <Alert severity="success" data-fact="request-ok">{message}</Alert>}
-    <TextField select label="Device" value={deviceId} onChange={(e) => { setDeviceId(e.target.value); setTicked(null); }} disabled={busy}>
+    <TextField select label="Device" value={deviceId}
+      onChange={(e) => { setDeviceId(e.target.value); setTicked(null); setPreviousRequestId(null); setVsIds([]); setDomainRef(null); }} disabled={busy}>
       {devices.filter(bundleDevice).map((d) => <MenuItem key={d.device_id} value={d.device_id}>{d.hostname}</MenuItem>)}
     </TextField>
     {cpManagement && <Alert severity="warning" data-fact="mds-warning">{MDS_WARNING}</Alert>}
@@ -142,47 +293,85 @@ function NewRequest({ kinds, devices, onDone }: {
     </Box>}
     <TextField label="Run at (empty: now)" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} disabled={busy}
       InputLabelProps={{ shrink: true }} helperText="Any time in the next 7 days. Inside business hours (08:00-20:00) you are asked to confirm." />
+    {warning && <Alert severity="warning" data-fact="wait-warning">{warning}</Alert>}
     {hint && <Alert severity="info" data-fact="collision-hint">{hint}</Alert>}
     <TextField label="Vendor case reference (optional)" value={caseRef} onChange={(e) => setCaseRef(e.target.value)} disabled={busy}
       inputProps={{ maxLength: 40 }} />
     <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required disabled={busy}
-      inputProps={{ maxLength: 500 }} helperText="At least 8 characters. Kept in the audit trail." />
+      inputRef={reasonRef} inputProps={{ maxLength: 500 }} helperText="At least 8 characters. Kept in the audit trail." />
     <Box><Button type="submit" variant="contained" disabled={busy || !deviceId || selected.size === 0 || reason.trim().length < 8}>Collect</Button></Box>
   </Box>;
 }
 
-function Requests({ rows, onChange }: { readonly rows: readonly SupportBundleRequest[] | null; readonly onChange: () => void }) {
+function Requests({ rows, onChange, onRequestAgain }: {
+  readonly rows: readonly SupportBundleRequest[] | null;
+  readonly onChange: () => void;
+  readonly onRequestAgain: (r: SupportBundleRequest) => void;
+}) {
   const [downloading, setDownloading] = useState<SupportBundleRequest | null>(null);
   const [afterDownload, setAfterDownload] = useState<SupportBundleRequest | null>(null);
   const [deleting, setDeleting] = useState<SupportBundleRequest | null>(null);
   const [uploading, setUploading] = useState<SupportBundleRequest | null>(null);
   const [cleaning, setCleaning] = useState<SupportBundleRequest | null>(null);
+  const [inspecting, setInspecting] = useState<SupportBundleRequest | null>(null);
   if (rows === null) return <StatePanel variant="empty" title="Reading the support bundles…" announce="status" />;
   if (rows.length === 0) return <StatePanel variant="empty" title="No support bundle yet" body="Collect one with the form above." />;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const openLinked = (id: string) => {
+    const found = byId.get(id);
+    if (found) setInspecting(found);
+  };
   return <Box sx={{ overflowX: "auto" }}>
     <Table size="small" aria-label="Support bundles">
       <TableHead><TableRow><TableCell>Device</TableCell><TableCell>State</TableCell><TableCell>Items</TableCell><TableCell>Requested</TableCell><TableCell>Expires</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>
-      <TableBody>{rows.map((r) => <TableRow key={r.id} data-bundle={r.id}>
-        <TableCell>{r.device_pseudonym}</TableCell>
-        <TableCell><StatusPill tone={r.state === "COMPLETED" ? "ok" : r.state === "FAILED" ? "bad" : "neutral"} word={r.state} /></TableCell>
-        <TableCell>{r.items.map((i) => <Box key={`${i.kind}-${i.ordinal}`} component="div" data-item={i.kind}>
-          {KIND_LABELS[i.kind] ?? i.kind}: {i.state}{i.outcome_code && i.outcome_code !== "COMPLETED" ? ` (${i.outcome_code})` : ""}
-          {i.size_bytes !== null ? ` ${sizeText(i.size_bytes)}` : ""}{i.digest_prefix ? ` ${i.digest_prefix}` : ""}</Box>)}</TableCell>
-        <TableCell>{formatStamp(r.requested_at)}
-          {r.work_dir_pending && <Typography variant="caption" component="div" color="warning.main" data-fact="work-dir-pending">
-            A work directory from this run is still on the device{r.cleanup_state === "REQUESTED" ? " (removal requested)" : r.cleanup_state === "FAILED" ? ` (last removal failed: ${r.cleanup_outcome ?? "unknown"})` : ""}.</Typography>}</TableCell>
-        <TableCell>{formatStamp(r.expires_at)}{r.expiry_warning && <Typography variant="caption" color="warning.main" component="div" data-fact="expiry-warning">
-          Will be deleted at this time{r.downloaded_at ? "" : " and has not been downloaded"}.</Typography>}</TableCell>
-        <TableCell><Stack direction="row" gap={1}>
-          {(r.state === "COMPLETED" || r.state === "PARTIAL") && <Button size="small" onClick={() => setDownloading(r)}>Download</Button>}
-          {(r.state === "COMPLETED" || r.state === "PARTIAL") && <Button size="small" onClick={() => setUploading(r)}>Upload</Button>}
-          {r.work_dir_pending && r.cleanup_state !== "REQUESTED" && !["QUEUED", "RUNNING"].includes(r.state)
-            && <Button size="small" color="warning" onClick={() => setCleaning(r)}>Remove leftover work directory</Button>}
-          {r.state === "QUEUED" && <Button size="small" onClick={() => { void cancelSupportBundle(r.id, "Cancelled from the support bundles screen").then(onChange); }}>Cancel</Button>}
-          {["COMPLETED", "PARTIAL", "FAILED", "CANCELLED", "EXPIRED"].includes(r.state) && <Button size="small" color="warning" onClick={() => setDeleting(r)}>Delete</Button>}
-        </Stack></TableCell>
-      </TableRow>)}</TableBody>
+      <TableBody>{rows.map((r) => {
+        const whyNotStarted = notStartedSentence(r);
+        return <TableRow key={r.id} id={`bundle-${r.id}`} data-bundle={r.id}>
+          <TableCell>{r.device_pseudonym}</TableCell>
+          <TableCell>
+            <StatusPill tone={r.state === "COMPLETED" ? "ok" : r.state === "FAILED" ? "bad" : "neutral"} word={r.state} />
+            {whyNotStarted && <Typography variant="caption" component="div" color="error" data-fact="not-started-reason" sx={{ mt: 0.5 }}>
+              {whyNotStarted}</Typography>}
+            {r.previous_request_id && <Typography variant="caption" component="div" data-fact="previous-request-link" sx={{ mt: 0.5 }}>
+              {r.auto_retry ? "Automatic retry of " : "Follow-up to "}
+              <Link component="button" type="button" variant="caption" onClick={() => openLinked(r.previous_request_id!)}>
+                {r.previous_request_id.slice(0, 8)}
+              </Link>
+            </Typography>}
+            {r.retry_request_id && <Typography variant="caption" component="div" data-fact="retry-request-link" sx={{ mt: 0.5 }}>
+              {"Retried as "}
+              <Link component="button" type="button" variant="caption" onClick={() => openLinked(r.retry_request_id!)}>
+                {r.retry_request_id.slice(0, 8)}
+              </Link>
+            </Typography>}
+            {!r.retry_request_id && r.retry_outcome === "SKIPPED_BUSINESS_HOURS" && <Typography variant="caption" component="div" color="text.secondary" data-fact="retry-skipped">
+              Automatic retry skipped (business-hours confirmation required).</Typography>}
+          </TableCell>
+          <TableCell>{r.items.map((i) => <Box key={`${i.kind}-${i.ordinal}`} component="div" data-item={i.kind}>
+            {KIND_LABELS[i.kind] ?? i.kind}: {i.state}{i.outcome_code && i.outcome_code !== "COMPLETED" ? ` (${i.outcome_code})` : ""}
+            {i.size_bytes !== null ? ` ${sizeText(i.size_bytes)}` : ""}{i.digest_prefix ? ` ${i.digest_prefix}` : ""}</Box>)}</TableCell>
+          <TableCell>{formatStamp(r.requested_at)}
+            {r.run_mode === "AT" && r.state === "QUEUED" && <Typography variant="caption" component="div" color="text.secondary">
+              Scheduled for {formatStamp(r.run_at)}</Typography>}
+            {r.work_dir_pending && <Typography variant="caption" component="div" color="warning.main" data-fact="work-dir-pending">
+              A work directory from this run is still on the device{r.cleanup_state === "REQUESTED" ? " (removal requested)" : r.cleanup_state === "FAILED" ? ` (last removal failed: ${r.cleanup_outcome ?? "unknown"})` : ""}.</Typography>}</TableCell>
+          <TableCell>{formatStamp(r.expires_at)}{r.expiry_warning && <Typography variant="caption" color="warning.main" component="div" data-fact="expiry-warning">
+            Will be deleted at this time{r.downloaded_at ? "" : " and has not been downloaded"}.</Typography>}</TableCell>
+          <TableCell><Stack direction="row" gap={1} flexWrap="wrap">
+            {(r.state === "COMPLETED" || r.state === "PARTIAL") && <Button size="small" onClick={() => setDownloading(r)}>Download</Button>}
+            {(r.state === "COMPLETED" || r.state === "PARTIAL") && <Button size="small" onClick={() => setUploading(r)}>Upload</Button>}
+            {canRequestAgain(r) && <Button size="small" variant="outlined" onClick={() => onRequestAgain(r)}>Request again</Button>}
+            {r.work_dir_pending && r.cleanup_state !== "REQUESTED" && !["QUEUED", "RUNNING"].includes(r.state)
+              && <Button size="small" color="warning" onClick={() => setCleaning(r)}>Remove leftover work directory</Button>}
+            {r.state === "QUEUED" && <Button size="small" onClick={() => { void cancelSupportBundle(r.id, "Cancelled from the support bundles screen").then(onChange); }}>Cancel</Button>}
+            <Button size="small" onClick={() => setInspecting(r)}>Details</Button>
+            {["COMPLETED", "PARTIAL", "FAILED", "CANCELLED", "EXPIRED"].includes(r.state) && <Button size="small" color="warning" onClick={() => setDeleting(r)}>Delete</Button>}
+          </Stack></TableCell>
+        </TableRow>;
+      })}</TableBody>
     </Table>
+    {inspecting && <DetailDialog request={inspecting} onClose={() => setInspecting(null)}
+      onSelectRequest={openLinked} onRequestAgain={(req) => { setInspecting(null); onRequestAgain(req); }} />}
     {downloading && <DownloadDialog request={downloading} onClose={() => setDownloading(null)}
       onStarted={() => { setAfterDownload(downloading); setDownloading(null); onChange(); }} />}
     {uploading && <UploadDialog request={uploading} onClose={() => setUploading(null)} />}
@@ -190,6 +379,45 @@ function Requests({ rows, onChange }: { readonly rows: readonly SupportBundleReq
     {afterDownload && <DeleteDialog request={afterDownload} afterDownload onClose={() => setAfterDownload(null)} onDone={() => { setAfterDownload(null); onChange(); }} />}
     {deleting && <DeleteDialog request={deleting} onClose={() => setDeleting(null)} onDone={() => { setDeleting(null); onChange(); }} />}
   </Box>;
+}
+
+function DetailDialog({ request, onClose, onSelectRequest, onRequestAgain }: {
+  readonly request: SupportBundleRequest;
+  readonly onClose: () => void;
+  readonly onSelectRequest: (id: string) => void;
+  readonly onRequestAgain: (r: SupportBundleRequest) => void;
+}) {
+  const whyNotStarted = notStartedSentence(request);
+  return <Dialog open onClose={onClose} aria-labelledby="sb-det-title" fullWidth maxWidth="sm">
+    <DialogTitle id="sb-det-title">Support bundle {request.id.slice(0, 8)}</DialogTitle>
+    <DialogContent>
+      <Stack gap={1.5}>
+        {whyNotStarted && <Alert severity="error" data-fact="detail-not-started">{whyNotStarted}</Alert>}
+        <Typography variant="body2">Device: {request.device_pseudonym} ({request.vendor})</Typography>
+        <Typography variant="body2">State: {request.state}{request.outcome ? ` · ${request.outcome}` : ""}</Typography>
+        <Typography variant="body2">Requested: {formatStamp(request.requested_at)}</Typography>
+        <Typography variant="body2">Scheduled start: {formatStamp(request.run_at)} ({request.run_mode})</Typography>
+        {request.finished_at && <Typography variant="body2">Finished: {formatStamp(request.finished_at)}</Typography>}
+        {request.case_ref && <Typography variant="body2">Case reference: {request.case_ref}</Typography>}
+        {request.previous_request_id && <Typography variant="body2" data-fact="detail-previous-link">
+          {request.auto_retry ? "Automatic retry of " : "Follow-up to "}
+          <Link component="button" type="button" variant="body2" onClick={() => onSelectRequest(request.previous_request_id!)}>
+            {request.previous_request_id}
+          </Link>
+        </Typography>}
+        {request.retry_request_id && <Typography variant="body2" data-fact="detail-retry-link">
+          {"Retried as "}
+          <Link component="button" type="button" variant="body2" onClick={() => onSelectRequest(request.retry_request_id!)}>
+            {request.retry_request_id}
+          </Link>
+        </Typography>}
+      </Stack>
+    </DialogContent>
+    <DialogActions>
+      {canRequestAgain(request) && <Button onClick={() => onRequestAgain(request)}>Request again</Button>}
+      <Button onClick={onClose}>Close</Button>
+    </DialogActions>
+  </Dialog>;
 }
 
 function DownloadDialog({ request, onClose, onStarted }: {

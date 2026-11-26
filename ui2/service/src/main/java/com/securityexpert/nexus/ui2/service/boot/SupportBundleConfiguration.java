@@ -1,7 +1,10 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import java.util.logging.Logger;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
@@ -12,7 +15,7 @@ import com.securityexpert.nexus.ui2.service.supportbundle.SupportBundleDownloadS
 import com.securityexpert.nexus.ui2.service.supportbundle.SupportBundleService;
 import com.securityexpert.nexus.ui2.service.systemlog.LogMasking;
 
-/** Support bundle collection composition (V230): the store, the request service and the download service. */
+/** Support bundle collection composition (V230, V274): the store, the request service, the download service, and busy retry sweep. */
 @Configuration
 public class SupportBundleConfiguration {
 
@@ -25,6 +28,30 @@ public class SupportBundleConfiguration {
     public SupportBundleService supportBundleService(DeviceRepository devices, JobAdmissionService admission,
             JooqSupportBundleStore store) {
         return new SupportBundleService(devices, admission, store);
+    }
+
+    @Bean
+    public BusyRetrySweep supportBundleBusyRetrySweep(SupportBundleService service) {
+        return new BusyRetrySweep(service);
+    }
+
+    /** Once a minute while scheduling is enabled: closes stale queued requests and schedules the one automatic quiet-hour retry. */
+    public static final class BusyRetrySweep {
+        private static final Logger LOG = Logger.getLogger(BusyRetrySweep.class.getName());
+        private final SupportBundleService service;
+
+        BusyRetrySweep(SupportBundleService service) {
+            this.service = service;
+        }
+
+        @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
+        public void sweep() {
+            try {
+                service.retryExpiredBusy();
+            } catch (RuntimeException e) {
+                LOG.warning("[SUPPORT_BUNDLE] busy retry sweep failed: " + e.getClass().getSimpleName());
+            }
+        }
     }
 
     @Bean

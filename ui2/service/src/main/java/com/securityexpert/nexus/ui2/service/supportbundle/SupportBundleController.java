@@ -30,7 +30,7 @@ import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleS
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /**
- * Support bundle routes (design sections 5.10 and 5.11). Reads return metadata only: opaque ids, the deterministic device
+ * Support bundle routes (design sections 5.10, 5.11 and 5.13). Reads return metadata only: opaque ids, the deterministic device
  * pseudonym, kinds, states, sizes, a 12-character digest prefix and the expiry. For the replay viewer (aiview) the
  * request actor, the reason and the case reference are left out, and every write, download and delete is refused again
  * here as defence in depth (the route gate already refuses it).
@@ -44,7 +44,13 @@ public final class SupportBundleController {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public record RequestBody_(@JsonProperty("kinds") List<String> kinds, @JsonProperty("run_at") String runAt,
-            @JsonProperty("case_ref") String caseRef, @JsonProperty("reason") String reason) {
+            @JsonProperty("case_ref") String caseRef, @JsonProperty("reason") String reason,
+            @JsonProperty("previous_request_id") String previousRequestId, @JsonProperty("vs_ids") List<Integer> vsIds,
+            @JsonProperty("domain_ref") String domainRef) {
+
+        public RequestBody_(List<String> kinds, String runAt, String caseRef, String reason) {
+            this(kinds, runAt, caseRef, reason, null, null, null);
+        }
     }
 
     public record ReasonBody(@JsonProperty("reason") String reason, @JsonProperty("mode") String mode) {
@@ -80,7 +86,12 @@ public final class SupportBundleController {
             row.put("check_point_management", k.onCheckPointManagement());
             rows.add(row);
         }
-        return ResponseEntity.ok(Map.of("kinds", rows));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("kinds", rows);
+        body.put("module_draining", service.isModuleDraining());
+        body.put("collection_window_open", service.isCollectionWindowOpen());
+        body.put("collection_window_ends_at", service.currentCollectionWindowEnd().map(Instant::toString).orElse(null));
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/api/v2/support-bundles")
@@ -100,9 +111,11 @@ public final class SupportBundleController {
     private ResponseEntity<Map<String, Object>> listBody(Optional<String> deviceId, String state, int limit, HttpServletRequest http) {
         List<Map<String, Object>> rows = new ArrayList<>();
         List<RequestRow> found = store.list(deviceId, Optional.ofNullable(state).filter(s -> !s.isBlank()), limit);
-        var cleanup = uploadStore.cleanupStatuses(found.stream().map(RequestRow::id).toList());
+        List<UUID> ids = found.stream().map(RequestRow::id).toList();
+        var cleanup = uploadStore.cleanupStatuses(ids);
+        var followUps = store.followUps(ids);
         for (RequestRow r : found) {
-            rows.add(requestBody(r, store.items(r.id()), viewer(http), cleanup.get(r.id())));
+            rows.add(requestBody(r, store.items(r.id()), viewer(http), cleanup.get(r.id()), followUps.get(r.id())));
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("support_bundles", rows);
@@ -115,8 +128,10 @@ public final class SupportBundleController {
         if (uuid.isEmpty()) return error(HttpStatus.BAD_REQUEST, "INVALID_ID", "Identifier must be a UUID");
         Optional<RequestRow> row = store.find(uuid.get());
         if (row.isEmpty()) return error(HttpStatus.NOT_FOUND, "NOT_FOUND", "No support bundle with that id");
-        return ResponseEntity.ok(requestBody(row.get(), store.items(row.get().id()), viewer(http),
-                uploadStore.cleanupStatuses(List.of(row.get().id())).get(row.get().id())));
+        UUID rid = row.get().id();
+        return ResponseEntity.ok(requestBody(row.get(), store.items(rid), viewer(http),
+                uploadStore.cleanupStatuses(List.of(rid)).get(rid),
+                store.followUps(List.of(rid)).get(rid)));
     }
 
     // ---------------------------------------------------------------- writes
@@ -136,8 +151,16 @@ public final class SupportBundleController {
                 return error(HttpStatus.BAD_REQUEST, "INVALID_RUN_AT", "run_at must be an ISO-8601 instant, for example 2026-11-16T01:00:00Z");
             }
         }
+        UUID previousRequestId = null;
+        if (body.previousRequestId() != null && !body.previousRequestId().isBlank()) {
+            Optional<UUID> parsed = uuid(body.previousRequestId().strip());
+            if (parsed.isEmpty()) {
+                return error(HttpStatus.BAD_REQUEST, "INVALID_PREVIOUS_REQUEST_ID", "previous_request_id must be a UUID");
+            }
+            previousRequestId = parsed.get();
+        }
         SupportBundleService.Outcome outcome = service.request(deviceId, body.kinds(), runAt, body.caseRef(), body.reason(),
-                actor(http));
+                actor(http), previousRequestId, body.vsIds(), body.domainRef());
         return switch (outcome) {
             case SupportBundleService.Outcome.Accepted accepted -> {
                 Map<String, Object> map = new LinkedHashMap<>();
@@ -258,7 +281,8 @@ public final class SupportBundleController {
     // ---------------------------------------------------------------- helpers
 
     private Map<String, Object> requestBody(RequestRow r, List<ItemRow> items, boolean viewer,
-            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore.CleanupStatus cleanup) {
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore.CleanupStatus cleanup,
+            UUID retryRequestId) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.id().toString());
         m.put("device_id", r.deviceId());
@@ -278,6 +302,12 @@ public final class SupportBundleController {
         m.put("outcome", r.outcome());
         m.put("job_id", r.jobId());
         m.put("prechecks", precheck(r.precheckJson()));
+        m.put("previous_request_id", r.previousRequestId() == null ? null : r.previousRequestId().toString());
+        m.put("retry_request_id", retryRequestId == null ? null : retryRequestId.toString());
+        m.put("auto_retry", r.autoRetry());
+        m.put("retry_outcome", r.retryOutcome());
+        m.put("hold_reasons", r.holdReasons());
+        m.put("not_started_summary", SupportBundleService.notStartedSummary(r));
         // a work directory the run left on the device and did not remove: the screen offers the admin-confirmed removal (state only)
         m.put("work_dir_pending", cleanup != null && cleanup.pending());
         m.put("cleanup_state", cleanup == null ? null : cleanup.state());
@@ -293,6 +323,8 @@ public final class SupportBundleController {
             Map<String, Object> e = new LinkedHashMap<>();
             e.put("kind", i.kind());
             e.put("ordinal", i.ordinal());
+            e.put("vs_id", i.vsId());
+            if (!viewer && i.domainRef() != null) e.put("domain_ref", i.domainRef());
             e.put("state", i.state());
             e.put("outcome_code", i.outcomeCode());
             e.put("size_bytes", i.sizeBytes());

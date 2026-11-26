@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SupportBundlesScreen, bundleDevice, collisionHint } from "../src/screens/SupportBundlesScreen";
+import { SupportBundlesScreen, bundleDevice, collisionHint, nextQuietHourLocal, notStartedSentence, waitWarning } from "../src/screens/SupportBundlesScreen";
 import {
   cleanupSupportBundleWorkDir, deleteSupportBundle, getSupportBundleCatalogue, getSupportBundleUploadDestinations, listDevices,
   listSupportBundleUploads, listSupportBundles, requestSupportBundle, requestSupportBundleDownloadTicket, startSupportBundleUpload,
@@ -251,5 +251,130 @@ describe("support bundles screen", () => {
     render(<SupportBundlesScreen />);
     await screen.findByText("FW-TANGO-04", { selector: "td" });
     expect(screen.queryByRole("button", { name: "Remove leftover work directory" })).toBeNull();
+  });
+
+  it("picks quiet hours avoiding 00/06/12/18 collection windows and 02:00 backups", () => {
+    // 23:46 GMT+3 (20:46Z) -> 04:00 next morning
+    expect(nextQuietHourLocal(new Date("2026-11-25T20:46:00Z"))).toBe("2026-11-26T04:00");
+    // 02:46 GMT+3 (23:46Z) -> 04:00 same morning
+    expect(nextQuietHourLocal(new Date("2026-11-25T23:46:00Z"))).toBe("2026-11-26T04:00");
+    // 11:00 GMT+3 (08:00Z) -> 20:00 same evening
+    expect(nextQuietHourLocal(new Date("2026-11-26T08:00:00Z"))).toBe("2026-11-26T20:00");
+    // 20:10 GMT+3 (17:10Z) -> 21:00 same evening
+    expect(nextQuietHourLocal(new Date("2026-11-26T17:10:00Z"))).toBe("2026-11-26T21:00");
+    // 23:10 GMT+3 (20:10Z) -> 23:30 same evening
+    expect(nextQuietHourLocal(new Date("2026-11-26T20:10:00Z"))).toBe("2026-11-26T23:30");
+  });
+
+  it("shows Request again only for NOT_STARTED_DEVICE_BUSY or CANCELLED before start, pre-fills the form, and sends previous_request_id", async () => {
+    const busyId = "22222222-2222-4222-8222-222222222222";
+    const cancelledId = "33333333-3333-4333-8333-333333333333";
+    const startedCancelId = "44444444-4444-4444-8444-444444444444";
+    vi.mocked(listSupportBundles).mockResolvedValue({
+      support_bundles: [
+        row(),
+        row({
+          id: busyId, state: "FAILED", outcome: "NOT_STARTED_DEVICE_BUSY", started_at: null,
+          finished_at: "2026-11-25T23:46:00Z", case_ref: "SR-7700",
+          hold_reasons: ["MODULE_DRAIN", "COLLECTION_WINDOW", "DEVICE_JOB_RUNNING"],
+          items: [
+            { kind: "cp_gaia_extras", ordinal: 1, state: "CANCELLED", outcome_code: "NOT_STARTED_DEVICE_BUSY", size_bytes: null, digest_prefix: null, detail: null },
+            { kind: "cp_cpinfo", ordinal: 2, vs_id: 2, domain_ref: "dom-retail", state: "CANCELLED", outcome_code: "NOT_STARTED_DEVICE_BUSY", size_bytes: null, digest_prefix: null, detail: null },
+          ],
+        }),
+        row({ id: cancelledId, state: "CANCELLED", outcome: "CANCELLED", started_at: null }),
+        row({ id: startedCancelId, state: "CANCELLED", outcome: "CANCELLED", started_at: "2026-11-25T01:00:10Z" }),
+      ],
+    } as never);
+    vi.mocked(requestSupportBundle).mockResolvedValue({ id: ID, job_id: "j-retry", status: "ACCEPTED" });
+
+    render(<SupportBundlesScreen />);
+    await screen.findAllByText("FW-TANGO-04", { selector: "td" });
+
+    // COMPLETED and started-then-CANCELLED rows have no Request again button; busy-expired and pre-start cancelled rows do
+    const completedRow = document.querySelector(`[data-bundle="${ID}"]`) as HTMLElement;
+    const busyRow = document.querySelector(`[data-bundle="${busyId}"]`) as HTMLElement;
+    const preCancelRow = document.querySelector(`[data-bundle="${cancelledId}"]`) as HTMLElement;
+    const postStartCancelRow = document.querySelector(`[data-bundle="${startedCancelId}"]`) as HTMLElement;
+    expect(within(completedRow).queryByRole("button", { name: "Request again" })).toBeNull();
+    expect(within(postStartCancelRow).queryByRole("button", { name: "Request again" })).toBeNull();
+    expect(within(preCancelRow).getByRole("button", { name: "Request again" })).toBeTruthy();
+
+    // Row displays the plain NOT_STARTED_DEVICE_BUSY sentence built from closed hold reasons and expiry time
+    expect(within(busyRow).getByText(/Did not start: held by a module drain, a collection window, and another job on the device; expired 2026-11-26 02:46 GMT\+3\./)).toBeTruthy();
+
+    // Click Request again -> form pre-fills device, exact kinds (including unticked cp_cpinfo), case_ref, and suggested quiet hour
+    fireEvent.click(within(busyRow).getByRole("button", { name: "Request again" }));
+    expect(await screen.findByText(/Pre-filled from request 22222222 for the next quiet hour/)).toBeTruthy();
+    expect((screen.getByLabelText(/Gaia details/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/cpinfo/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/Latest HCP health report/) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/Vendor case reference/) as HTMLInputElement).value).toBe("SR-7700");
+    const runAtInput = screen.getByLabelText(/Run at/) as HTMLInputElement;
+    expect(runAtInput.value).toMatch(/T(04:00|20:00|21:00|22:00|23:00|23:30)$/);
+
+    // Operator types a fresh reason and clicks Collect
+    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Re-run after night window cleared" } });
+    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    await waitFor(() => expect(requestSupportBundle).toHaveBeenCalled());
+    expect(vi.mocked(requestSupportBundle).mock.calls[0][0]).toBe("d-cp");
+    expect(vi.mocked(requestSupportBundle).mock.calls[0][1]).toMatchObject({
+      kinds: ["cp_gaia_extras", "cp_cpinfo"],
+      reason: "Re-run after night window cleared",
+      case_ref: "SR-7700",
+      previous_request_id: busyId,
+      vs_ids: [2],
+      domain_ref: "dom-retail",
+    });
+    expect(vi.mocked(requestSupportBundle).mock.calls[0][1].run_at).toBeTruthy();
+  });
+
+  it("shows the bidirectional link between an expired-busy request and its automatic retry, plus detail sentence", async () => {
+    const origId = "55555555-5555-4555-8555-555555555555";
+    const retryId = "66666666-6666-4666-8666-666666666666";
+    vi.mocked(listSupportBundles).mockResolvedValue({
+      support_bundles: [
+        row({
+          id: retryId, state: "QUEUED", outcome: null, run_mode: "AT", run_at: "2026-11-26T01:00:00Z",
+          previous_request_id: origId, auto_retry: true,
+        }),
+        row({
+          id: origId, state: "FAILED", outcome: "NOT_STARTED_DEVICE_BUSY", started_at: null,
+          finished_at: "2026-11-25T23:46:00Z", hold_reasons: ["MODULE_DRAIN"], retry_request_id: retryId,
+          retry_outcome: "RETRY_SCHEDULED",
+        }),
+      ],
+    } as never);
+    render(<SupportBundlesScreen />);
+    await screen.findAllByText("FW-TANGO-04", { selector: "td" });
+
+    const retryRow = document.querySelector(`[data-bundle="${retryId}"]`) as HTMLElement;
+    const origRow = document.querySelector(`[data-bundle="${origId}"]`) as HTMLElement;
+    expect(within(retryRow).getByText(/Automatic retry of/)).toBeTruthy();
+    expect(within(retryRow).getByRole("button", { name: "55555555" })).toBeTruthy();
+    expect(within(retryRow).getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(within(origRow).getByText(/Retried as/)).toBeTruthy();
+    expect(within(origRow).getByRole("button", { name: "66666666" })).toBeTruthy();
+
+    // Open Details on the expired-busy row: shows the same plain sentence and link
+    fireEvent.click(within(origRow).getByRole("button", { name: "Details" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByText(/Did not start: held by a module drain; expired 2026-11-26 02:46 GMT\+3\./)).toBeTruthy();
+    expect(dialog.getByRole("button", { name: retryId })).toBeTruthy();
+  });
+
+  it("warns before submit when a module drain is active or inside a collection window", async () => {
+    expect(waitWarning("", true, false, null)).toMatch(/module drain is active; this will wait until/);
+    expect(waitWarning("", false, true, "2026-11-25T22:00:00Z")).toMatch(/collection window is active; this will wait until/);
+    expect(waitWarning("2026-11-26T00:15", false, false, null)).toMatch(/00:00-00:59 is a scheduled collection window; this will wait until 01:00/);
+    expect(waitWarning("2026-11-26T04:00", false, false, null)).toBeNull();
+    expect(notStartedSentence({ outcome: "NOT_STARTED_DEVICE_BUSY", hold_reasons: [], finished_at: "2026-11-25T23:46:00Z", expires_at: "2026-11-29T00:00:00Z" }))
+      .toMatch(/device remained busy for 3 hours; expired 2026-11-26 02:46 GMT\+3/);
+
+    vi.mocked(getSupportBundleCatalogue).mockResolvedValue({
+      kinds, module_draining: true, collection_window_open: true, collection_window_ends_at: "2026-11-25T22:00:00Z",
+    } as never);
+    render(<SupportBundlesScreen />);
+    expect(await screen.findByText(/A module drain and a collection window are active; this will wait until/)).toBeTruthy();
   });
 });
