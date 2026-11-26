@@ -59,6 +59,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     private PrivacyMaskingResponseBodyAdvice advice;
+    private TopologyNamePseudonymizer topologyPseudonymizer;
     private HttpServletRequest httpRequest;
     private ServletServerHttpRequest serverRequest;
 
@@ -66,7 +67,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
     void setUp() {
         byte[] testKey = "01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8);
         SubnetPreservingIpMasker ipMasker = new SubnetPreservingIpMasker(testKey);
-        TopologyNamePseudonymizer topologyPseudonymizer = new TopologyNamePseudonymizer(testKey);
+        topologyPseudonymizer = new TopologyNamePseudonymizer(testKey);
         advice = new PrivacyMaskingResponseBodyAdvice(ipMasker, topologyPseudonymizer);
 
         httpRequest = mock(HttpServletRequest.class);
@@ -710,5 +711,103 @@ class PrivacyMaskingResponseBodyAdviceTest {
         // Non-viewer role keeps original JsonNode body untouched
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
         assertThat(localAdvice.beforeBodyWrite(body, null, null, null, serverRequest, null)).isSameAs(body);
+    }
+
+    private static Map<String, Object> overrideEnd(String deviceId, String context, String interfaceName) {
+        Map<String, Object> end = new LinkedHashMap<>();
+        end.put("device_id", deviceId);
+        end.put("context", context);
+        end.put("interface_name", interfaceName);
+        return end;
+    }
+
+    private static Map<String, Object> override(String id, Map<String, Object> a, Map<String, Object> b) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("override_id", id);
+        body.put("override_action", "ADD_LINK");
+        body.put("a", a);
+        body.put("b", b);
+        body.put("override_status", "APPLIED");
+        return body;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksTheBareContextOfEveryTopologyOverrideEndConsistentlyForReplayViewer() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        String ctxA = "CTX-TANGO-04";
+        String ctxB = "CTX-JULIET-06";
+        Map<String, Object> body = Map.of("overrides", List.of(
+                override("tlo-1", overrideEnd("dev-a", ctxA, "eth-tango-1"), overrideEnd("dev-b", ctxB, "eth-juliet-2")),
+                override("tlo-2", overrideEnd("dev-c", ctxA, "eth-tango-1"), overrideEnd("dev-b", ctxB, "eth-juliet-2"))));
+
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        List<Map<String, Object>> overrides = (List<Map<String, Object>>) result.get("overrides");
+        Map<String, Object> a1 = (Map<String, Object>) overrides.get(0).get("a");
+        Map<String, Object> b1 = (Map<String, Object>) overrides.get(0).get("b");
+        Map<String, Object> a2 = (Map<String, Object>) overrides.get(1).get("a");
+        Map<String, Object> b2 = (Map<String, Object>) overrides.get(1).get("b");
+
+        assertThat(a1.get("context")).isNotEqualTo(ctxA).isEqualTo(a2.get("context"));
+        assertThat(b1.get("context")).isNotEqualTo(ctxB).isEqualTo(b2.get("context"));
+        assertThat(a1.get("context")).isNotEqualTo(b1.get("context"));
+        assertThat(String.valueOf(a1.get("context")) + b1.get("context")).doesNotContain("TANGO-04", "JULIET-06");
+        // Same pseudonym kind as the composite path: one name, one pseudonym everywhere.
+        assertThat(a1.get("context")).isEqualTo(topologyPseudonymizer.maskPolicyName("context", ctxA));
+        // Interface and device fields keep their existing behaviour.
+        assertThat(a1.get("interface_name")).isNotEqualTo("eth-tango-1").isEqualTo(a2.get("interface_name"));
+        assertThat(a1.get("device_id")).isEqualTo("dev-a");
+        assertThat(overrides.get(0).get("override_id")).isEqualTo("tlo-1");
+    }
+
+    @Test
+    void leavesTopologyOverrideContextsUnchangedForANonReplayViewer() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(null);
+        Map<String, Object> body = Map.of("overrides", List.of(
+                override("tlo-1", overrideEnd("dev-a", "CTX-TANGO-04", "eth-tango-1"), overrideEnd("dev-b", "CTX-JULIET-06", "eth-juliet-2"))));
+        assertThat(advice.beforeBodyWrite(body, null, null, null, serverRequest, null)).isSameAs(body);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksTheBareContextOfATopologyNodeAndConflictAndKeepsNullAndBlank() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("node_id", "n-1");
+        node.put("node_kind", "DEVICE");
+        node.put("context", "CTX-TANGO-04");
+        Map<String, Object> bareNode = new LinkedHashMap<>();
+        bareNode.put("node_id", "n-2");
+        bareNode.put("node_kind", "DEVICE");
+        bareNode.put("context", null);
+        Map<String, Object> conflict = new LinkedHashMap<>();
+        conflict.put("conflict_id", "c-1");
+        conflict.put("conflict_kind", "OVERLAP");
+        conflict.put("context", "CTX-TANGO-04");
+        Map<String, Object> blank = new LinkedHashMap<>();
+        blank.put("conflict_id", "c-2");
+        blank.put("conflict_kind", "OVERLAP");
+        blank.put("context", " ");
+        Map<String, Object> body = Map.of("nodes", List.of(node, bareNode), "conflicts", List.of(conflict, blank));
+
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        List<Map<String, Object>> nodes = (List<Map<String, Object>>) result.get("nodes");
+        List<Map<String, Object>> conflicts = (List<Map<String, Object>>) result.get("conflicts");
+        assertThat(nodes.get(0).get("context")).isNotEqualTo("CTX-TANGO-04").isEqualTo(conflicts.get(0).get("context"));
+        assertThat(String.valueOf(nodes.get(0).get("context"))).doesNotContain("TANGO-04");
+        assertThat(nodes.get(1).get("context")).isNull();
+        assertThat(conflicts.get(1).get("context")).isEqualTo(" ");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void leavesTheBareContextOfOtherBodiesAloneBecauseAControllerMasksItOrScreensReadIt() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> inventoryContext = new LinkedHashMap<>();
+        inventoryContext.put("context", "physical");
+        inventoryContext.put("interfaces", List.of());
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(
+                inventoryContext, null, null, null, serverRequest, null);
+        assertThat(result.get("context")).isEqualTo("physical");
     }
 }

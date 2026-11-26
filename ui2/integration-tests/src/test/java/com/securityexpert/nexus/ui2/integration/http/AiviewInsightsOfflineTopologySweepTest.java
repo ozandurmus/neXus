@@ -122,25 +122,17 @@ class AiviewInsightsOfflineTopologySweepTest {
     private static final List<String> REFUSED = List.of(SANITIZE_JOB, SANITIZE_DOWNLOAD, SANITIZE_REVERT);
 
     /**
-     * Surviving raw values per route and value class, found by this sweep and left for a masking fix lane (no production
-     * class is edited here). A new leak, a larger count, or a fix that shrinks a count without editing this map fails
+     * Surviving raw values per route and value class, found by this sweep. Empty: the one finding of this round
+     * ({@code GET /api/v2/topology/overrides}, the bare {@code context} of each override end) is closed by the
+     * shape-keyed {@code context} case of {@code PrivacyMaskingResponseBodyAdvice}. A new leak, or a larger count, fails
      * the test.
-     * <ol>
-     *   <li>{@code GET /api/v2/topology/overrides}: {@code overrides[].a.context} and {@code overrides[].b.context} (the
-     *       virtual-system or virtual-context name of each end) are returned raw: 2 overrides x 2 ends = 4. The key-based
-     *       switch of {@code PrivacyMaskingResponseBodyAdvice} masks {@code interface_name} but has no case for a bare
-     *       {@code context} key ({@code maskContext} is reached only for composite element strings), so the nested
-     *       {@code a}/{@code b} endpoint objects pass the context through. A real exposure: a context name is a raw
-     *       estate identity.</li>
-     * </ol>
      *
      * <p>Note: {@code GET /api/v2/system-logs/{deviceId}/spike-data} previously leaked embedded host names in
      * {@code directories[].name_class} and {@code directories[].member_classes[].class} (2 + 2), which is now closed
      * by {@code TopologyNamePseudonymizer.knownNamesPattern()} matching across {@code -} delimiters (sweep round 6 fix);
      * spike-data now returns 0 surviving planted raw values.</p>
      */
-    static final Map<String, Map<ValueClass, Integer>> KNOWN_LEAKS = Map.of(
-            OVERRIDES, Map.of(ValueClass.CONTEXT_OR_INTERFACE, 4));
+    static final Map<String, Map<ValueClass, Integer>> KNOWN_LEAKS = Map.of();
 
     private static Ui2PostgresFixture fixture;
     private static ConfigurableApplicationContext context;
