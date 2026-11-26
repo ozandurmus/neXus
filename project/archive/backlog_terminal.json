@@ -1305,6 +1305,15 @@
       "priority": "P2",
       "target": "b2aec1f5: lt/gt/neq decided as ranges, DEFECT test enabled",
       "note": ""
+    },
+    {
+      "id": "policy_insights_design_followups",
+      "category": "engineering",
+      "title": "Policy Insights design follow-ups: missing hygiene-modes design file the code cites, stale work-budget figure",
+      "status": "done",
+      "priority": "P3",
+      "target": "POLICY_INSIGHTS_DESIGN_2026_11_24.md section 11",
+      "note": ""
     }
   ]
 }

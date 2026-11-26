@@ -8,6 +8,7 @@ import {
 import { RestrictedPanel, StatePanel, isRestricted } from "../../shell/States";
 import { StatusPill } from "../../shell/StatusPill";
 import { formatStamp } from "../../shell/time";
+import { parseTraceTuple, traceTupleHref } from "../../shell/traceTupleLink";
 import { urlParam, writeUrlParams } from "../../shell/urlParams";
 import { m3 } from "../../theme/m3Theme";
 import { cutoverFailureText } from "./cutoverErrors";
@@ -17,7 +18,20 @@ import {
 
 const PAGE = 100;
 const number = (value: number | null | undefined) => (typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US") : "UNKNOWN");
-const TRACE_HREF = "?screen=trace&mode=path";
+
+function flowTraceHref(flow: CutoverFlowItem): string | null {
+  const rawProtocol = typeof flow.protocol === "string" ? flow.protocol : "";
+  const protocol = rawProtocol === "TCP" || rawProtocol === "UDP" ? rawProtocol.toLowerCase() : rawProtocol;
+  if (typeof flow.port !== "number" || !Number.isInteger(flow.port)) return null;
+  const href = traceTupleHref({
+    src: typeof flow.flowSource === "string" ? flow.flowSource : "",
+    dst: typeof flow.flowDestination === "string" ? flow.flowDestination : "",
+    protocol,
+    port: flow.port,
+  });
+  const hashIndex = href.indexOf("#");
+  return hashIndex >= 0 && parseTraceTuple(href.slice(hashIndex)) !== null ? href : null;
+}
 
 /**
  * One stored assessment (brief, screen 3). The verdict line is the server's headline, its readiness chip and the
@@ -183,6 +197,8 @@ function FlowRow({ flow, deviceName }: { readonly flow: CutoverFlowItem; readonl
   const decision = decisionOf(flow.decision);
   const flags = flow.flags ?? [];
   const dropped = flags.includes("ALREADY_DROPPED_TODAY");
+  const traceHref = flow.targetSource === "PATH" ? flowTraceHref(flow) : null;
+  const tupleLabel = `Open Trace for this tuple (${flow.flowSource} → ${flow.flowDestination} ${flow.protocol}/${flow.port})`;
   return <TableRow data-decision={flow.decision} data-flags={flags.join(" ") || undefined} sx={dropped ? { opacity: 0.6 } : undefined}>
     <TableCell>{directionOf(flow.direction)}</TableCell>
     <TableCell sx={{ fontFamily: "monospace" }}>{flow.flowSource}</TableCell>
@@ -203,8 +219,9 @@ function FlowRow({ flow, deviceName }: { readonly flow: CutoverFlowItem; readonl
             {deviceName(hop.deviceId)}{hop.vendor ? ` (${hop.vendor})` : ""} · {hop.hopVerdict || "UNKNOWN"}{hop.decidingRule ? ` · rule ${ruleText(hop.decidingRule)}` : ""}
           </li>)}</Box>
         </Box>}
-        {flow.targetSource === "PATH" && <Link variant="body2" href={TRACE_HREF} title={`Trace ${flow.flowSource} → ${flow.flowDestination} ${flow.protocol}/${flow.port}`}>
-          Open Trace for this tuple ({flow.flowSource} → {flow.flowDestination} {flow.protocol}/{flow.port})</Link>}
+        {flow.targetSource === "PATH" && (traceHref !== null
+          ? <Link variant="body2" href={traceHref} title={`Trace ${flow.flowSource} → ${flow.flowDestination} ${flow.protocol}/${flow.port}`}>{tupleLabel}</Link>
+          : <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{`${tupleLabel} · tuple not linkable`}</Typography>)}
       </Stack>
     </TableCell>
   </TableRow>;
@@ -227,4 +244,3 @@ function MissingRules({ items }: { readonly items: readonly CutoverMissingRuleIt
     </TableRow>)}</TableBody>
   </Table></Box>;
 }
-

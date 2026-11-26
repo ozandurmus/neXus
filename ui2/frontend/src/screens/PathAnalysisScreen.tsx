@@ -12,6 +12,8 @@ import { queryPath, responsesAreMasked, type PathQueryRequest, type PathResult }
 import { M3Button } from "../shell/M3Widgets";
 import { EmptyPanel, ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { RestrictedPanel, StatePanel } from "../shell/States";
+import { parseTraceTuple } from "../shell/traceTupleLink";
+import { URL_CHANGE_EVENT } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
 import { RADIUS } from "../theme/tokens";
 import { PathResultView } from "./pathanalysis/PathResultView";
@@ -73,23 +75,54 @@ export function toRequest(values: PathFormValues): PathQueryRequest {
  * and port.
  */
 export function PathAnalysisPanel() {
-  const [values, setValues] = useState<PathFormValues>(EMPTY_FORM);
+  const initialHash = typeof window !== "undefined" ? window.location.hash : "";
+  const [values, setValues] = useState<PathFormValues>(() => {
+    const prefill = parseTraceTuple(initialHash);
+    return prefill ? { ...EMPTY_FORM, ...prefill } : EMPTY_FORM;
+  });
+  const [prefilled, setPrefilled] = useState<boolean>(() => parseTraceTuple(initialHash) !== null);
+  const lastHash = useRef(initialHash);
   const [result, setResult] = useState<PathResult | null>(null);
   const [failure, setFailure] = useState<PathFailure | null>(null);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => {
+    const syncFromHash = () => {
+      const currentHash = window.location.hash;
+      if (currentHash === lastHash.current) return;
+      lastHash.current = currentHash;
+      const prefill = parseTraceTuple(currentHash);
+      if (!prefill) return;
+      setValues({ ...EMPTY_FORM, ...prefill });
+      setPrefilled(true);
+      setResult(null);
+      setFailure(null);
+    };
+    window.addEventListener(URL_CHANGE_EVENT, syncFromHash);
+    window.addEventListener("popstate", syncFromHash);
+    window.addEventListener("hashchange", syncFromHash);
+    return () => {
+      window.removeEventListener(URL_CHANGE_EVENT, syncFromHash);
+      window.removeEventListener("popstate", syncFromHash);
+      window.removeEventListener("hashchange", syncFromHash);
+    };
+  }, []);
   const masked = useMasked();
   // Stage A6: a verification belongs to one computed result; a new result (or a refusal) resets it.
   const verification = usePathValidation(result);
 
   const missing = pathFormMissing(values);
   const reason = missing.length ? `Needs ${missing.join(", ")}` : null;
-  const set = <K extends keyof PathFormValues>(key: K, value: PathFormValues[K]) => setValues((v) => ({ ...v, [key]: value }));
+  const set = <K extends keyof PathFormValues>(key: K, value: PathFormValues[K]) => {
+    setPrefilled(false);
+    setValues((v) => ({ ...v, [key]: value }));
+  };
 
   const run = async () => {
     if (inFlight.current || reason) return;
+    setPrefilled(false);
     inFlight.current = true; setBusy(true); setFailure(null);
     try {
       const answer = await queryPath(toRequest(values));
@@ -107,10 +140,15 @@ export function PathAnalysisPanel() {
       if (mounted.current) setBusy(false);
     }
   };
-  const submit = (event: FormEvent) => { event.preventDefault(); void run(); };
+  const submit = (event: FormEvent) => { event.preventDefault(); setPrefilled(false); void run(); };
 
   return (
     <>
+      {prefilled ? (
+        <Typography variant="body2" data-testid="path-prefilled-note" sx={{ color: m3.onSurfaceVar }}>
+          Filled from a link: check the values, then press Evaluate path.
+        </Typography>
+      ) : null}
       <Card component="form" onSubmit={submit} aria-label="Path query"
         sx={{ border: `1px solid ${m3.outlineVar}`, boxShadow: "none", borderRadius: `${RADIUS.card}px`, p: 2.5, bgcolor: m3.scLowest }}>
         <Stack spacing={2}>
