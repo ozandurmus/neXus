@@ -38,7 +38,13 @@ class InMemoryLogDetectionRepository implements LogDetectionRepository {
 
     @Override
     public Settings writeSettings(String actor, boolean enabled, Instant shadowUntil) {
-        settings = new Settings(enabled, shadowUntil, Instant.now(), actor);
+        settings = new Settings(enabled, shadowUntil, Instant.now(), actor, settings.p2Enabled());
+        return settings;
+    }
+
+    @Override
+    public Settings writeSettings(String actor, boolean enabled, Instant shadowUntil, boolean p2Enabled) {
+        settings = new Settings(enabled, shadowUntil, Instant.now(), actor, p2Enabled);
         return settings;
     }
 

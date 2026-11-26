@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
+import com.securityexpert.nexus.ui2.service.logdetect.LogCatalogAdmin;
 import com.securityexpert.nexus.ui2.service.logdetect.LogFindingReadService;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
@@ -30,16 +31,20 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
  * {@code log-finding}, {@code log-finding-ack}, {@code log-coverage}). Reads are {@code system_log_read} (aiview
  * included); the acknowledgement is {@code log_finding_acknowledge} and never aiview; the switch is
  * {@code log_detection_settings_write} (security_admin). Findings carry counts, device-local times, closed-vocabulary labels and pointers,
- * never a log line.
+ * never a log line. Phase P2 adds the template catalog routes (design section 9 {@code log-catalog}, {@code log-catalog-diff},
+ * {@code log-catalog-freeze}) under the same two settings actions: reading a catalog is {@code log_detection_settings_read},
+ * building and freezing one is {@code log_detection_settings_write}; no new action id.
  */
 @RestController
 public final class LogFindingController {
     private final LogFindingReadService service;
+    private final LogCatalogAdmin catalogs;
     private final ActionRegistry actions;
     private final RbacEvaluator rbac;
 
-    public LogFindingController(LogFindingReadService service, ActionRegistry actions, RbacEvaluator rbac) {
+    public LogFindingController(LogFindingReadService service, LogCatalogAdmin catalogs, ActionRegistry actions, RbacEvaluator rbac) {
         this.service = service;
+        this.catalogs = catalogs;
         this.actions = actions;
         this.rbac = rbac;
     }
@@ -99,6 +104,38 @@ public final class LogFindingController {
                     "Changing the log detection switch needs the Security Admin role."));
         }
         return json(service.updateSettings(actor, body));
+    }
+
+    @GetMapping("/api/v2/config/log-detection/catalogs")
+    public ResponseEntity<Map<String, Object>> catalogs() {
+        return json(catalogs.list());
+    }
+
+    @GetMapping("/api/v2/config/log-detection/catalogs/{version}")
+    public ResponseEntity<Map<String, Object>> catalogDiff(@PathVariable String version,
+            @RequestParam(value = "from", required = false) String from) {
+        return json(catalogs.diff(version, from));
+    }
+
+    @PostMapping("/api/v2/config/log-detection/catalogs")
+    public ResponseEntity<Map<String, Object>> buildCatalog(@RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request) {
+        String actor = (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+        if (actor == null || !maySetSwitch(request, actor)) {
+            return error(new LogFindingReadService.Refusal(403, "LOG_DETECTION_SETTINGS_NOT_PERMITTED",
+                    "Building a template catalog needs the Security Admin role."));
+        }
+        return json(catalogs.startBuild(actor, body));
+    }
+
+    @PostMapping("/api/v2/config/log-detection/catalogs/{version}/freeze")
+    public ResponseEntity<Map<String, Object>> freezeCatalog(@PathVariable String version, HttpServletRequest request) {
+        String actor = (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
+        if (actor == null || !maySetSwitch(request, actor)) {
+            return error(new LogFindingReadService.Refusal(403, "LOG_DETECTION_SETTINGS_NOT_PERMITTED",
+                    "Freezing a template catalog needs the Security Admin role."));
+        }
+        return json(catalogs.freeze(actor, version));
     }
 
     private boolean maySetSwitch(HttpServletRequest request, String actor) {

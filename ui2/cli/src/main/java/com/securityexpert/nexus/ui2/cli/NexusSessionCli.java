@@ -146,7 +146,8 @@ final class NexusSessionCli {
         System.out.println("  log-findings [deviceId] [severity=..] [state=..] [days=..] [limit=..]   log detection findings (layer A), worst first; counts and pointers only");
         System.out.println("  log-finding <id> | log-coverage <deviceId> | log-chips | log-budget   one finding; coverage per source and window; the devices-list chip data; the alert-budget counters");
         System.out.println("  log-finding-ack <id> [note]                    operation_admin and above: acknowledge a finding (audited; raised again on a rise or later evidence)");
-        System.out.println("  log-detection | log-detection-set enabled=true|false [shadow_days=N]   the P1 switch and shadow period (security_admin, audited)");
+        System.out.println("  log-detection | log-detection-set [enabled=true|false] [shadow_days=N] [p2_enabled=true|false]   the P1 switch, shadow period and P2 switch (security_admin, audited)");
+        System.out.println("  log-catalog | log-catalog-diff <version> [from-version] | log-catalog-build from=yyyy-mm-dd to=yyyy-mm-dd | log-catalog-freeze <version>   P2 template catalog (security_admin; build and freeze audited)");
         System.out.println("  snmp-polling                                   Administration > SNMP polling: switch, interval, credentials, scope, last outcomes");
         System.out.println("  snmp-polling-set <key>=<value> ...             security_admin (audited); enabled=true interval_s=300 scope_mode=VENDORS|DEVICES");
         System.out.println("                                                 default_credential_reference_id=<ref>|null; vendor=<vendor>:on|off[:<ref>] (repeat: the");
@@ -370,8 +371,22 @@ final class NexusSessionCli {
                 case "log-budget" -> print(call("GET", LOG_FINDINGS + "/budget", null));
                 case "log-detection" -> print(call("GET", LOG_DETECTION_SETTINGS, null));
                 case "log-detection-set" -> {
-                    require(args, 2, "log-detection-set enabled=true|false [shadow_days=N]");
+                    require(args, 2, "log-detection-set [enabled=true|false] [shadow_days=N] [p2_enabled=true|false]");
                     yield print(call("PUT", LOG_DETECTION_SETTINGS, json(settingsBody(args))));
+                }
+                case "log-catalog" -> print(call("GET", LOG_DETECTION_SETTINGS + "/catalogs", null));
+                case "log-catalog-diff" -> {
+                    require(args, 2, "log-catalog-diff <version> [from-version]");
+                    String from = args.length > 2 ? "?from=" + java.net.URLEncoder.encode(opaque(args[2]), StandardCharsets.UTF_8) : "";
+                    yield print(call("GET", LOG_DETECTION_SETTINGS + "/catalogs/" + opaque(args[1]) + from, null));
+                }
+                case "log-catalog-build" -> {
+                    require(args, 3, "log-catalog-build from=yyyy-mm-dd to=yyyy-mm-dd");
+                    yield print(call("POST", LOG_DETECTION_SETTINGS + "/catalogs", json(settingsBody(args))));
+                }
+                case "log-catalog-freeze" -> {
+                    require(args, 2, "log-catalog-freeze <version>");
+                    yield print(call("POST", LOG_DETECTION_SETTINGS + "/catalogs/" + opaque(args[1]) + "/freeze", json(new LinkedHashMap<>())));
                 }
                 case "syslog-settings" -> print(call("GET", SYSLOG_SETTINGS, null));
                 case "snmp-polling" -> print(call("GET", SNMP_POLLING, null));

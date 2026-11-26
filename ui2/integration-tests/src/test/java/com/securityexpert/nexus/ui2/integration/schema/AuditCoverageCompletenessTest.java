@@ -177,6 +177,19 @@ class AuditCoverageCompletenessTest {
             Map.entry("log_finding", "V272: derived layer-A findings written by the service as a system job; recomputable from "
                     + "the evidence rows; a review-state change is recorded by its audited log_finding_action row "
                     + "(trg_audit_log_finding_action); no log text"),
+            Map.entry("log_template", "V273: templates of a catalog version (id, vocabulary-form text, class, counts), derived by "
+                    + "the offline build from the masked pool and recomputable; the build and the freeze are recorded by the "
+                    + "audited log_template_catalog row (trg_audit_log_template_catalog); frozen rows are immutable"),
+            Map.entry("log_template_device_window", "V273: a device's usable training days per catalog version, derived by the "
+                    + "offline build; the audited catalog row records the build"),
+            Map.entry("log_template_device_stat", "V273: per-device template baselines (median, MAD, shares) of a catalog "
+                    + "version, derived by the offline build; the audited catalog row records the build"),
+            Map.entry("log_template_index_state", "V273: what the P2 job did with one stored chunk (status and counters, no line); "
+                    + "derived by the service as a system job and recomputable"),
+            Map.entry("log_template_count", "V273: P2 evidence rows (template id, bucket, count, at most three pointers); derived "
+                    + "by the service as a system job and recomputable"),
+            Map.entry("log_provisional_template", "V273: vocabulary form of provisional template ids, derived by the service as a "
+                    + "system job; no log line"),
             Map.entry("zone_matrix_run", "V267: derived evaluation run written by the service as a system job with no user "
                     + "actor (ZONE_MATRIX_CONTRACT 5.1, 8.4); RUNNING to COMPLETE or FAILED once, then final "
                     + "(tr_zone_matrix_run_guard); holds ids, hashes and counts only"),

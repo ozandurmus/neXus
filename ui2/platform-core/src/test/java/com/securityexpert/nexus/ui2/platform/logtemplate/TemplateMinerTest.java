@@ -1,4 +1,4 @@
-package com.securityexpert.nexus.ui2.worker.diagnostic;
+package com.securityexpert.nexus.ui2.platform.logtemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** The Drain-style miner over normalised synthetic messages. */
+/** The Drain-style miner over normalised synthetic messages (moved from the worker census, 2026-11-26, so the log detection engine reuses it). */
 class TemplateMinerTest {
 
     private static TemplateMiner miner() {
@@ -17,8 +17,8 @@ class TemplateMinerTest {
     @Test
     void sameShapeWithDifferentParametersGroupsIntoOneTemplate() {
         TemplateMiner m = miner();
-        int a = m.add(CensusLineShapes.normalize("kernel: EDAC MC0: 1 CE memory read error on CPU_SrcID#0_Ha#0_Chan#1_DIMM#0 (channel:1 slot:0 page:0x4a1f2 offset:0x0 grain:32)"));
-        int b = m.add(CensusLineShapes.normalize("kernel: EDAC MC0: 9 CE memory read error on CPU_SrcID#0_Ha#0_Chan#1_DIMM#0 (channel:1 slot:0 page:0x4a1f4 offset:0x0 grain:32)"));
+        int a = m.add("kernel: EDAC MC<*>: <*> CE memory read error on CPU_SrcID#<*>_Ha#<*>_Chan#<*>_DIMM#<*> (channel:<*> slot:<*> page:<*> offset:<*> grain:<*>)");
+        int b = m.add("kernel: EDAC MC<*>: <*> CE memory read error on CPU_SrcID#<*>_Ha#<*>_Chan#<*>_DIMM#<*> (channel:<*> slot:<*> page:<*> offset:<*> grain:<*>)");
         assertEquals(a, b);
         assertEquals(1, m.clusterCount());
         assertEquals(2, m.cluster(a).size());
@@ -77,5 +77,42 @@ class TemplateMinerTest {
         assertEquals(TemplateMiner.EMPTY, miner().add("   "));
         assertThrows(IllegalArgumentException.class, () -> new TemplateMiner.Params(2, 0.5, 10, 10, 10));
         assertThrows(IllegalArgumentException.class, () -> new TemplateMiner.Params(4, 0.0, 10, 10, 10));
+    }
+
+    @Test
+    void frozenMinerMatchesWithoutCreatingOrWideningClusters() {
+        TemplateMiner f = TemplateMiner.frozen(TemplateMiner.Params.defaults(), java.util.List.of(
+                "kernel: EDAC MC<NUM>: <NUM> CE memory read error on <DIMM_LABEL>",
+                "sshd[<PID>]: Accepted password for <USR> from <IP> port <NUM> ssh2",
+                "ntpd: synchronized to peer <*> stratum <NUM>"));
+        assertEquals(0, f.match("kernel: EDAC MC<NUM>: <NUM> CE memory read error on <DIMM_LABEL>"));
+        assertEquals(2, f.match("ntpd: synchronized to peer alpha stratum <NUM>"));
+        assertEquals(TemplateMiner.NO_MATCH, f.match("crond: job alpha started"));
+        assertEquals(TemplateMiner.EMPTY, f.match("  "));
+        assertEquals(3, f.clusterCount());
+        assertEquals("ntpd: synchronized to peer <*> stratum <NUM>", f.cluster(2).text());
+        assertThrows(IllegalStateException.class, () -> f.add("crond: job alpha started"));
+    }
+
+    @Test
+    void frozenTemplatesAreNeverMergedAndTheMostSpecificExactTemplateWins() {
+        TemplateMiner f = TemplateMiner.frozen(TemplateMiner.Params.defaults(), java.util.List.of(
+                "fwk: state <*> on <IF>",
+                "fwk: state down on <IF>"));
+        assertEquals(2, f.clusterCount());
+        assertEquals(1, f.match("fwk: state down on <IF>"));
+        assertEquals(0, f.match("fwk: state up on <IF>"));
+    }
+
+    @Test
+    void frozenMatchIsDeterministicAcrossRebuilds() {
+        java.util.List<String> templates = java.util.List.of("a b <*> d", "a b c <*>", "x y z w");
+        for (int i = 0; i < 3; i++) {
+            TemplateMiner f = TemplateMiner.frozen(TemplateMiner.Params.defaults(), templates);
+            assertEquals(0, f.match("a b q d"));
+            assertEquals(1, f.match("a b c q"));
+            // equally specific exact candidates: the lower cluster id decides
+            assertEquals(0, f.match("a b c d"));
+        }
     }
 }

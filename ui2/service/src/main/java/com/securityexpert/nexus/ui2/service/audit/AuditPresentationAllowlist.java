@@ -364,7 +364,13 @@ public final class AuditPresentationAllowlist {
                     "spike_data_retention_days", "updated_at", "updated_by")),
             // V272 (log detection engine P1): the switch row holds a boolean, a shadow-period end and the writer's opaque
             // fingerprint; an acknowledgement event holds ids and a closed action word (note and actor are tier-2 redacted).
-            Map.entry("log_detection_settings", Set.of("enabled", "settings_id", "shadow_until", "updated_at", "updated_by")),
+            // V273 (P2): p2_enabled is the second switch (a boolean). The catalog row is a version id, a DRAFT/FROZEN word,
+            // a digest, a count and two closed-key JSON objects written by the service (versions, parameters, ids,
+            // counts; no log text); its created_by and frozen_by are tier-2 redacted.
+            Map.entry("log_detection_settings", Set.of("enabled", "p2_enabled", "settings_id", "shadow_until", "updated_at",
+                    "updated_by")),
+            Map.entry("log_template_catalog", Set.of("catalog_version", "created_at", "diff", "digest", "frozen_at", "manifest",
+                    "previous_version", "state", "template_count")),
             Map.entry("log_finding_action", Set.of("action", "action_id", "created_at", "finding_id")),
             // V151: summaries are counts, field names, formats and enum-like values only -- nothing to redact.
             Map.entry("system_log_measurement", Set.of(
