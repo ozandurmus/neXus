@@ -52,9 +52,32 @@ class LogDetectionRepositoryTest {
             "log_finding.masking_rule_set", "log_finding.marker_list_version", "log_finding.config_version",
             "log_finding.review_state", "log_finding.review_by",
             "log_finding_action.action_id", "log_finding_action.finding_id", "log_finding_action.action",
-            "log_finding_action.actor", "log_finding_action.note");
+            "log_finding_action.actor", "log_finding_action.note",
+            // V273 (P2). Each is bounded by a CHECK in the migration: a closed set (phase, state, status, class, provenance,
+            // segment, time_basis), an id pattern (catalog_version, template_id, marker_id, versions) or the closed-vocabulary
+            // template character set with a length cap (template_text, match_form); none can hold a log line.
+            "log_finding.phase", "log_finding.template_id", "log_finding.template_text", "log_finding.catalog_version",
+            "log_finding.normaliser_version",
+            "log_template_catalog.catalog_version", "log_template_catalog.state", "log_template_catalog.previous_version",
+            "log_template_catalog.digest", "log_template_catalog.created_by", "log_template_catalog.frozen_by",
+            "log_template.catalog_version", "log_template.template_id", "log_template.source_key", "log_template.template_text",
+            "log_template.match_form", "log_template.marker_id", "log_template.template_class", "log_template.provenance",
+            "log_template_device_window.catalog_version", "log_template_device_window.device_id",
+            "log_template_device_window.source_key",
+            "log_template_device_stat.catalog_version", "log_template_device_stat.device_id", "log_template_device_stat.source_key",
+            "log_template_device_stat.template_id", "log_template_device_stat.segment",
+            "log_template_index_state.chunk_id", "log_template_index_state.catalog_version",
+            "log_template_index_state.masking_rule_set", "log_template_index_state.normaliser_version",
+            "log_template_index_state.device_id", "log_template_index_state.source_key", "log_template_index_state.job_id",
+            "log_template_index_state.status",
+            "log_template_count.count_id", "log_template_count.chunk_id", "log_template_count.catalog_version",
+            "log_template_count.device_id", "log_template_count.source_key", "log_template_count.template_id",
+            "log_template_count.time_basis", "log_template_count.marker_id",
+            "log_provisional_template.template_id", "log_provisional_template.source_key",
+            "log_provisional_template.template_text");
     private static final Set<String> TABLES = Set.of("log_detection_settings", "log_index_state", "log_event_count", "log_coverage",
-            "log_finding", "log_finding_action");
+            "log_finding", "log_finding_action", "log_template_catalog", "log_template", "log_template_device_window",
+            "log_template_device_stat", "log_template_index_state", "log_template_count", "log_provisional_template");
 
     @Test
     void noNewTableHasAColumnThatCouldHoldALogLine() throws Exception {

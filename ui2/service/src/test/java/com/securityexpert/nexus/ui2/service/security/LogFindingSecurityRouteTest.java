@@ -66,6 +66,14 @@ class LogFindingSecurityRouteTest {
         assertNull(method.invoke(interceptor, "DELETE", BASE + "/" + "a".repeat(32)));
         assertNull(method.invoke(interceptor, "POST", BASE));
         assertNull(method.invoke(interceptor, "POST", "/api/v2/config/log-detection"));
+        // P2: the template catalog routes reuse the two settings actions (no new action id)
+        assertEquals(ActionRegistry.LOG_DETECTION_SETTINGS_READ, method.invoke(interceptor, "GET", "/api/v2/config/log-detection/catalogs"));
+        assertEquals(ActionRegistry.LOG_DETECTION_SETTINGS_READ, method.invoke(interceptor, "GET", "/api/v2/config/log-detection/catalogs/cat-1"));
+        assertEquals(ActionRegistry.LOG_DETECTION_SETTINGS_WRITE, method.invoke(interceptor, "POST", "/api/v2/config/log-detection/catalogs"));
+        assertEquals(ActionRegistry.LOG_DETECTION_SETTINGS_WRITE,
+                method.invoke(interceptor, "POST", "/api/v2/config/log-detection/catalogs/cat-1/freeze"));
+        assertNull(method.invoke(interceptor, "DELETE", "/api/v2/config/log-detection/catalogs/cat-1"));
+        assertNull(method.invoke(interceptor, "PUT", "/api/v2/config/log-detection/catalogs/cat-1"));
         assertTrue(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet().stream()
                 .filter(e -> e.getKey().contains("log-detection") || e.getKey().contains("acknowledge"))
                 .noneMatch(e -> e.getValue().equals(ActionRegistry.SYSTEM_LOG_READ)), "the switch and the acknowledgement are never a plain read");

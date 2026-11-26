@@ -34,7 +34,9 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
             + "event_count, peak_bucket_count, history_days, baseline_days, presence_days, cohort_devices, "
             + "prevalence_devices, chronic, fleet_background, array_to_string(labels, ',') as labels, incident_group, "
             + "coverage_state, cast(pointers as text) as pointers, masking_rule_set, marker_list_version, config_version, "
-            + "review_state, review_by, review_at, first_raised_at, updated_at";
+            + "review_state, review_by, review_at, first_raised_at, updated_at, phase, template_id, template_text, "
+            + "catalog_version, normaliser_version, array_to_string(kinds, ',') as kinds, rarity, change_factor, score, "
+            + "z_score, baseline_median, baseline_mad, device_first_seen, fleet_first_seen";
 
     private final TransactionBoundary transactions;
     private final AuditedTransactionBoundary audited;
@@ -50,13 +52,15 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
     }
 
     private static Settings selectSettings(DSLContext dsl) {
-        return dsl.fetchOptional("select enabled, shadow_until, updated_at, updated_by from log_detection_settings "
+        return dsl.fetchOptional("select enabled, shadow_until, updated_at, updated_by, p2_enabled from log_detection_settings "
                 + "where settings_id = 'default'")
                 .map(r -> new Settings(Boolean.TRUE.equals(r.get("enabled", Boolean.class)), instant(r, "shadow_until"),
-                        instant(r, "updated_at"), r.get("updated_by", String.class)))
-                .orElse(new Settings(false, null, null, null));
+                        instant(r, "updated_at"), r.get("updated_by", String.class),
+                        Boolean.TRUE.equals(r.get("p2_enabled", Boolean.class))))
+                .orElse(new Settings(false, null, null, null, false));
     }
 
+    /** The P1 switch and shadow period only: the P2 switch keeps its stored value (one statement, no read-then-write). */
     @Override
     public Settings writeSettings(String actorFingerprint, boolean enabled, Instant shadowUntil) {
         return audited.inTransaction(actorFingerprint, SETTINGS_ACTION, dsl -> {
@@ -65,6 +69,20 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
                     + "enabled = excluded.enabled, shadow_until = excluded.shadow_until, updated_at = now(), "
                     + "updated_by = excluded.updated_by", enabled, shadowUntil == null ? null : OffsetDateTime.ofInstant(
                             shadowUntil, java.time.ZoneOffset.UTC), actorFingerprint);
+            return selectSettings(dsl);
+        });
+    }
+
+    /** Both switches in one audited statement on the one settings row (the V272 audit trigger records it). */
+    @Override
+    public Settings writeSettings(String actorFingerprint, boolean enabled, Instant shadowUntil, boolean p2Enabled) {
+        return audited.inTransaction(actorFingerprint, SETTINGS_ACTION, dsl -> {
+            dsl.execute("insert into log_detection_settings(settings_id, enabled, shadow_until, updated_at, updated_by, p2_enabled) "
+                    + "values ('default', {0}, {1}, now(), {2}, {3}) on conflict (settings_id) do update set "
+                    + "enabled = excluded.enabled, shadow_until = excluded.shadow_until, updated_at = now(), "
+                    + "updated_by = excluded.updated_by, p2_enabled = excluded.p2_enabled", enabled,
+                    shadowUntil == null ? null : OffsetDateTime.ofInstant(shadowUntil, java.time.ZoneOffset.UTC),
+                    actorFingerprint, p2Enabled);
             return selectSettings(dsl);
         });
     }
@@ -419,7 +437,7 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
 
     // ------------------------------------------------------------ mapping
 
-    private static FindingRow finding(Record r) {
+    static FindingRow finding(Record r) {
         String labels = r.get("labels", String.class);
         return new FindingRow(r.get("finding_id", String.class), r.get("device_id", String.class),
                 r.get("source_key", String.class), r.get("rule_id", String.class), r.get("rule_version", String.class),
@@ -437,10 +455,37 @@ public final class JooqLogDetectionRepository implements LogDetectionRepository 
                 parsePointers(r.get("pointers", String.class)), r.get("masking_rule_set", String.class),
                 r.get("marker_list_version", String.class), r.get("config_version", String.class),
                 r.get("review_state", String.class), r.get("review_by", String.class), instant(r, "review_at"),
-                instant(r, "first_raised_at"), instant(r, "updated_at"));
+                instant(r, "first_raised_at"), instant(r, "updated_at"), layerB(r));
     }
 
-    private static Instant instant(Record r, String field) {
+    /** The layer-B part of a {@code P2} row (V273), null for a layer-A row. */
+    static LayerB layerB(Record r) {
+        if (!"P2".equals(r.get("phase", String.class))) return null;
+        String kinds = r.get("kinds", String.class);
+        return new LayerB(r.get("template_id", String.class), r.get("template_text", String.class),
+                r.get("catalog_version", String.class), r.get("normaliser_version", String.class),
+                kinds == null || kinds.isEmpty() ? List.of() : Arrays.asList(kinds.split(",")), decimal(r, "rarity"),
+                decimal(r, "change_factor"), decimal(r, "score"), nullableDecimal(r, "z_score"),
+                nullableDecimal(r, "baseline_median"), nullableDecimal(r, "baseline_mad"), date(r, "device_first_seen"),
+                date(r, "fleet_first_seen"));
+    }
+
+    static double decimal(Record r, String field) {
+        java.math.BigDecimal v = r.get(field, java.math.BigDecimal.class);
+        return v == null ? 0 : v.doubleValue();
+    }
+
+    static Double nullableDecimal(Record r, String field) {
+        java.math.BigDecimal v = r.get(field, java.math.BigDecimal.class);
+        return v == null ? null : v.doubleValue();
+    }
+
+    static LocalDate date(Record r, String field) {
+        java.sql.Date v = r.get(field, java.sql.Date.class);
+        return v == null ? null : v.toLocalDate();
+    }
+
+    static Instant instant(Record r, String field) {
         OffsetDateTime value = r.get(field, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }

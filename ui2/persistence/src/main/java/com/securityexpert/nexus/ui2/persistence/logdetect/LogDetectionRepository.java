@@ -13,10 +13,23 @@ import java.util.Optional;
  * method accepts or returns a log line, masked or not.
  */
 public interface LogDetectionRepository {
-    /** The P1 switch and the end of the shadow period; the default is off. */
-    record Settings(boolean enabled, Instant shadowUntil, Instant updatedAt, String updatedBy) {
+    /**
+     * The P1 switch, the end of the shadow period and the P2 switch (V273, layer B); both switches are off by default.
+     * P2 runs only while both are on.
+     */
+    record Settings(boolean enabled, Instant shadowUntil, Instant updatedAt, String updatedBy, boolean p2Enabled) {
+        /** P1 only (P2 off). */
+        public Settings(boolean enabled, Instant shadowUntil, Instant updatedAt, String updatedBy) {
+            this(enabled, shadowUntil, updatedAt, updatedBy, false);
+        }
+
         public boolean shadow(Instant now) {
             return shadowUntil != null && shadowUntil.isAfter(now);
+        }
+
+        /** Whether the P2 job may run: the P2 switch and the P1 switch are both on. */
+        public boolean p2Runs() {
+            return enabled && p2Enabled;
         }
     }
 
@@ -69,7 +82,20 @@ public interface LogDetectionRepository {
             int historyDays) {
     }
 
-    /** One finding row (design section 7.2, layer A). */
+    /**
+     * The layer-B part of a finding (V273, phase P2; design sections 4.3, 4.4 and 7.2): the template, the catalog and
+     * normaliser versions, the kinds that hold, the score with its factors and the device's baseline. Null on a layer-A
+     * finding. {@code z}, {@code baselineMedian} and {@code baselineMad} are null when no baseline was usable.
+     */
+    record LayerB(String templateId, String templateText, String catalogVersion, String normaliserVersion,
+            List<String> kinds, double rarity, double change, double score, Double z, Double baselineMedian,
+            Double baselineMad, LocalDate deviceFirstSeen, LocalDate fleetFirstSeen) {
+        public LayerB {
+            kinds = List.copyOf(kinds);
+        }
+    }
+
+    /** One finding row (design section 7.2): layer A (phase P1, {@code layerB} null) or layer B (phase P2). */
     record FindingRow(String findingId, String deviceId, String sourceKey, String ruleId, String ruleVersion, String kind,
             String markerId, String keyToken, LocalDate windowDay, LocalDateTime windowStart, LocalDateTime windowEnd,
             String severity, String severityRule, double severityWeight, String provenance, long eventCount,
@@ -77,10 +103,49 @@ public interface LogDetectionRepository {
             int prevalenceDevices, boolean chronic, boolean fleetBackground, List<String> labels, String incidentGroup,
             String coverageState, List<Pointer> pointers, String maskingRuleSet, String markerListVersion,
             String configVersion, String reviewState, String reviewBy, Instant reviewAt, Instant firstRaisedAt,
-            Instant updatedAt) {
+            Instant updatedAt, LayerB layerB) {
         public FindingRow {
             labels = List.copyOf(labels);
             pointers = List.copyOf(pointers);
+        }
+
+        /** A layer-A (phase P1) finding. */
+        public FindingRow(String findingId, String deviceId, String sourceKey, String ruleId, String ruleVersion, String kind,
+                String markerId, String keyToken, LocalDate windowDay, LocalDateTime windowStart, LocalDateTime windowEnd,
+                String severity, String severityRule, double severityWeight, String provenance, long eventCount,
+                int peakBucketCount, int historyDays, int baselineDays, int presenceDays, int cohortDevices,
+                int prevalenceDevices, boolean chronic, boolean fleetBackground, List<String> labels, String incidentGroup,
+                String coverageState, List<Pointer> pointers, String maskingRuleSet, String markerListVersion,
+                String configVersion, String reviewState, String reviewBy, Instant reviewAt, Instant firstRaisedAt,
+                Instant updatedAt) {
+            this(findingId, deviceId, sourceKey, ruleId, ruleVersion, kind, markerId, keyToken, windowDay, windowStart,
+                    windowEnd, severity, severityRule, severityWeight, provenance, eventCount, peakBucketCount, historyDays,
+                    baselineDays, presenceDays, cohortDevices, prevalenceDevices, chronic, fleetBackground, labels,
+                    incidentGroup, coverageState, pointers, maskingRuleSet, markerListVersion, configVersion, reviewState,
+                    reviewBy, reviewAt, firstRaisedAt, updatedAt, null);
+        }
+
+        /** {@code P1} (layer A) or {@code P2} (layer B). */
+        public String phase() {
+            return layerB == null ? "P1" : "P2";
+        }
+
+        /** The same finding with another incident group. */
+        public FindingRow withIncidentGroup(String group) {
+            return new FindingRow(findingId, deviceId, sourceKey, ruleId, ruleVersion, kind, markerId, keyToken, windowDay,
+                    windowStart, windowEnd, severity, severityRule, severityWeight, provenance, eventCount, peakBucketCount,
+                    historyDays, baselineDays, presenceDays, cohortDevices, prevalenceDevices, chronic, fleetBackground,
+                    labels, group, coverageState, pointers, maskingRuleSet, markerListVersion, configVersion, reviewState,
+                    reviewBy, reviewAt, firstRaisedAt, updatedAt, layerB);
+        }
+
+        /** The evidence of this finding with the review columns of {@code old} (the engine never rewrites a review). */
+        public FindingRow withReviewOf(FindingRow old) {
+            return new FindingRow(findingId, deviceId, sourceKey, ruleId, ruleVersion, kind, markerId, keyToken, windowDay,
+                    windowStart, windowEnd, severity, severityRule, severityWeight, provenance, eventCount, peakBucketCount,
+                    historyDays, baselineDays, presenceDays, cohortDevices, prevalenceDevices, chronic, fleetBackground,
+                    labels, incidentGroup, coverageState, pointers, maskingRuleSet, markerListVersion, configVersion,
+                    old.reviewState(), old.reviewBy(), old.reviewAt(), old.firstRaisedAt(), old.updatedAt(), layerB);
         }
     }
 
@@ -101,8 +166,13 @@ public interface LogDetectionRepository {
 
     Settings settings();
 
-    /** Audited write of the switch (security_admin). */
-    Settings writeSettings(String actorFingerprint, boolean enabled, Instant shadowUntil);
+    /** Audited write of the P1 switch (security_admin); the P2 switch keeps its value. */
+    default Settings writeSettings(String actorFingerprint, boolean enabled, Instant shadowUntil) {
+        return writeSettings(actorFingerprint, enabled, shadowUntil, settings().p2Enabled());
+    }
+
+    /** Audited write of both switches (security_admin), one row, one audit path (V272 trigger). */
+    Settings writeSettings(String actorFingerprint, boolean enabled, Instant shadowUntil, boolean p2Enabled);
 
     /** Chunks not yet processed under these versions, oldest first; pruned chunks are not offered. */
     List<PendingChunk> pendingChunks(String maskingRuleSet, String markerListVersion, int limit);

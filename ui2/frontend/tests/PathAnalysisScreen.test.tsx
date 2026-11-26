@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PathAnalysisScreen, MASKED_INPUT_HINT, INPUT_HINT, toRequest } from "../src/screens/PathAnalysisScreen";
@@ -37,6 +37,11 @@ const refusal = (status: number, body: Record<string, unknown>): ApiError => ({ 
 beforeEach(() => {
   queryPath.mockReset();
   responsesAreMasked.mockReturnValue(false);
+  window.history.replaceState(null, "", "/");
+});
+
+afterEach(() => {
+  window.history.replaceState(null, "", "/");
 });
 
 describe("the path query form", () => {
@@ -86,6 +91,59 @@ describe("the path query form", () => {
     expect(screen.getByTestId("path-input-hint")).toHaveAttribute("data-masked", "false");
     act(() => { window.dispatchEvent(new Event("nx-masked")); });
     expect(screen.getByTestId("path-input-hint")).toHaveAttribute("data-masked", "true");
+  });
+
+  it("prefills the four tuple fields from the URL fragment, shows the prefill note, never auto-runs, and clears the note on edit or submit", async () => {
+    queryPath.mockResolvedValue(PATH_ALLOWED);
+    window.history.replaceState(null, "", "/?screen=trace&mode=path#tuple=192.0.2.10,198.51.100.20,udp,53");
+    renderScreen();
+
+    expect(screen.getByLabelText(/^Source/)).toHaveValue("192.0.2.10");
+    expect(screen.getByLabelText(/^Destination/)).toHaveValue("198.51.100.20");
+    expect(screen.getByLabelText(/^Port/)).toHaveValue("53");
+    expect(screen.getByLabelText(/^Ingress unit/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Ingress interface/)).toHaveValue("");
+    expect(screen.getByRole("checkbox", { name: /Up to the edge/ })).not.toBeChecked();
+    expect(screen.getByTestId("path-prefilled-note")).toHaveTextContent("Filled from a link: check the values, then press Evaluate path.");
+    expect(screen.getByTestId("path-submit")).toBeEnabled();
+    expect(queryPath).not.toHaveBeenCalled();
+
+    submit();
+    await waitFor(() => expect(queryPath).toHaveBeenCalledTimes(1));
+    expect(queryPath).toHaveBeenCalledWith({ src: "192.0.2.10", dst: "198.51.100.20", protocol: "udp", port: 53 });
+    expect(screen.queryByTestId("path-prefilled-note")).toBeNull();
+  });
+
+  it("removes the prefill note as soon as the operator edits a field, without sending a request", () => {
+    window.history.replaceState(null, "", "/?screen=trace&mode=path#tuple=192.0.2.10,198.51.100.20,tcp,443");
+    renderScreen();
+    expect(screen.getByTestId("path-prefilled-note")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Port/), { target: { value: "8443" } });
+    expect(screen.queryByTestId("path-prefilled-note")).toBeNull();
+    expect(queryPath).not.toHaveBeenCalled();
+  });
+
+  it("leaves the empty form with no prefill note and no echoed input when the fragment is invalid", () => {
+    const leadingZeroIp = ["010", "0", "0", "1"].join(".");
+    window.history.replaceState(null, "", `/?screen=trace&mode=path#tuple=${leadingZeroIp},198.51.100.20,tcp,443`);
+    renderScreen();
+    expect(screen.getByLabelText(/^Source/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Destination/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Port/)).toHaveValue("443");
+    expect(screen.queryByTestId("path-prefilled-note")).toBeNull();
+    expect(document.body.textContent).not.toContain(leadingZeroIp);
+    expect(queryPath).not.toHaveBeenCalled();
+  });
+
+  it("keeps the masked input hint alongside a prefilled tuple in a masked session", () => {
+    responsesAreMasked.mockReturnValue(true);
+    window.history.replaceState(null, "", "/?screen=trace&mode=path#tuple=192.0.2.10,198.51.100.20,tcp,22");
+    renderScreen();
+    expect(screen.getByTestId("path-input-hint")).toHaveAttribute("data-masked", "true");
+    expect(screen.getByTestId("path-input-hint")).toHaveTextContent(MASKED_INPUT_HINT);
+    expect(screen.getByTestId("path-prefilled-note")).toHaveTextContent("Filled from a link: check the values, then press Evaluate path.");
+    expect(screen.getByLabelText(/^Source/)).toHaveValue("192.0.2.10");
+    expect(queryPath).not.toHaveBeenCalled();
   });
 });
 
