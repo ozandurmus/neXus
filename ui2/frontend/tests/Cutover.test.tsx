@@ -240,4 +240,53 @@ describe("assessment page (ACI-1, ACI-6)", () => {
     expect(getCutoverFlows).toHaveBeenCalledWith(ASSESSMENT_ID, "MISSING_RULE", null, 0);
     expect(new URLSearchParams(window.location.search).get("tab")).toBe("missing");
   });
+
+  it("carries the tuple in the Trace link fragment when linkable, and renders no link when unlinkable", async () => {
+    const leadingZeroSrc = ["192", "0", "2", "010"].join(".");
+    vi.mocked(getCutoverFlows).mockResolvedValueOnce({
+      total: 5,
+      page: 0,
+      items: [
+        drop,
+        { ...drop, flowSource: "192.0.2.20", flowDestination: "198.51.100.30", protocol: "UDP", port: 53 },
+        { ...drop, flowSource: "192.0.2.21", flowDestination: "198.51.100.31", protocol: "icmp", port: 8 },
+        { ...drop, flowSource: "192.0.2.22", flowDestination: "198.51.100.32", protocol: "Tcp", port: 443 },
+        { ...drop, flowSource: leadingZeroSrc, flowDestination: "198.51.100.33", protocol: "tcp", port: 443 },
+      ],
+    } as never);
+    render(<CutoverAssessmentPage assessmentId={ASSESSMENT_ID} back={() => undefined} />);
+
+    const tcpLink = await screen.findByRole("link", { name: "Open Trace for this tuple (192.0.2.10 → 198.51.100.20 tcp/22)" });
+    expect(tcpLink).toHaveAttribute("href", "?screen=trace&mode=path#tuple=192.0.2.10,198.51.100.20,tcp,22");
+
+    const udpLink = screen.getByRole("link", { name: "Open Trace for this tuple (192.0.2.20 → 198.51.100.30 UDP/53)" });
+    expect(udpLink).toHaveAttribute("href", "?screen=trace&mode=path#tuple=192.0.2.20,198.51.100.30,udp,53");
+
+    expect(screen.queryByRole("link", { name: /192\.0\.2\.21/ })).toBeNull();
+    expect(screen.getByText("Open Trace for this tuple (192.0.2.21 → 198.51.100.31 icmp/8) · tuple not linkable")).toBeInTheDocument();
+
+    expect(screen.queryByRole("link", { name: /192\.0\.2\.22/ })).toBeNull();
+    expect(screen.getByText("Open Trace for this tuple (192.0.2.22 → 198.51.100.32 Tcp/443) · tuple not linkable")).toBeInTheDocument();
+
+    expect(screen.queryByRole("link", { name: new RegExp(leadingZeroSrc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) })).toBeNull();
+    expect(screen.getByText(`Open Trace for this tuple (${leadingZeroSrc} → 198.51.100.33 tcp/443) · tuple not linkable`)).toBeInTheDocument();
+
+    expect(visibleText()).not.toMatch(FORBIDDEN_PATTERN);
+  });
+
+  it("navigates from a Cutover flow link into Trace with the four tuple fields prefilled and without auto-running", async () => {
+    window.history.replaceState(null, "", `/?screen=cutover&segment=${SEGMENT_ID}&assessment=${ASSESSMENT_ID}`);
+    render(<App />);
+    const link = await screen.findByRole("link", { name: "Open Trace for this tuple (192.0.2.10 → 198.51.100.20 tcp/22)" });
+    fireEvent.click(link);
+
+    expect(window.location.search).toBe("?screen=trace&mode=path");
+    expect(window.location.hash).toBe("#tuple=192.0.2.10,198.51.100.20,tcp,22");
+    expect(await screen.findByRole("heading", { name: "Trace" })).toBeInTheDocument();
+    expect(screen.getByTestId("path-prefilled-note")).toHaveTextContent("Filled from a link: check the values, then press Evaluate path.");
+    expect(screen.getByLabelText(/^Source/)).toHaveValue("192.0.2.10");
+    expect(screen.getByLabelText(/^Destination/)).toHaveValue("198.51.100.20");
+    expect(screen.getByLabelText(/^Port/)).toHaveValue("22");
+    expect(screen.getByText("No path evaluated yet")).toBeInTheDocument();
+  });
 });

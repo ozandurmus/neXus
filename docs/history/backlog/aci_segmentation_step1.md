@@ -13,3 +13,5 @@ status: in_progress · target: PO started 2026-11-14
 ASA and FortiGate old-path policies and operator-override targets evaluated through PolicyLookup; missing zone or interface gives NOT_DECIDED (3ea02652).
 
 2026-11-25: ACI-2 and ACI-3 (as amended by PO Q8) pinned as labelled tests in CutoverAcceptanceCriteriaTest (five tests, both PROVEN; tests and comments only, the DRAFT design text is untouched and its ACI-3 sentence is read as superseded by Q8 and 3ea02652).
+
+- 2026-11-26: Cutover flow Trace link carries the tuple (fragment, prefill, no auto-run).
