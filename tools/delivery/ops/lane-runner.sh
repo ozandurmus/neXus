@@ -27,7 +27,12 @@ running() { ps -axo command | grep -E "(^/.*Python .*argon_task_neon\.py|^/bin/b
 qwen_running() { ps -axo command | grep -E "^/bin/bash .*qwen_task\.sh" | grep -v grep | wc -l | tr -d ' '; }
 # Engine: meta engine=claude|agy; a file lane-queue/ENGINE_CLAUDE forces Claude for every lane.
 # Auto-switch: when a finished agy lane's log shows a quota/limit error, the runner creates ENGINE_CLAUDE itself.
-quota_hit() { grep -qiE "quota|RESOURCE_EXHAUSTED|rate.?limit|usage limit|credits? (exhausted|exceeded)|429" "$1" 2>/dev/null; }
+# Only the engine's own error lines count (2026-11-26: a planner's report that merely mentioned quotas was read as a quota
+# hit, switched every lane to Claude, then paused the runner): agy "error:"/"AGY_ERROR:" lines, a line that starts with
+# RESOURCE_EXHAUSTED, and the Claude CLI's own limit/API-error lines. Free text written by the model never matches.
+quota_hit() {
+  grep -qiE '^(error: .*(quota|rate.?limit|credits? (exhausted|exceeded))|AGY_ERROR: .*(RESOURCE_EXHAUSTED|429|quota)|RESOURCE_EXHAUSTED|Claude AI usage limit reached|API Error: (429|529)|.*usage limit reached\|[0-9]+$)' "$1" 2>/dev/null
+}
 # Markers (looked for in the lane's log): a permission the headless agent was refused, and transient infrastructure errors
 # near the end of the log (start errors, connection and gateway errors).
 PERM_RE='auto-denied|\[argon\] FAILED: a permission'

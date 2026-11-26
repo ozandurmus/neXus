@@ -50,7 +50,7 @@ public final class JobLogQueryService {
              *  Phase 2 follow-up: the RESULT cell says {@code Collected · 1,234 lines}). Null for every other job type,
              *  and for a collection run that left no chunk row -- never 0 in place of "not recorded". */
             @JsonProperty("lines_stored") Long linesStored,
-            /** Closed target kind ({@code device}, {@code cluster}, {@code failover_unit}, {@code policy_source}, {@code policy_container}, {@code packet_analysis_case}, {@code fleet}). */
+            /** Closed target kind ({@code device}, {@code cluster}, {@code failover_unit}, {@code policy_source}, {@code policy_container}, {@code packet_analysis_case}, {@code script}, {@code fleet}). */
             @JsonProperty("target_kind") String targetKind,
             /** Internal cluster or fallback reference for server-side AIView masking; never serialised raw. */
             @JsonIgnore String clusterRef) {
@@ -527,13 +527,17 @@ public final class JobLogQueryService {
             if (query.masked()) {
                 // The masked view matches the opaque ids only: the hostname and the reason text are raw values behind
                 // what aiview is shown, and a substring match on them answers "does a real name contain X" (M-2).
-                clauses.add("(lower(j.job_id) like ? or lower(j.target_device_id) like ?)");
+                clauses.add("(lower(j.job_id) like ? or lower(j.target_device_id) like ? "
+                        + "or (j.target_kind = 'script' and lower(split_part(j.target_ref, '@', 1)) like ?))");
+                bindings.add(like);
                 bindings.add(like);
                 bindings.add(like);
                 return;
             }
             clauses.add("(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
-                    + "or lower(coalesce(j.terminal_reason, '')) like ?)");
+                    + "or lower(coalesce(j.terminal_reason, '')) like ? "
+                    + "or (j.target_kind = 'script' and lower(split_part(j.target_ref, '@', 1)) like ?))");
+            bindings.add(like);
             bindings.add(like);
             bindings.add(like);
             bindings.add(like);

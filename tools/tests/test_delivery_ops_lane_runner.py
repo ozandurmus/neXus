@@ -151,6 +151,23 @@ def test_routing_skips_a_rate_limited_model(ops):
     assert "LIMITED" in r.stdout and "FREE" in r.stdout
 
 
+def test_a_report_that_mentions_quotas_is_not_a_quota_hit(ops):
+    # 2026-11-26: the planner's own prose ("... rate limit ... quota ... 429 ...") switched lanes to Claude and paused.
+    ops.write_lane(LANE, "[argon] exit=3 head=abc x", age_s=60,
+                   report="Findings: the agy quota note, a rate limit of 429 per window and usage limit wording.\n[lane] no commit made")
+    out = finish(ops)
+    assert not (ops.lq / "ENGINE_CLAUDE").exists() and not (ops.lq / "PAUSED").exists()
+    assert (ops.lq / "done" / f"{LANE}.outcome").read_text().strip() == "NO_CHANGE" and "NO_CHANGE" in out
+
+
+def test_the_real_agy_429_lines_are_a_quota_hit(ops):
+    ops.write_lane(LANE, "[argon] exit=3 head=abc x", age_s=900, meta="base=origin/main\nagy_model=gemini-4-carbon-high\n",
+                   report="error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 10m32s.\n"
+                          'AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): Individual quota reached."}')
+    out = finish(ops)
+    assert (ops.lq / ".agy-limited-gemini-4-carbon-high").exists() and (ops.lq / f"{LANE}.brief").exists()
+
+
 def test_a_running_lane_is_left_alone(ops):
     ops.write_lane(LANE, None, report="working")
     assert finish(ops) == ""
