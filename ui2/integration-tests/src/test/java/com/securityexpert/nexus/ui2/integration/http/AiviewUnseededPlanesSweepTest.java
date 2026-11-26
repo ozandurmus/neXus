@@ -44,8 +44,13 @@ import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
+import com.securityexpert.nexus.ui2.policy.asa.AsaConfigPolicyParser;
+import com.securityexpert.nexus.ui2.policy.asa.AsaPolicyMapper;
+import com.securityexpert.nexus.ui2.policy.fortigate.FortiGateConfigPolicyParser;
+import com.securityexpert.nexus.ui2.policy.fortigate.FortiGatePolicyMapper;
 import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration;
 import com.securityexpert.nexus.ui2.service.boot.Ui2Application;
+import com.securityexpert.nexus.ui2.service.policy.PolicyHygiene;
 import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
 
 /**
@@ -99,6 +104,7 @@ class AiviewUnseededPlanesSweepTest {
             Map.entry("GET /api/v2/policy/policies/*", Set.of("pan-policy", "pan-rule")),
             Map.entry("GET /api/v2/policy/policies/*/rules", Set.of("pan-rule")),
             Map.entry("GET /api/v2/policy/policies/*/hygiene", Set.of("pan-zone-verdict")),
+            Map.entry("GET /api/v2/policy/policies/*/hygiene.csv", Set.of("pan-rule")),
             Map.entry("GET /api/v2/policy/devices", Set.of("pan-policy")),
             Map.entry("GET /api/v2/operations/policy-install/status", Set.of("device", "pan-policy", "policy-install-row")),
             Map.entry("GET /api/v2/system-logs/health", Set.of("device", "snmp-metrics")));
@@ -187,11 +193,15 @@ class AiviewUnseededPlanesSweepTest {
     }
 
     /** Every planted raw value, generated per run. */
-    record Estate(Device cpA, Device cpB, Device pan, Device panorama, String principal, String objectName,
-            String objectAddress, String policyName, String policyId, String domainId, String objectId, String ruleId,
-            String ruleName, String shadowedRuleName, String zoneA, String zoneB, String vsys, String catalogProduct,
-            String syslogHost, String smtpHost, String smtpTo, String smtpFrom, String routeRecipients,
-            String auditTargetHost, String auditTargetAddress, Map<String, ValueClass> raw) {
+    record Estate(Device cpA, Device cpB, Device pan, Device panorama, Device asa, Device fgt, String principal,
+            String fgtModifier, String objectName, String objectAddress, String policyName, String policyId,
+            String domainId, String objectId, String ruleId, String ruleName, String shadowedRuleName, String zoneA,
+            String zoneB, String vsys, String asaOutsideIf, String asaInsideIf, String asaIfAddress, String asaHostName,
+            String asaHostAddress, String asaBoundAcl, String asaUnboundAcl, String fgtPortA, String fgtPortB,
+            String fgtIfAddress, String fgtSrcObjName, String fgtSrcAddress, String fgtDstObjName, String fgtDstAddress,
+            String fgtRuleName, String fgtShadowedRuleName, String catalogProduct, String syslogHost, String smtpHost,
+            String smtpTo, String smtpFrom, String routeRecipients, String auditTargetHost, String auditTargetAddress,
+            Map<String, ValueClass> raw) {
 
         static Estate generate() {
             String cluster = "CLX-ROMEO-" + tag().toUpperCase(Locale.ROOT);
@@ -204,16 +214,31 @@ class AiviewUnseededPlanesSweepTest {
                     "0" + hex(6).replaceAll("[a-f]", "7"), "192.0.2." + (base + 2), null);
             Device panorama = new Device(Ui2Rows.opaqueId("dev"), "palo_alto", "management_server", "core" + tag() + "-pano-a",
                     "0" + hex(6).replaceAll("[a-f]", "3"), "192.0.2." + (base + 3), null);
+            Device asa = new Device(Ui2Rows.opaqueId("dev"), "cisco_asa", "gateway", "asa" + tag() + "-edge01",
+                    "JAD" + hex(4).toUpperCase(Locale.ROOT), "192.0.2." + (base + 4), null);
+            Device fgt = new Device(Ui2Rows.opaqueId("dev"), "fortinet", "gateway", "fgt" + tag() + "-edge01",
+                    "FGT" + hex(5).toUpperCase(Locale.ROOT), "192.0.2." + (base + 5), null);
             String principal = "adm" + tag() + ".ops";
+            String fgtModifier = "fgtadm" + tag() + ".sec";
             String t = tag();
-            Estate e = new Estate(a, b, pan, panorama, principal, "h-" + tag() + "-dbsrv", "198.51.100." + (base % 200),
+            char at = '@';
+            Estate e = new Estate(a, b, pan, panorama, asa, fgt, principal, fgtModifier,
+                    "h-" + tag() + "-dbsrv", "198.51.100." + (base % 200),
                     "pkg-" + tag() + "-pan", "policy-" + UUID.randomUUID(), "domain-" + UUID.randomUUID(),
                     "obj-" + UUID.randomUUID(), "rule-" + UUID.randomUUID(), "allow-" + tag() + "-payroll",
                     "deny-" + tag() + "-legacy", "zn-" + tag() + "-cardholder", "zn-" + tag() + "-corebank",
-                    "vsys-" + tag(), "Synthetic-" + tag() + " 6600", "syslog" + t + "-collector01", "smtp" + t + "-relay01",
-                    principal + "@mail" + t + ".example.test", "noreply@mail" + t + ".example.test",
-                    "oncall" + t + "@mail" + t + ".example.test", "jump" + tag() + "-bastion02", "198.51.100." + (base % 200 + 1),
-                    null);
+                    "vsys-" + tag(),
+                    "nif-" + tag() + "-out", "nif-" + tag() + "-in", "203.0.113." + (base % 200),
+                    "asah-" + tag() + "-app01", "203.0.113." + (base % 200 + 1),
+                    "ACL-" + tag().toUpperCase(Locale.ROOT) + "-OUT", "ACL-" + tag().toUpperCase(Locale.ROOT) + "-ORPHAN",
+                    "if-" + tag() + "-wan", "if-" + tag() + "-lan", "203.0.113." + (base % 200 + 2),
+                    "fgth-" + tag() + "-src", "203.0.113." + (base % 200 + 3),
+                    "fgth-" + tag() + "-dst", "203.0.113." + (base % 200 + 4),
+                    "fgtpol-" + tag() + "-allow", "fgtpol-" + tag() + "-shadow",
+                    "Synthetic-" + tag() + " 6600", "syslog" + t + "-collector01", "smtp" + t + "-relay01",
+                    principal + at + "mail" + t + ".example.test", "noreply" + at + "mail" + t + ".example.test",
+                    "oncall" + t + at + "mail" + t + ".example.test", "jump" + tag() + "-bastion02",
+                    "198.51.100." + (base % 200 + 1), null);
             Map<String, ValueClass> raw = new LinkedHashMap<>();
             for (Device d : e.devices()) {
                 raw.put(d.hostname(), ValueClass.HOSTNAME);
@@ -222,6 +247,7 @@ class AiviewUnseededPlanesSweepTest {
             }
             raw.put(cluster, ValueClass.HOSTNAME);
             raw.put(principal, ValueClass.PRINCIPAL);
+            raw.put(e.fgtModifier(), ValueClass.PRINCIPAL);
             raw.put(e.objectName(), ValueClass.OBJECT_NAME);
             raw.put(e.objectAddress(), ValueClass.ADDRESS);
             raw.put(e.policyName(), ValueClass.POLICY_NAME);
@@ -230,6 +256,22 @@ class AiviewUnseededPlanesSweepTest {
             raw.put(e.zoneA(), ValueClass.ZONE_NAME);
             raw.put(e.zoneB(), ValueClass.ZONE_NAME);
             raw.put(e.vsys(), ValueClass.VSYS_NAME);
+            raw.put(e.asaOutsideIf(), ValueClass.ZONE_NAME);
+            raw.put(e.asaInsideIf(), ValueClass.ZONE_NAME);
+            raw.put(e.asaIfAddress(), ValueClass.ADDRESS);
+            raw.put(e.asaHostName(), ValueClass.OBJECT_NAME);
+            raw.put(e.asaHostAddress(), ValueClass.ADDRESS);
+            raw.put(e.asaBoundAcl(), ValueClass.RULE_NAME);
+            raw.put(e.asaUnboundAcl(), ValueClass.RULE_NAME);
+            raw.put(e.fgtPortA(), ValueClass.ZONE_NAME);
+            raw.put(e.fgtPortB(), ValueClass.ZONE_NAME);
+            raw.put(e.fgtIfAddress(), ValueClass.ADDRESS);
+            raw.put(e.fgtSrcObjName(), ValueClass.OBJECT_NAME);
+            raw.put(e.fgtSrcAddress(), ValueClass.ADDRESS);
+            raw.put(e.fgtDstObjName(), ValueClass.OBJECT_NAME);
+            raw.put(e.fgtDstAddress(), ValueClass.ADDRESS);
+            raw.put(e.fgtRuleName(), ValueClass.RULE_NAME);
+            raw.put(e.fgtShadowedRuleName(), ValueClass.RULE_NAME);
             raw.put(e.syslogHost(), ValueClass.HOSTNAME);
             raw.put(e.smtpHost(), ValueClass.HOSTNAME);
             raw.put(e.smtpTo(), ValueClass.MAIL_ADDRESS);
@@ -237,14 +279,17 @@ class AiviewUnseededPlanesSweepTest {
             raw.put(e.routeRecipients(), ValueClass.MAIL_ADDRESS);
             raw.put(e.auditTargetHost(), ValueClass.HOSTNAME);
             raw.put(e.auditTargetAddress(), ValueClass.ADDRESS);
-            return new Estate(a, b, pan, panorama, principal, e.objectName(), e.objectAddress(), e.policyName(), e.policyId(),
-                    e.domainId(), e.objectId(), e.ruleId(), e.ruleName(), e.shadowedRuleName(), e.zoneA(), e.zoneB(), e.vsys(),
-                    e.catalogProduct(), e.syslogHost(), e.smtpHost(), e.smtpTo(), e.smtpFrom(), e.routeRecipients(),
-                    e.auditTargetHost(), e.auditTargetAddress(), Map.copyOf(raw));
+            return new Estate(a, b, pan, panorama, asa, fgt, principal, e.fgtModifier(), e.objectName(), e.objectAddress(),
+                    e.policyName(), e.policyId(), e.domainId(), e.objectId(), e.ruleId(), e.ruleName(), e.shadowedRuleName(),
+                    e.zoneA(), e.zoneB(), e.vsys(), e.asaOutsideIf(), e.asaInsideIf(), e.asaIfAddress(), e.asaHostName(),
+                    e.asaHostAddress(), e.asaBoundAcl(), e.asaUnboundAcl(), e.fgtPortA(), e.fgtPortB(), e.fgtIfAddress(),
+                    e.fgtSrcObjName(), e.fgtSrcAddress(), e.fgtDstObjName(), e.fgtDstAddress(), e.fgtRuleName(),
+                    e.fgtShadowedRuleName(), e.catalogProduct(), e.syslogHost(), e.smtpHost(), e.smtpTo(), e.smtpFrom(),
+                    e.routeRecipients(), e.auditTargetHost(), e.auditTargetAddress(), Map.copyOf(raw));
         }
 
         List<Device> devices() {
-            return List.of(cpA, cpB, pan, panorama);
+            return List.of(cpA, cpB, pan, panorama, asa, fgt);
         }
     }
 
@@ -274,6 +319,8 @@ class AiviewUnseededPlanesSweepTest {
             seedSnmpMetrics(c, e);
             seedBackupDeviation(c, e);
             seedPanPolicy(c, e);
+            seedAsaPolicy(c, e);
+            seedFgtPolicy(c, e);
             seedNotifications(c, e);
             seedAuditAndSettings(c, e);
         }
@@ -373,17 +420,17 @@ class AiviewUnseededPlanesSweepTest {
         Map<String, List<String>> any = Map.of("from", List.of("any"), "to", List.of("any"), "last-modifier", List.of(e.principal()));
         var first = new PolicySnapshot.Rule(e.ruleId(), UUID.randomUUID().toString(), 1, e.ruleName(), true,
                 new PolicySnapshot.Cell(List.of(e.objectId()), false), new PolicySnapshot.Cell(List.of(e.objectId()), false),
-                new PolicySnapshot.Cell(List.of("any-obj"), false), new PolicySnapshot.Cell(List.of("any-obj"), false), "Accept", "Log",
+                new PolicySnapshot.Cell(List.of("any-obj"), false), new PolicySnapshot.Cell(List.of("any-obj"), false), "allow", "Log",
                 "requested by " + e.principal() + " for " + e.pan().hostname(), named);
         var later = new PolicySnapshot.Rule("rule-" + UUID.randomUUID(), UUID.randomUUID().toString(), 2, e.shadowedRuleName(), true,
                 new PolicySnapshot.Cell(List.of(e.objectId()), false), new PolicySnapshot.Cell(List.of(e.objectId()), false),
-                new PolicySnapshot.Cell(List.of("any-obj"), false), new PolicySnapshot.Cell(List.of("any-obj"), false), "Accept", "Log",
+                new PolicySnapshot.Cell(List.of("any-obj"), false), new PolicySnapshot.Cell(List.of("any-obj"), false), "allow", "Log",
                 "opened by " + e.principal(), any);
         var metadata = new PolicySnapshot.Metadata(e.policyId(), e.panorama().id(), e.panorama().hostname(), "PAN", e.domainId(),
                 "shared", e.policyName(), java.time.Instant.now().toString(), null,
                 List.of(new PolicySnapshot.Target(e.pan().id(), e.pan().hostname(), e.vsys(), "IN_SYNC")));
         var snapshot = new PolicySnapshot(metadata,
-                List.of(new PolicySnapshot.Section("section-1", "Pre Rules", "Network", null, List.of(first, later))),
+                List.of(new PolicySnapshot.Section("section-1", "Pre rules", "Network", null, List.of(first, later))),
                 Map.of(e.objectId(), object, "any-obj", new PolicySnapshot.PolicyObject("any-obj", "Any", "any", List.of(), List.of(), "RESOLVED")),
                 List.of());
         audited(c, Ui2Rows.ACTOR, () -> {
@@ -396,6 +443,126 @@ class AiviewUnseededPlanesSweepTest {
             exec(c, "insert into pan_vsys_zone_set(device_id, vsys, zone_names, read_at) values (?, ?, ?, now())",
                     e.pan().id(), e.vsys(), c.createArrayOf("text", new String[] {e.zoneA(), e.zoneB()}));
         });
+    }
+
+    /**
+     * Cisco ASA local-snapshot policy mapped via {@link AsaPolicyMapper}: carries {@code asa-interfaces}, a shadowed
+     * inbound ACE with a remark naming raw actors/hosts, and an unbound ACL in section {@code "ASA not evaluated"}
+     * carrying the raw ACL name in {@code Rule.name} and {@code asa-acl-use=["none"]} ({@link PolicyHygiene#ASA_ACL_NOT_REFERENCED}).
+     */
+    private static void seedAsaPolicy(Connection c, Estate e) throws Exception {
+        String asaConfig = "ASA Version 9.18(4)22\n"
+                + "hostname " + e.asa().hostname() + "\n"
+                + "interface GigabitEthernet0/0\n"
+                + " nameif " + e.asaOutsideIf() + "\n"
+                + " security-level 0\n"
+                + " ip address " + e.asaIfAddress() + " 255.255.255.0\n"
+                + "interface GigabitEthernet0/1\n"
+                + " nameif " + e.asaInsideIf() + "\n"
+                + " security-level 100\n"
+                + "object network " + e.asaHostName() + "\n"
+                + " host " + e.asaHostAddress() + "\n"
+                + "access-list " + e.asaBoundAcl() + " remark approved by " + e.principal() + " for " + e.asa().hostname() + "\n"
+                + "access-list " + e.asaBoundAcl() + " extended permit tcp any object " + e.asaHostName() + " eq 443 log\n"
+                + "access-list " + e.asaBoundAcl() + " extended permit tcp any object " + e.asaHostName() + " eq 443 log\n"
+                + "access-list " + e.asaUnboundAcl() + " extended permit ip any any\n"
+                + "access-group " + e.asaBoundAcl() + " in interface " + e.asaOutsideIf() + "\n";
+        PolicySnapshot snapshot = AsaPolicyMapper.map(e.asa().id(), e.asa().hostname(), java.time.Instant.now().toString(),
+                null, AsaConfigPolicyParser.parse(asaConfig));
+        var boundSection = snapshot.sections().stream().filter(s -> "ASA access-group".equals(s.source())).findFirst().orElseThrow();
+        var notEvaluated = snapshot.sections().stream().filter(s -> "ASA not evaluated".equals(s.name())).findFirst().orElseThrow();
+        var unboundRule = notEvaluated.rules().stream().filter(r -> e.asaUnboundAcl().equals(r.name())).findFirst().orElseThrow();
+        ids.put("asaPolicyId", snapshot.metadata().id());
+        ids.put("asaRuleId", boundSection.rules().get(0).id());
+        ids.put("asaUnboundRuleId", unboundRule.id());
+        audited(c, Ui2Rows.ACTOR, () -> exec(c,
+                "insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) values (?, now(), ?::jsonb, ?::jsonb)",
+                snapshot.metadata().id(), JSON.writeValueAsString(snapshot.metadata()), JSON.writeValueAsString(snapshot)));
+    }
+
+    /**
+     * FortiGate local-snapshot policy mapped via {@link FortiGatePolicyMapper}: carries {@code fgt-interfaces},
+     * {@code srcaddr}/{@code dstaddr} objects, and shadowed firewall policies with raw rule names, comments, and
+     * {@code last-modifier}.
+     */
+    private static void seedFgtPolicy(Connection c, Estate e) throws Exception {
+        String fgtConfig = "#config-version=FGVM64-7.4.8-FW-build2795-250521:opmode=0:vdom=0:user=admin\n"
+                + "config system global\n"
+                + "    set hostname \"" + e.fgt().hostname() + "\"\n"
+                + "end\n"
+                + "config system interface\n"
+                + "    edit \"" + e.fgtPortA() + "\"\n"
+                + "        set vdom \"root\"\n"
+                + "        set ip " + e.fgtIfAddress() + " 255.255.255.0\n"
+                + "    next\n"
+                + "    edit \"" + e.fgtPortB() + "\"\n"
+                + "        set vdom \"root\"\n"
+                + "    next\n"
+                + "end\n"
+                + "config firewall address\n"
+                + "    edit \"" + e.fgtSrcObjName() + "\"\n"
+                + "        set subnet " + e.fgtSrcAddress() + " 255.255.255.255\n"
+                + "    next\n"
+                + "    edit \"" + e.fgtDstObjName() + "\"\n"
+                + "        set subnet " + e.fgtDstAddress() + " 255.255.255.255\n"
+                + "    next\n"
+                + "end\n"
+                + "config firewall service custom\n"
+                + "    edit \"HTTPS\"\n"
+                + "        set tcp-portrange 443\n"
+                + "    next\n"
+                + "end\n"
+                + "config firewall policy\n"
+                + "    edit 1\n"
+                + "        set name \"" + e.fgtRuleName() + "\"\n"
+                + "        set srcintf \"" + e.fgtPortA() + "\"\n"
+                + "        set dstintf \"" + e.fgtPortB() + "\"\n"
+                + "        set srcaddr \"" + e.fgtSrcObjName() + "\"\n"
+                + "        set dstaddr \"" + e.fgtDstObjName() + "\"\n"
+                + "        set action accept\n"
+                + "        set schedule \"always\"\n"
+                + "        set service \"HTTPS\"\n"
+                + "        set logtraffic all\n"
+                + "        set comments \"approved by " + e.fgtModifier() + " on " + e.fgt().hostname() + "\"\n"
+                + "    next\n"
+                + "    edit 2\n"
+                + "        set name \"" + e.fgtShadowedRuleName() + "\"\n"
+                + "        set srcintf \"" + e.fgtPortA() + "\"\n"
+                + "        set dstintf \"" + e.fgtPortB() + "\"\n"
+                + "        set srcaddr \"" + e.fgtSrcObjName() + "\"\n"
+                + "        set dstaddr \"" + e.fgtDstObjName() + "\"\n"
+                + "        set action accept\n"
+                + "        set schedule \"always\"\n"
+                + "        set service \"HTTPS\"\n"
+                + "        set logtraffic all\n"
+                + "        set comments \"shadowed policy by " + e.fgtModifier() + "\"\n"
+                + "    next\n"
+                + "end\n";
+        PolicySnapshot mapped = FortiGatePolicyMapper.map(e.fgt().id(), e.fgt().hostname(),
+                java.time.Instant.now().toString(), null, FortiGateConfigPolicyParser.parse(fgtConfig)).get(0);
+        List<PolicySnapshot.Section> sections = new ArrayList<>(mapped.sections().size());
+        for (PolicySnapshot.Section s : mapped.sections()) {
+            if ("FGT firewall policy".equals(s.source())) {
+                List<PolicySnapshot.Rule> rules = new ArrayList<>(s.rules().size());
+                for (PolicySnapshot.Rule r : s.rules()) {
+                    Map<String, List<String>> extras = new LinkedHashMap<>(r.extras());
+                    extras.put("last-modifier", List.of(e.fgtModifier()));
+                    rules.add(new PolicySnapshot.Rule(r.id(), r.uuid(), r.number(), r.name(), r.enabled(),
+                            r.source(), r.destination(), r.service(), r.application(), r.action(), r.log(), r.comment(), extras));
+                }
+                sections.add(new PolicySnapshot.Section(s.id(), s.name(), s.source(), s.parentRuleId(), rules));
+            } else {
+                sections.add(s);
+            }
+        }
+        PolicySnapshot snapshot = new PolicySnapshot(mapped.metadata(), sections, mapped.objects(), mapped.failures());
+        var policySection = snapshot.sections().stream().filter(s -> "FGT firewall policy".equals(s.source())).findFirst().orElseThrow();
+        ids.put("fgtPolicyId", snapshot.metadata().id());
+        ids.put("fgtRuleId", policySection.rules().get(0).id());
+        ids.put("fgtShadowRuleId", policySection.rules().get(1).id());
+        audited(c, Ui2Rows.ACTOR, () -> exec(c,
+                "insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) values (?, now(), ?::jsonb, ?::jsonb)",
+                snapshot.metadata().id(), JSON.writeValueAsString(snapshot.metadata()), JSON.writeValueAsString(snapshot)));
     }
 
     /** Configuration-override notifications (V16): the summary and the paths are free text naming raw values. */
@@ -668,6 +835,88 @@ class AiviewUnseededPlanesSweepTest {
         leaks.forEach((route, classes) -> classes.keySet().forEach(cls -> observed.add(route + " " + cls)));
         assertEquals(new TreeSet<>(KNOWN_LEAKS), observed,
                 "planted raw values surviving in aiview GET bodies (route + value class); KNOWN_LEAKS must match exactly");
+    }
+
+    @Test
+    void asaAndFortiGatePolicyViewsAndHygieneCsvLeakZeroRawValuesInAiview() throws Exception {
+        String cookie = login();
+        Estate e = estate;
+        String asaPolicyId = ids.get("asaPolicyId");
+        String asaRuleId = ids.get("asaRuleId");
+        String asaUnboundRuleId = ids.get("asaUnboundRuleId");
+        String fgtPolicyId = ids.get("fgtPolicyId");
+        String fgtRuleId = ids.get("fgtRuleId");
+        String fgtShadowRuleId = ids.get("fgtShadowRuleId");
+
+        Resp asaPage = get("/api/v2/policy/policies/" + asaPolicyId, cookie);
+        assertEquals(200, asaPage.status(), "ASA policy page");
+        assertTrue(asaPage.body().contains(asaPolicyId) && asaPage.body().contains(asaRuleId)
+                && asaPage.body().contains(asaUnboundRuleId) && asaPage.body().contains("\"ASA not evaluated\""),
+                "ASA policy page must include seeded rules and not-evaluated section");
+        assertTrue(count(asaPage.body(), e.raw()).isEmpty(),
+                "ASA policy page leaked raw classes: " + count(asaPage.body(), e.raw()));
+
+        Resp asaRule = get("/api/v2/policy/policies/" + asaPolicyId + "/rules?ruleId="
+                + java.net.URLEncoder.encode(asaUnboundRuleId, StandardCharsets.UTF_8), cookie);
+        assertEquals(200, asaRule.status(), "ASA unbound ACL rule detail");
+        assertTrue(asaRule.body().contains(asaUnboundRuleId)
+                && asaRule.body().contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED),
+                "ASA unbound ACL rule detail must include ASA_ACL_NOT_REFERENCED");
+        assertTrue(count(asaRule.body(), e.raw()).isEmpty(),
+                "ASA rule detail leaked raw classes: " + count(asaRule.body(), e.raw()));
+
+        Resp asaHygiene = get("/api/v2/policy/policies/" + asaPolicyId + "/hygiene", cookie);
+        assertEquals(200, asaHygiene.status(), "ASA hygiene");
+        assertTrue(asaHygiene.body().contains(asaUnboundRuleId)
+                && asaHygiene.body().contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED)
+                && asaHygiene.body().contains("\"shadowStatus\":\"REDUNDANT\"")
+                && asaHygiene.body().contains(asaRuleId),
+                "ASA hygiene must include ASA_ACL_NOT_REFERENCED and REDUNDANT verdict");
+        assertTrue(count(asaHygiene.body(), e.raw()).isEmpty(),
+                "ASA hygiene leaked raw classes: " + count(asaHygiene.body(), e.raw()));
+
+        Resp asaCsv = get("/api/v2/policy/policies/" + asaPolicyId + "/hygiene.csv", cookie);
+        assertEquals(200, asaCsv.status(), "ASA hygiene CSV");
+        assertTrue(asaCsv.body().contains(PolicyHygiene.ASA_ACL_NOT_REFERENCED) && asaCsv.body().contains(asaRuleId),
+                "ASA hygiene CSV must include ASA_ACL_NOT_REFERENCED and covering rule ID");
+        assertTrue(count(asaCsv.body(), e.raw()).isEmpty(),
+                "ASA hygiene CSV leaked raw classes: " + count(asaCsv.body(), e.raw()));
+
+        Resp fgtPage = get("/api/v2/policy/policies/" + fgtPolicyId, cookie);
+        assertEquals(200, fgtPage.status(), "FortiGate policy page");
+        assertTrue(fgtPage.body().contains(fgtPolicyId) && fgtPage.body().contains(fgtRuleId)
+                && fgtPage.body().contains(fgtShadowRuleId) && fgtPage.body().contains("\"FGT implicit deny\""),
+                "FortiGate policy page must include seeded rules and implicit deny section");
+        assertTrue(count(fgtPage.body(), e.raw()).isEmpty(),
+                "FortiGate policy page leaked raw classes: " + count(fgtPage.body(), e.raw()));
+
+        Resp fgtRule = get("/api/v2/policy/policies/" + fgtPolicyId + "/rules?ruleId="
+                + java.net.URLEncoder.encode(fgtShadowRuleId, StandardCharsets.UTF_8), cookie);
+        assertEquals(200, fgtRule.status(), "FortiGate shadowed rule detail");
+        assertTrue(fgtRule.body().contains(fgtShadowRuleId)
+                && fgtRule.body().contains("\"shadowStatus\":\"REDUNDANT\"")
+                && fgtRule.body().contains(fgtRuleId),
+                "FortiGate shadowed rule detail must include REDUNDANT and covering rule ID");
+        assertTrue(count(fgtRule.body(), e.raw()).isEmpty(),
+                "FortiGate rule detail leaked raw classes: " + count(fgtRule.body(), e.raw()));
+
+        Resp fgtHygiene = get("/api/v2/policy/policies/" + fgtPolicyId + "/hygiene", cookie);
+        assertEquals(200, fgtHygiene.status(), "FortiGate hygiene");
+        assertTrue(fgtHygiene.body().contains(fgtShadowRuleId)
+                && fgtHygiene.body().contains("\"shadowStatus\":\"REDUNDANT\"")
+                && fgtHygiene.body().contains(fgtRuleId),
+                "FortiGate hygiene must include REDUNDANT and covering rule ID");
+        assertTrue(count(fgtHygiene.body(), e.raw()).isEmpty(),
+                "FortiGate hygiene leaked raw classes: " + count(fgtHygiene.body(), e.raw()));
+
+        Resp fgtCsv = get("/api/v2/policy/policies/" + fgtPolicyId + "/hygiene.csv", cookie);
+        assertEquals(200, fgtCsv.status(), "FortiGate hygiene CSV");
+        assertTrue(fgtCsv.body().contains("\"shadowed\"")
+                && fgtCsv.body().contains("Earlier enabled rule fully covers this match with the same action.")
+                && fgtCsv.body().contains(fgtRuleId),
+                "FortiGate hygiene CSV must include redundant shadow finding and covering rule ID");
+        assertTrue(count(fgtCsv.body(), e.raw()).isEmpty(),
+                "FortiGate hygiene CSV leaked raw classes: " + count(fgtCsv.body(), e.raw()));
     }
 
     /** The counter itself: an address is not matched as the prefix of a longer address, names match case-insensitively. */
