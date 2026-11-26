@@ -1854,8 +1854,16 @@ def test_cancelling_the_ship_side_stops_the_host_driver_through_the_closed_sessi
         time.sleep(0.1)
     with pytest.raises(ProcessLookupError):
         os.kill(remote_pid, 0)
-    assert subprocess.run(["git", "-C", str(repo), "for-each-ref", "refs/security-pregate"],
-                          capture_output=True, text=True).stdout == ""
+    # The wrapper's EXIT trap deletes the run ref after its signal handler returns, in a process the ship does not
+    # wait for: poll for the observable end state under a deadline instead of sampling it once.
+    deadline = time.monotonic() + 20
+    while True:
+        refs = subprocess.run(["git", "-C", str(repo), "for-each-ref", "refs/security-pregate"],
+                              capture_output=True, text=True).stdout
+        if refs == "" or time.monotonic() >= deadline:
+            break
+        time.sleep(0.1)
+    assert refs == ""
 
 
 def test_remote_cleanup_disarms_signals_so_second_signal_never_leaks_work_dir(wrapper_env):
