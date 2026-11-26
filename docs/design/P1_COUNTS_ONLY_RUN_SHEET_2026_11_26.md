@@ -342,6 +342,103 @@ Closes the live raw-versus-masked comparison run of `aiview_masking_leak_audit` 
 
 ---
 
+## 6. ASA and FortiGate stored-policy counts
+
+### Purpose
+
+Feeds backlog item `asa_fortigate_policy_model` (P1, in progress; design steps 0-8 are built, `docs/design/ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md` section 8 leaves "real-environment validation, separate gate") by re-measuring, with counts only inside `ui2-service`, what the current ASA parser, mapper, hygiene and lookup make of the latest stored `show_configuration` artefacts, and what shapes the stored ASA and FortiGate configurations have. Authorization basis of the measurement kind: `docs/design/PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md` item 2 (Q1: one in-pod, counts-only measurement over the stored artefacts, no device contact, no configuration text read by a person or an agent). Whether that item also covers a repeat run is UNKNOWN; the PO session that starts a run decides it.
+
+### Harness verdicts
+
+The three harnesses were written on a 2026-11-14 branch; the READMEs of the mapper-validation and evaluation harnesses say "this branch's" parser and mapper. Each was checked against this repository at `26753874` by reading the code and comparing every class and method it calls with `ui2/platform-core` and `ui2/service`, and by compiling it (`javac --release 21`, no run, no pod image build) against the worktree sources; nothing was executed against an environment and no harness was changed.
+
+| Harness | Verdict | Basis |
+| --- | --- | --- |
+| `scripts/measurement/asa_fgt_policy_shape/` (`AsaFgtShapeMeasure.java`, `measure_run.sh`) | `RUNNABLE_AS_DOCUMENTED` | Calls no policy class. Its only repository dependencies are `ArtefactRef(String)`, `ArtefactStore.retrieve(ArtefactRef, byte[], boolean)`, `FileArtefactStore(Path, ArtefactStoreCipher)`, `ArtefactStoreCipher.fromBase64Key(String)` and `SecretFile.readRequired(Path, String)`; all exist with those signatures. The SQL names columns of `devices`, `device_configuration_run`, `configuration_artefact` and `backup_artefact`; none is renamed or dropped by any migration. |
+| `scripts/measurement/asa_policy_mapper_validation/` (`AsaMapperValidation.java`, `validate_run.sh`) | `RUNNABLE_AS_DOCUMENTED` | `AsaConfigPolicyParser.parse(String)` and `AsaPolicyMapper.map(String, String, String, String, AsaPolicyConfig)` match; the `AsaPolicyConfig` accessors it reads (`acls`, `networkObjects`, `serviceObjects`, `objectGroups`, `names`, `interfaces`, `accessGroups`, `counters`) and the `PolicySnapshot` records (`Section`, `Rule`, `Cell`, `PolicyObject`, failures) compile against the current sources. `validate_run.sh` still finds `policy/asa/*.tsv`. |
+| `scripts/measurement/asa_policy_evaluation/` (`AsaEvaluationMeasure.java`, `evaluation_run.sh`) | `RUNNABLE_AS_DOCUMENTED` | Same parse/map calls, plus `PolicyHygiene.analyze(PolicySnapshot, int, Instant, int)` with `PolicyHygiene.TOTAL_WORK`, `PolicyHygiene.REASONS`, `PolicyLookup.prepare(PolicySnapshot, int)`, `Prepared.evaluate(PolicyLookup.Query)` returning `PolicyResponse.body()`, the seven-argument `PolicyLookup.Query`, `PolicyLookup.REASONS`, `PolicyLookup.ASA_LIST_WORK`, `PolicyNormalization.Budget(int)` and its `left` field, `PolicyNormalization.Resolver(Map, Budget)` and `PolicyNormalization.normalize(PolicySnapshot, Section, Rule, Resolver, boolean)` with `Match.problem()`. All exist with those signatures; the package-private ones are used from the same package (`com.securityexpert.nexus.ui2.service.policy`) as before. The `evaluation_run.sh` source list (`PolicyNormalization`, `PolicyLookup`, `PolicyHygiene`, `PolicyRuleMetrics`) still exists. |
+
+No harness is `NEEDS_PORT`, so no port lane is opened by this section. A harness that is later found to need one is not ported by the lane that discovers it; the port is a separate lane.
+
+Limits of these verdicts (what a compile and a read do not prove):
+
+- The compile was against the repository sources, not against the running pod's `service.jar`. `validate_run.sh` and `evaluation_run.sh` compile the checkout's parser, mapper and engine sources against the pod jar, and the compiled classes shadow the pod's own copies at run time (`-Dloader.path`). The measurement therefore describes the checkout it is started from; start it from a checkout of the deployed commit, or the counters describe code that is not live. `AsaFgtShapeMeasure` is independent of this.
+- The harness reads mapper vocabulary by string (`"ASA access-group"` section source, `" in"` section-name suffix, `"asa-interfaces"` object type, `"nameif: "`, `"ip-netmask: "`, `"protocol: tcp"`, `"port: "` values, `"RESOLVED"` status, the extras keys `user`, `time`, `security-group`, `asa-unparsed`). Each string was found in `AsaPolicyMapper.java` at `26753874`; a later change to one would not fail compilation and would silently change a counter.
+- Behaviour changed after 2026-11-14 (A0-ASA-16a identity narrowing, the 2026-11-23 `ACL_NOT_BOUND` rule). A new run is compared with the before/after tables of `ASA_POLICY_EVALUATION_MEASUREMENT_2026_11_14.md`, not read as a repeat of its first table.
+- None of the three harnesses measures FortiGate policy evaluation. The FortiGate parser, mapper and lookup are exercised only by automated tests; the shape harness counts FortiGate configuration shapes only.
+
+### Preconditions
+
+- `scripts/measurement/asa_fgt_policy_shape/`, `scripts/measurement/asa_policy_mapper_validation/` and `scripts/measurement/asa_policy_evaluation/` are present on the checkout the PO session runs from, and that checkout is the deployed commit (see Limits above).
+- Operator host configuration (`~/.config/nexus/hosta`) and cluster `kubectl -n ui2` access exist on the operator workstation as read by the run scripts; `javac` (release 21) is on the workstation path.
+- No deploy rollout or `hosta_e2e.sh` run is active (each run script exits if `hosta_e2e.sh` is running, and `/app/tmp` is lost on a pod rollout).
+- At least one ASA or FortiGate gateway is enrolled with a stored `show_configuration` artefact; otherwise the files hold only the terminal token.
+- Explicit Product Owner session go-ahead before executing any script on this section.
+
+### Steps
+
+Commands exactly as the harness READMEs give them. Each harness is run once, by the PO session, in this order; all three are in-pod, read-only against stored artefacts, and contact no device.
+
+1. Shape measurement (`scripts/measurement/asa_fgt_policy_shape/README.md`); writes `shape-<tag>.tsv`:
+
+```sh
+SHAPE_WORK_DIR=<empty scratch dir> bash scripts/measurement/asa_fgt_policy_shape/measure_run.sh <tag>
+```
+
+2. Parser and mapper validation (`scripts/measurement/asa_policy_mapper_validation/README.md`); writes `val-<tag>.tsv`:
+
+```sh
+VALIDATE_WORK_DIR=<scratch dir> bash scripts/measurement/asa_policy_mapper_validation/validate_run.sh <tag>
+```
+
+3. Hygiene and lookup evaluation (`scripts/measurement/asa_policy_evaluation/README.md`); writes `eval-<tag>.tsv`. The README gives the form below, run from the harness directory; the script finds its own directory, so the repository-relative path works as well. `<scratch dir holding podjar/>` is the work directory of step 1 or 2, which unpacks the pod's `service.jar` into `podjar/`; the script stops with "no podjar/ in work dir" otherwise:
+
+```sh
+EVAL_WORK_DIR=<scratch dir holding podjar/ (the pod's service.jar unpacked)> bash evaluation_run.sh <tag>
+```
+
+### Evidence to record
+
+Every field of every recorded line matches `[a-z0-9_.]+` (`show_safe.sh` drops any other line and prints `filtered_lines <n>`; devices are ordinals `asa_NN` / `fgt_NN`, VDOMs `v0`, `v1`, ...; configuration-derived tokens come only from closed vocabularies). Record only counters and closed-vocabulary tokens, per ordinal or summed:
+
+- Guard and completion lines for each file: `filtered_lines` (expected `0`), no `unsafe_field_dropped` line, and the terminal token `done` or `fatal <lowercase exception class>`.
+- Shape file (`fgt`/`asa` lines of `vendor, device ordinal, VDOM ordinal, key, value`): policy and ACE counts, `access_group_*` and bound/unbound ACL counts, identity (`user`/`user-group`) and `time-range` ACE counts, port words outside Cisco's table, non-contiguous masks, NAT section counts, interface and security-level facts, `in_pair`, the per-family `family.<key>` match/mismatch and `policy_hash` pair verdicts, and for FortiGate `vips`, `vip_in_dstaddr`, `vip_portforward`, `match_vip_set_*`, zone and mode counters. The `software` value is recorded as a major.minor bucket only.
+- Mapper validation file (`asa` lines of `device ordinal, key, value`): `parser.*` (parsed/unparsed ACEs, NAT rules, object-group children, unknown top-level lines, interface, ACL and access-group counts), `failure.*`, `sections.*` and `rules.*` (including the `asa_not_evaluated` source), `access.*` (action, unique ACE and resolved-cell counts, `access.rules_fully_resolved`), `objects.<type>.<status>`, `align.*`, and `error_*` if any.
+- Evaluation file (`asa` lines of `device ordinal, key, value`, plus `all` lines): `failures`, `hygiene_budget_reached`, `shadow.<status>`, `shadow_reason.<reason slug>` (reasons not in `PolicyHygiene.REASONS` are `other`), `finding.<class>` (classes `shadowed`, `conflict`, `disabled`, `unused`, `expired`, `broad`, `unknown`), `lookup.queries`, `lookup.verdict_<verdict>`, `lookup.reason.<reason slug>`, `lookup.budget_*`, `lists.*`, the timings, and `all retained_heap_mb_all_snapshots` and `all snapshots`.
+
+### How to read the result
+
+Meanings are taken only from `docs/design/ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md`, `docs/design/PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md` (FROZEN, "A0 amendment"), `docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md` answer 2, and the three earlier measurement records (`ASA_FGT_POLICY_SHAPE_MEASUREMENT_2026_11_14.md`, `ASA_POLICY_MAPPER_VALIDATION_2026_11_14.md`, `ASA_POLICY_EVALUATION_MEASUREMENT_2026_11_14.md`). Where they do not say, the cell says UNKNOWN. A count is evidence about the stored artefacts at their collection time, never about the device now.
+
+| Outcome | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| Evaluation file: `finding.unused` > `0` | Count of ASA ACLs whose mapper use is `none`: no access-group binds the ACL, no parsed feature (NAT, crypto map, VPN filter, class-map, route-map, others the parser reads) uses it, and no configuration line the parser does not read names it as a whole token. This is the `ACL_NOT_BOUND` meaning of PO answer 2; the counter is per ACL name (the mapper emits one entry per ACL in the `ASA not evaluated` section) and the harness prints no counter literally named `ACL_NOT_BOUND` | Record the count; it is a hygiene candidate wording "no reference found by the scanned uses", never a statement that the ACL is unused on the device |
+| Evaluation file: `shadow_reason.` + the slug of the reason "ACL is named by a configuration feature the parser does not read; whether it is used is UNKNOWN" (the slug is cut at 60 characters, `acl_is_named_by_a_configuration_feature_the_parser_does_not_`) > `0` | ASA ACLs named only by a line the parser does not interpret: the verdict is UNKNOWN, never `ACL_NOT_BOUND`, never OK (PO answer 2). `shadow.unknown` includes these | Record the count; a large share relative to `finding.unused` shows how much of the old "unused" population was an unread-feature reference, and which unparsed families to read next is UNKNOWN until `unparsed_sig.*` or a parser lane says |
+| Evaluation file: `shadow.not_shadowed`, `shadow.redundant`, `shadow.conflict`, `shadow.unknown` | Shadow status of each rule in the evaluated lists: not covered by an earlier rule / fully covered by an earlier rule of the same action / covered with a different action / not decidable | Compare with the "after A0-ASA-16a" column of the 2026-11-14 evaluation record; `redundant` and `conflict` are proofs, `unknown` is not a finding and is never shown as OK |
+| Evaluation file: `shadow_reason.<slug>` (UNKNOWN reasons: unsupported constraints of an earlier rule, user or category, `asa_not_evaluated`/unsupported rulebase, empty or dynamic group, time, unresolved object, unsupported service) | Why a rule is not decidable. A0-ASA-16 keeps an identity criterion UNKNOWN; A0-ASA-16a lets its address and port cells bound it only to prove a flow is outside it | Record counts; which reason dominates informs the next parser or PO question, not an authorization |
+| Evaluation file: `lookup.verdict_allowed`, `lookup.verdict_denied`, `lookup.verdict_unknown` and `lookup.reason.<slug>` | Verdict and fixed reason of each synthetic in-memory lookup (a rule's own single-host destination and tcp port, from a documentation source address, leaving by another interface of the same unit). A `denied` carries the implicit deny of the list, the same-security-level rule or a first matching deny rule; `unknown` carries "earlier rule could match" or "analysis budget" | These are lookups the engine answers over the stored policy; they are not compared with the device's own answer (see Closes) |
+| Evaluation file: `lookup.budget_in_list_with_128_plus_constrained` versus `lookup.budget_other_cause`; `lists.with_128_or_more_constrained_rules`, `lists.with_128_plus_undecidable`, `lists.normalization_budget_exhausted`; `hygiene_budget_reached` = `1` | A lookup that ended on "analysis budget" because its list holds 128 or more identity, time, security-group or unparsed rules, or for another cause; a list the normalization budget cannot hold; the hygiene work limit reached. `hygiene_budget_reached` = `1` means the hygiene counts of that unit are partial | Record counts; do not read a unit with `hygiene_budget_reached` = `1` or `lists.normalization_budget_exhausted` > `0` as complete |
+| Evaluation file: `failures` > `0` for an ordinal, or `error_<exception class>` | The snapshot carried collection failures, so lookup and hygiene treat that policy as incomplete; or the unit's processing threw | Do not count that unit as measured; record the token only |
+| Mapper file: `parser.unparsed_aces`, `parser.unparsed_nat`, `parser.unparsed_og_children`, `parser.unknown_top_level` > `0` | Lines in policy families the parser read but could not interpret; each unparsed ACE keeps its rule UNKNOWN (`extras` key `asa-unparsed`) | Record counts; a parser-shape lane needs a closed `unparsed_sig.*` signature, never a raw line |
+| Mapper file: `objects.<type>.<status>` with a status other than `resolved`; `access.src_`, `access.dst_`, `access.svc_` leaf classes other than `resolved` | Objects and cells the mapper marked UNRESOLVED, UNSUPPORTED or UNKNOWN (fail closed). The 2026-11-14 validation record carries an open finding of ACE operands naming a network object with no definition in the stored text, cause UNKNOWN; this run is another reading of it, not its resolution | Record counts; the cause stays UNKNOWN unless a different evidence source (the startup configuration in the backup bundle, no device contact) is compared in a separate step |
+| Mapper file: `access.unique_aces` against the shape file's bound-ACE count; `sections.asa_access_group` and `rules.asa_access_group` | Whether the mapper sees as many unique ACEs in access-group sections as the shape tokeniser counts in bound ACLs (they agreed on 2026-11-14) | A difference is recorded as a mismatch between two counters of the same artefacts; its cause is UNKNOWN until a lane isolates it |
+| Shape file, FortiGate: `vips` = `0` and `vip_in_dstaddr` = `0` | No VIP object and no policy destination naming a VIP in that VDOM, so the VIP-dependent A0-FG-18/19/20 UNKNOWNs have no exposure there (design section 11: `match-vip` options are inert only in a VDOM without any VIP) | Record the counts |
+| Shape file, FortiGate: `vips` > `0`, `vip_in_dstaddr` > `0` or `vip_portforward` > `0` | The stored configuration contains VIP-published destinations. Lookup then evaluates the VIP cell as its external address and its mapped address in parallel (A0-FG-19) and answers UNKNOWN where they differ or where an earlier ordinary rule and a later VIP rule both match (A0-FG-18, `FGT_VIP_PRIORITY_UNPROVEN`; A0-FG-20, `FGT_MATCH_VIP_UNPROVEN`). The exposure is real; **how many FortiGate lookups would be UNKNOWN is UNKNOWN: no harness runs FortiGate lookups, and "FortiGate VIP-published services UNKNOWN count" is not produced by any of the three** | Record the exposure counts; a FortiGate evaluation harness is a separate lane and is not on this sheet |
+| Shape file: `in_pair`, `policy_hash`, `family.<key>` = `mismatch` for a pair | Per-policy-family comparison of the two members of an HA pair claim (remarks ignored, per decision record item 6). A `mismatch` is a claim about stored text only; pair existence is not pair health (AGENTS.md Evidence laws) | Record per-family tokens; whether the members are synchronized is not answered by this file |
+| Any file: `done` absent, `fatal <exception class>`, `filtered_lines` > `0`, `compile failed` or `jar copy failed` from a run script | Run did not complete or an unsafe field was dropped | Do not record as measured; verify the deployed build and checkout and open a harness fix item citing only the exception class token and the `filtered_lines` count |
+
+### Never record
+
+Raw database rows, hostnames, management or interface addresses, `device_id` values, serial numbers, ACL, object, object-group, interface (`nameif`), VDOM, zone, policy or policy-name values, user and group names, certificate or key material, configuration text or any line of it (including the first words of a line), artefact references and artefact-store keys, usernames, exception messages, bank identifiers, and any mapping from `asa_NN` / `fgt_NN` / `v<n>` ordinals back to devices or VDOMs. If a diagnostic run ever emits a configuration-derived token that is not from a closed vocabulary, delete that output file, do not copy any of it, and record only that this happened.
+
+### Closes
+
+Gives the PO session fresh counts-only evidence for the stored-policy half of `asa_fortigate_policy_model`: the current parser and mapper over the stored ASA configurations, hygiene and lookup counts (including the `ACL_NOT_BOUND` and UNKNOWN split of PO answer 2), and the stored ASA and FortiGate shapes. A clean set of three files with `done` and `filtered_lines` = `0` supports an `AUTOMATED_VALIDATED` statement over stored artefacts and nothing more.
+
+**It does not close** the real-environment validation of design section 8: the 20 masked lookups per vendor, chosen by the Product Owner, compared with the device's own answer (the ASA `packet-tracer`, R2; a FortiGate equivalent still to be researched and proposed). That needs a device read that has no approved gate row, so it requires the network-device command gate and a literal Product Owner decision (`AGENTS.md` "Network action taxonomy" and the 2026-09-26 ad hoc parser-diagnostics amendment); it stays a PO decision and is not on this sheet. Until it is recorded, `asa_fortigate_policy_model` does not reach `REAL_ENV_VALIDATED`; counts of lookups answered by the engine are not agreement with the device. It also does not close the FortiGate lookup validation (no harness exists), the open finding of undefined network-object references (cause UNKNOWN), or the Zone Matrix ASA/FortiGate amendment decision.
+
+---
+
 ## Not on this sheet
 
 - **Script Execution real-environment validation (`script_execution_module`):** governed by PO answer 6 (`docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md`) and covered by its own standalone checklist in `docs/design/SCRIPT_EXECUTION_REAL_ENV_VALIDATION_CHECKLIST_2026_11_23.md`.
