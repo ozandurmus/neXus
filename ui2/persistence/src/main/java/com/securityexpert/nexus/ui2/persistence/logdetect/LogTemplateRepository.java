@@ -112,9 +112,21 @@ public interface LogTemplateRepository {
     record ProvisionalTemplate(String templateId, String sourceKey, String templateText, LocalDate firstSeenDay) {
     }
 
-    /** Chunks not yet processed under these versions, oldest first; pruned chunks and windows not yet closed are not offered. */
+    /** Chunks not yet processed under these versions, newest log day first (then collection order); pruned chunks and windows not yet closed are not offered. */
     List<PendingChunk> pendingChunks(String catalogVersion, String maskingRuleSet, String normaliserVersion,
             Collection<String> sources, int limit);
+
+    /** Whether {@code (deviceId, sourceKey)} still has a closed, non-pruned chunk in {@code [from, toExclusive)} not yet processed under these versions. */
+    default boolean hasUnprocessedHistory(String catalogVersion, String maskingRuleSet, String normaliserVersion,
+            String deviceId, String sourceKey, LocalDate from, LocalDate toExclusive) {
+        return false;
+    }
+
+    /** Distinct device-local days on or after {@code fromDay} with P2 counts whose {@code [day - 28, day)} history has no unprocessed closed chunks left. */
+    default List<LocalDate> readyCountDaysAfter(String catalogVersion, String maskingRuleSet, String normaliserVersion,
+            String deviceId, String sourceKey, LocalDate fromDay) {
+        return List.of();
+    }
 
     /** In one transaction: removes the chunk's earlier rows of this catalog version, writes {@code rows}, the provisional forms and the state. */
     void replaceChunkCounts(TemplateIndexState state, List<CountRow> rows, List<ProvisionalTemplate> provisional);

@@ -198,6 +198,52 @@ class ZoneMatrixSummaryViewTest {
     }
 
     @Test
+    void zm26_unknownOnlyOnCurrentCompletePolicyNeverProjectsABareZeroStalenessHeadline() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of(finding("P-CUR", "u-unk", 5, "UNKNOWN", null, List.of())));
+        Map<String, Object> h = get(ZoneMatrixSummaryView.project(runService().storedSummary(), masked(),
+                ZoneMatrixSummaryView.Query.defaults()), "headline");
+        assertEquals(0, h.get("distinct_violating_rules"));
+        assertEquals(1, h.get("unknown_findings"));
+        assertEquals(false, h.get("exact"));
+        assertEquals("at least 0", h.get("count_text"));
+        assertEquals("no proven violations in evaluated rules", h.get("text"));
+        Map<String, Object> stale = get(h, "staleness_headline");
+        assertEquals(false, stale.get("exact"));
+        assertEquals("at least 0", stale.get("text"));
+    }
+
+    @Test
+    void zm26_aSummaryCarryingUndecidedCountsIsNeverProjectedWithAnExactStalenessHeadlineOnRead() {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of());
+        StoredSummary clean = runService().storedSummary();
+        var base = clean.headline();
+        var exactZero = new ZoneMatrixStaleness.CountHeadline(0, true, "0");
+        // (not evaluable, unknown, became undecided): each alone, with the defective exact "0" staleness headline.
+        for (int[] undecided : new int[][] {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}) {
+            var stored = new ZoneMatrixRunService.StoredHeadline(base.versionId(), base.versionNumber(), 0, 0, 0, 0, 0, 0,
+                    undecided[0], undecided[1], undecided[2], 0, 0, 0, 0, exactZero, false, "at least 0",
+                    "no proven violations in evaluated rules", null);
+            var summary = new StoredSummary(clean.evaluatedAt(), clean.stalenessThreshold(), clean.activeVersion(),
+                    clean.policies(), clean.notEvaluated(), clean.findings(), stored,
+                    clean.resolvedByVersionChangeLast7Days(), clean.resolvedByVersionChangeByVersion(),
+                    clean.cellCounts());
+            Map<String, Object> h = get(ZoneMatrixSummaryView.project(summary, masked(),
+                    ZoneMatrixSummaryView.Query.defaults()), "headline");
+            Map<String, Object> stale = get(h, "staleness_headline");
+            assertEquals(false, stale.get("exact"));
+            assertEquals("at least 0", stale.get("text"));
+        }
+        // Positive control: the clean summary keeps the exact zero.
+        Map<String, Object> cleanHeadline = get(ZoneMatrixSummaryView.project(clean, masked(),
+                ZoneMatrixSummaryView.Query.defaults()), "headline");
+        assertEquals("0", this.<Map<String, Object>>get(cleanHeadline, "staleness_headline").get("text"));
+    }
+
+    @Test
     void countsEqualTheStoredSummary() {
         StoredSummary summary = fullFixture().storedSummary();
         var body = ZoneMatrixSummaryView.project(summary, masked(), ZoneMatrixSummaryView.Query.defaults());

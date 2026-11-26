@@ -661,8 +661,11 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                         || f.flags().contains("CONDITION_IGNORED"))) conditional++;
             }
             int outside = outsideHeadlineRules.size();
-            CountHeadline stalenessHeadline = ZoneMatrixStaleness.headline(n, coveredForHeadline);
-            boolean exact = stalenessHeadline.exact() && notEvaluableFindings == 0 && unknownFindings == 0;
+            // One rule for both: exact only when staleness/coverage allow it and nothing is undecided (ZM-26).
+            CountHeadline stalenessHeadline = ZoneMatrixStaleness.withUndecided(
+                    ZoneMatrixStaleness.headline(n, coveredForHeadline),
+                    notEvaluableFindings + unknownFindings + becameUndecidedFindings);
+            boolean exact = stalenessHeadline.exact();
             String countText = exact ? Integer.toString(n) : "at least " + n;
             int versionNumber = active.number();
             String text;

@@ -71,6 +71,16 @@ export function headlineProven(data: ZoneMatrixSummaryResponse, h: SummaryHeadli
     && data.policies.every((p) => p.staleness.verdict === "CURRENT" && p.coverage === "COMPLETE" && p.has_complete_run);
 }
 
+/**
+ * The staleness line follows the same proof as the headline: when it is not proven, a bare number never prints; the
+ * line reads "at least N" even if the response says exact (ZM-26, contract 7.2).
+ */
+export function stalenessHeadlineText(data: ZoneMatrixSummaryResponse, h: SummaryHeadline): string {
+  const raw = h.staleness_headline.text;
+  if (headlineProven(data, h) || /^\s*at least\b/i.test(raw)) return raw;
+  return `at least ${h.distinct_violating_rules}`;
+}
+
 function HeadlinePanel({ data, h }: { readonly data: ZoneMatrixSummaryResponse; readonly h: SummaryHeadline }) {
   const proven = headlineProven(data, h);
   const n = h.distinct_violating_rules;
@@ -86,7 +96,7 @@ function HeadlinePanel({ data, h }: { readonly data: ZoneMatrixSummaryResponse; 
       </Stack>
       <Typography variant="body2" data-testid="headline-count-text">{h.count_text}</Typography>
       {h.outside_headline_text ? <Typography variant="body2" data-testid="outside-headline-text">{h.outside_headline_text}</Typography> : null}
-      <Typography variant="body2" data-testid="staleness-headline" sx={{ color: m3.onSurfaceVar }}>{h.staleness_headline.text}</Typography>
+      <Typography variant="body2" data-testid="staleness-headline" sx={{ color: m3.onSurfaceVar }}>{stalenessHeadlineText(data, h)}</Typography>
       <Hint>Zone matrix version {h.version_number}. Counts are rules of the latest complete run of each policy, not observed traffic.</Hint>
     </Box>
   );

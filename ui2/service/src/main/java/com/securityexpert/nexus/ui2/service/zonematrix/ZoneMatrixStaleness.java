@@ -151,6 +151,19 @@ public final class ZoneMatrixStaleness {
         return new CountHeadline(count, exact, exact ? Integer.toString(count) : "at least " + count);
     }
 
+    /**
+     * Composes the staleness headline with undecided evidence (contract 7.2, ZM-26): a count is never exact while any
+     * NOT_EVALUABLE, UNKNOWN or became-undecided finding exists, because a rule the engine could not decide may still
+     * violate. Pure and idempotent; {@link #headline} stays unchanged for ZM-35.
+     */
+    public static CountHeadline withUndecided(CountHeadline base, int undecidedFindings) {
+        Objects.requireNonNull(base, "base");
+        if (undecidedFindings <= 0 || !base.exact()) {
+            return base;
+        }
+        return new CountHeadline(base.count(), false, "at least " + base.count());
+    }
+
     /** Snapshot time text to an instant (ISO instant or offset form); {@code null} when missing or unreadable. */
     static Instant parse(String text) {
         if (text == null || text.isBlank()) {

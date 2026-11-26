@@ -274,6 +274,33 @@ class ZoneMatrixEvidenceReportInputsTest {
     // ------------------------------------------------------------------ ZM-31 projection half
 
     @Test
+    void zm26_notEvaluableOnlyOnCurrentCompletePolicyNeverCarriesABareZeroHeadlineInTheReportSummary() {
+        defaultVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of(
+                finding("P-CUR", "u-ne", 3, RULE_NAME, "NOT_EVALUABLE", null, List.of(), zoneB, zoneA)));
+        StoredSummary summary = runService().storedSummary();
+        assertEquals(0, summary.headline().distinctViolatingRules());
+        assertEquals(1, summary.headline().notEvaluableFindings());
+
+        String text = assemble(summary, masked(), request()).summary().headlineText();
+        assertTrue(text.contains("no proven violations in evaluated rules. at least 0. Splits:"), text);
+        assertFalse(text.contains(". 0. Splits:"), text);
+        assertFalse(text.contains("0 rules violate"), text);
+        assertTrue(text.endsWith("The count is a lower bound."), text);
+    }
+
+    @Test
+    void zm26_currentCompletePolicyWithNothingUndecidedKeepsTheExactZeroHeadlineInTheReportSummary() {
+        defaultVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        completeRun("P-CUR", "COMPLETE", 0, List.of());
+        String text = assemble(runService().storedSummary(), masked(), request()).summary().headlineText();
+        assertTrue(text.contains("0 rules violate the zone matrix (v1). 0. Splits:"), text);
+        assertTrue(text.endsWith("The count is exact."), text);
+    }
+
+    @Test
     void zm31_maskedAndRawInputsDifferAndTheMaskedOneCarriesNoPlantedNameAndNoViewCarriesWitnessData() {
         StoredSummary summary = fullFixture();
         assertTrue(summary.findings().stream().flatMap(f -> f.finding().violatedCells().stream())

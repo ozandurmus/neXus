@@ -348,7 +348,9 @@ public final class ZoneMatrixEvidenceReportInputs {
             return new Summary(null, null);
         }
         String text = "Headline (v" + h.versionNumber() + ", fleet-wide, not filtered): " + h.text() + ". "
-                + h.stalenessHeadline().text() + ". Splits: " + h.criticalRules() + " critical rules; "
+                + ZoneMatrixStaleness.withUndecided(h.stalenessHeadline(),
+                        h.notEvaluableFindings() + h.unknownFindings() + h.becameUndecidedFindings()).text()
+                + ". Splits: " + h.criticalRules() + " critical rules; "
                 + h.coveredByEarlierRule() + " covered by an earlier rule; " + h.conditionalRules()
                 + " conditional (identity / time); " + h.outsideHeadlineOrderedLayer()
                 + " rules outside the headline (other ordered layer); " + h.notEvaluableFindings()

@@ -38,7 +38,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -252,7 +251,6 @@ class ZoneMatrixStepFiveAcceptancePinsTest {
     }
 
     @Test
-    @Disabled("DEFECT: ZM-26 - ZoneMatrixSummaryView projects headline.staleness_headline.text=\"0\" for a CURRENT and COMPLETE policy with 0 violations and 1 NOT_EVALUABLE finding, which ViolationsTab renders verbatim in summary-headline")
     @DisplayName("ZM-26: one NOT_EVALUABLE rule on a CURRENT and COMPLETE policy never projects '0' in summary headline fields rendered by ViolationsTab")
     void zm26_oneNotEvaluableRuleOnCurrentCompletePolicyNeverProjectsZeroInSummaryHeadline() {
         var env = new Env(services);
@@ -267,10 +265,31 @@ class ZoneMatrixStepFiveAcceptancePinsTest {
         assertEquals(false, h.get("exact"));
         assertEquals("at least 0", h.get("count_text"));
         assertEquals("no proven violations in evaluated rules", h.get("text"));
-        // ViolationsTab.tsx renders h.staleness_headline.text verbatim inside data-testid="summary-headline":
-        // it must not be the bare string "0" when a NOT_EVALUABLE rule prevents proving zero violations.
+        // ViolationsTab.tsx and CoverageTab.tsx print staleness_headline.text: never the bare "0" here.
         Map<String, Object> stalenessHeadline = get(h, "staleness_headline");
+        assertEquals(0, stalenessHeadline.get("count"));
+        assertEquals(false, stalenessHeadline.get("exact"));
+        assertEquals("at least 0", stalenessHeadline.get("text"));
         assertNotEquals("0", stalenessHeadline.get("text"));
+    }
+
+    @Test
+    @DisplayName("ZM-26 positive control: a CURRENT and COMPLETE policy with nothing undecided still projects the exact '0' headline")
+    void zm26_currentCompletePolicyWithNothingUndecidedStillProjectsExactZero() {
+        var env = new Env(services);
+        env.catalog.putSnapshot(localPan("pol-clean", NOW.minus(Duration.ofHours(1)), List.of(), List.of()));
+        env.runService.submit("pol-clean", null);
+
+        Map<String, Object> h = get(env.projectMasked(), "headline");
+        assertEquals(0, h.get("not_evaluable_findings"));
+        assertEquals(0, h.get("unknown_findings"));
+        assertEquals(0, h.get("became_undecided_findings"));
+        assertEquals(true, h.get("exact"));
+        assertEquals("0", h.get("count_text"));
+        assertEquals("0 rules violate the zone matrix (v1)", h.get("text"));
+        Map<String, Object> stalenessHeadline = get(h, "staleness_headline");
+        assertEquals(true, stalenessHeadline.get("exact"));
+        assertEquals("0", stalenessHeadline.get("text"));
     }
 
     // ------------------------------------------------------------------------------------------ ZM-35

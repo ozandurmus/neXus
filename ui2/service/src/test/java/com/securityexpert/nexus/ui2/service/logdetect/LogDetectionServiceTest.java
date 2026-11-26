@@ -36,7 +36,11 @@ class LogDetectionServiceTest {
     private static final Pattern STORED_KEY = Pattern.compile("[A-Za-z0-9#_.:-]{0,64}");
 
     private static String line(int minute, String text) {
-        LocalDateTime t = DAY.atStartOfDay().plusHours(2).plusMinutes(minute);
+        return lineOn(DAY, minute, text);
+    }
+
+    private static String lineOn(LocalDate day, int minute, String text) {
+        LocalDateTime t = day.atStartOfDay().plusHours(2).plusMinutes(minute);
         return GAIA.format(t) + " edge-fw-01 " + text + "\n";
     }
 
@@ -210,5 +214,105 @@ class LogDetectionServiceTest {
         assertEquals("EVALUATED", repo.coverage.get("FW-BRAVO-02|cp_messages|job-c-b").state());
         assertEquals(1, repo.findings.size());
         assertEquals("FW-BRAVO-02", repo.findings.values().iterator().next().deviceId());
+    }
+
+    @Test
+    void newestDaysAreIndexedFirstAndVerdictsStayHonestAcrossOutOfOrderBackfill(@TempDir Path dir) throws Exception {
+        var fixture = new SystemLogReadFixture(dir);
+        var repo = new StrictRepository();
+        String slot = "CPU_SrcID#1_MC#0_Chan#2_DIMM#0";
+        // Insert 15 days in ascending collection order (DAY - 14 .. DAY):
+        //   - DAY - 14 is quiet (0 markers);
+        //   - kern.oops occurs on DAY - 13 .. DAY (13 of 14 baseline days before DAY = 92.9% >= 80%: chronic once backfilled);
+        //   - io.error occurs on DAY - 10 .. DAY (10 of 14 baseline days before DAY = 71.4% < 80%: NOT chronic);
+        //   - hw.edac.ce occurs only on DAY (0 of 14 baseline days: NOT chronic).
+        for (int offset = 14; offset >= 0; offset--) {
+            LocalDate d = DAY.minusDays(offset);
+            String chunk = "c-day-" + d;
+            StringBuilder text = new StringBuilder();
+            text.append(lineOn(d, 0, "sshd[100]: session closed for user admin"));
+            if (offset <= 13) {
+                text.append(lineOn(d, 5, "kernel: BUG: unable to handle kernel paging request at 0x0"));
+                text.append(lineOn(d, 6, "kernel: BUG: unable to handle kernel paging request at 0x0"));
+            }
+            if (offset <= 10) {
+                text.append(lineOn(d, 25, "kernel: blk_update_request: I/O error, dev sda, sector 42"));
+                text.append(lineOn(d, 26, "kernel: blk_update_request: I/O error, dev sda, sector 43"));
+            }
+            if (offset == 0) {
+                for (int i = 0; i < 12; i++) {
+                    text.append(lineOn(d, 40 + i, "kernel: EDAC MC0: 1 CE memory read error on " + slot
+                            + " (channel:2 slot:0 page:0x1000 offset:0x0 grain:32)"));
+                }
+            }
+            fixture.chunk(chunk, SystemLogReadFixture.bytes(text.toString()));
+            repo.pending.add(new PendingChunk(chunk, "FW-TANGO-04", "cp_messages", "job-" + d, d));
+        }
+
+        LogDetectionService service = service(repo, fixture);
+        // Pass 1 (11 chunks): indexes DAY down to DAY - 10 newest-first; DAY - 14 .. DAY - 11 stay pending.
+        PassSummary first = service.runOnce(11, Duration.ofMinutes(1));
+        assertEquals(11, first.chunksIndexed());
+        assertTrue(repo.states.containsKey("c-day-" + DAY), "newest day is indexed first");
+        assertTrue(repo.states.containsKey("c-day-" + DAY.minusDays(10)));
+        assertFalse(repo.states.containsKey("c-day-" + DAY.minusDays(11)), "older days wait for backfill");
+
+        // While DAY - 14 .. DAY - 11 are still unprocessed, DAY is evaluated for Layer A markers immediately, with
+        // NOT_EVALUABLE (HISTORY_UNDER_7_DAYS) coverage, and io.error is NOT falsely suppressed as CHRONIC from the
+        // newest-only 10/10 slice; DAY - 10 never counts future days DAY - 9 .. DAY as its history.
+        var covDayAfterFirst = repo.coverage.get("FW-TANGO-04|cp_messages|job-" + DAY);
+        assertEquals("NOT_EVALUABLE", covDayAfterFirst.state());
+        assertEquals("HISTORY_UNDER_7_DAYS", covDayAfterFirst.reason());
+        assertEquals(1, covDayAfterFirst.historyDays());
+        var covMinus10AfterFirst = repo.coverage.get("FW-TANGO-04|cp_messages|job-" + DAY.minusDays(10));
+        assertEquals("NOT_EVALUABLE", covMinus10AfterFirst.state());
+        assertEquals(1, covMinus10AfterFirst.historyDays(), "an older day never counts already-indexed newer days");
+
+        FindingRow ceFirst = findingOn(repo, DAY, "hw.edac.ce");
+        FindingRow ioFirst = findingOn(repo, DAY, "io.error");
+        FindingRow oopsFirst = findingOn(repo, DAY, "kern.oops");
+        assertEquals("ATTENTION", ceFirst.severity());
+        assertEquals("ATTENTION", ioFirst.severity(), "io.error must not guess CHRONIC from a partial newest-only slice");
+        assertFalse(ioFirst.chronic());
+        assertEquals("ATTENTION", oopsFirst.severity());
+        assertTrue(ceFirst.labels().contains("HISTORY_UNDER_7_DAYS"));
+        assertEquals("NOT_EVALUABLE", ceFirst.coverageState());
+
+        // Pass 2: backfills DAY - 11 .. DAY - 14 (DAY - 14 has 0 marker lines); refreshes coverage and re-evaluates DAY.
+        PassSummary second = service.runOnce(10, Duration.ofMinutes(1));
+        assertEquals(4, second.chunksIndexed());
+
+        var covDayAfterSecond = repo.coverage.get("FW-TANGO-04|cp_messages|job-" + DAY);
+        assertEquals("EVALUATED", covDayAfterSecond.state());
+        assertEquals("LAYER_A_ONLY", covDayAfterSecond.reason());
+        assertEquals(15, covDayAfterSecond.historyDays());
+        var covOldest = repo.coverage.get("FW-TANGO-04|cp_messages|job-" + DAY.minusDays(14));
+        assertEquals("NOT_EVALUABLE", covOldest.state());
+        assertEquals(1, covOldest.historyDays(), "the oldest day has 1 day of history even when indexed last");
+
+        FindingRow ceFinal = findingOn(repo, DAY, "hw.edac.ce");
+        FindingRow ioFinal = findingOn(repo, DAY, "io.error");
+        FindingRow oopsFinal = findingOn(repo, DAY, "kern.oops");
+        assertEquals("ATTENTION", ceFinal.severity());
+        assertFalse(ceFinal.labels().contains("HISTORY_UNDER_7_DAYS"));
+        assertEquals("EVALUATED", ceFinal.coverageState());
+        assertEquals(14, ceFinal.baselineDays());
+        assertEquals(0, ceFinal.presenceDays());
+
+        assertEquals("ATTENTION", ioFinal.severity(), "10 of 14 baseline days (71.4%) is below 80%: stays ATTENTION");
+        assertFalse(ioFinal.chronic());
+        assertEquals(14, ioFinal.baselineDays());
+        assertEquals(10, ioFinal.presenceDays());
+
+        assertEquals("INFO", oopsFinal.severity(), "13 of 14 baseline days (92.9%) at baseline rate: becomes CHRONIC INFO");
+        assertTrue(oopsFinal.chronic());
+        assertEquals(List.of("CHRONIC"), oopsFinal.labels());
+        assertEquals("EVALUATED", oopsFinal.coverageState());
+    }
+
+    private static FindingRow findingOn(StrictRepository repo, LocalDate day, String marker) {
+        return repo.findings.values().stream()
+                .filter(f -> f.windowDay().equals(day) && f.markerId().equals(marker))
+                .findFirst().orElseThrow(() -> new AssertionError("missing " + marker + " on " + day));
     }
 }

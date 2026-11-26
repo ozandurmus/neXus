@@ -272,11 +272,42 @@ public final class JooqLogTemplateRepository implements LogTemplateRepository {
                         + "and s.normaliser_version = {" + (n + 2) + "} "
                         + "and (s.status not in ('MASKING_UNAVAILABLE', 'STORE_UNAVAILABLE', 'UNREADABLE') "
                         + "or s.indexed_at > now() - interval '15 minutes')) "
-                        + "order by c.collected_at, c.chunk_id limit {" + (n + 3) + "}",
+                        + "order by c.log_day desc, c.collected_at, c.chunk_id limit {" + (n + 3) + "}",
                 binds(sources, catalogVersion, maskingRuleSet, normaliserVersion, bounded))
                 .map(r -> new PendingChunk(r.get("chunk_id", String.class), r.get("device_id", String.class),
                         r.get("source_key", String.class), r.get("job_id", String.class),
                         LocalDate.parse(r.get("log_day", String.class)))));
+    }
+
+    @Override
+    public boolean hasUnprocessedHistory(String catalogVersion, String maskingRuleSet, String normaliserVersion,
+            String deviceId, String sourceKey, LocalDate from, LocalDate toExclusive) {
+        return transactions.inTransaction(dsl -> Boolean.TRUE.equals(dsl.fetchOne(
+                "select exists (select 1 from system_log_chunk c where c.device_id = {0} and c.source_key = {1} "
+                        + "and c.pruned_at is null and c.log_day >= cast({2} as date) and c.log_day < cast({3} as date) "
+                        + "and exists (select 1 from system_log_run r where r.device_id = c.device_id and r.job_id = c.job_id) "
+                        + "and not exists (select 1 from log_template_index_state s where s.chunk_id = c.chunk_id "
+                        + "and s.catalog_version = {4} and s.masking_rule_set = {5} and s.normaliser_version = {6})) as pending",
+                deviceId, sourceKey, from.toString(), toExclusive.toString(), catalogVersion, maskingRuleSet, normaliserVersion)
+                .get("pending", Boolean.class)));
+    }
+
+    @Override
+    public List<LocalDate> readyCountDaysAfter(String catalogVersion, String maskingRuleSet, String normaliserVersion,
+            String deviceId, String sourceKey, LocalDate fromDay) {
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select distinct cast(tc.bucket_start as date) as d from log_template_count tc "
+                        + "where tc.catalog_version = {0} and tc.device_id = {1} and tc.source_key = {2} "
+                        + "and tc.bucket_start >= cast({3} as date) "
+                        + "and not exists (select 1 from system_log_chunk c where c.device_id = tc.device_id "
+                        + "and c.source_key = tc.source_key and c.pruned_at is null "
+                        + "and c.log_day >= cast(tc.bucket_start as date) - 28 and c.log_day < cast(tc.bucket_start as date) "
+                        + "and exists (select 1 from system_log_run r where r.device_id = c.device_id and r.job_id = c.job_id) "
+                        + "and not exists (select 1 from log_template_index_state s where s.chunk_id = c.chunk_id "
+                        + "and s.catalog_version = {0} and s.masking_rule_set = {4} and s.normaliser_version = {5})) "
+                        + "order by d",
+                catalogVersion, deviceId, sourceKey, fromDay.toString(), maskingRuleSet, normaliserVersion)
+                .map(r -> r.get("d", java.sql.Date.class).toLocalDate()));
     }
 
     @Override
@@ -362,12 +393,21 @@ public final class JooqLogTemplateRepository implements LogTemplateRepository {
         return out;
     }
 
+    private static final String COMPLETE_P2_DAY_SQL = "not exists (select 1 from system_log_chunk c "
+            + "where c.device_id = s.device_id and c.source_key = s.source_key and c.log_day = s.log_day "
+            + "and c.pruned_at is null "
+            + "and exists (select 1 from system_log_run r where r.device_id = c.device_id and r.job_id = c.job_id) "
+            + "and not exists (select 1 from log_template_index_state s2 where s2.chunk_id = c.chunk_id "
+            + "and s2.catalog_version = s.catalog_version and s2.masking_rule_set = s.masking_rule_set "
+            + "and s2.normaliser_version = s.normaliser_version and s2.status = 'INDEXED'))";
+
     @Override
     public List<LocalDate> indexedDays(String catalogVersion, String deviceId, String sourceKey, LocalDate from,
             LocalDate toExclusive) {
-        return transactions.inTransaction(dsl -> dsl.fetch("select distinct cast(log_day as text) as d from log_template_index_state "
-                + "where catalog_version = {0} and device_id = {1} and source_key = {2} and status = 'INDEXED' "
-                + "and log_day >= cast({3} as date) and log_day < cast({4} as date) order by d", catalogVersion, deviceId,
+        return transactions.inTransaction(dsl -> dsl.fetch("select distinct cast(s.log_day as text) as d from log_template_index_state s "
+                + "where s.catalog_version = {0} and s.device_id = {1} and s.source_key = {2} and s.status = 'INDEXED' "
+                + "and s.log_day >= cast({3} as date) and s.log_day < cast({4} as date) and " + COMPLETE_P2_DAY_SQL
+                + " order by d", catalogVersion, deviceId,
                 sourceKey, from.toString(), toExclusive.toString()).map(r -> LocalDate.parse(r.get("d", String.class))));
     }
 

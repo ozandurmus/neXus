@@ -21,11 +21,15 @@ import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.logdetect.JooqLogDetectionRepository;
+import com.securityexpert.nexus.ui2.persistence.logdetect.JooqLogTemplateRepository;
+import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.CoverageRow;
 import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.EventRow;
 import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.FindingQuery;
 import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.FindingRow;
 import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.IndexState;
+import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.PendingChunk;
 import com.securityexpert.nexus.ui2.persistence.logdetect.LogDetectionRepository.Pointer;
+import com.securityexpert.nexus.ui2.persistence.logdetect.LogTemplateRepository.TemplateIndexState;
 
 /**
  * The log detection engine's tables (V272) on PostgreSQL: the P1 switch is off by default, evidence rows are idempotent
@@ -370,6 +374,106 @@ class LogDetectionRepositoryTest {
             assertEquals("GAP", rows.get(0).state());
             assertEquals(2, repository.devicesWithCoverage(DAY));
         }
+    }
+
+    @Test
+    void pendingChunksOrdersNewestLogDayFirstThenCollectedAtAndChunkIdAndKeepsEveryFilter() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("log_detection_pending_order")) {
+            fixture.runFlyway();
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            var p1 = new JooqLogDetectionRepository(tx);
+            var p2 = new JooqLogTemplateRepository(tx);
+            try (var db = fixture.migrateConnection()) {
+                for (String job : List.of("job-old", "job-new-1", "job-new-2", "job-retry", "job-pruned")) {
+                    audited(db, "insert into system_log_run(run_id, device_id, job_id, source_key, outcome) values "
+                            + "('run-" + job + "', '" + DEV + "', '" + job + "', 'cp_messages', 'COLLECTED')");
+                }
+                // Older log_day with a newer collected_at: log_day desc must still rank DAY ahead of DAY - 5.
+                insertChunk(db, "c-old", "job-old", DAY.minusDays(5), "2026-11-24 12:00:00+03", 0, false);
+                insertChunk(db, "c-new-b", "job-new-1", DAY, "2026-11-24 06:00:00+03", 100, false);
+                insertChunk(db, "c-new-a", "job-new-1", DAY, "2026-11-24 06:00:00+03", 200, false);
+                insertChunk(db, "c-new-later", "job-new-2", DAY, "2026-11-24 09:00:00+03", 300, false);
+                // Filtered out: pruned, window not closed (no system_log_run), and a recent (< 15m) UNREADABLE retry guard.
+                insertChunk(db, "c-pruned", "job-pruned", DAY.plusDays(1), "2026-11-25 06:00:00+03", 400, true);
+                insertChunk(db, "c-open", "job-open", DAY.plusDays(1), "2026-11-25 06:00:00+03", 500, false);
+                insertChunk(db, "c-recent-fail", "job-new-2", DAY, "2026-11-24 09:30:00+03", 600, false);
+                insertChunk(db, "c-expired-fail", "job-retry", DAY.minusDays(1), "2026-11-23 06:00:00+03", 700, false);
+            }
+            p1.recordIndexState(new IndexState("c-recent-fail", "logmask-v8", "markers-p1-1", DEV, "cp_messages",
+                    "job-new-2", DAY, "UNREADABLE", 0, 0, 0));
+            p1.recordIndexState(new IndexState("c-expired-fail", "logmask-v8", "markers-p1-1", DEV, "cp_messages",
+                    "job-retry", DAY.minusDays(1), "MASKING_UNAVAILABLE", 0, 0, 0));
+            p2.recordIndexState(new TemplateIndexState("c-recent-fail", "cat-1", "logmask-v8", "norm-v1", DEV,
+                    "cp_messages", "job-new-2", DAY, "UNREADABLE", 0, 0, 0, 0));
+            p2.recordIndexState(new TemplateIndexState("c-expired-fail", "cat-1", "logmask-v8", "norm-v1", DEV,
+                    "cp_messages", "job-retry", DAY.minusDays(1), "MASKING_UNAVAILABLE", 0, 0, 0, 0));
+            try (var db = fixture.migrateConnection(); var st = db.createStatement()) {
+                st.execute("update log_index_state set indexed_at = now() - interval '20 minutes' where chunk_id = 'c-expired-fail'");
+                st.execute("update log_template_index_state set indexed_at = now() - interval '20 minutes' where chunk_id = 'c-expired-fail'");
+            }
+
+            List<String> expected = List.of("c-new-a", "c-new-b", "c-new-later", "c-expired-fail", "c-old");
+            assertEquals(expected, p1.pendingChunks("logmask-v8", "markers-p1-1", 10).stream().map(PendingChunk::chunkId).toList());
+            assertEquals(expected, p2.pendingChunks("cat-1", "logmask-v8", "norm-v1", List.of("cp_messages"), 10).stream()
+                    .map(PendingChunk::chunkId).toList());
+            assertEquals(List.of("c-new-a", "c-new-b"), p1.pendingChunks("logmask-v8", "markers-p1-1", 2).stream()
+                    .map(PendingChunk::chunkId).toList(), "a bounded pass takes the newest log day first");
+        }
+    }
+
+    @Test
+    void newestFirstArrivalWithholdsBaselineUntilHistoryIsIndexedAndNeverLooksAhead() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("log_detection_newest_first_history")) {
+            fixture.runFlyway();
+            var repository = new JooqLogDetectionRepository(new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+            try (var db = fixture.migrateConnection()) {
+                for (int i = 0; i <= 2; i++) {
+                    LocalDate d = DAY.minusDays(i);
+                    String job = "job-h" + i;
+                    audited(db, "insert into system_log_run(run_id, device_id, job_id, source_key, outcome) values "
+                            + "('run-h" + i + "', '" + DEV + "', '" + job + "', 'cp_messages', 'COLLECTED')");
+                    insertChunk(db, "ch" + i, job, d, d + " 06:00:00+03", i * 100L, false);
+                }
+            }
+            // Index DAY and DAY - 1 newest-first while DAY - 2 is still unprocessed in system_log_chunk.
+            repository.replaceChunkIndex(new IndexState("ch0", "logmask-v8", "markers-p1-1", DEV, "cp_messages", "job-h0", DAY,
+                    "INDEXED", 10, 1, 0), List.of(event("eh0", "ch0", "kern.oops", "", DAY + "T10:00:00", 2, DAY + "T10:00:00", DAY + "T10:00:30")));
+            repository.upsertCoverage(new CoverageRow(DEV, "cp_messages", "job-h0", DAY, "NOT_EVALUABLE", "HISTORY_UNDER_7_DAYS", 1));
+            repository.replaceChunkIndex(new IndexState("ch1", "logmask-v8", "markers-p1-1", DEV, "cp_messages", "job-h1",
+                    DAY.minusDays(1), "INDEXED", 10, 1, 0), List.of(event("eh1", "ch1", "kern.oops", "",
+                            DAY.minusDays(1) + "T10:00:00", 2, DAY.minusDays(1) + "T10:00:00", DAY.minusDays(1) + "T10:00:30")));
+            repository.upsertCoverage(new CoverageRow(DEV, "cp_messages", "job-h1", DAY.minusDays(1), "NOT_EVALUABLE", "HISTORY_UNDER_7_DAYS", 1));
+
+            assertEquals(1, repository.historyDays(DEV, "cp_messages", DAY), "unprocessed older chunks keep history honest");
+            assertEquals(0, repository.baseline(DEV, "cp_messages", "kern.oops", DAY).usableDays(),
+                    "baseline is withheld while an earlier closed chunk in the 28-day window is unprocessed");
+            assertTrue(repository.readyCoverageAfter(DEV, "cp_messages", DAY.minusDays(1)).isEmpty());
+            assertTrue(repository.readyEvidenceDaysAfter(DEV, "cp_messages", DAY.minusDays(1)).isEmpty());
+
+            // Now backfill DAY - 2: no unprocessed history remains; DAY - 2 never counts newer days, and newer days become ready.
+            repository.replaceChunkIndex(new IndexState("ch2", "logmask-v8", "markers-p1-1", DEV, "cp_messages", "job-h2",
+                    DAY.minusDays(2), "INDEXED", 10, 0, 0), List.of());
+            assertEquals(1, repository.historyDays(DEV, "cp_messages", DAY.minusDays(2)), "no look-ahead into newer days");
+            assertEquals(2, repository.historyDays(DEV, "cp_messages", DAY.minusDays(1)));
+            assertEquals(3, repository.historyDays(DEV, "cp_messages", DAY));
+            var base = repository.baseline(DEV, "cp_messages", "kern.oops", DAY);
+            assertEquals(2, base.usableDays());
+            assertEquals(1, base.presenceDays());
+            assertEquals(List.of("job-h1", "job-h0"), repository.readyCoverageAfter(DEV, "cp_messages", DAY.minusDays(2))
+                    .stream().map(CoverageRow::jobId).toList());
+            assertEquals(List.of(DAY.minusDays(1), DAY), repository.readyEvidenceDaysAfter(DEV, "cp_messages", DAY.minusDays(2)));
+        }
+    }
+
+    private static void insertChunk(Connection db, String chunkId, String jobId, LocalDate logDay, String collectedAt,
+            long startOffset, boolean pruned) throws SQLException {
+        String pruneCols = pruned ? ", now(), 'RETENTION'" : ", null, null";
+        audited(db, "insert into system_log_chunk(chunk_id, device_id, source_key, job_id, collected_at, log_day, "
+                + "file_name_hmac, inode, start_offset, end_offset, bytes, lines, artefact_ref, wrapped_data_key, "
+                + "plaintext_hmac, ciphertext_bytes, pruned_at, prune_reason) values ('" + chunkId + "', '" + DEV
+                + "', 'cp_messages', '" + jobId + "', timestamptz '" + collectedAt + "', date '" + logDay + "', '" + HEX
+                + "', '12345', " + startOffset + ", " + (startOffset + 80) + ", 80, 1, 'art-" + chunkId
+                + "', '\\x0102'::bytea, '" + HEX + "', 80" + pruneCols + ")");
     }
 
     private static EventRow event(String id, String chunk, String marker, String key, String bucket, int count, String first, String last) {
