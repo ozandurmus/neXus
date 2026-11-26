@@ -5,6 +5,7 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository.
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository.Version;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ResolvedByVersionFinding;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ResolvedFinding;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvaluator.CoverageItem;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvaluator.FindingIdentity;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvidenceReport.FindingRow;
@@ -69,7 +70,8 @@ import java.util.Set;
  * A count that cannot be given is {@code null} (printed UNKNOWN), never {@code 0}: the whole-scope count when an
  * evaluable policy has no {@code COMPLETE} run, the filtered count when the filtered scope contains one, and both counts
  * for a period report, because the stored summary carries only open findings and the findings resolved by a matrix
- * version change (other resolutions are not read here). Findings are never capped or dropped: every stored VIOLATION,
+ * version change; the findings resolved for any reason within the period come from a separate period read (ZM-32), and
+ * without it other resolutions are not read here. Findings are never capped or dropped: every stored VIOLATION,
  * NOT_EVALUABLE and UNKNOWN row is passed to the builder, which owns period membership. An undecided rule stored
  * without a finding lifecycle (a standalone NOT_EVALUABLE or UNKNOWN row) gets no lifecycle, so its dates print
  * UNKNOWN. Unreadable active-version content refuses the input instead of printing an empty matrix.
@@ -109,6 +111,17 @@ public final class ZoneMatrixEvidenceReportInputs {
      * @param now     the generation time
      */
     public static Input assemble(StoredSummary summary, Labels labels, ObjectMapper mapper, Request request, Instant now) {
+        return assemble(summary, null, labels, mapper, request, now);
+    }
+
+    /**
+     * {@link #assemble(StoredSummary, Labels, ObjectMapper, Request, Instant)} with the findings resolved within the
+     * period for any reason ({@link ZoneMatrixRunService#resolvedInPeriod}, read once by the caller; ZM-32). A finding the
+     * summary already lists (open, or resolved by a matrix version change) appears once. {@code null} means the read
+     * was not made: only the version-change resolutions are then listed and the filter description says so.
+     */
+    public static Input assemble(StoredSummary summary, List<ResolvedFinding> resolvedInPeriod, Labels labels,
+            ObjectMapper mapper, Request request, Instant now) {
         Objects.requireNonNull(summary, "summary");
         Objects.requireNonNull(labels, "labels");
         Objects.requireNonNull(mapper, "mapper");
@@ -154,16 +167,26 @@ public final class ZoneMatrixEvidenceReportInputs {
         List<FindingRow> rows = new ArrayList<>();
         int whole = 0;
         int filtered = 0;
+        Set<List<Object>> listed = new LinkedHashSet<>();
         for (StoredFinding s : summary.findings()) {
             whole++;
             if (!matches(filter, s.finding())) continue;
             filtered++;
             rows.add(row(s.finding(), s.versionId(), policyNames, labels));
+            if (s.finding().resolvedAt() != null) listed.add(resolvedKey(s.finding()));
         }
         if (period) {
             for (ResolvedByVersionFinding r : resolvedByVersionChange(summary)) {
                 if (!matches(filter, r.finding())) continue;
+                if (!listed.add(resolvedKey(r.finding()))) continue;
                 rows.add(resolvedRow(r, policyNames, labels));
+            }
+            if (resolvedInPeriod != null) {
+                for (ResolvedFinding r : resolvedInPeriod) {
+                    if (!matches(filter, r.finding())) continue;
+                    if (!listed.add(resolvedKey(r.finding()))) continue;
+                    rows.add(resolvedAnyReasonRow(r, policyNames, labels));
+                }
             }
         }
 
@@ -176,7 +199,7 @@ public final class ZoneMatrixEvidenceReportInputs {
                 viewLabel(labels),
                 request.periodFrom(),
                 request.periodTo(),
-                filterDescription(filter, labels, summary, period),
+                filterDescription(filter, labels, summary, period, resolvedInPeriod != null),
                 filteredKnown ? filtered : null,
                 wholeKnown ? whole : null,
                 request.regulation(),
@@ -204,7 +227,7 @@ public final class ZoneMatrixEvidenceReportInputs {
     }
 
     private static String filterDescription(ZoneMatrixSummaryView.Query filter, Labels labels, StoredSummary summary,
-            boolean period) {
+            boolean period, boolean allResolutionsRead) {
         List<String> parts = new ArrayList<>();
         if (filter.policyId() != null) {
             String name = summary.policies().stream().filter(p -> p.policyId().equals(filter.policyId()))
@@ -216,7 +239,10 @@ public final class ZoneMatrixEvidenceReportInputs {
         if (filter.outcome() != null) {
             parts.add("outcome " + filter.outcome());
         }
-        if (period) {
+        if (period && allResolutionsRead) {
+            parts.add("resolved findings listed are those resolved within the period for any reason (matrix version "
+                    + "change, rule changed, rule removed or disabled); the finding counts are UNKNOWN");
+        } else if (period) {
             parts.add("resolved findings listed are only those resolved by a matrix version change; other "
                     + "resolutions are not read for this report, so the finding counts are UNKNOWN");
         }
@@ -389,6 +415,22 @@ public final class ZoneMatrixEvidenceReportInputs {
         return findingRow(r.finding(), r.resolvedFromVersionId(), policyNames, labels, lifecycle(r.finding(),
                 r.resolvedFromVersionId(), Transition.RESOLVED, ResolutionReason.MATRIX_VERSION_CHANGED,
                 r.resolvedAt(), r.resolvedFromVersionId(), r.resolvedInVersionId()));
+    }
+
+    /**
+     * A finding resolved within the period for any reason. A stored reason the enum does not know leaves the lifecycle
+     * reason {@code null}, which the builder prints as UNKNOWN for a resolved finding; the row is never dropped.
+     */
+    private static FindingRow resolvedAnyReasonRow(ResolvedFinding r, Map<String, String> policyNames, Labels labels) {
+        return findingRow(r.finding(), r.foundVersionId(), policyNames, labels, lifecycle(r.finding(),
+                r.foundVersionId(), Transition.RESOLVED, resolutionReason(r.finding().resolutionReason()),
+                r.resolvedAt(), null, null));
+    }
+
+    /** One resolved finding as the stores list it: identity and resolution instant (the version is not identity). */
+    private static List<Object> resolvedKey(ZoneMatrixRunRepository.Finding f) {
+        return List.of(f.policySourceId(), f.ruleUid(), f.inlineParentPath(), Set.copyOf(f.violatedPairs()),
+                f.resolvedAt());
     }
 
     private static FindingRow findingRow(ZoneMatrixRunRepository.Finding f, String versionId,

@@ -102,14 +102,23 @@ final class PolicyReorder {
      * proposal step to this class.
      */
     static Result analyze(PolicySnapshot snapshot, PolicyPartialShadow.Result partial, Budget budget, int ruleLimit) {
+        return analyze(snapshot, partial, budget, ruleLimit, Resolver.shadowing(snapshot, budget), false);
+    }
+
+    /**
+     * The same pass over the sections of ONE evaluation scope, for the scope-local proposal ({@link PolicyProposal}): the
+     * caller owns the resolver (its memo seeded with what the scopes before this one resolved, so every unit is charged
+     * as the whole-snapshot pass charges it) and {@code scopeOfAWhole}: a scope without a candidate still reads and
+     * charges its rules as the whole-snapshot pass does whenever another scope has one. Not a new rule; only the seam.
+     */
+    static Result analyze(PolicySnapshot snapshot, PolicyPartialShadow.Result partial, Budget budget, int ruleLimit, Resolver resolver, boolean scopeOfAWhole) {
         var meta = snapshot.metadata();
         Map<String, Move> moves = new LinkedHashMap<>();
         Map<String, Integer> counts = new HashMap<>();
         Map<String, PolicyPartialShadow.Partial> candidates = new HashMap<>();
         partial.rules().forEach((id, p) -> { if (PolicyPartialShadow.PARTIAL.equals(p.status()) && p.sameAction() && !p.overlapping().isEmpty()) candidates.put(id, p); });
-        if (!"CP".equals(meta.vendor()) || !snapshot.failures().isEmpty() || candidates.isEmpty())
+        if (!"CP".equals(meta.vendor()) || !snapshot.failures().isEmpty() || candidates.isEmpty() && !scopeOfAWhole)
             return new Result(Map.of(), 0, 0, 0, 0, 0, 0, 0, partial.notEvaluable());
-        var resolver = Resolver.shadowing(snapshot, budget);
         var scope = new EvaluationScope<List<Entry>>(meta, ArrayList::new);
         Map<String, Position> where = new HashMap<>();
         List<Rule> order = new ArrayList<>();

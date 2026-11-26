@@ -286,6 +286,37 @@ public final class JooqZoneMatrixRunRepository implements ZoneMatrixRunRepositor
         });
     }
 
+    @Override public List<ResolvedFinding> resolvedInPeriod(Instant from, Instant to) {
+        return transactions.inTransaction(dsl -> {
+            var rows = dsl.fetch("select f.finding_id, r.version_id as found_version_id, "
+                    + "r.version_number as found_version_number, " + FINDING_COLUMNS
+                    + " from zone_matrix_finding f "
+                    + "join zone_matrix_run r on r.run_id = f.run_id and r.state = 'COMPLETE' "
+                    + "where f.resolved_at is not null "
+                    + "  and ({0}::timestamptz is null or f.resolved_at >= {0}::timestamptz) "
+                    + "  and ({1}::timestamptz is null or f.resolved_at < {1}::timestamptz) "
+                    + "order by f.resolved_at desc, f.finding_id desc",
+                    odtOrNull(from), odtOrNull(to));
+
+            record DedupKey(String policySourceId, String ruleUid, List<String> parentPath, Set<String> pairs,
+                    Instant firstObservedAt, Instant resolvedAt) {}
+            Map<DedupKey, ResolvedFinding> deduplicated = new LinkedHashMap<>();
+            for (Record r : rows) {
+                Finding f = finding(r);
+                DedupKey key = new DedupKey(f.policySourceId(), f.ruleUid(), f.inlineParentPath(),
+                        Set.copyOf(f.violatedPairs()), f.firstObservedAt(), f.resolvedAt());
+                // Rows come newest id first, so a repeated chain row is an older one: it names the earlier version.
+                ResolvedFinding existing = deduplicated.get(key);
+                deduplicated.put(key, new ResolvedFinding(
+                        r.get("found_version_id", String.class),
+                        r.get("found_version_number", Integer.class),
+                        f.resolvedAt(),
+                        existing == null ? f : existing.finding()));
+            }
+            return List.copyOf(deduplicated.values());
+        });
+    }
+
     @Override public List<Run> runs(int limit) {
         int bounded = Math.max(0, Math.min(limit, MAX_LISTING));
         return transactions.inTransaction(dsl -> dsl.fetch("select " + RUN_COLUMNS
