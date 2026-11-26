@@ -215,7 +215,13 @@ export function ScriptRunsSection({
                   : "Run now requires Operator role or above (read-only execution status for this account)."}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <M3Button
+              emphasis="outlined"
+              href={`?screen=operations&tab=jobs&job_type=script_run&q=${encodeURIComponent(script.script_id)}`}
+            >
+              Open in Jobs
+            </M3Button>
             <M3Button emphasis="outlined" disabled={runsLoading} onClick={() => void loadRuns()}>
               Refresh runs
             </M3Button>
@@ -310,9 +316,17 @@ export function ScriptRunsSection({
                         <Timestamp at={run.requested_at} />
                       </TableCell>
                       <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
-                        <M3Button emphasis="text" onClick={() => void inspectRun(run.run_id, run)}>
-                          Inspect run
-                        </M3Button>
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+                          <M3Button emphasis="text" onClick={() => void inspectRun(run.run_id, run)}>
+                            Inspect run
+                          </M3Button>
+                          <M3Button
+                            emphasis="text"
+                            href={`?screen=operations&tab=jobs&job=${encodeURIComponent(run.run_id)}`}
+                          >
+                            Open job row
+                          </M3Button>
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   );
@@ -353,7 +367,13 @@ export function ScriptRunsSection({
                       v{selectedRunDetail.version} · {selectedRunDetail.trigger_kind}
                     </Typography>
                   </Stack>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <M3Button
+                      emphasis="text"
+                      href={`?screen=operations&tab=jobs&job=${encodeURIComponent(selectedRunDetail.run_id)}`}
+                    >
+                      Open job row
+                    </M3Button>
                     <M3Button
                       emphasis="text"
                       disabled={runDetailLoading}

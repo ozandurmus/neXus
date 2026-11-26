@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useCallback } from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -15,32 +16,41 @@ import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
+import { useSession, type SessionInfo } from "../auth/SessionContext";
+import { formatBytes } from "../shell/bytes";
 import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
 import { PaginationFooter } from "../shell/DataTable";
 import { SortHeaderCell, useServerTableSort } from "../shell/tableSort";
 import { StatusPill } from "../shell/StatusPill";
 import type { Tone } from "../shell/tone";
 import { Presented, Stamp } from "../shell/PresentedText";
+import { primaryRoleLabel, roleTokenLabel } from "../shell/roleLabel";
 import { displayInputToIso, formatDuration, isoToDisplayInput, DISPLAY_TZ_LABEL } from "../shell/time";
 import { completedReasonOutcome, jobOutcomeWord, jobStateWord, outcomeEchoesState, outcomeLine, readinessReasonLabel } from "../shell/presenters";
 import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { MONO, m3 } from "../theme/m3Theme";
+import { LABEL_UPPER, RADIUS, TYPE } from "../theme/tokens";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { JobReconcileDialog } from "./JobReconcileDialog";
 import { FAILOVER_RELEASE_NOTE, RECONCILE_STATUS_WORD, isFailoverRunJob, isReconcilable } from "../jobs/jobReconcile";
-import { useCanReconcileJobs } from "../shell/actionAccess";
+import { PLANE_OPERATIONS, planeGranted, useCanReconcileJobs } from "../shell/actionAccess";
+import { describeApiError } from "./ScriptFormHelpers";
 import {
   cancelJob,
   downloadJobsCsv,
+  downloadScriptRunOutput,
   getJobStats,
+  getScriptRun,
   jobFacets,
   listDevices,
   listJobs,
+  responsesAreMasked,
   type ApiError,
   type JobEventView,
   type JobFacetsView,
   type JobQueryParams,
+  type ScriptRunSummary,
 } from "../auth/adminApi";
 
 /** The state word's colour from the role table: Completed green, Failed red, Running brand, queued or claimed amber, anything else neutral. */
@@ -245,7 +255,245 @@ export function jobTargetLabel(
     ?? cleanTargetWord(device?.name)
     ?? cleanTargetWord(job.cluster_member_ref)
     ?? cleanTargetWord(device?.cluster)
+    ?? (isScriptRunJob(job) ? cleanTargetWord(job.target_ref) : null)
     ?? "No target recorded";
+}
+
+function isScriptRunJob(job: Pick<JobEventView, "job_type" | "target_kind">): boolean {
+  return job.job_type === "script_run" || job.target_kind === "script";
+}
+
+const SCRIPT_OUTPUT_ROLE_LABELS = new Set(["Security Admin", "Operation Admin", "Operator"]);
+
+function canSessionReadScriptOutput(
+  session: SessionInfo | null,
+  isMasked: boolean,
+  detail: ScriptRunSummary,
+): boolean {
+  if (isMasked) return false;
+  if (!session) return detail.output_tail !== null;
+  if (primaryRoleLabel(session.roleTokens).startsWith("aiview")) return false;
+  if (session.canReadAdministration) return true;
+  if (session.roleTokens.length > 0) {
+    return session.roleTokens.some((token) => SCRIPT_OUTPUT_ROLE_LABELS.has(roleTokenLabel(token)));
+  }
+  return planeGranted(session.permissions, PLANE_OPERATIONS) && detail.output_tail !== null;
+}
+
+function triggerScriptOutputDownload(content: string, fileName: string): void {
+  if (typeof URL.createObjectURL !== "function") return;
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => {
+    if (typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(url);
+    }
+  }, 1000);
+}
+
+function JobScriptRunDetail({
+  jobId,
+  pageMasked,
+}: {
+  readonly jobId: string;
+  readonly pageMasked: boolean;
+}) {
+  const session = useSession();
+  const [detail, setDetail] = useState<ScriptRunSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  const [reloadSeq, setReloadSeq] = useState(0);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadNote, setDownloadNote] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setDetail(null);
+    setDownloadNote(null);
+    setDownloadError(null);
+    getScriptRun(jobId)
+      .then((res) => {
+        if (active) {
+          setDetail(res);
+          setLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(err);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [jobId, reloadSeq]);
+
+  if (error) {
+    return (
+      <Alert
+        severity="error"
+        data-testid="job-script-run-error"
+        sx={{ mb: 1 }}
+        action={
+          <Button
+            size="small"
+            color="inherit"
+            onClick={(event) => {
+              event.stopPropagation();
+              setReloadSeq((n) => n + 1);
+            }}
+            sx={{ textTransform: "none" }}
+          >
+            Retry
+          </Button>
+        }
+      >
+        Could not load script run details: {describeApiError(error)}
+      </Alert>
+    );
+  }
+
+  if (loading || !detail) {
+    return (
+      <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1 }} data-testid="job-script-run-loading">
+        Loading script run details…
+      </Typography>
+    );
+  }
+
+  const sessionMasked = Boolean(session && primaryRoleLabel(session.roleTokens).startsWith("aiview"));
+  const isMasked = pageMasked || sessionMasked || (session === null && responsesAreMasked());
+  const canReadOutput = canSessionReadScriptOutput(session, isMasked, detail);
+
+  const handleDownload = async () => {
+    if (!detail.has_output || downloadBusy) return;
+    setDownloadBusy(true);
+    setDownloadError(null);
+    setDownloadNote(null);
+    try {
+      const content = await downloadScriptRunOutput(jobId);
+      const fileName = `script-run-${jobId}.log`;
+      triggerScriptOutputDownload(content, fileName);
+      setDownloadNote(
+        `Downloaded ${fileName} (${formatBytes(new Blob([content]).size)}) — recorded in the server audit log.`,
+      );
+    } catch (err) {
+      const status = (err as ApiError | undefined)?.status;
+      const msg = describeApiError(err);
+      setDownloadError(
+        status === 403
+          ? `Output download refused (HTTP 403): ${msg}`
+          : `Could not download script output: ${msg}`,
+      );
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
+  return (
+    <Stack spacing={1} sx={{ mb: 1 }} data-testid="job-script-run-detail">
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap alignItems="center" data-testid="job-script-run-meta">
+        <Typography variant="caption" sx={{ fontFamily: MONO, color: m3.onSurface }}>
+          v{detail.version}
+        </Typography>
+        <Typography variant="caption" sx={{ fontFamily: MONO, color: m3.onSurfaceVar }}>
+          {detail.trigger_kind}
+        </Typography>
+        {detail.exit_code !== null && detail.exit_code !== undefined && (
+          <Typography variant="caption" sx={{ fontFamily: MONO, color: m3.onSurface }}>
+            Exit {detail.exit_code}
+          </Typography>
+        )}
+        <Typography variant="caption" sx={{ fontFamily: MONO, color: m3.onSurfaceVar }}>
+          stdout {formatBytes(detail.stdout_bytes)}
+          {detail.stdout_truncated ? " (truncated)" : ""} · stderr {formatBytes(detail.stderr_bytes)}
+          {detail.stderr_truncated ? " (truncated)" : ""}
+        </Typography>
+      </Stack>
+
+      {detail.failure_reason ? (
+        <Alert severity="warning" data-testid="job-script-failure-reason">
+          Failure reason: {detail.failure_reason}
+        </Alert>
+      ) : null}
+
+      {canReadOutput && typeof detail.output_tail === "string" && detail.output_tail.length > 0 ? (
+        <Box>
+          <Typography sx={{ ...LABEL_UPPER, color: m3.onSurfaceVar, mb: 0.5 }}>
+            Captured output tail (masked, up to 4 KiB)
+          </Typography>
+          <Box
+            component="pre"
+            data-testid="job-script-output-tail"
+            aria-label="Captured output tail (masked, up to 4 KiB)"
+            sx={{
+              m: 0,
+              p: 1.5,
+              maxHeight: 220,
+              overflow: "auto",
+              borderRadius: `${RADIUS.card}px`,
+              bgcolor: m3.scLow,
+              border: `1px solid ${m3.outlineVar}`,
+              fontFamily: MONO,
+              fontSize: TYPE.mono.fontSize,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {detail.output_tail}
+          </Box>
+        </Box>
+      ) : !canReadOutput ? (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }} data-testid="job-script-output-gated">
+          {isMasked
+            ? "Captured script output tail and full output download are withheld in masked (aiview) inspection mode (requires Operator role or above; downloads are audited server-side)."
+            : "Captured script output tail and full output download require Operator role or above (withheld for this session; downloads are audited server-side)."}
+        </Typography>
+      ) : (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }} data-testid="job-script-output-empty">
+          {["REQUESTED", "CLAIMED", "EXECUTING", "RUNNING"].includes(detail.state.toUpperCase())
+            ? "No captured script output yet (run is still in progress)."
+            : detail.has_output
+              ? "No inline output tail captured for this run."
+              : "No captured output stored for this run."}
+        </Typography>
+      )}
+
+      {canReadOutput && detail.has_output ? (
+        <Stack spacing={0.75} data-testid="job-script-output-download-section">
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={downloadBusy}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleDownload();
+              }}
+              sx={{ textTransform: "none" }}
+            >
+              {downloadBusy ? "Downloading…" : "Download run output"}
+            </Button>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }} data-testid="job-script-output-audit-note">
+              Full output download is recorded in the server audit log before the first byte.
+            </Typography>
+          </Stack>
+          {downloadError ? <Alert severity="error">{downloadError}</Alert> : null}
+          {downloadNote ? <Alert severity="success">{downloadNote}</Alert> : null}
+        </Stack>
+      ) : null}
+    </Stack>
+  );
 }
 
 export function JobLogsPanel({
@@ -706,6 +954,13 @@ export function JobLogsPanel({
                                     }}>Reconcile</Button>}
                                 </>}
                           </Stack>
+                        )}
+                        {isScriptRunJob(job) && (
+                          <JobScriptRunDetail
+                            key={job.job_id}
+                            jobId={job.job_id}
+                            pageMasked={!page.targetSortable || page.idsOnlySearch}
+                          />
                         )}
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
                           {([["Job ID", job.job_id], ...(targetId ? [["Device ID", targetId] as const] : [])] as const).map(([label, value]) => (

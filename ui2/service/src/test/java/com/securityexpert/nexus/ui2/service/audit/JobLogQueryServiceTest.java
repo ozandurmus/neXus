@@ -35,10 +35,11 @@ class JobLogQueryServiceTest {
 
         assertEquals(" where j.state = ? and (j.job_type = ? or j.job_type like ?) and j.target_device_id = ? and j.submitted_at >= ? and "
                 + "(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
-                + "or lower(coalesce(j.terminal_reason, '')) like ?)",
+                + "or lower(coalesce(j.terminal_reason, '')) like ? "
+                + "or (j.target_kind = 'script' and lower(split_part(j.target_ref, '@', 1)) like ?))",
                 where.sql());
         assertEquals(List.of("FAILED", "cp_gateway_backup", "%\\_cp\\_gateway\\_backup", "dev-1", Timestamp.from(since), "%sftp 100\\%%", "%sftp 100\\%%",
-                "%sftp 100\\%%", "%sftp 100\\%%"), where.bindings());
+                "%sftp 100\\%%", "%sftp 100\\%%", "%sftp 100\\%%"), where.bindings());
     }
 
     @Test
@@ -310,13 +311,50 @@ class JobLogQueryServiceTest {
         // addresses) answers "does a real name contain X" for aiview, which is shown pseudonyms only.
         Where where = JobLogQueryService.whereOf(masked(Optional.of("Edge_1"), Optional.empty()));
 
-        assertEquals(" where (lower(j.job_id) like ? or lower(j.target_device_id) like ?)", where.sql());
-        assertEquals(List.of("%edge\\_1%", "%edge\\_1%"), where.bindings());
+        assertEquals(" where (lower(j.job_id) like ? or lower(j.target_device_id) like ? "
+                + "or (j.target_kind = 'script' and lower(split_part(j.target_ref, '@', 1)) like ?))", where.sql());
+        assertEquals(List.of("%edge\\_1%", "%edge\\_1%", "%edge\\_1%"), where.bindings());
         assertTrue(!where.sql().contains("observed_hostname") && !where.sql().contains("terminal_reason"), where.sql());
-        // The unmasked search is unchanged.
+        // The unmasked search includes hostname, reason, and the opaque script id.
         Where full = JobLogQueryService.whereOf(new JobQuery(Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.of("edge"), 1, 50));
-        assertTrue(full.sql().contains("d.observed_hostname") && full.sql().contains("j.terminal_reason"), full.sql());
+        assertTrue(full.sql().contains("d.observed_hostname") && full.sql().contains("j.terminal_reason")
+                && full.sql().contains("split_part(j.target_ref, '@', 1)"), full.sql());
+    }
+
+    @Test
+    void whereOfMatchesOpaqueScriptIdViaTargetRefInUnmaskedAndMaskedModesWithoutMatchingRawScriptNames() {
+        String scriptClause = "(j.target_kind = 'script' and lower(split_part(j.target_ref, '@', 1)) like ?)";
+
+        Where unmasked = JobLogQueryService.whereOf(new JobQuery(
+                Optional.empty(), Optional.of("script_run"), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.of("script-alpha-01"), 1, 50));
+        assertEquals(" where (j.job_type = ? or j.job_type like ?) and "
+                + "(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
+                + "or lower(coalesce(j.terminal_reason, '')) like ? or " + scriptClause + ")",
+                unmasked.sql());
+        assertEquals(List.of(
+                "script_run", "%\\_script\\_run",
+                "%script-alpha-01%", "%script-alpha-01%", "%script-alpha-01%", "%script-alpha-01%", "%script-alpha-01%"),
+                unmasked.bindings());
+        assertTrue(!unmasked.sql().contains("scr.") && !unmasked.sql().contains("script_name"), unmasked.sql());
+
+        Where maskedWhere = JobLogQueryService.whereOf(new JobQuery(
+                Optional.empty(), Optional.of("script_run"), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.of("script-alpha-01"), 1, 50,
+                Optional.empty(), Optional.empty(), true));
+        assertEquals(" where (j.job_type = ? or j.job_type like ?) and "
+                + "(lower(j.job_id) like ? or lower(j.target_device_id) like ? or " + scriptClause + ")",
+                maskedWhere.sql());
+        assertEquals(List.of(
+                "script_run", "%\\_script\\_run",
+                "%script-alpha-01%", "%script-alpha-01%", "%script-alpha-01%"),
+                maskedWhere.bindings());
+        assertTrue(!maskedWhere.sql().contains("scr.")
+                && !maskedWhere.sql().contains("script_name")
+                && !maskedWhere.sql().contains("observed_hostname")
+                && !maskedWhere.sql().contains("terminal_reason"),
+                maskedWhere.sql());
     }
 
     @Test
