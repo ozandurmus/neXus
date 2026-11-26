@@ -399,9 +399,23 @@ def review_run(ops, agy_only, agy_reply):
 
 def test_b_review_under_agy_only_uses_neon_xhigh_and_never_claude(ops):
     calls = review_run(ops, True, "VERDICT: PASS")
-    assert "CLAUDE-CALLED" not in calls and "--model gemini-4-neon-xhigh --mode plan --print-timeout 1500" in calls
+    assert "CLAUDE-CALLED" not in calls and "--model gemini-4-neon-xhigh --mode plan --print-timeout 1500s" in calls
     assert ".review-" in calls and "reviewed=neon-agy-only" in (ops.sq / f"{LANE}.ship").read_text()
     assert not list(ops.repo.glob(".review-*")) and not list(ops.codo.glob("**/.review-*.diff"))
+
+
+@pytest.mark.parametrize("agy_only,expected_model", [
+    (True, "gemini-4-neon-xhigh"),
+    (False, "gemini-4-neon-high"),
+])
+def test_b_review_print_timeout_uses_valid_go_duration(ops, agy_only, expected_model):
+    calls = review_run(ops, agy_only, "VERDICT: PASS")
+    assert f"--model {expected_model}" in calls
+    timeouts = re.findall(r"--print-timeout(?:=|\s+)(\S+)", calls)
+    assert timeouts, f"expected --print-timeout in agy invocation: {calls!r}"
+    for val in timeouts:
+        assert re.fullmatch(r"([0-9]+[smh]|0)", val), f"invalid Go duration for --print-timeout: {val!r}"
+        assert val == "1500s"
 
 
 def test_b_review_without_agy_only_still_uses_claude(ops):

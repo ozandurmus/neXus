@@ -160,7 +160,9 @@ test('export_reference.sql covers the P1 tables with the right categories', () =
     // Script Execution, SNMP polling, log detection, failover actor authority, failover runs and settings screens
     'HOST script.name', 'USER script_version.created_by', 'USER script_run.requested_by',
     'USER snmp_polling_settings.updated_by', 'USER snmp_polling_override.updated_by', 'USER log_detection_settings.updated_by',
-    'USER log_finding.review_by', 'USER log_finding_action.actor', 'USER failover_actor_authority.actor',
+    'USER log_finding.review_by', 'USER log_finding_action.actor',
+    'USER log_template_catalog.created_by', 'USER log_template_catalog.frozen_by',
+    'USER failover_actor_authority.actor',
     'CLUSTER failover_run.cluster_ref', 'USER failover_run.requested_by', 'USER failover_approval.approved_by',
     'USER ldap_settings.updated_by', 'USER policy_change_evidence.admin_name', 'HOST grid_member.host_name',
     // pre-P1 sources stay
@@ -169,14 +171,17 @@ test('export_reference.sql covers the P1 tables with the right categories', () =
   for (const expected of [
     'ADDR cutover_segment.blocks elements', 'ADDR cutover_segment.peer_blocks elements',
     'ADDR cutover_assessment_flow.flow flow_addresses', 'HOST zone_matrix_version.content zone_names',
-    'ADDR zone_matrix_version.content zone_blocks',
+    'ADDR zone_matrix_version.content zone_blocks', 'ADDR zone_matrix_finding.violated_cells witness_ranges',
     'HOST script.egress host_port_array', 'HOST script_run.egress_declared host_port_array',
     'HOST ldap_settings.servers host_port_array',
   ]) assert.ok(json.has(expected), `JSON source ${expected}`);
   for (const source of [...plain, ...json]) assert.ok(CATEGORIES.includes(source.split(' ')[0]), `category of ${source}`);
   // JSON shapes read only named keys, and invalid JSON is skipped rather than raising.
   assert.match(SQL_CODE, /pg_input_is_valid\(t\.%I::text, ''jsonb''\)/);
-  for (const key of ["''zones''", "''blocks''", "''name''", "''flowSource''", "''flowDestination''", "''flowSources''", "''sourceRange''"]) {
+  for (const key of [
+    "''zones''", "''blocks''", "''name''", "''flowSource''", "''flowDestination''", "''flowSources''", "''sourceRange''",
+    "''witness''", "''source_range''", "''destination_range''",
+  ]) {
     assert.ok(SQL_CODE.includes(key), `reads ${key}`);
   }
   // The host:port array shape reads TEXT[] columns only, cuts the port, and splits IP literals (ADDR) from names (HOST).
@@ -214,5 +219,22 @@ test('scanner finds zone / segment names and CIDR blocks as the SQL exports them
   assert.equal(leaked.get('ADDR'), 2);   // the address part of both blocks (IPv4 by the address scan, IPv6 by its token)
   const masked = scanner.scan(JSON.stringify({ name: 'SEGMENT-1', zones: [{ name: 'ZONE-1' }],
     blocks: ['10.77.4.128/29', 'Withheld in AIView'], actor: 'USER-1' }));
+  assert.equal(masked.size, 0);
+});
+
+test('scanner flags Zone Matrix violated-cell witness CIDR/range and reports 0 matches on AIView masked text', () => {
+  const WITNESS_CIDR = '198.51.100.64/28';
+  const lines = ['#src\tADDR\tzone_matrix_finding.violated_cells[].witness.ranges\t1'];
+  for (const [c, n] of exported('ADDR', WITNESS_CIDR)) lines.push(`${c}\t${digest(SALT, n)}`);
+  const { reference } = parseReference(lines.join('\n') + '\n');
+  const scanner = new Scanner(reference, SALT);
+  const leaked = scanner.scan(JSON.stringify({
+    violated_cells: [{ witness: { source_range: WITNESS_CIDR, destination_range: '192.0.2.0/24' } }],
+  }));
+  assert.equal(leaked.get('ADDR'), 1);
+  assert.equal(leaked.get('IPV4'), 1);
+  const masked = scanner.scan(JSON.stringify({
+    violated_cells: [{ witness: { source_range: '10.77.8.64/28', destination_range: 'Withheld in AIView' } }],
+  }));
   assert.equal(masked.size, 0);
 });

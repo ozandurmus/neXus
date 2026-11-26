@@ -79,7 +79,7 @@ review_main() {
       if agy_only; then
         printf '%s\n' "$diff" > "$wt/.review-$n.diff"   # inside the worktree: headless agy cannot read outside it
         (cd "$wt" && agy -p "You review one change before it is merged to main of a bank firewall-operations product (Java/React), written by a small model without human review. Report only concrete defects that matter: wrong behaviour, a broken invariant, UNKNOWN or missing data shown as OK/zero/green, a security or privacy regression (credentials, device commands, authorization, masking), a weakened or deleted test, concurrency/transaction mistakes, swallowed errors, real-looking hostnames/IPs/serials or secret-shaped literals. Ignore style. End with exactly one line: 'VERDICT: PASS' or 'VERDICT: BLOCK' and, for BLOCK, the defects with file:line above it. The diff is in the file .review-$n.diff in this directory." \
-           --model gemini-4-neon-xhigh --mode plan --print-timeout 1500) > "$out" 2>&1 || true
+           --model gemini-4-neon-xhigh --mode plan --print-timeout 1500s) > "$out" 2>&1 || true
         rm -f "$wt/.review-$n.diff"
       else
           (cd "$wt" && claude -p "You review one change before it is merged to main of a bank firewall-operations product (Java/React).
@@ -105,7 +105,7 @@ review_main() {
     wt2=$OPS_CODO/nexus-q-$n; [ -d "$wt2" ] || wt2=$R
     printf '%s\n' "$diff" > "$wt2/.review-$n.diff"   # inside the worktree: headless agy cannot read outside it
     (cd "$wt2" && agy -p "You review one change before it is merged (bank firewall-operations product, Java/React), written by a small model without human review. Report only concrete defects that matter: wrong behaviour, broken invariant, UNKNOWN shown as OK/zero, security or privacy regression, weakened/deleted test, concurrency mistakes, swallowed errors, real-looking hostnames/IPs/secrets. Ignore style. End with exactly one line 'VERDICT: PASS' or 'VERDICT: BLOCK'. The diff is in the file .review-$n.diff in this directory." \
-       --model gemini-4-neon-high --mode plan --print-timeout 1500 >> "$out.neon" 2>&1) || true
+       --model gemini-4-neon-high --mode plan --print-timeout 1500s >> "$out.neon" 2>&1) || true
     rm -f "$wt2/.review-$n.diff"
     if grep -qE '^VERDICT: BLOCK' "$out.neon"; then cat "$out.neon" >> "$out"; sed_inplace 's/^VERDICT: PASS/VERDICT: PASS (Sonnet); BLOCK (Neon)/' "$out"; fi
   fi

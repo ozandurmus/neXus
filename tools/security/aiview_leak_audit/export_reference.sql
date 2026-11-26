@@ -19,15 +19,16 @@
 -- (ADDR) from the canonical version content, static-route preview destinations, next hops and representative hosts
 -- (ADDR), requesters (USER) and units (CLUSTER).  A block "a/n" also yields its address part "a" (ADDR, trailing
 -- separators removed the way the probe tokenizes) so a block printed as text is found by its network address.
--- Later planes (V251 - V272 and older actor columns): Script Execution script names and declared egress host:port
+-- Later planes (V251 - V273 and older actor columns): Script Execution script names and declared egress host:port
 -- targets and the LDAP servers (HOST, or ADDR for an IP literal), failover / cluster-run references (CLUSTER),
--- Infoblox grid member and notification / support-upload hosts (HOST, ADDR), and the person or principal columns of older
--- migrations (USER).  Opaque ids, actor fingerprints, device-id lists and closed enums are not sources.
+-- Infoblox grid member and notification / support-upload hosts (HOST, ADDR), Zone Matrix violated-cell witness ranges
+-- (ADDR), and the person or principal columns of older and newer migrations (USER).  Opaque ids, actor fingerprints,
+-- device-id lists and closed enums are not sources.
 \set ON_ERROR_STOP on
 BEGIN READ ONLY;
 
 -- Source columns that exist in this schema (column names only; a missing one is skipped and shows as absent in the meta lines).
--- Plain columns are read as text.  JSON sources (shape = elements / zone_names / zone_blocks / flow_addresses) read
+-- Plain columns are read as text.  JSON sources (shape = elements / zone_names / zone_blocks / witness_ranges / flow_addresses) read
 -- text out of a JSONB column or a TEXT column holding JSON; a value that is not valid JSON, or not of the expected
 -- shape, contributes nothing (never an error).  The shape host_port_array reads a TEXT[] column of host:port items:
 -- the port is cut off, an IP literal (digits and dots, or any value with a colon left) is exported as ADDR and
@@ -82,12 +83,14 @@ WITH plain(cat, tbl, col) AS (VALUES
     ('HOST',    'script',                   'name'),
     ('USER',    'script_version',           'created_by'),
     ('USER',    'script_run',               'requested_by'),
-    -- SNMP polling (V268), log detection (V272), failover actor authority (V260): the people and principals who acted.
+    -- SNMP polling (V268), log detection (V272, V273), failover actor authority (V260): the people and principals who acted.
     ('USER',    'snmp_polling_settings',    'updated_by'),
     ('USER',    'snmp_polling_override',    'updated_by'),
     ('USER',    'log_detection_settings',   'updated_by'),
     ('USER',    'log_finding',              'review_by'),
     ('USER',    'log_finding_action',       'actor'),
+    ('USER',    'log_template_catalog',     'created_by'),
+    ('USER',    'log_template_catalog',     'frozen_by'),
     ('USER',    'failover_actor_authority', 'actor'),
     -- Failover runs, approvals, schedules, resumes, sequences and config sync (V31, V101, V137, V170, V178, V256):
     -- cluster_ref is the cluster reference also stored in devices.cluster_member_ref; the *_by columns are principals.
@@ -169,8 +172,9 @@ json(cat, tbl, col, shape) AS (VALUES
     ('ADDR',    'cutover_segment',          'blocks',      'elements'),
     ('ADDR',    'cutover_segment',          'peer_blocks', 'elements'),
     ('ADDR',    'cutover_assessment_flow',  'flow',        'flow_addresses'),
-    ('HOST',    'zone_matrix_version',      'content',     'zone_names'),
-    ('ADDR',    'zone_matrix_version',      'content',     'zone_blocks'),
+    ('HOST',    'zone_matrix_version',      'content',        'zone_names'),
+    ('ADDR',    'zone_matrix_version',      'content',        'zone_blocks'),
+    ('ADDR',    'zone_matrix_finding',      'violated_cells', 'witness_ranges'),
     -- Script Execution (V251, V258): declared egress host:port targets (TEXT[]), exported without the port.
     ('HOST',    'script',                   'egress',          'host_port_array'),
     ('HOST',    'script_run',               'egress_declared', 'host_port_array'),
@@ -186,7 +190,8 @@ s AS (
     UNION ALL
     SELECT j.cat, j.tbl, j.col, j.shape, j.tbl || '.' || j.col || CASE j.shape
                WHEN 'elements' THEN '[]' WHEN 'zone_names' THEN '.zones[].name'
-               WHEN 'zone_blocks' THEN '.zones[].blocks[]' WHEN 'host_port_array' THEN '[]{host}' ELSE '{addresses}' END,
+               WHEN 'zone_blocks' THEN '.zones[].blocks[]' WHEN 'witness_ranges' THEN '[].witness.ranges'
+               WHEN 'host_port_array' THEN '[]{host}' ELSE '{addresses}' END,
            CASE WHEN j.shape = 'host_port_array' THEN
            format('SELECT CASE WHEN x.h ~ ''^[0-9.]+$'' OR x.h LIKE ''%%:%%'' THEN ''ADDR'' ELSE ''HOST'' END AS cat, x.h AS v '
                   || 'FROM public.%I t, LATERAL unnest(t.%I) e(v), '
@@ -205,6 +210,10 @@ s AS (
                           || 'THEN d.j->''zones'' ELSE ''[]''::jsonb END) z, '
                           || 'jsonb_array_elements_text(CASE WHEN jsonb_typeof(z->''blocks'') = ''array'' '
                           || 'THEN z->''blocks'' ELSE ''[]''::jsonb END) b'
+                      WHEN 'witness_ranges' THEN
+                          'SELECT c->''witness''->>k FROM jsonb_array_elements(CASE WHEN jsonb_typeof(d.j) = ''array'' '
+                          || 'THEN d.j ELSE ''[]''::jsonb END) c, unnest(ARRAY[''source_range'', ''destination_range'']) k '
+                          || 'WHERE jsonb_typeof(c->''witness'') = ''object'''
                       ELSE
                           'SELECT d.j->>k FROM unnest(ARRAY[''flowSource'', ''flowDestination'', ''sourceRange'']) k '
                           || 'UNION ALL SELECT e FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(d.j->''flowSources'') = ''array'' '
