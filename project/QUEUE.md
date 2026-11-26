@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:03:11Z
+Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:47:24Z
 
 ## Now
 - NXS-LOCAL-0419 — Zone matrix Overview attention row, aiview sweep round 2, ASA/FortiGate A0 defects fixed, lane harness HOST-A hand-off, delivery runner merge (automated_validated)
@@ -86,7 +86,6 @@ Build: NXS-LOCAL-0419 · Track: PCP.x · Generated: 2026-11-26T08:03:11Z
 - P3/planned script_run_launcher_stdout_race
 - P3/planned trivy_cache_pvc_enable_attended
 - P3/planned waf_fortiweb_capability_scope_and_measurement
-- P3/planned zone_matrix_bridge_size_debt
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer
 - P0 hosta_rebuild_real_env_acceptance

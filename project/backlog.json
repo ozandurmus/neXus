@@ -392,7 +392,7 @@
       "title": "Zone matrix steps 3 and later (designed, not built)",
       "status": "planned",
       "priority": "P2",
-      "target": "After step 2 (batch 4)",
+      "target": "umbrella; superseded by the per-step items named in its note",
       "note": ""
     },
     {
@@ -479,10 +479,10 @@
     {
       "id": "verify_first_scheduled_mds_export_and_asa_saved_state",
       "category": "verification",
-      "title": "Verify the first scheduled MDS export (02:30) and the first ASA saved-state relations (V250 ***** mask assumption) after the 2026-11-19 nightly backup",
+      "title": "Verify the first ASA saved-state relations (V250 ***** mask assumption) after the nightly backup; ASA saved-state half only, MDS export half verified (PO 2026-11-23)",
       "status": "planned",
       "priority": "P1",
-      "target": "Due 2026-11-19 morning; PR b86b93ae, 1fa4e9f1",
+      "target": "ASA saved-state half only; MDS export half verified (PO 2026-11-23); PR 1fa4e9f1",
       "note": ""
     },
     {
@@ -618,15 +618,6 @@
       "status": "planned",
       "priority": "P2",
       "target": "docs/design/LOG_TEMPLATE_CENSUS_TOOL_2026_11_24.md",
-      "note": ""
-    },
-    {
-      "id": "zone_matrix_bridge_size_debt",
-      "category": "engineering",
-      "title": "ZoneMatrixPolicyBridge is still 1713 lines after the NAT builder split (limit 1500); further split needed",
-      "status": "planned",
-      "priority": "P3",
-      "target": "8ec46955",
       "note": ""
     },
     {
