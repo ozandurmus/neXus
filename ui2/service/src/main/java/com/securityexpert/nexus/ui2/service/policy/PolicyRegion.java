@@ -36,17 +36,41 @@ final class PolicyRegion {
             ranges.forEach((family, list) -> { if (!list.isEmpty()) copy.put(family, List.copyOf(list)); });
             ranges = Collections.unmodifiableMap(copy);
         }
-        /** The dimension of a resolved selector, or null when it carries opaque tokens (no set semantics to subtract). */
+        /** The dimension of a resolved selector, or null when it carries opaque tokens or an invalid source-port family. */
         static Dim of(Selector selector) {
-            if (!selector.tokens().isEmpty()) return null;
+            if (!selector.tokens().isEmpty() || !validSourceFamilies(selector.ranges())) return null;
             return selector.any() ? ANY : new Dim(false, selector.ranges());
         }
         boolean empty() { return !complement && ranges.isEmpty(); }
-        /** Whether one value of one family lies in this dimension. */
+        /** Whether one value of one family (or source-port family {@code tcp|s=...}/{@code udp|s=...}) lies in this dimension. */
         boolean contains(String family, long value) {
-            boolean in = false;
-            for (Range r : ranges.getOrDefault(family, List.of())) if (r.start() <= value && value <= r.end()) { in = true; break; }
-            return in != complement;
+            String proto = protocol(family);
+            if (!family.contains("|s=") && !hasSourcePortKey(ranges, proto)) {
+                return inRanges(ranges.getOrDefault(family, List.of()), value) != complement;
+            }
+            List<Range> querySources = sources(family);
+            List<Map.Entry<List<Range>, List<Range>>> protoEntries = protocolEntries(ranges, proto);
+            if (querySources.size() == 1 && querySources.get(0).start() == querySources.get(0).end()) {
+                long s = querySources.get(0).start();
+                boolean in = false;
+                for (var entry : protoEntries) {
+                    if (inRanges(entry.getKey(), s) && inRanges(entry.getValue(), value)) { in = true; break; }
+                }
+                return in != complement;
+            }
+            Budget check = new Budget(Integer.MAX_VALUE);
+            TreeSet<Long> cuts = new TreeSet<>();
+            for (Range r : querySources) { cuts.add(r.start()); cuts.add(r.end() + 1); }
+            for (var entry : protoEntries) for (Range r : entry.getKey()) { cuts.add(r.start()); cuts.add(r.end() + 1); }
+            for (Range r : querySources) {
+                for (Long from : cuts.subSet(r.start(), true, r.end(), true)) {
+                    Long next = cuts.higher(from);
+                    long to = Math.min(r.end(), next == null ? r.end() : next - 1);
+                    List<Range> slice = sliceDestinations(protoEntries, from, to, check);
+                    if (inRanges(slice, value) == complement) return false;
+                }
+            }
+            return true;
         }
         /** The lowest and highest value over every family; [MIN, MAX] for a complement. Disjoint spans prove disjoint dimensions. */
         long[] span() {
@@ -135,6 +159,7 @@ final class PolicyRegion {
     }
 
     static Dim intersect(Dim a, Dim b, Budget budget) {
+        if (hasSourcePortFamily(a.ranges(), b.ranges())) return intersectWithSourcePorts(a, b, budget);
         if (!a.complement() && !b.complement()) return new Dim(false, perFamily(a.ranges(), b.ranges(), true, budget));
         if (!a.complement()) return new Dim(false, perFamily(a.ranges(), b.ranges(), false, budget));
         if (!b.complement()) return new Dim(false, perFamily(b.ranges(), a.ranges(), false, budget));
@@ -143,6 +168,151 @@ final class PolicyRegion {
     static Dim minus(Dim a, Dim b, Budget budget) {
         // a minus (everything except X) = a intersect X; a minus X = a intersect (everything except X).
         return intersect(a, new Dim(!b.complement(), b.ranges()), budget);
+    }
+
+    private static boolean validSourceFamilies(Map<String, List<Range>> ranges) {
+        for (String family : ranges.keySet()) {
+            int at = family.indexOf("|s=");
+            if (at < 0) continue;
+            String proto = family.substring(0, at);
+            if (!"tcp".equals(proto) && !"udp".equals(proto)) return false;
+            String spec = family.substring(at + 3);
+            if (spec.isEmpty()) return false;
+            long prevEnd = -1;
+            for (String part : spec.split(",", -1)) {
+                String[] ends = part.split("-", -1);
+                if (ends.length != 2) return false;
+                try {
+                    long s = Long.parseLong(ends[0]), e = Long.parseLong(ends[1]);
+                    if (s < 0 || e > 65535 || s > e || s <= prevEnd) return false;
+                    prevEnd = e;
+                } catch (NumberFormatException invalid) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static boolean hasSourcePortFamily(Map<String, List<Range>> a, Map<String, List<Range>> b) {
+        for (String k : a.keySet()) if (k.contains("|s=")) return true;
+        for (String k : b.keySet()) if (k.contains("|s=")) return true;
+        return false;
+    }
+
+    private static boolean hasSourcePortKey(Map<String, List<Range>> ranges, String proto) {
+        for (String k : ranges.keySet()) if (k.contains("|s=") && protocol(k).equals(proto)) return true;
+        return false;
+    }
+
+    private static boolean inRanges(List<Range> ranges, long value) {
+        for (Range r : ranges) if (r.start() <= value && value <= r.end()) return true;
+        return false;
+    }
+
+    private static List<Map.Entry<List<Range>, List<Range>>> protocolEntries(Map<String, List<Range>> ranges, String proto) {
+        List<Map.Entry<List<Range>, List<Range>>> out = new ArrayList<>();
+        for (var e : ranges.entrySet()) {
+            if (protocol(e.getKey()).equals(proto)) out.add(Map.entry(sources(e.getKey()), e.getValue()));
+        }
+        return out;
+    }
+
+    private static List<Range> sliceDestinations(List<Map.Entry<List<Range>, List<Range>>> entries, long from, long to, Budget budget) {
+        List<Range> single = null;
+        List<Range> combined = null;
+        for (var e : entries) {
+            boolean holds = false;
+            for (Range s : e.getKey()) {
+                budget.spend();
+                if (s.start() <= from && s.end() >= to) { holds = true; break; }
+            }
+            if (!holds) continue;
+            if (single == null && combined == null) single = e.getValue();
+            else {
+                if (combined == null) { combined = new ArrayList<>(single); single = null; }
+                combined.addAll(e.getValue());
+            }
+        }
+        if (single != null) return single;
+        if (combined == null) return List.of();
+        return union(combined, List.of(), budget);
+    }
+
+    /**
+     * Exact intersection of two dimensions when {@code tcp} or {@code udp} carries source-port families ({@code tcp|s=...}):
+     * partitions {@code [0, 65535]} at every source-port boundary so plain and source-port-restricted families of the same
+     * protocol share their overlapping {@code (sourcePort, destPort)} points instead of acting as disjoint family keys.
+     */
+    private static Dim intersectWithSourcePorts(Dim a, Dim b, Budget budget) {
+        Set<String> sourceProtos = new TreeSet<>();
+        for (String k : a.ranges().keySet()) if (k.contains("|s=")) sourceProtos.add(protocol(k));
+        for (String k : b.ranges().keySet()) if (k.contains("|s=")) sourceProtos.add(protocol(k));
+
+        Map<String, List<Range>> aPlain = new TreeMap<>(), bPlain = new TreeMap<>();
+        a.ranges().forEach((k, v) -> { if (!sourceProtos.contains(protocol(k))) aPlain.put(k, v); });
+        b.ranges().forEach((k, v) -> { if (!sourceProtos.contains(protocol(k))) bPlain.put(k, v); });
+
+        Map<String, List<Range>> out;
+        if (!a.complement() && !b.complement()) out = new TreeMap<>(perFamily(aPlain, bPlain, true, budget));
+        else if (!a.complement()) out = new TreeMap<>(perFamily(aPlain, bPlain, false, budget));
+        else if (!b.complement()) out = new TreeMap<>(perFamily(bPlain, aPlain, false, budget));
+        else out = new TreeMap<>(union(aPlain, bPlain, budget));
+
+        for (String proto : sourceProtos) {
+            var aEntries = protocolEntries(a.ranges(), proto);
+            var bEntries = protocolEntries(b.ranges(), proto);
+            TreeSet<Long> cuts = new TreeSet<>();
+            cuts.add(0L);
+            cuts.add(65536L);
+            for (var e : aEntries) for (Range r : e.getKey()) {
+                budget.spend();
+                cuts.add(Math.max(0L, r.start()));
+                cuts.add(Math.min(65536L, r.end() + 1));
+            }
+            for (var e : bEntries) for (Range r : e.getKey()) {
+                budget.spend();
+                cuts.add(Math.max(0L, r.start()));
+                cuts.add(Math.min(65536L, r.end() + 1));
+            }
+            Map<List<Range>, List<Range>> byDest = new LinkedHashMap<>();
+            Long prev = null;
+            for (Long point : cuts) {
+                if (prev != null && prev < point) {
+                    budget.spend();
+                    long from = prev, to = point - 1;
+                    List<Range> da = sliceDestinations(aEntries, from, to, budget);
+                    List<Range> db = sliceDestinations(bEntries, from, to, budget);
+                    List<Range> res;
+                    if (!a.complement() && !b.complement()) {
+                        res = da.isEmpty() || db.isEmpty() ? List.of() : intersect(da, db, budget);
+                    } else if (!a.complement()) {
+                        res = da.isEmpty() ? List.of() : db.isEmpty() ? da : subtract(da, db, budget);
+                    } else if (!b.complement()) {
+                        res = db.isEmpty() ? List.of() : da.isEmpty() ? db : subtract(db, da, budget);
+                    } else {
+                        res = da.isEmpty() ? db : db.isEmpty() ? da : union(da, db, budget);
+                    }
+                    if (!res.isEmpty()) {
+                        List<Range> srcs = byDest.computeIfAbsent(res, d -> new ArrayList<>());
+                        if (!srcs.isEmpty() && srcs.get(srcs.size() - 1).end() + 1 == from) {
+                            Range last = srcs.get(srcs.size() - 1);
+                            srcs.set(srcs.size() - 1, new Range(last.start(), to));
+                        } else {
+                            srcs.add(new Range(from, to));
+                        }
+                    }
+                }
+                prev = point;
+            }
+            for (var entry : byDest.entrySet()) {
+                budget.spend();
+                List<Range> srcs = entry.getValue();
+                boolean every = srcs.size() == 1 && srcs.get(0).start() == 0 && srcs.get(0).end() == 65535;
+                out.put(every ? proto : sourceFamily(proto, srcs), entry.getKey());
+            }
+        }
+        return new Dim(a.complement() && b.complement(), out);
     }
 
     /** Per family of {@code a}: {@code a} intersect {@code b} ({@code intersect}) or {@code a} minus {@code b}. */

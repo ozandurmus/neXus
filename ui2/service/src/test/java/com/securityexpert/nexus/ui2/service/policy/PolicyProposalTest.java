@@ -237,11 +237,13 @@ class PolicyProposalTest {
         assertTrue(windowed.budgetStopped()); assertEquals(0, windowed.accepted());
     }
     @Test void anotherVendorAndAnIncompleteSnapshotGiveAnEmptyProposalNeverAnException() {
-        var pan = PolicyHygieneTest.snapshot(List.of(PolicyHygieneTest.rule("r1", "net", "any", "allow", true), PolicyHygieneTest.rule("r2", "any", "any", "allow", true)), PolicyHygieneTest.objects());
-        var other = PolicyProposal.propose(pan, List.of("r2"));
-        assertEquals(PolicyProposal.UNSUPPORTED_VENDOR, other.emptyReason());
-        assertTrue(other.steps().isEmpty()); assertSame(pan, other.snapshot()); assertEquals(PolicyProposal.NO_MOVES, other.packageVerdict());
-        assertEquals(PolicyProposal.UNSUPPORTED_VENDOR, PolicyProposal.allOfferedMoves(pan).emptyReason());
+        for (String vendor : List.of("ASA", "FGT")) {
+            var unsup = PolicyUnionCoverTest.unsupportedVendorSnapshot(vendor);
+            var other = PolicyProposal.propose(unsup, List.of("r2"));
+            assertEquals(PolicyProposal.UNSUPPORTED_VENDOR, other.emptyReason(), vendor);
+            assertTrue(other.steps().isEmpty()); assertSame(unsup, other.snapshot()); assertEquals(PolicyProposal.NO_MOVES, other.packageVerdict());
+            assertEquals(PolicyProposal.UNSUPPORTED_VENDOR, PolicyProposal.allOfferedMoves(unsup).emptyReason(), vendor);
+        }
         var complete = stackedRelease();
         var incomplete = new PolicySnapshot(complete.metadata(), complete.sections(), complete.objects(), List.of(new CollectionFailure("layer", "COLLECTION_PENDING")));
         var result = PolicyProposal.propose(incomplete, List.of("x", "sB"));
@@ -314,5 +316,115 @@ class PolicyProposalTest {
         var result = PolicyProposal.allOfferedMoves(stackedRelease());
         var numbers = numbers(result.snapshot());
         for (int i = 1; i < numbers.size(); i++) assertTrue(numbers.get(i) > numbers.get(i - 1), numbers.toString());
+    }
+
+    @Test void paloAltoProposalPromotesWithinScopesRefusesPhaseAndDeviceGroupCrossingsAndMatchesReference() {
+        String za = PolicyUnionCoverTest.ZA, zb = PolicyUnionCoverTest.ZB, zc = PolicyUnionCoverTest.ZC;
+        // Shared pre: s1 (lo)
+        // DG pre: dCross (net, overlaps Shared pre s1 -> CROSSES_SECTION!), dBroad (lo, ZC, PROF-ALPHA), dSpec (net, ZC, PROF-BRAVO -> SAFE_INSPECTION_CHANGES)
+        // DG post: pBroad (lo, ZC, svc-p2), pAnchor (app-default), pBlocked (net, ZC, svc-p2 -> ANCHOR_BLOCKED), pSafeBroad (lo, ZB, svc-p2), pSafeSpec (net, ZB, svc-p2 -> SAFE)
+        var stored = PolicyUnionCoverTest.panSnapshot(
+            PolicyUnionCoverTest.panSection("Shared", "pre-rulebase",
+                PolicyUnionCoverTest.panRule("s1", 1, "allow", List.of(za), List.of(zb), "lo", "any", "svc-p1", Map.of())),
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+                PolicyUnionCoverTest.panRule("dCross", 1, "allow", List.of(za), List.of(zb), "net", "any", "svc-p1", Map.of()),
+                PolicyUnionCoverTest.panRule("dBroad", 2, "allow", List.of(zc), List.of(zb), "lo", "any", "svc-p1", Map.of("profile-setting/group", List.of("PROF-ALPHA"))),
+                PolicyUnionCoverTest.panRule("dSpec", 3, "allow", List.of(zc), List.of(zb), "net", "any", "svc-p1", Map.of("profile-setting/group", List.of("PROF-BRAVO")))),
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "post-rulebase",
+                PolicyUnionCoverTest.panRule("pBroad", 1, "allow", List.of(zc), List.of(zb), "lo", "other", "svc-p2", Map.of()),
+                PolicyUnionCoverTest.panRule("pAnchor", 2, "allow", List.of(zc), List.of(zb), "h0", "other", PolicyUnionCoverTest.panAppDefaultRef(), Map.of()),
+                PolicyUnionCoverTest.panRule("pBlocked", 3, "allow", List.of(zc), List.of(zb), "net", "other", "svc-p2", Map.of()),
+                PolicyUnionCoverTest.panRule("pSafeBroad", 4, "allow", List.of(zb), List.of(zc), "lo", "other", "svc-p2", Map.of("profile-setting/group", List.of("PROF-ALPHA"))),
+                PolicyUnionCoverTest.panRule("pSafeSpec", 5, "allow", List.of(zb), List.of(zc), "net", "other", "svc-p2", Map.of("profile-setting/group", List.of("PROF-ALPHA")))));
+
+        var stats = new PolicyProposal.Stats();
+        var result = PolicyProposal.propose(stored, null, PolicyProposal.TOTAL_WORK, PolicyProposal.RULE_WORK, true, stats);
+        var reference = PolicyProposal.proposeReference(stored, null, PolicyProposal.TOTAL_WORK, PolicyProposal.RULE_WORK);
+        assertEquals(reference.steps(), result.steps());
+        assertEquals(reference.packageVerdict(), result.packageVerdict());
+        assertEquals(reference.label(), result.label());
+        assertEquals(order(reference.snapshot()), order(result.snapshot()));
+        assertEquals(List.of(
+            PolicyReorder.CROSSES_SECTION,
+            PolicyReorder.SAFE_INSPECTION_CHANGES,
+            PolicyReorder.ANCHOR_BLOCKED,
+            PolicyReorder.SAFE), results(result));
+        assertEquals(2, result.accepted());
+        assertEquals(PolicyProposal.LABEL_INSPECTION_CHANGES, result.label());
+        assertEquals(PolicyReorder.CHANGES, result.packageVerdict());
+        // Verify Shared pre stayed ["s1"], DG pre reordered dSpec above dBroad, DG post reordered pSafeSpec above pSafeBroad.
+        assertEquals(List.of("s1"), result.snapshot().sections().get(0).rules().stream().map(Rule::id).toList());
+        assertEquals(List.of("dCross", "dSpec", "dBroad"), result.snapshot().sections().get(1).rules().stream().map(Rule::id).toList());
+        assertEquals(List.of("pBroad", "pAnchor", "pBlocked", "pSafeSpec", "pSafeBroad"), result.snapshot().sections().get(2).rules().stream().map(Rule::id).toList());
+    }
+
+    @Test void paloAltoProposalDifferentialOracleAndScopeLocalParity() {
+        Random random = new Random(2026112605L);
+        Set<PolicyUnionCoverTest.PanPacket> allUniverse = new HashSet<>(PolicyUnionCoverTest.panRulePackets(
+            PolicyUnionCoverTest.panRule("u", 1, "allow", List.of("any"), List.of("any"), "any", "any", "any", Map.of()),
+            PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+        allUniverse.addAll(PolicyUnionCoverTest.panRulePackets(
+            PolicyUnionCoverTest.panRule("u2", 1, "allow", List.of("any"), List.of("any"), "other", "other", "any", Map.of()),
+            PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+
+        int acceptedMoves = 0, safePackages = 0, budgetStops = 0;
+        for (int trial = 0; trial < 220; trial++) {
+            var realized = PolicyUnionCoverTest.panRealize(
+                PolicyUnionCoverTest.randomPanRulebase(random, trial % 2 == 0, trial % 3 != 0));
+            var items = realized.items();
+            var stored = realized.snapshot();
+            var res = PolicyProposal.allOfferedMoves(stored);
+            var ref = PolicyProposal.proposeReference(stored, null, PolicyProposal.TOTAL_WORK, PolicyProposal.RULE_WORK);
+            assertEquals(ref.steps(), res.steps(), "ScopeLocal vs Reference steps in trial " + trial);
+            assertEquals(ref.packageVerdict(), res.packageVerdict());
+            assertEquals(ref.label(), res.label());
+            assertEquals(order(ref.snapshot()), order(res.snapshot()));
+
+            if (res.accepted() > 0) {
+                acceptedMoves += res.accepted();
+                // Verify section membership never changed (no cross-phase or cross-DG move).
+                assertEquals(stored.sections().size(), res.snapshot().sections().size());
+                for (int s = 0; s < stored.sections().size(); s++) {
+                    Set<String> beforeIds = new HashSet<>(stored.sections().get(s).rules().stream().map(Rule::id).toList());
+                    Set<String> afterIds = new HashSet<>(res.snapshot().sections().get(s).rules().stream().map(Rule::id).toList());
+                    assertEquals(beforeIds, afterIds, "rule crossed PAN section/phase/DG boundary in trial " + trial);
+                }
+                Map<String, PolicyUnionCoverTest.PanSynthetic> byId = new HashMap<>();
+                Map<String, Set<PolicyUnionCoverTest.PanPacket>> pts = new HashMap<>();
+                for (var item : items) {
+                    byId.put(item.rule().id(), item);
+                    pts.put(item.rule().id(), PolicyUnionCoverTest.panRulePackets(
+                        item.rule(), PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+                }
+                List<PolicyUnionCoverTest.PanSynthetic> afterItems = res.snapshot().sections().stream()
+                    .flatMap(s -> s.rules().stream())
+                    .map(r -> new PolicyUnionCoverTest.PanSynthetic(r, byId.get(r.id()).kind(), byId.get(r.id()).sectionIndex()))
+                    .toList();
+                boolean eqNoInspection = PolicyReorder.EQUIVALENT.equals(res.packageVerdict()) && !res.inspectionChanges();
+                if (eqNoInspection) safePackages++;
+                for (boolean anchorsMatch : new boolean[]{false, true}) {
+                    for (var pkt : allUniverse) {
+                        Rule beforeDec = PolicyMergeTest.panFirstMatch(items, pkt, anchorsMatch, pts);
+                        Rule afterDec = PolicyMergeTest.panFirstMatch(afterItems, pkt, anchorsMatch, pts);
+                        if (beforeDec == null && afterDec == null) continue;
+                        assertNotNull(beforeDec); assertNotNull(afterDec);
+                        if (beforeDec.id().equals(afterDec.id())) continue;
+                        assertTrue(PolicyEffectSignature.sameVerdict(beforeDec, afterDec), "PAN proposal changed verdict in trial " + trial);
+                        if (eqNoInspection) {
+                            assertTrue(PolicyEffectSignature.sameFull("PAN", beforeDec, afterDec), "SAFE PAN proposal changed effect in trial " + trial);
+                        }
+                    }
+                }
+            }
+
+            int lim = 10 + random.nextInt(150);
+            var limRes = PolicyProposal.allOfferedMoves(stored, lim, Math.max(1, lim / 2));
+            var limRef = PolicyProposal.proposeReference(stored, null, lim, Math.max(1, lim / 2));
+            assertEquals(limRef.steps(), limRes.steps(), "limited ScopeLocal vs Reference in trial " + trial);
+            if (limRes.budgetStopped()) budgetStops++;
+        }
+        assertTrue(acceptedMoves >= 25, "PAN accepted proposal moves exercised: " + acceptedMoves);
+        assertTrue(safePackages >= 5, "PAN SAFE/EQUIVALENT packages exercised: " + safePackages);
+        assertTrue(budgetStops >= 10, "PAN proposal budget stops exercised: " + budgetStops);
     }
 }

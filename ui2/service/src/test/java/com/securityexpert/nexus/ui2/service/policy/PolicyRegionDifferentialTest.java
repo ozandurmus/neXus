@@ -112,6 +112,136 @@ class PolicyRegionDifferentialTest {
         assertNull(Dim.of(new Selector(false, Map.of(), Set.of(PolicyNormalization.APPLICATION_DEFAULT))), "an opaque token has no box");
     }
 
+    @Test void sourcePortFamiliesAgreeWithBruteForceEnumerationAndFailClosedOnBudgetOrMalformedKeys() {
+        List<Integer> sampleSports = List.of(0, 1, 500, 1024, 2000, 65535);
+        List<Long> sampleDports = List.of(1L, 2L, 3L, 99L);
+        List<Object[]> serviceAxis = new ArrayList<>();
+        for (String proto : List.of("tcp", "udp")) {
+            for (int sp : sampleSports) {
+                for (long dp : sampleDports) {
+                    serviceAxis.add(new Object[]{proto + "|s=" + sp + "-" + sp, dp});
+                }
+            }
+        }
+        serviceAxis.add(new Object[]{"icmp", 1L});
+        serviceAxis.add(new Object[]{"icmp", 99L});
+        serviceAxis.add(new Object[]{"zz", 0L});
+
+        List<Object[]> addrAxis = List.of(new Object[]{"ipv4", 0L}, new Object[]{"ipv4", 1L}, new Object[]{"ipv4", 99L}, new Object[]{"zz", 0L});
+        List<Object[]> appAxis = List.of(new Object[]{"app", 0L}, new Object[]{"app", 99L}, new Object[]{"zz", 0L});
+
+        List<Point> spUniverse = new ArrayList<>();
+        for (var src : addrAxis) {
+            for (var dst : addrAxis) {
+                for (var svc : serviceAxis) {
+                    for (var app : appAxis) {
+                        spUniverse.add(new Point(
+                            new String[]{(String) src[0], (String) dst[0], (String) svc[0], (String) app[0]},
+                            new long[]{(long) src[1], (long) dst[1], (long) svc[1], (long) app[1]}));
+                    }
+                }
+            }
+        }
+
+        Random random = new Random(20261126L);
+        int covers = 0, partials = 0, overlapsDetected = 0;
+        for (int trial = 0; trial < 260; trial++) {
+            Box subject = sourcePortBox(random);
+            List<Box> earlier = new ArrayList<>();
+            for (int n = 1 + random.nextInt(5); n > 0; n--) earlier.add(sourcePortBox(random));
+            if (trial % 3 == 0) {
+                // Plant a complementary source-port split (0..1023 and 1024..65535) of the subject's TCP/UDP range.
+                earlier.addAll(sourcePortSlices(subject));
+            }
+            var full = PolicyRegion.residual(subject, earlier, new Budget(Integer.MAX_VALUE));
+            assertEquals(PolicyRegion.Status.PROVEN, full.status());
+            assertExact(spUniverse, subject, earlier, full, "sp trial " + trial);
+            if (full.covered()) covers++;
+            else if (!full.contributors().isEmpty()) partials++;
+
+            for (Box prior : earlier) {
+                boolean engineIntersects = PolicyPartialShadow.intersects(subject, prior, new Budget(Integer.MAX_VALUE));
+                boolean bruteIntersects = spUniverse.stream().anyMatch(p -> in(subject, p) && in(prior, p));
+                assertEquals(bruteIntersects, engineIntersects, "intersects mismatch in sp trial " + trial);
+                if (engineIntersects) overlapsDetected++;
+            }
+
+            var limited = PolicyRegion.residual(subject, earlier, new Budget(1 + random.nextInt(90)));
+            if (limited.status() == PolicyRegion.Status.NOT_PROVEN) {
+                assertEquals("analysis budget", limited.reason());
+                assertFalse(limited.covered());
+                assertTrue(limited.boxes().isEmpty() && limited.contributors().isEmpty());
+            } else {
+                assertExact(spUniverse, subject, earlier, limited, "sp limited trial " + trial);
+            }
+        }
+        assertTrue(covers >= 25, "source-port covers exercised: " + covers);
+        assertTrue(partials >= 25, "source-port partials exercised: " + partials);
+        assertTrue(overlapsDetected >= 50, "source-port overlaps exercised: " + overlapsDetected);
+
+        // Plain tcp vs tcp|s=1024-65535 MUST intersect on port 443 and split into tcp|s=0-1023 on subtraction.
+        var budget = new Budget(Integer.MAX_VALUE);
+        Dim plainTcp = new Dim(false, Map.of("tcp", List.of(new Range(443, 443))));
+        Dim ephemeralTcp = new Dim(false, Map.of("tcp|s=1024-65535", List.of(new Range(443, 443))));
+        Dim lowTcp = new Dim(false, Map.of("tcp|s=0-1023", List.of(new Range(443, 443))));
+        assertFalse(PolicyRegion.intersect(plainTcp, ephemeralTcp, budget).empty());
+        assertEquals(lowTcp, PolicyRegion.minus(plainTcp, ephemeralTcp, budget));
+        assertTrue(PolicyRegion.minus(PolicyRegion.minus(plainTcp, ephemeralTcp, budget), lowTcp, budget).empty());
+
+        // Malformed source-port family keys fail closed to null Dim.
+        for (String bad : List.of("tcp|s=", "icmp|s=1-2", "tcp|s=70000-70001", "tcp|s=20-10", "tcp|s=1-10,10-20", "tcp|s=abc")) {
+            assertNull(Dim.of(new Selector(false, Map.of(bad, List.of(new Range(80, 80))))), bad);
+        }
+    }
+
+    private static Box sourcePortBox(Random random) {
+        Selector src = random.nextInt(5) == 0 ? new Selector(true, Map.of())
+            : new Selector(false, Map.of("ipv4", List.of(new Range(random.nextInt(2), 1))));
+        Selector dst = random.nextInt(5) == 0 ? new Selector(true, Map.of())
+            : new Selector(false, Map.of("ipv4", List.of(new Range(0, random.nextInt(2)))));
+        Selector svc;
+        if (random.nextInt(6) == 0) {
+            svc = new Selector(true, Map.of());
+        } else {
+            List<List<Range>> spChoices = List.of(
+                List.of(new Range(0, 65535)),
+                List.of(new Range(0, 1023)),
+                List.of(new Range(1024, 65535)),
+                List.of(new Range(1, 2000)),
+                List.of(new Range(0, 1), new Range(2000, 65535)));
+            Map<String, List<Range>> map = new TreeMap<>();
+            for (int k = 1 + random.nextInt(3); k > 0; k--) {
+                String proto = random.nextInt(3) == 0 ? "udp" : "tcp";
+                List<Range> sp = spChoices.get(random.nextInt(spChoices.size()));
+                String key = sp.size() == 1 && sp.get(0).start() == 0 && sp.get(0).end() == 65535
+                    ? proto : PolicyNormalization.sourceFamily(proto, sp);
+                long d1 = 1 + random.nextInt(3), d2 = d1 + random.nextInt(4 - (int) d1);
+                map.merge(key, List.of(new Range(d1, d2)), (a, b) -> PolicyRegion.union(a, b, new Budget(Integer.MAX_VALUE)));
+            }
+            if (random.nextInt(8) == 0) map.put("icmp", List.of(new Range(1, 1)));
+            svc = new Selector(false, map);
+        }
+        Selector app = random.nextBoolean() ? new Selector(true, Map.of())
+            : new Selector(false, Map.of("app", List.of(new Range(0, 0))));
+        return Box.of(List.of(src, dst, svc, app));
+    }
+
+    private static List<Box> sourcePortSlices(Box subject) {
+        Dim d = subject.dims().get(2);
+        if (d.complement()) return List.of();
+        List<Box> out = new ArrayList<>();
+        for (String proto : List.of("tcp", "udp")) {
+            List<Range> plain = d.ranges().get(proto);
+            if (plain == null) continue;
+            for (String half : List.of(proto + "|s=0-1023", proto + "|s=1024-65535")) {
+                List<Dim> dims = new ArrayList<>(subject.dims());
+                dims.set(2, new Dim(false, Map.of(half, plain)));
+                out.add(new Box(dims));
+            }
+        }
+        return out;
+    }
+
     /** Two to four boxes that split the subject on one dimension (plus noise), so their union often covers it. */
     static List<Box> slices(Box subject, Random random) {
         int axis = random.nextInt(PolicyRegion.DIMENSIONS);
