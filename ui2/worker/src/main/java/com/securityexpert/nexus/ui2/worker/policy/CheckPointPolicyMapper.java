@@ -19,7 +19,12 @@ public final class CheckPointPolicyMapper {
     /** The object fields the mapper keeps as values, from a dictionary object or an inventory object alike. */
     static final List<String> VALUE_FIELDS = List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6",
         "port", "icmp-type", "icmp-code", "ipv4-address-first", "ipv4-address-last", "ipv6-address-first", "ipv6-address-last",
-        "ip-address-first", "ip-address-last");
+        "ip-address-first", "ip-address-last",
+        // Soundness: a source-port restriction (and the "exp" service qualifier) must reach the resolver, which fails closed
+        // on them; dropping them would silently widen the service to every source port. "match-for-any" is deliberately not
+        // kept: it is a flag on whether the service is used when a rule says Any, not a constraint, and keeping it would make
+        // the resolver reject every ordinary service object that carries it.
+        "source-port", "exp");
 
     /**
      * PO decision D-1 (2026-11-14, A0 amendment section G1): the management addresses of a gateway-class object, read
@@ -197,7 +202,7 @@ public final class CheckPointPolicyMapper {
                     node.path("enabled").isBoolean() ? node.path("enabled").asBoolean() : null,
                     cell(meta, node, "source", dict, objects), cell(meta, node, "destination", dict, objects),
                     cell(meta, node, "service", dict, objects), new Cell(List.of(), false),
-                    resolve(node.path("action"), dict), resolve(node.path("track").path("type"), dict), node.path("comments").asText(""), extras, PolicyHitCounts.checkPoint(node.path("hits"), meta.collectedAt())));
+                    action(node, dict), resolve(node.path("track").path("type"), dict), node.path("comments").asText(""), extras, PolicyHitCounts.checkPoint(node.path("hits"), meta.collectedAt())));
             if (node.has("inline-layer")) {
                 flush(sections, keys, section, name, parent, pending);
                 layer(meta, CheckPointPolicyCollector.inlineUid(node.path("inline-layer")), ruleId, layers, dict, objects, sections, keys, path);
@@ -279,8 +284,23 @@ public final class CheckPointPolicyMapper {
         // Keep the vendor class of an unmodelled object so the remaining gap can be counted by type (no names, no values).
         if (status.equals("UNSUPPORTED") && type.equals("unresolved"))
             values.add("native-type: " + (nativeType.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") ? nativeType : "UNKNOWN"));
-        objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? (inventory != null ? inventory.schedule() : CheckPointSchedule.parse(node)) : null));
+        objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? schedule(uid, node, inventory, dict) : null));
         return id;
+    }
+    /**
+     * A time object's schedule. The rulebase dictionary often carries only a stub (no usable start/end/recurrence), which
+     * parses as unknown; then, and only then, the stored inventory's schedule of the same uid (same type, within the age
+     * bound, parsed from the full show-times reply) is used. A schedule the dictionary itself parses is never replaced.
+     */
+    private static com.securityexpert.nexus.ui2.policy.PolicySchedule schedule(String uid, JsonNode node, InventoryObject fromInventory, Sources dict) {
+        if (fromInventory != null) return fromInventory.schedule();
+        var own = CheckPointSchedule.parse(node);
+        if (!own.kind().equals("unknown")) return own;
+        InventoryObject stored = dict.inventory(uid);
+        if (stored == null || stored.schedule() == null || !"time".equals(stored.node().path("type").asText(null))
+                || stored.schedule().kind().equals("unknown")) return own;
+        dict.used(stored);
+        return stored.schedule();
     }
     /**
      * The networks component of an access role, one {@code networks: <object reference>} value per network, or
@@ -327,7 +347,18 @@ public final class CheckPointPolicyMapper {
     static String type(String nativeType) { return com.securityexpert.nexus.ui2.policy.CpObjectTypes.type(nativeType); }
     private static String resolve(JsonNode node, Sources dict) {
         if (node.isObject()) return node.path("name").asText("UNKNOWN");
-        return dict.dictionary.containsKey(node.asText()) ? dict.dictionary.get(node.asText()).path("name").asText("UNKNOWN") : "UNKNOWN";
+        if (dict.dictionary.containsKey(node.asText())) return dict.dictionary.get(node.asText()).path("name").asText("UNKNOWN");
+        InventoryObject stored = node.isTextual() ? dict.inventory(node.asText()) : null;
+        return stored == null ? "UNKNOWN" : stored.node().path("name").asText("UNKNOWN");
+    }
+    /**
+     * The rule action. A rule with an inline layer whose action the dictionary and the stored inventory cannot name is an
+     * "Apply Layer" rule (PATH_ANALYSIS_VENDOR_SEMANTICS.md 2b): the management reply carries no action name for it. A
+     * named action (Accept, Drop, ...) is never replaced, and a rule without an inline layer stays UNKNOWN.
+     */
+    private static String action(JsonNode rule, Sources dict) {
+        String action = resolve(rule.path("action"), dict);
+        return action.equals("UNKNOWN") && rule.has("inline-layer") && !texts(rule.path("inline-layer")).isEmpty() ? "Apply Layer" : action;
     }
     private static List<String> texts(JsonNode node) {
         if (node.isMissingNode() || node.isNull()) return List.of();

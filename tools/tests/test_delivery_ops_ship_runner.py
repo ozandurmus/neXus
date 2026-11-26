@@ -231,3 +231,11 @@ def test_daily_metrics_counts_returned_reviews_and_lane_alerts(ops):
 def test_daily_metrics_survives_missing_logs(ops):
     r = ops.bash(f'python3 -I "{OPS}/daily-metrics.py" 2026-01-01')
     assert r.returncode == 0 and "| lane_starts | 0 |" in r.stdout
+
+
+def test_a_reply_without_a_verdict_is_unavailable_not_a_block(ops):
+    # 2026-11-26: "You've hit your 5-hour limit" was read as BLOCK and sent two good lanes back to their authors.
+    ship_entry(ops)
+    log = decide(ops, "You've hit your 5-hour limit \u00b7 resets 2:20am\n")
+    assert (ops.sq / "held" / f"{LANE}.ship").exists() and "B-REVIEW UNAVAILABLE" in log
+    assert list(ops.lq.glob("*fix-blocked*.brief")) == [] and not (ops.sq / "returned" / f"{LANE}.ship").exists()

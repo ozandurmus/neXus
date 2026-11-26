@@ -125,6 +125,16 @@ class TopologyNamePseudonymizerTest {
         assertThat(pseudonymizer.maskText("device FW-TANGO-09 ready")).isEqualTo("device FW-TANGO-09 ready");
     }
 
+    @Test
+    void masksRealNameShapedLikeAPseudonymInFreeText() {
+        String realShaped = "FW-DC-01";
+        String masked = pseudonymizer.maskDeviceName(realShaped, null);
+        assertThat(masked).isNotEqualTo(realShaped);
+        assertThat(pseudonymizer.maskText(realShaped + " backup failed")).isEqualTo(masked + " backup failed");
+        assertThat(pseudonymizer.maskText("archive_" + realShaped + "_x.tgz")).isEqualTo("archive_" + masked + "_x.tgz");
+        assertThat(pseudonymizer.maskText(realShaped + "-extra")).doesNotContain(realShaped);
+    }
+
 
     @Test
     void aValueThatIsNotAHostnameIsAGapAndNeverAFirewallName() {

@@ -55,7 +55,7 @@ class PolicyRuleQueryTest {
             assertThrows(IllegalArgumentException.class, () -> PolicyRuleQuery.compile(q, objects(), now), q);
     }
     @Test void scheduleFilteringAndExplainablePermissiveness() {
-        var schedule = new PolicySchedule("one-time", null, "2026-10-01T23:59", List.of(), "UTC", false);
+        var schedule = new PolicySchedule("one-time", null, "2026-09-29T23:59", List.of(), "UTC", false); // > 26 h before now: expiry is provable without a known timezone
         Map<String, PolicyObject> objects = new HashMap<>(objects());
         objects.put("time", new PolicyObject("time", "OBJ-TIME-01", "time", List.of(), List.of(), "RESOLVED", schedule));
         var base = rule(new Cell(List.of("any"), false));

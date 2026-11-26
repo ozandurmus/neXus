@@ -100,9 +100,13 @@ public class TopologyNamePseudonymizer {
 
     private final Map<String, String> reverseClusterCache = new ConcurrentHashMap<>();
     private final Map<String, String> rawNameToPseudonym = new ConcurrentHashMap<>();
+    private final java.util.Set<String> mintedPseudonyms = ConcurrentHashMap.newKeySet();
 
     private void registerTextName(String raw, String masked) {
-        if (raw.length() >= 3 && !raw.matches("\\p{N}+")) rawNameToPseudonym.put(raw, masked);
+        if (raw.length() >= 3 && !raw.matches("\\p{N}+")) {
+            rawNameToPseudonym.put(raw, masked);
+            mintedPseudonyms.add(masked);
+        }
     }
 
     public String maskClusterName(String rawClusterName) {
@@ -547,7 +551,7 @@ public class TopologyNamePseudonymizer {
         return out.toString();
     }
 
-    private static boolean insideMintedPseudonym(String text, int matchStart, int matchEnd) {
+    private boolean insideMintedPseudonym(String text, int matchStart, int matchEnd) {
         int a = matchStart;
         while (a > 0 && isTokenOrHyphen(text.charAt(a - 1))) {
             a--;
@@ -560,7 +564,15 @@ public class TopologyNamePseudonymizer {
             return false;
         }
         String enclosing = text.substring(a, b);
-        return MINTED_PSEUDONYM.matcher(enclosing).matches() || UNKNOWN_HOST_TOKEN.matcher(enclosing).matches();
+        if (UNKNOWN_HOST_TOKEN.matcher(enclosing).matches()) {
+            return true;
+        }
+        // A real estate name can have the shape of a pseudonym (FW-DC-01): a token registered as a raw name is never
+        // protected by its shape, only a token that was actually issued as a pseudonym is.
+        if (rawNameToPseudonym.containsKey(enclosing)) {
+            return mintedPseudonyms.contains(enclosing);
+        }
+        return mintedPseudonyms.contains(enclosing) || MINTED_PSEUDONYM.matcher(enclosing).matches();
     }
 
     private static boolean isTokenOrHyphen(char c) {

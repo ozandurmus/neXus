@@ -38,7 +38,8 @@ class PolicyMappersTest {
         assertEquals("Accept", rules.get(0).action()); assertEquals("Log", rules.get(0).log());
         assertEquals("any", snapshot.objects().get(rules.get(0).destination().refs().get(0)).type());
         assertEquals(List.of(ref("policy-1", "object", "target-01")), rules.get(0).extras().get("install-on"));
-        assertNull(rules.get(2).enabled()); assertEquals("UNKNOWN", rules.get(2).action());
+        assertNull(rules.get(2).enabled()); assertEquals("UNKNOWN", rules.get(2).action()); // no inline layer: stays unknown
+        assertEquals("Accept", rules.get(0).action()); // the rule with an inline layer and a named action keeps it
         assertEquals(List.of("rule-001", "rule-003", "rule-002"), rules.stream().map(Rule::uuid).toList());
         assertTrue(snapshot.sections().stream().anyMatch(s -> rules.get(0).id().equals(s.parentRuleId())));
         assertTrue(snapshot.objects().values().stream().anyMatch(o -> o.status().equals("UNRESOLVED")));
@@ -268,5 +269,61 @@ class PolicyMappersTest {
         assertEquals(List.of("s1", "o"), snapshot.withPageSplitsMerged().sections().stream().map(Section::id).toList());
         var pan = new PolicySnapshot(metadata("PAN"), List.of(s1, s2), Map.of());
         assertSame(pan, pan.withPageSplitsMerged());
+    }
+    /** P1 part A: an inline-layer parent whose action the reply does not name is "Apply Layer"; nothing else is renamed. */
+    @Test void inlineLayerParentWithUnnamedActionIsApplyLayerAndNothingElseIs() throws Exception {
+        var page = new ObjectMapper().readTree("""
+            {"uid":"layer-p","name":"Synthetic layer","from":1,"to":4,"total":4,
+             "objects-dictionary":[{"uid":"act-drop","type":"RulebaseAction","name":"Drop"}],
+             "rulebase":[
+               {"type":"access-rule","uid":"p1","name":"p1","action":"act-unknown","inline-layer":"layer-i"},
+               {"type":"access-rule","uid":"p2","name":"p2","action":"act-drop","inline-layer":"layer-i"},
+               {"type":"access-rule","uid":"p3","name":"p3","action":"act-unknown"},
+               {"type":"access-rule","uid":"p4","name":"p4","action":"act-stored","inline-layer":"layer-i"}]}""");
+        var stored = new CheckPointPolicyMapper.InventoryObject("act-stored", new ObjectMapper().readTree(
+            "{\"uid\":\"act-stored\",\"type\":\"RulebaseAction\",\"name\":\"Accept\"}"), null, java.time.Instant.parse("2026-10-01T11:00:00Z"));
+        var rules = new CheckPointPolicyMapper().map(metadata("CP"), List.of(page), List.of(), uid -> uid.equals("act-stored") ? stored : null)
+            .sections().stream().flatMap(s -> s.rules().stream()).collect(java.util.stream.Collectors.toMap(Rule::uuid, Rule::action));
+        assertEquals("Apply Layer", rules.get("p1"));
+        assertEquals("Drop", rules.get("p2"));      // a named action is never replaced
+        assertEquals("UNKNOWN", rules.get("p3"));   // no inline layer: stays unknown
+        assertEquals("Accept", rules.get("p4"));    // the stored inventory names it
+    }
+    /** P1 part A soundness: source-port and exp reach (match-for-any is not kept) the snapshot instead of being dropped. */
+    @Test void sourcePortAndServiceQualifiersSurviveMapping() throws Exception {
+        var page = new ObjectMapper().readTree("""
+            {"uid":"layer-p","name":"Synthetic layer","from":1,"to":1,"total":1,
+             "objects-dictionary":[{"uid":"svc","type":"service-tcp","name":"OBJ-SVC-01","port":"443","source-port":"1024-2048","match-for-any":true},
+                                   {"uid":"svc-o","type":"service-other","name":"OBJ-SVC-02","exp":"synthetic"}],
+             "rulebase":[{"type":"access-rule","uid":"r1","name":"r1","service":["svc","svc-o"]}]}""");
+        var snapshot = new CheckPointPolicyMapper().map(metadata("CP"), List.of(page));
+        var tcp = snapshot.objects().get(ref("policy-1", "object", "svc"));
+        assertTrue(tcp.values().contains("source-port: 1024-2048")); assertTrue(tcp.values().contains("port: 443"));
+        assertTrue(tcp.values().stream().noneMatch(v -> v.startsWith("match-for-any"))); // a flag, not a constraint: must not make the service unresolvable
+        assertTrue(snapshot.objects().get(ref("policy-1", "object", "svc-o")).values().contains("exp: synthetic"));
+    }
+    private static final String TIME_STUB = "{\"uid\":\"t1\",\"type\":\"time\",\"name\":\"OBJ-TIME-01\"}";
+    private com.securityexpert.nexus.ui2.policy.PolicySchedule joined(String stub, String inventoryTime, String collectedAt) throws Exception {
+        var mapper = new ObjectMapper();
+        var page = mapper.readTree("{\"uid\":\"layer-p\",\"name\":\"L\",\"from\":1,\"to\":1,\"total\":1,\"objects-dictionary\":[" + stub
+            + "],\"rulebase\":[{\"type\":\"access-rule\",\"uid\":\"r1\",\"name\":\"r1\",\"time\":[\"t1\"]}]}");
+        var node = mapper.readTree(inventoryTime);
+        var found = new CheckPointPolicyMapper.InventoryObject("t1", node, CheckPointSchedule.parse(node), java.time.Instant.parse(collectedAt));
+        return new CheckPointPolicyMapper().map(metadata("CP"), List.of(page), List.of(), uid -> uid.equals("t1") ? found : null)
+            .objects().get(ref("policy-1", "object", "t1")).schedule();
+    }
+    /** P1 part A (I9): a dictionary time stub is joined with the stored inventory schedule, only when the stub parses unknown. */
+    @Test void dictionaryTimeStubJoinsTheStoredInventorySchedule() throws Exception {
+        String full = "{\"uid\":\"t1\",\"type\":\"time\",\"name\":\"OBJ-TIME-01\",\"start-now\":true,\"end\":{\"iso-8601\":\"2026-09-01T10:00+0300\"}}";
+        var joined = joined(TIME_STUB, full, "2026-10-01T00:00:00Z");
+        assertEquals("one-time", joined.kind()); assertEquals("2026-09-01T10:00", joined.end());
+        assertEquals("expired", joined.status(java.time.Instant.parse("2026-10-01T00:00:00Z")));
+        // An inventory older than the age bound is not used: the stub stays unknown.
+        assertEquals("unknown", joined(TIME_STUB, full, "2026-09-01T00:00:00Z").kind());
+        // A dictionary entry that already parses is never replaced by the inventory.
+        String own = "{\"uid\":\"t1\",\"type\":\"time\",\"name\":\"OBJ-TIME-01\",\"end-never\":true}";
+        assertEquals("always", joined(own, full, "2026-10-01T00:00:00Z").status(java.time.Instant.parse("2026-10-01T00:00:00Z")));
+        // An inventory entry that itself parses unknown cannot widen or narrow anything.
+        assertEquals("unknown", joined(TIME_STUB, TIME_STUB, "2026-10-01T00:00:00Z").kind());
     }
 }
