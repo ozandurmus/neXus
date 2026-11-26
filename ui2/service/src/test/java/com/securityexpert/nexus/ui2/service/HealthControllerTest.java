@@ -72,13 +72,22 @@ class HealthControllerTest {
             release.await();
             return connection(true);
         }));
+        long timeoutMillis = HealthController.DB_CHECK_TIMEOUT.toMillis();
+        // Each call is timed on its own. A call waits for the check in flight for the timeout and no longer; a loaded host
+        // can only stretch that wait, so the upper bound is a pathological one (timeout plus 10 s), not a tight one.
         long started = System.nanoTime();
         ResponseEntity<String> first = health.ready();
+        long firstMillis = (System.nanoTime() - started) / 1_000_000;
+        started = System.nanoTime();
         ResponseEntity<String> second = health.ready();
-        long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
+        long secondMillis = (System.nanoTime() - started) / 1_000_000;
         assertEquals("db_timeout", first.getBody());
+        assertTrue(firstMillis >= timeoutMillis / 2, "the first call waits for the check: " + firstMillis);
+        assertTrue(firstMillis < timeoutMillis + 10_000, "first call took " + firstMillis);
+        // The second call joins the check still in flight (it never opens another one) and gives up at the timeout as well.
         assertEquals(503, second.getStatusCode().value());
-        assertTrue(elapsedMillis < 2 * HealthController.DB_CHECK_TIMEOUT.toMillis() + 1_000, "took " + elapsedMillis);
+        assertEquals("db_timeout", second.getBody());
+        assertTrue(secondMillis < timeoutMillis + 10_000, "second call took " + secondMillis);
         assertEquals(1, opened.get(), "one check in flight at a time");
         release.countDown();
         for (int i = 0; i < 50 && !"ok".equals(health.ready().getBody()); i++) Thread.sleep(50);

@@ -3,7 +3,9 @@ package com.securityexpert.nexus.ui2.service.policy;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
+import com.securityexpert.nexus.ui2.service.support.CpuTimeGuard;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Micro-benchmark pinned as a test: a fully resolvable 10,000-rule policy (one placement key for Check Point, four zone
@@ -19,20 +21,39 @@ import java.util.*;
  *   PAN 20,000 rules   -                               -                          0.6 s, none
  * </pre>
  * The bound below is generous for shared CI runners; it fails on a return to quadratic set and stream work per pair.
+ *
+ * Timing: the analysed section is timed with this thread's CPU time (analyze runs on the calling thread; a loaded host
+ * stretches wall time, not CPU time), the minimum of three samples after a warm-up. Besides the absolute bound each test
+ * checks a growth ratio that does not depend on machine speed: the same analysis at 2,500 and at 10,000 rules. The
+ * candidate comparisons are themselves close to quadratic in the rule count (every rule against the earlier rules of its
+ * key), so this is not a linearity check: a 4x input costs about 16x in the model and 10-17x measured. Fifteen runs on
+ * a laptop JVM, 2026-11-26, 4x ratio: CP 7.8-13.3, PAN 5.0-9.5, PAN many zone keys 10.3-17.3; the limit of 35 is over
+ * twice the largest. It fails when growth turns clearly worse than that (a scratch copy with a per-rule scan of order n^2/40
+ * ahead of the comparison gave 49 for CP and 36 in the partial-prior test; PAN many zone keys gave 34, just under its limit). A constant-factor
+ * regression (the former scan, 25x slower per pair) is caught by the budget assertions, which count work units and
+ * therefore do not depend on the host either.
  */
 class PolicyHygieneScaleTest {
+    static final int SAMPLES = 3;
+    static final double MAX_RATIO_FOR_4X_RULES = 35.0;
     @Test void tenThousandRulePoliciesFinishWithinSecondsAndWithoutBudget() {
         for (String vendor : List.of("CP", "PAN")) {
             var snapshot = SyntheticPolicies.large(vendor, 10_000, 7);
+            var small = SyntheticPolicies.large(vendor, 2_500, 7);
             PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
-            long started = System.nanoTime();
-            var result = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
-            long millis = (System.nanoTime() - started) / 1_000_000;
-            System.out.println("SCALE " + vendor + " 10000 rules: " + millis + " ms");
+            PolicyHygiene.analyze(small, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
+            var last = new AtomicReference<PolicyHygiene.Result>();
+            long nanos = CpuTimeGuard.minNanos(SAMPLES, () -> last.set(PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK)));
+            long smallNanos = CpuTimeGuard.minNanos(SAMPLES, () -> PolicyHygiene.analyze(small, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK));
+            var result = last.get();
+            long millis = CpuTimeGuard.millis(nanos);
+            System.out.println("SCALE " + vendor + " 10000 rules: " + millis + " ms " + (CpuTimeGuard.cpuTimed() ? "thread CPU" : "wall clock")
+                + ", 2500 rules " + CpuTimeGuard.millis(smallNanos) + " ms, ratio " + String.format("%.2f", ratio(nanos, smallNanos)));
             assertFalse(result.budgetReached(), vendor);
             assertEquals(10_000, result.rules().size());
             assertTrue(result.rules().values().stream().noneMatch(a -> "analysis budget".equals(a.shadowReason())), vendor);
-            assertTrue(millis < 30_000, vendor + " took " + millis + " ms"); // blow-up guard sized for CI runners
+            assertTrue(millis < 30_000, vendor + " took " + millis + " ms"); // blow-up guard, thread CPU time
+            assertRatio(vendor, nanos, smallNanos);
         }
     }
     /**
@@ -43,22 +64,36 @@ class PolicyHygieneScaleTest {
      * unproven, 8,063 not shadowed), no "analysis budget". The bound is the same as above.
      */
     @Test void tenThousandPanRulesOverManyZoneKeysFinishWithoutBudget() {
-        var base = SyntheticPolicies.large("PAN", 10_000, 7); var random = new Random(13);
+        var snapshot = manyZoneKeys(10_000); var small = manyZoneKeys(2_500);
+        PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
+        PolicyHygiene.analyze(small, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
+        var last = new AtomicReference<PolicyHygiene.Result>();
+        long nanos = CpuTimeGuard.minNanos(SAMPLES, () -> last.set(PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK)));
+        long smallNanos = CpuTimeGuard.minNanos(SAMPLES, () -> PolicyHygiene.analyze(small, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK));
+        var result = last.get();
+        long millis = CpuTimeGuard.millis(nanos);
+        Map<String, Long> verdicts = new TreeMap<>();
+        for (var a : result.rules().values()) verdicts.merge(a.shadowStatus() + (a.shadowReason() == null ? "" : " / " + a.shadowReason()), 1L, Long::sum);
+        System.out.println("SCALE PAN 10000 rules, many zone keys: " + millis + " ms " + (CpuTimeGuard.cpuTimed() ? "thread CPU" : "wall clock")
+            + ", 2500 rules " + CpuTimeGuard.millis(smallNanos) + " ms, ratio " + String.format("%.2f", ratio(nanos, smallNanos)) + " " + verdicts);
+        assertFalse(result.budgetReached());
+        assertTrue(result.rules().values().stream().noneMatch(a -> "analysis budget".equals(a.shadowReason())));
+        assertTrue(millis < 90_000, "took " + millis + " ms"); // pathological blow-up guard only, thread CPU time; the budget assertions above are the real check
+        assertRatio("PAN many zone keys", nanos, smallNanos);
+    }
+    private static PolicySnapshot manyZoneKeys(int size) {
+        var base = SyntheticPolicies.large("PAN", size, 7); var random = new Random(13);
         List<PolicySnapshot.Rule> rules = new ArrayList<>();
         for (var rule : base.sections().get(0).rules())
             rules.add(SyntheticPolicies.withExtras(rule, rule.action(), Map.of("from", zones(random), "to", zones(random))));
         var section = base.sections().get(0);
-        var snapshot = new PolicySnapshot(base.metadata(), List.of(new PolicySnapshot.Section(section.id(), section.name(), section.source(), null, rules)), base.objects());
-        PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
-        long started = System.nanoTime();
-        var result = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
-        long millis = (System.nanoTime() - started) / 1_000_000;
-        Map<String, Long> verdicts = new TreeMap<>();
-        for (var a : result.rules().values()) verdicts.merge(a.shadowStatus() + (a.shadowReason() == null ? "" : " / " + a.shadowReason()), 1L, Long::sum);
-        System.out.println("SCALE PAN 10000 rules, many zone keys: " + millis + " ms " + verdicts);
-        assertFalse(result.budgetReached());
-        assertTrue(result.rules().values().stream().noneMatch(a -> "analysis budget".equals(a.shadowReason())));
-        assertTrue(millis < 90_000, "took " + millis + " ms"); // pathological blow-up guard only: the lane harness runs many suites at once (33.8 s seen against 0.7 s on a laptop); the budget assertions above are the real check
+        return new PolicySnapshot(base.metadata(), List.of(new PolicySnapshot.Section(section.id(), section.name(), section.source(), null, rules)), base.objects());
+    }
+    private static double ratio(long big, long small) { return (double) big / Math.max(1L, small); }
+    /** Machine-speed independent growth guard: 4x the rules costs about 16x for quadratic comparison work; see the class comment. */
+    private static void assertRatio(String what, long bigNanos, long smallNanos) {
+        assertTrue(ratio(bigNanos, smallNanos) < MAX_RATIO_FOR_4X_RULES,
+            what + ": 4x the rules must not cost " + MAX_RATIO_FOR_4X_RULES + "x: " + CpuTimeGuard.millis(smallNanos) + " ms vs " + CpuTimeGuard.millis(bigNanos) + " ms");
     }
     private static List<String> zones(Random random) {
         if (random.nextInt(10) == 0) return List.of("any");
