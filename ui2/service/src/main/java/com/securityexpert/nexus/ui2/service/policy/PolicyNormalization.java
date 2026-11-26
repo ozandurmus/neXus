@@ -46,17 +46,31 @@ final class PolicyNormalization {
     static final class Budget {
         final int[] left;
         private final int[] window, sideLeft;
-        Budget(int limit) { this(new int[]{limit}, new int[]{Integer.MAX_VALUE}, new int[]{limit}); }
-        private Budget(int[] left, int[] window, int[] sideLeft) { this.left = left; this.window = window; this.sideLeft = sideLeft; }
+        /** Set once any unit was refused (pool or per-rule window), shared by {@link #side()}; only ever read, never a decision input. */
+        private final boolean[] refused;
+        /**
+         * Proposal probe only ({@link PolicyProposal}): while set on the calling thread, every budget made by
+         * {@code new Budget(limit)} is listed, so the caller can tell whether an engine refused a unit. Never set by
+         * production analysis; it changes no charge and no verdict.
+         */
+        static final ThreadLocal<List<Budget>> PROBE = new ThreadLocal<>();
+        Budget(int limit) {
+            this(new int[]{limit}, new int[]{Integer.MAX_VALUE}, new int[]{limit}, new boolean[1]);
+            var probe = PROBE.get();
+            if (probe != null) probe.add(this);
+        }
+        private Budget(int[] left, int[] window, int[] sideLeft, boolean[] refused) { this.left = left; this.window = window; this.sideLeft = sideLeft; this.refused = refused; }
         void rule(int limit) { window[0] = limit; }
-        void spend() { if (--left[0] < 0 | --window[0] < 0) throw new Unknown("analysis budget"); }
+        void spend() { if (--left[0] < 0 | --window[0] < 0) { refused[0] = true; throw new Unknown("analysis budget"); } }
+        /** Whether this budget (or its {@link #side()}) ever refused a unit of work. */
+        boolean refused() { return refused[0]; }
         /**
          * The same per-rule window over a separate snapshot-wide pool of the same size, for partial-prior work (resolving
          * what an unresolvable rule's selectors do resolve, and the later disjointness checks). That work only ever turns
          * an "earlier rule has unsupported constraints" UNKNOWN into NOT_SHADOWED, so it must never take budget another
          * rule's verdict needed: running out of it leaves the rule exactly as before (still UNKNOWN for that reason).
          */
-        Budget side() { return new Budget(sideLeft, window, sideLeft); }
+        Budget side() { return new Budget(sideLeft, window, sideLeft, refused); }
     }
     /** Section IDs hash the layer UID recursively; the UID cannot be recovered from a snapshot. */
     static final class CpLayers {

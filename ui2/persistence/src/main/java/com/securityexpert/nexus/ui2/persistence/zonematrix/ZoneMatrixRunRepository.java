@@ -149,6 +149,19 @@ public interface ZoneMatrixRunRepository {
         }
     }
 
+    /**
+     * A finding resolved for any reason ({@code resolution_reason}, carried by {@code finding}) within a period, with the
+     * version of the run it was found against (ZM-32). The resolving version is not read: only a version-change
+     * resolution has one, and {@link ResolvedByVersionFinding} carries it.
+     */
+    record ResolvedFinding(String foundVersionId, int foundVersionNumber, Instant resolvedAt, Finding finding) {
+        public ResolvedFinding {
+            Objects.requireNonNull(foundVersionId, "foundVersionId");
+            Objects.requireNonNull(resolvedAt, "resolvedAt");
+            Objects.requireNonNull(finding, "finding");
+        }
+    }
+
     /** A run row: ids, state, counts and coverage; never zone names, blocks, addresses or rule names. */
     record Run(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,
             String engineVersion, String state, String failureReason, Instant startedAt, Instant finishedAt,
@@ -230,6 +243,15 @@ public interface ZoneMatrixRunRepository {
      * non-null), newest resolution first.
      */
     default List<ResolvedByVersionFinding> resolvedByVersionChange(Instant since) {
+        return List.of();
+    }
+
+    /**
+     * Findings of {@code COMPLETE} runs resolved within the half-open period {@code [from, to)} for any resolution reason
+     * ({@code null} bound: unbounded), newest resolution first. Never capped: the period is the bound. One entry per
+     * finding identity and resolution instant, carrying the earliest stored row's version.
+     */
+    default List<ResolvedFinding> resolvedInPeriod(Instant from, Instant to) {
         return List.of();
     }
 

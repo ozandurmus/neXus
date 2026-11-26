@@ -10,6 +10,7 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunReposito
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.PriorHistory;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ResolutionUpdate;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ResolvedByVersionFinding;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ResolvedFinding;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
 import com.securityexpert.nexus.ui2.service.policy.ZoneMatrixPolicyBridge;
@@ -780,6 +781,14 @@ public final class ZoneMatrixRunService implements AutoCloseable {
     /** Findings resolved with {@code MATRIX_VERSION_CHANGED} at or after {@code since} (all when {@code since == null}). */
     public List<ResolvedByVersionFinding> resolvedByVersionChange(Instant since) {
         return runs.resolvedByVersionChange(since);
+    }
+
+    /**
+     * Findings resolved for any reason within the half-open period {@code [from, to)} (ZM-32), newest resolution first.
+     * Read once per report assembly; the period bounds the read and nothing is capped.
+     */
+    public List<ResolvedFinding> resolvedInPeriod(Instant from, Instant to) {
+        return runs.resolvedInPeriod(from, to);
     }
 
     /** Findings resolved with {@code MATRIX_VERSION_CHANGED}, grouped by the version id of the resolving run (ZM-36). */

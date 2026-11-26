@@ -691,6 +691,25 @@ class ZoneMatrixRunServiceTest {
             return List.copyOf(out.values());
         }
 
+        @Override public synchronized List<ResolvedFinding> resolvedInPeriod(Instant from, Instant to) {
+            List<StoredRow> matching = new ArrayList<>();
+            for (StoredRow sr : storedRows) {
+                Row owner = rows.get(sr.runId);
+                Instant at = sr.finding.resolvedAt();
+                if (owner == null || !STATE_COMPLETE.equals(owner.state) || at == null) continue;
+                if ((from != null && at.isBefore(from)) || (to != null && !at.isBefore(to))) continue;
+                matching.add(sr);
+            }
+            matching.sort(Comparator.comparing((StoredRow sr) -> sr.finding.resolvedAt()).reversed()
+                    .thenComparing(Comparator.comparingLong((StoredRow sr) -> sr.findingId).reversed()));
+            List<ResolvedFinding> out = new ArrayList<>();
+            for (StoredRow sr : matching) {
+                Row owner = rows.get(sr.runId);
+                out.add(new ResolvedFinding(owner.versionId, owner.versionNumber, sr.finding.resolvedAt(), sr.finding));
+            }
+            return List.copyOf(out);
+        }
+
         @Override public synchronized List<Run> runs(int limit) {
             List<Row> copy = new ArrayList<>(rows.values());
             Collections.reverse(copy);

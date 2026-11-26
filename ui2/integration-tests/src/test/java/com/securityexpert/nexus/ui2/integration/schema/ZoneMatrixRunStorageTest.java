@@ -304,6 +304,100 @@ class ZoneMatrixRunStorageTest {
     }
 
     /**
+     * ZM-32 (section 7.3): the findings resolved within a half-open period for every resolution reason, newest first,
+     * with the version each was found against; nothing before the period, nothing at its exclusive end, and nothing
+     * from a run that did not complete (its resolutions roll back with it).
+     */
+    @Test void zm32_findingsResolvedForAnyReasonAreReadByHalfOpenPeriodFromCompleteRunsOnly() throws Exception {
+        try (Connection db = fixture.appConnection()) {
+            ZoneMatrixRunRepository repository = new JooqZoneMatrixRunRepository(
+                    new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            String policy = "pol-period-" + UUID.randomUUID();
+            Instant t1 = Instant.parse("2026-11-10T10:00:00Z");
+            Coverage coverage = new Coverage("COMPLETE", List.of(), 0, true, "PAN", t1.minusSeconds(600), 5);
+            List<String> uids = List.of("uid-before", "uid-changed", "uid-removed", "uid-version", "uid-after", "uid-failed");
+            List<Finding> opened = uids.stream().map(uid -> new Finding(policy, uid, List.of(), List.of("ZONE-A->ZONE-B"),
+                    "r-" + uid, 1, "RULE-" + uid, "sec-1", "Local rules", List.of("FW-TANGO-04"), "VIOLATION", null,
+                    "HIGH", List.of(), null, List.of(), List.of(), "original", t1, t1, t1, null, null)).toList();
+            String run1 = UUID.randomUUID().toString();
+            repository.start(new NewRun(run1, VERSION, 1, SHA, policy, "step3-v1", t1.minusSeconds(5), t1.minusSeconds(600)));
+            assertTrue(repository.complete(run1, t1, 1L, coverage,
+                    history -> new CompletionPlan(new Counts(6, 0, 0, 0, 0, 6), opened, List.of())));
+
+            Instant before = Instant.parse("2026-11-11T10:00:00Z");
+            Instant changed = Instant.parse("2026-11-12T10:00:00Z");
+            Instant removed = Instant.parse("2026-11-13T10:00:00Z");
+            Instant version = Instant.parse("2026-11-14T10:00:00Z");
+            Instant after = Instant.parse("2026-11-15T10:00:00Z");
+            resolveOneInARun(repository, policy, VERSION_TWO, 2, SHA_TWO, coverage, "uid-before", "RULE_CHANGED", before);
+            resolveOneInARun(repository, policy, VERSION_TWO, 2, SHA_TWO, coverage, "uid-changed", "RULE_CHANGED", changed);
+            resolveOneInARun(repository, policy, VERSION_TWO, 2, SHA_TWO, coverage, "uid-removed",
+                    "RULE_REMOVED_OR_DISABLED", removed);
+            resolveOneInARun(repository, policy, VERSION_TWO, 2, SHA_TWO, coverage, "uid-version",
+                    "MATRIX_VERSION_CHANGED", version);
+            resolveOneInARun(repository, policy, VERSION_TWO, 2, SHA_TWO, coverage, "uid-after", "RULE_CHANGED", after);
+
+            // A run that fails while completing rolls its resolution back: the finding stays open and is never listed.
+            Instant failedAt = Instant.parse("2026-11-13T12:00:00Z");
+            String failedRun = UUID.randomUUID().toString();
+            repository.start(new NewRun(failedRun, VERSION_TWO, 2, SHA_TWO, policy, "step3-v1", failedAt.minusSeconds(5),
+                    t1.minusSeconds(600)));
+            Finding invalid = new Finding(policy, "uid-invalid", List.of(), List.of(), "r-9", 9, "BAD", "sec-1",
+                    "Local rules", List.of(), "COMPLIANT", null, null, List.of(), null, List.of(), List.of(), null,
+                    failedAt, null, failedAt, null, null);
+            assertThrows(RuntimeException.class, () -> repository.complete(failedRun, failedAt, 1L, coverage,
+                    history -> new CompletionPlan(new Counts(0, 1, 0, 0, 0, 1), List.of(invalid),
+                            List.of(new ResolutionUpdate("uid-failed", List.of(), List.of("ZONE-A->ZONE-B"), failedAt,
+                                    "RULE_CHANGED")))));
+            assertTrue(repository.fail(failedRun, FailureReason.STORE_ERROR, failedAt));
+
+            // [changed, version): the inclusive start, an interior instant, and the exclusive end left out.
+            List<ResolvedFinding> period = ofPolicy(repository.resolvedInPeriod(changed, version), policy);
+            assertEquals(List.of("uid-removed", "uid-changed"), period.stream().map(r -> r.finding().ruleUid()).toList(),
+                    "newest resolution first; the finding resolved exactly at the end instant is out");
+            assertEquals(List.of("RULE_REMOVED_OR_DISABLED", "RULE_CHANGED"),
+                    period.stream().map(r -> r.finding().resolutionReason()).toList());
+            assertEquals(List.of(removed, changed), period.stream().map(ResolvedFinding::resolvedAt).toList());
+            assertEquals(List.of(removed, changed), period.stream().map(r -> r.finding().resolvedAt()).toList());
+            assertTrue(period.stream().allMatch(r -> VERSION.equals(r.foundVersionId()) && r.foundVersionNumber() == 1),
+                    "each row cites the version of the run it was found against");
+            assertEquals(t1, period.get(0).finding().firstObservedAt());
+
+            // Every reason, once each, in a period that holds the three.
+            List<ResolvedFinding> all = ofPolicy(repository.resolvedInPeriod(changed, after), policy);
+            assertEquals(List.of("uid-version", "uid-removed", "uid-changed"),
+                    all.stream().map(r -> r.finding().ruleUid()).toList());
+            assertEquals(List.of("MATRIX_VERSION_CHANGED", "RULE_REMOVED_OR_DISABLED", "RULE_CHANGED"),
+                    all.stream().map(r -> r.finding().resolutionReason()).toList());
+
+            // Unbounded sides, and a period holding nothing.
+            assertEquals(5, ofPolicy(repository.resolvedInPeriod(null, null), policy).size());
+            assertEquals(1, ofPolicy(repository.resolvedInPeriod(null, changed), policy).size());
+            assertEquals(2, ofPolicy(repository.resolvedInPeriod(null, removed), policy).size());
+            assertEquals(1, ofPolicy(repository.resolvedInPeriod(after, null), policy).size());
+            assertTrue(ofPolicy(repository.resolvedInPeriod(after.plusSeconds(1), null), policy).isEmpty());
+            assertTrue(ofPolicy(repository.resolvedInPeriod(before.plusSeconds(1), changed), policy).isEmpty());
+            assertTrue(ofPolicy(repository.resolvedInPeriod(null, null), policy).stream()
+                    .noneMatch(r -> "uid-failed".equals(r.finding().ruleUid())));
+        }
+    }
+
+    private static List<ResolvedFinding> ofPolicy(List<ResolvedFinding> list, String policy) {
+        return list.stream().filter(r -> policy.equals(r.finding().policySourceId())).toList();
+    }
+
+    /** One COMPLETE run on {@code versionId} finishing at {@code at}, resolving one open finding with {@code reason}. */
+    private static void resolveOneInARun(ZoneMatrixRunRepository repository, String policy, String versionId,
+            int versionNumber, String sha, Coverage coverage, String uid, String reason, Instant at) {
+        String runId = UUID.randomUUID().toString();
+        repository.start(new NewRun(runId, versionId, versionNumber, sha, policy, "step3-v1", at.minusSeconds(5),
+                at.minusSeconds(600)));
+        assertTrue(repository.complete(runId, at, 1L, coverage, history -> new CompletionPlan(
+                new Counts(0, 0, 0, 0, 0, 0), List.of(),
+                List.of(new ResolutionUpdate(uid, List.of(), List.of("ZONE-A->ZONE-B"), at, reason)))));
+    }
+
+    /**
      * Step 4b-2 (sections 7.1, 8.1): the audited witness read returns exactly the witness tuples and NAT view stored with the
      * finding, by the opaque id the summary carries; the id of a finding of a run that is not COMPLETE, or of no finding, reads
      * nothing. The read writes nothing (the audit row is the service's, written first).

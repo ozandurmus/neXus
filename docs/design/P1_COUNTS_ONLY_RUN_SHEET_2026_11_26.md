@@ -439,6 +439,70 @@ Gives the PO session fresh counts-only evidence for the stored-policy half of `a
 
 ---
 
+## 7. Policy Insights G1 engine budget and cost
+
+### Purpose
+
+Feeds backlog item `policy_insights_p2`, PO decision Q8 of `docs/design/PO_DECISION_RECORD_2026_11_24_POLICY_INSIGHTS.md` ("budget exhaustion is NOT_PROVEN; revisit after P2 measures how often the budget is hit") and the P2 gate of `docs/design/POLICY_INSIGHTS_DESIGN_2026_11_24.md` section 9 (differential tests and the 10,000-rule scale test). Inside `ui2-service` the harness runs the shadow engine and the five Policy Insights engines (`PolicyUnionCover`, `PolicyPartialShadow`, `PolicyMerge`, `PolicyReorder`, `PolicyProposal.allOfferedMoves`) once each, with the production budgets, over the ten Check Point policies with the most enabled security rules, and prints per engine how many rule evaluations ended `NOT_PROVEN` on the budget (`hit_rate_ppm`, `any_hit`) and the thread CPU time and sampled heap of each call. **It does not measure the interactive-request cost under load, and it does not run Palo Alto (the engines evaluate Check Point only).**
+
+### Preconditions
+
+- `scripts/measurement/policy_insights_budget/` (`README.md`, `PolicyInsightsBudgetMeasure.java`, `selftest.sh`, `measure_run.sh`, `run_in_pod.sh`, `show_safe.sh`) is present on `origin/main` once the branch that adds it has merged. The harness was written and self-tested by a worker lane and has **not been run against any environment; no counts exist**.
+- The running `deploy/ui2-service` pod's `/app/service.jar` contains the five engine classes and `PolicyHygiene`; per `scripts/measurement/policy_insights_budget/README.md`, an older pod ends the run in `fatal exceptionininitializererror`.
+- Operator host configuration (`~/.config/nexus/hosta`) and cluster `kubectl -n ui2` access exist on the operator workstation as read by `measure_run.sh`.
+- No deploy rollout or `hosta_e2e.sh` run is active (`measure_run.sh` refuses to start while `hosta_e2e.sh` runs, and `/app/tmp` is lost on a pod rollout).
+- Explicit Product Owner session go-ahead before executing `measure_run.sh`. The run adds no device command, no gate row and no frequency.
+
+### Steps
+
+Copied verbatim from `scripts/measurement/policy_insights_budget/README.md`:
+
+Local self-test (no pod, no database, no device; expects `show_safe	ok`, `selftest	ok` and `report	ok`):
+
+```sh
+cd ui2 && ./gradlew --no-daemon :service:classes :persistence:classes :platform-core:classes :worker:classes
+bash scripts/measurement/policy_insights_budget/selftest.sh
+```
+
+PO-session in-pod run (`measure_run.sh` copies the pod's own service jar, compiles only the harness against it, stages `pibudget-<tag>` into `/app/tmp`, runs `run_in_pod.sh` (`java -Xmx2g` through `PropertiesLauncher`, 30 minute timeout), waits for `done` or `fatal` (up to 30 minutes), writes the `show_safe.sh`-filtered output into `pibudget-<tag>.tsv`, and removes the stage directory):
+
+```sh
+MEASURE_WORK_DIR=<scratch dir> bash scripts/measurement/policy_insights_budget/measure_run.sh <tag>
+```
+
+### Evidence to record
+
+`measure.out` is tab-separated, four fields per line (`kind id key value`), every field `[a-z0-9_.]+`; `show_safe.sh` drops any other line and reports `filtered_lines`. Record these tokens and nothing else:
+
+- `scope fleet <counter> n`: `snapshots_total`, `snapshots_parse_failed`, `snapshots_with_failures_skipped`, `snapshots_vendor_not_evaluated`, `snapshots_analysable`, `snapshots_ranked` (at most 10), `ranked_reread_failed`, `analysis_failed`, `cpu_time_unsupported`; `package fleet snapshots|rules_security|rules_security_disabled|rules_security_ranked|snapshots_measured n`.
+- Per ranked policy `p01`..`p10` (ordinal by enabled security rules, `p01` the largest) and `fleet`: `package pNN rules_security`; per engine `<pNN|fleet>.<union_cover|partial_shadow|merge|reorder|proposal>`: `engine ... evaluated|decided|not_proven`, `reason ... <closed slug>` (the four engines), `outcome ... <slug>` (including the proposal's `accepted`, `steps`, `candidates_total`, `budget_stopped`), `refused ... <closed word>` (the proposal), `cost ... cpu_ms|heap_additional_mb` (also `<pNN|fleet>.hygiene`).
+- `budget <pNN|fleet>.<engine> hit_rate_ppm n` (parts per million of rule evaluations that ended `NOT_PROVEN` on the budget, integer) and `budget <pNN|fleet>.<engine> any_hit true|false`: the Q8 answer.
+- The final `done` line (a `fatal <exception class>` line instead means the run failed) and the `filtered_lines` count.
+
+### How to read the result
+
+Per `scripts/measurement/policy_insights_budget/README.md` and Q8 of the decision record:
+
+| Outcome | Meaning | Follow-up it opens |
+| --- | --- | --- |
+| `done`, `filtered_lines` 0, `analysis_failed` 0, `snapshots_ranked` 10, every `budget fleet.<engine> any_hit` `false` | No engine hit its production budget on the ten largest stored policies | PO session writes the counts-only MEASUREMENT RECORD and may close the Q8 revisit as "budget not hit at these sizes"; the `cost` lines are the real CPU and heap input of the P2 gate |
+| An `any_hit` `true` with a small `hit_rate_ppm` (the PO session names the threshold) | The budget bites on few rules | Record per engine and ordinal; decide whether to raise `RULE_WORK` / `TOTAL_WORK` or keep `NOT_PROVEN` (Q8); no engine change from the harness lane |
+| `any_hit` `true` with a large `hit_rate_ppm`, or `proposal budget_stopped` 1 | The interval-box arithmetic does not finish on a real policy of that size | Open a G1 engine or budget lane; `NOT_PROVEN` stays the safe answer meanwhile |
+| `cpu_ms` of one engine close to the request timeout, or a large `heap_additional_mb` | The engine is too costly to run inside a request on that policy | Plan an asynchronous run or a pool of its own before P2 reaches users; repeat the run first if a figure is near a limit |
+| `snapshots_ranked` below 10, `ranked_reread_failed` or `analysis_failed` above 0, `cpu_time_unsupported` 1, `fatal <class>`, `filtered_lines` above 0, or no `done` | The run is incomplete | Nothing is evidenced for the missing part; do not record a budget claim |
+
+Limits of the figures: one single-threaded call per engine per policy, warm nothing (the first call's class loading is inside `p01`); heap is a 20 ms sampling estimate of the harness JVM's own used heap; `reorder` and `proposal` run only on the I4 candidates the partial pass finds under the same limits; the proposal's rate overstates independent hits because it stops at its first `NOT_PROVEN` step.
+
+### Never record
+
+Raw `policy_snapshot` rows, policy IDs or hashes, device IDs, rule UIDs or rule names, object, section or layer names, addresses, usernames, exception messages, bank identifiers, or any mapping from `p01`..`p10` ordinals to policies. Only the counted tokens above, taken from `pibudget-<tag>.tsv`, are recorded.
+
+### Closes
+
+Closes nothing by itself and decides nothing. After a clean, complete PO-session run (`done`, `analysis_failed` 0, `snapshots_ranked` 10, `filtered_lines` 0) the PO session may record the stored-policy measurement that Q8 and the P2 gate of `POLICY_INSIGHTS_DESIGN_2026_11_24.md` section 9 wait for in `policy_insights_p2`; whether to change the budget remains a separate PO decision. Automated tests (`PolicyUnionCoverScaleTest` and siblings, the harness self-test) and the in-pod stored-policy run are separate gates.
+
+---
+
 ## Not on this sheet
 
 - **Script Execution real-environment validation (`script_execution_module`):** governed by PO answer 6 (`docs/design/PO_DECISION_RECORD_2026_11_23_P1_MIDDAY_ANSWERS.md`) and covered by its own standalone checklist in `docs/design/SCRIPT_EXECUTION_REAL_ENV_VALIDATION_CHECKLIST_2026_11_23.md`.

@@ -464,6 +464,134 @@ class ZoneMatrixEvidenceReportInputsTest {
         assertEquals(summary.findings().size(), table(built, "findings").size(), "every open finding is in the period");
     }
 
+    // ------------------------------------------------------------------ ZM-32 resolved findings of every reason
+
+    private static final Instant PERIOD_FROM = NOW.minus(Duration.ofDays(7));
+
+    /** A stored VIOLATION that was resolved at {@code resolvedAt} for {@code reason} (a raw string, so unknown ones work). */
+    private Finding resolved(String policy, String uid, int number, String reason, Instant resolvedAt) {
+        Finding f = finding(policy, uid, number, RULE_NAME, "VIOLATION", "HIGH", List.of(), zoneB, zoneA);
+        return new Finding(f.policySourceId(), f.ruleUid(), f.inlineParentPath(), f.violatedPairs(), f.ruleId(),
+                f.ruleNumber(), f.ruleName(), f.sectionId(), f.sectionName(), f.targetDeviceIds(), f.outcome(),
+                f.reason(), f.highestSeverity(), f.flags(), f.coveringRuleId(), f.violatedCells(), f.undecidedParts(),
+                f.natView(), resolvedAt.minus(Duration.ofDays(2)), resolvedAt.minus(Duration.ofDays(3)),
+                resolvedAt.minus(Duration.ofMinutes(5)), resolvedAt, reason);
+    }
+
+    private ZoneMatrixRunService periodFixture(Finding... resolvedFindings) {
+        defaultVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        List<Finding> all = new ArrayList<>();
+        all.add(finding("P-CUR", "u-open", 1, RULE_NAME, "VIOLATION", "LOW", List.of(), zoneB, zoneA));
+        all.addAll(List.of(resolvedFindings));
+        completeRun("P-CUR", "COMPLETE", 0, all);
+        return runService();
+    }
+
+    private Input periodInput(ZoneMatrixRunService service, List<ZoneMatrixRunRepository.ResolvedFinding> read,
+            ZoneMatrixSummaryView.Labels labels) {
+        return ZoneMatrixEvidenceReportInputs.assemble(service.storedSummary(), read, labels, MAPPER,
+                new Request("9.9.9-test", CALLER, PERIOD_FROM, NOW, null, null, null, null), NOW);
+    }
+
+    @Test
+    void zm32_aPeriodReportListsFindingsResolvedForEveryReasonInsideThePeriodExactlyOnce() {
+        Instant changed = NOW.minus(Duration.ofDays(1));
+        Instant removed = NOW.minus(Duration.ofDays(2));
+        Instant versionChange = NOW.minus(Duration.ofDays(3));
+        ZoneMatrixRunService service = periodFixture(
+                resolved("P-CUR", "u-changed", 11, "RULE_CHANGED", changed),
+                resolved("P-CUR", "u-removed", 12, "RULE_REMOVED_OR_DISABLED", removed),
+                resolved("P-CUR", "u-version", 13, "MATRIX_VERSION_CHANGED", versionChange),
+                resolved("P-CUR", "u-before", 14, "RULE_CHANGED", PERIOD_FROM.minus(Duration.ofSeconds(1))),
+                resolved("P-CUR", "u-after", 15, "RULE_CHANGED", NOW));
+        var read = service.resolvedInPeriod(PERIOD_FROM, NOW);
+        assertEquals(3, read.size(), "the half-open period holds the first three only");
+
+        // The stores list one finding twice (an older chain row, and the version change also from the summary read).
+        List<ZoneMatrixRunRepository.ResolvedFinding> twice = new ArrayList<>(read);
+        twice.add(read.get(0));
+        twice.addAll(read);
+        Input in = periodInput(service, twice, raw());
+        assertTrue(in.filterDescription().contains("for any reason"));
+        assertNull(in.wholeScopeFindingCount());
+        Built built = ZoneMatrixEvidenceReport.build(in, NOW);
+        var rows = table(built, "findings");
+        assertEquals(4, rows.size(), "one open finding and three resolved ones, each once");
+        for (String number : List.of("#11", "#12", "#13")) {
+            assertEquals(1, rows.stream().filter(r -> r.get(1).contains("(rule " + number + ")")).count(), number);
+        }
+        assertTrue(rows.stream().noneMatch(r -> r.get(1).contains("(rule #14)") || r.get(1).contains("(rule #15)")),
+                "resolved before the period or at its exclusive end: absent");
+        for (var row : rows) {
+            if (row.get(1).contains("(rule #1)")) continue;
+            assertEquals("RESOLVED", row.get(9));
+            assertFalse(row.get(10).isBlank(), "first observed date");
+            assertFalse(row.get(11).isBlank(), "first observed in any version date");
+            assertFalse(row.get(12).isBlank(), "last observed date");
+            assertFalse(row.get(13).isBlank(), "resolved date");
+        }
+        assertEquals("RULE_CHANGED", reasonOf(rows, "#11"));
+        assertEquals("RULE_REMOVED_OR_DISABLED", reasonOf(rows, "#12"));
+        assertEquals("MATRIX_VERSION_CHANGED", reasonOf(rows, "#13"));
+        assertEquals("", reasonOf(rows, "#1"), "an open finding has no resolution reason");
+    }
+
+    private static String reasonOf(List<List<String>> rows, String number) {
+        return rows.stream().filter(r -> r.get(1).contains("(rule " + number + ")")).findFirst().orElseThrow().get(14);
+    }
+
+    @Test
+    void zm32_aVersionChangeResolutionTheSummaryAlreadyListsIsNotListedAgain() {
+        ZoneMatrixRunService service = periodFixture(
+                resolved("P-CUR", "u-version", 13, "MATRIX_VERSION_CHANGED", NOW.minus(Duration.ofDays(3))));
+        StoredSummary summary = service.storedSummary();
+        assertEquals(1, summary.resolvedByVersionChangeByVersion().values().stream().mapToInt(List::size).sum());
+        Input in = ZoneMatrixEvidenceReportInputs.assemble(summary, service.resolvedInPeriod(PERIOD_FROM, NOW), raw(),
+                MAPPER, new Request("9.9.9-test", CALLER, PERIOD_FROM, NOW, null, null, null, null), NOW);
+        var rows = table(ZoneMatrixEvidenceReport.build(in, NOW), "findings");
+        assertEquals(1, rows.stream().filter(r -> r.get(1).contains("(rule #13)")).count());
+    }
+
+    @Test
+    void zm32_aResolutionReasonTheEnumDoesNotKnowIsKeptAndPrintedAsUnknown() {
+        ZoneMatrixRunService service = periodFixture(
+                resolved("P-CUR", "u-future", 16, "RULE_SPLIT_BY_A_FUTURE_ENGINE", NOW.minus(Duration.ofDays(1))));
+        Input in = periodInput(service, service.resolvedInPeriod(PERIOD_FROM, NOW), raw());
+        var rows = table(ZoneMatrixEvidenceReport.build(in, NOW), "findings");
+        assertEquals("UNKNOWN", reasonOf(rows, "#16"));
+        assertEquals("RESOLVED", rows.stream().filter(r -> r.get(1).contains("(rule #16)")).findFirst().orElseThrow().get(9));
+    }
+
+    @Test
+    void zm32_theMaskedViewMasksTheNamesOfEveryResolvedRowToo() {
+        ZoneMatrixRunService service = periodFixture(
+                resolved("P-CUR", "u-changed", 11, "RULE_CHANGED", NOW.minus(Duration.ofDays(1))),
+                resolved("P-CUR", "u-removed", 12, "RULE_REMOVED_OR_DISABLED", NOW.minus(Duration.ofDays(2))));
+        Input in = periodInput(service, service.resolvedInPeriod(PERIOD_FROM, NOW), masked());
+        Built built = ZoneMatrixEvidenceReport.build(in, NOW);
+        assertEquals(3, table(built, "findings").size());
+        List<String> all = new ArrayList<>(strings(in));
+        built.sections().forEach(sec -> sec.tables().forEach(t -> t.rows().forEach(r ->
+                r.forEach(c -> all.add(c.text())))));
+        for (String planted : List.of(RULE_NAME, ZONE_A_NAME, ZONE_B_NAME, ZONE_C_NAME, POLICY_NAME, SOURCE_NAME,
+                CONTAINER_NAME)) {
+            assertTrue(all.stream().noneMatch(v -> v != null && v.contains(planted)), planted);
+        }
+        for (String marker : ADDRESS_MARKERS) {
+            assertTrue(all.stream().noneMatch(v -> v != null && v.contains(marker)), marker);
+        }
+    }
+
+    @Test
+    void zm32_withoutThePeriodReadOnlyVersionChangeResolutionsAreListedAndTheDescriptionSaysSo() {
+        ZoneMatrixRunService service = periodFixture(
+                resolved("P-CUR", "u-changed", 11, "RULE_CHANGED", NOW.minus(Duration.ofDays(1))));
+        Input in = periodInput(service, null, raw());
+        assertTrue(in.filterDescription().contains("only those resolved by a matrix version change"));
+        assertEquals(1, table(ZoneMatrixEvidenceReport.build(in, NOW), "findings").size());
+    }
+
     @Test
     void anUnknownPolicyOrOutcomeFilterIsRefused() {
         StoredSummary summary = fullFixture();
