@@ -16,7 +16,7 @@ import com.sun.net.httpserver.HttpServer;
 
 class StaticRouteCliTest {
 
-    private static final String PREVIEW_ID = "99999999-8888-4777-8666-555555555555";
+    private static final String PREVIEW_ID = "srp-99999999-8888-4777-8666-555555555555";
     private static final String UNIT_ID = "11111111-2222-4333-8444-555555555555";
 
     record Seen(String method, String path, String csrf, String idemKey, String body) {
@@ -42,7 +42,7 @@ class StaticRouteCliTest {
     @Test
     void staticRoutePreviewAndShowHitTheExactR0Routes(@TempDir Path home) throws Exception {
         List<Seen> seen = new ArrayList<>();
-        HttpServer server = serve(seen, 202, "{\"preview_id\":\"99999999-8888-4777-8666-555555555555\",\"mutation_possible\":false}".getBytes(StandardCharsets.UTF_8));
+        HttpServer server = serve(seen, 202, "{\"preview_id\":\"srp-99999999-8888-4777-8666-555555555555\",\"mutation_possible\":false}".getBytes(StandardCharsets.UTF_8));
         try {
             NexusSessionCli cli = new NexusSessionCli(home);
             cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "cookie-1", "csrf-1"));
@@ -90,6 +90,8 @@ class StaticRouteCliTest {
             assertEquals(2, cli.run(new String[] {"static-route-preview", UNIT_ID, "192.0.2.128/25"}));
             assertEquals(2, cli.run(new String[] {"static-route-preview", UNIT_ID, "192.0.2.128/25", "192.0.2.1", "--unknown-flag"}));
             assertEquals(2, cli.run(new String[] {"static-route-preview-show", "not-a-uuid"}));
+            assertEquals(2, cli.run(new String[] {"static-route-preview-show", "99999999-8888-4777-8666-555555555555"}));
+            assertEquals(2, cli.run(new String[] {"static-route-preview-show", "srp-99999999-8888-4777-8666-55555555555A"}));
             assertTrue(seen.isEmpty());
         } finally {
             server.stop(0);

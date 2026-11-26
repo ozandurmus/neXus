@@ -20,8 +20,8 @@ final class StaticRouteCli {
 
     static final String BASE_PATH = "/api/v2/operations/static-route/preview";
     private static final Pattern OPAQUE_TARGET = Pattern.compile("\\A[A-Za-z0-9_.:-]{1,128}\\z");
-    private static final Pattern UUID_FORM = Pattern.compile(
-            "\\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z");
+    private static final Pattern PREVIEW_ID_FORM = Pattern.compile(
+            "\\Asrp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\z");
     private static final Pattern CIDR_FORM = Pattern.compile(
             "\\A\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/\\d{1,2}\\z");
     private static final Pattern IPV4_FORM = Pattern.compile(
@@ -149,10 +149,10 @@ final class StaticRouteCli {
 
     private int show(String[] args) throws IOException, InterruptedException {
         String usage = "static-route-preview-show <id>";
-        if (args.length != 2 || !UUID_FORM.matcher(args[1]).matches()) {
+        if (args.length != 2 || !PREVIEW_ID_FORM.matcher(args[1]).matches()) {
             throw new IllegalArgumentException("usage: " + usage);
         }
-        return NexusSessionCli.print(cli.call("GET", BASE_PATH + "/" + args[1].toLowerCase(Locale.ROOT), null));
+        return NexusSessionCli.print(cli.call("GET", BASE_PATH + "/" + args[1], null));
     }
 
     private static String nextValue(String[] args, int index, String usage) {

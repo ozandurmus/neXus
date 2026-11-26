@@ -62,6 +62,7 @@ public final class StaticRoutePreview {
 
     public static final String CP_DEFAULT_CONTEXT = "gaia-default";
     public static final String ASA_SINGLE_CONTEXT = "single";
+    public static final String PREVIEW_ID_PREFIX = "srp-";
 
     // Whole-string anchor patterns (\A...\z) per Contract §5.1 invariant 1 and §5.3.
     private static final Pattern IPV4_OCTETS = Pattern.compile(
@@ -78,8 +79,8 @@ public final class StaticRoutePreview {
     private static final Pattern TICKET_REF = Pattern.compile("\\A[A-Za-z0-9_.:/-]{3,64}\\z");
     private static final Pattern REASON = Pattern.compile("\\A[\\x20-\\x7E]{8,255}\\z");
     private static final Pattern ADMIN_USER = Pattern.compile("\\A[A-Za-z0-9_.-]{1,31}\\z");
-    private static final Pattern UUID_V4 = Pattern.compile(
-            "\\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\z");
+    private static final Pattern PREVIEW_ID = Pattern.compile(
+            "\\Asrp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\z");
 
     private StaticRoutePreview() {
     }
@@ -307,8 +308,14 @@ public final class StaticRoutePreview {
             String reason) {
     }
 
+    /** Validates the V252 {@code static_route_preview.preview_id} format ({@code srp-<lowercase-uuid>}). */
+    public static boolean isValidPreviewId(String value) {
+        return value != null && PREVIEW_ID.matcher(value).matches();
+    }
+
+    /** Alias for {@link #isValidPreviewId(String)} retained for callers checking preview identifiers. */
     public static boolean isValidUuid(String value) {
-        return value != null && UUID_V4.matcher(value).matches();
+        return isValidPreviewId(value);
     }
 
     public static int parseIpv4ToInt(String raw, String errorCode) {

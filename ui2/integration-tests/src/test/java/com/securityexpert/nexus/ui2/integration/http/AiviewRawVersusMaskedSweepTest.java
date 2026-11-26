@@ -76,10 +76,10 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixContent;
  * IPv4 and IPv6 blocks, cell rationale and regulation reference, the administrator as author and publisher), an ACI
  * cutover segment with one assessment and its flow rows (raw segment name, blocks, flow addresses, the seeded rule), and a
  * Cisco ASA failover pair (raw cluster reference, unit serials, stored running configurations in the test store); the
- * seeded static-route preview uses {@code "srp-" + UUID} per V252 ({@code static_route_preview_preview_id_check}), so
- * {@code GET /api/v2/operations/static-route/preview} answers 200 with the seeded row while
- * {@code GET /api/v2/operations/static-route/preview/*} answers 404 until
- * {@code StaticRoutePreview#isValidUuid} / {@code StaticRoutePreviewService} reconciles the {@code srp-} prefix with V252.
+ * seeded static-route preview uses {@code "srp-" + UUID} per V252 ({@code static_route_preview_preview_id_check}) and
+ * {@code '[]'::jsonb} for {@code inverse_plan_json} per V275, so both
+ * {@code GET /api/v2/operations/static-route/preview} and {@code GET /api/v2/operations/static-route/preview/*} answer
+ * 200 with the seeded row.
  * Output names the route, the HTTP status and the value <em>class</em> with a count --
  * never a value. A surviving raw value fails the test unless the route and class are on {@link #KNOWN_LEAKS}, which
  * must match the findings exactly (an entry that stops leaking fails too, so the list only shrinks on purpose).</p>
@@ -148,6 +148,7 @@ class AiviewRawVersusMaskedSweepTest {
             Map.entry("GET /api/v2/system-logs/*/chunks", Set.of("log-chunk")),
             Map.entry("GET /api/v2/system-logs/chunks/*/text", Set.of("log-line")),
             Map.entry("GET /api/v2/operations/static-route/preview", Set.of("device", "static-route-preview")),
+            Map.entry("GET /api/v2/operations/static-route/preview/*", Set.of("device", "static-route-preview")),
             Map.entry("GET /api/v2/zone-matrix/versions", Set.of("zone-matrix-version")),
             Map.entry("GET /api/v2/zone-matrix/versions/*", Set.of("zone-matrix-version", "zone")),
             Map.entry("GET /api/v2/zone-matrix/draft", Set.of("zone-matrix-version")),
@@ -631,7 +632,7 @@ class AiviewRawVersusMaskedSweepTest {
                         + "interface_name, route_name, device_comment, representative_host, state, verdict, pre_checks_json, "
                         + "command_plan_json, inverse_plan_json, completed_at) values (?, ?, ?, ?, ?, ?, 'check_point', "
                         + "'default', 'ADD', '203.0.113.0/24', ?, 'eth1', ?, ?, '203.0.113.10', 'DONE', 'PASS', '[]'::jsonb, "
-                        + "'{}'::jsonb, '{}'::jsonb, now())",
+                        + "'{}'::jsonb, '[]'::jsonb, now())",
                         preview, UUID.randomUUID().toString(), "4".repeat(64), e.principal(), e.cluster(), e.cpMemberA().id(),
                         e.cpMemberB().interfaceAddress(), "to-" + e.panFirewall().hostname(),
                         "for " + e.principal());

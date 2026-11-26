@@ -187,7 +187,7 @@ public final class StaticRoutePreviewService {
         PreviewPlanSet compiledPlans = StaticRoutePreview.compilePreviewPlans(
                 validated, unit.memberDeviceIds(), Optional.empty(), Optional.empty());
 
-        String previewId = UUID.randomUUID().toString();
+        String previewId = StaticRoutePreview.PREVIEW_ID_PREFIX + UUID.randomUUID();
         String preChecksJson = writeJson(stageAChecks);
         String commandPlanJson = writeJson(compiledPlans);
         String inversePlanJson = writeJson(compiledPlans.inverseSteps());
@@ -258,7 +258,7 @@ public final class StaticRoutePreviewService {
     }
 
     public Optional<Map<String, Object>> getPreview(String previewId, boolean masked) {
-        if (!StaticRoutePreview.isValidUuid(previewId)) {
+        if (!StaticRoutePreview.isValidPreviewId(previewId)) {
             return Optional.empty();
         }
         return repository.find(previewId)
