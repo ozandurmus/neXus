@@ -230,7 +230,7 @@ def start(ops, name, meta, agy_only=True, agy_running=0, extra=""):
 
 def test_agy_only_routes_a_pin_claude_lane_to_agy(ops):
     out = start(ops, "20261126-1300-G5-D5-p1-pinned", "base=main\nengine=claude\npin_claude=1\nclaude_model=sonnet\n")
-    assert "gemini-4-carbon-high" in out and "claude" not in out.replace("pin_claude", "")
+    assert "gemini-4-neon-medium" in out and "claude" not in out.replace("pin_claude", "")
 
 
 def test_without_agy_only_pin_claude_still_runs_on_claude(ops):
@@ -252,7 +252,7 @@ def test_agy_only_sends_a_state_sync_lane_to_agy_not_claude(ops):
 def test_agy_only_lifts_the_half_and_half_slot_cap(ops):
     # Two agy lanes already run (MAX 3): normally the third spills to Claude, under AGY_ONLY it stays on agy.
     out = start(ops, "20261126-1300-G5-D5-p1-third", "base=main\n", agy_running=2)
-    assert "gemini-4-carbon-high" in out
+    assert "gemini-4-neon-medium" in out
     ops.lq.joinpath("AGY_ONLY").unlink()
     for f in ops.lq.glob("20261126*"):
         f.unlink()
@@ -269,12 +269,12 @@ def test_explicit_gemini_model_in_the_meta_is_honored_by_an_agy_lane(ops):
 
 def test_without_a_model_line_the_lane_name_still_routes(ops):
     out = start(ops, "20261126-1300-G5-D5-p1-named", "base=main\nengine=agy\n", agy_only=False)
-    assert "gemini-4-carbon-high" in out
+    assert "gemini-4-neon-medium" in out
 
 
 def test_agy_only_with_every_model_rate_limited_keeps_the_brief_queued(ops):
-    for m in ("carbon", "neon", "hydrogen"):
-        (ops.lq / f".agy-limited-gemini-4-{m}-high").touch()
+    for m in ("gemini-4-carbon-high", "gemini-4-neon-high", "gemini-4-neon-medium", "gemini-4-hydrogen-high"):
+        (ops.lq / f".agy-limited-{m}").touch()
     out = start(ops, "20261126-1300-G5-D5-p1-limited", "base=main\nengine=claude\npin_claude=1\n")
     assert "stays queued" in out and (ops.lq / "20261126-1300-G5-D5-p1-limited.brief").exists()
     assert not (ops.lq / "ENGINE_CLAUDE").exists()
@@ -350,3 +350,71 @@ def test_the_lane_runner_re_executes_itself_only_when_its_script_changed(ops, tm
     r = ops.source("lane-runner.sh", body)
     assert r.stdout.split() .count("REEXEC") == 1 and "after-unchanged" in r.stdout
     assert r.stdout.index("after-unchanged") < r.stdout.index("REEXEC")
+
+
+@pytest.mark.parametrize("lane_name,meta,expected", [
+    ("20261126-1300-G5-D5-docs-update", "base=main\n", "gemini-4-hydrogen-high"),
+    ("20261126-1300-G5-D5-checklist-audit", "base=main\n", "gemini-4-hydrogen-high"),
+    ("20261126-1300-G5-D5-p1-feature", "base=main\n", "gemini-4-neon-medium"),
+    ("20261126-1300-G5-D5-refill-p1", "base=main\n", "gemini-4-neon-medium"),
+    ("20261126-1300-G5-D5-misc-job", "base=main\n", "gemini-4-neon-medium"),
+    ("20261126-1300-G5-D5-p1-deep", "base=main\nmodel=gemini-4-carbon-high\n", "gemini-4-carbon-high"),
+])
+def test_minimum_required_model_routing_by_lane_name_and_explicit_meta(ops, lane_name, meta, expected):
+    out = start(ops, lane_name, meta)
+    assert f"({expected}," in out
+    args = next(ops.logs.glob("q-*.log.args")).read_text()
+    assert f"--model {expected}" in args
+
+
+@pytest.mark.parametrize("lane_name", [
+    "20261126-1300-G5-D5-p1-fallback",
+    "20261126-1300-G5-D5-docs-fallback",
+])
+def test_rate_limit_fallback_from_neon_or_hydrogen_never_escalates_to_carbon(ops, lane_name):
+    for m in ("gemini-4-hydrogen-high", "gemini-4-neon-medium", "gemini-4-neon-high"):
+        (ops.lq / f".agy-limited-{m}").touch()
+    out = start(ops, lane_name, "base=main\n")
+    assert "stays queued" in out and "gemini-4-carbon-high" not in out
+    assert (ops.lq / f"{lane_name}.brief").exists()
+
+
+def test_rate_limit_fallback_order_moves_down_and_sideways_never_up_to_carbon(ops):
+    (ops.lq / ".agy-limited-gemini-4-neon-medium").touch()
+    out = start(ops, "20261126-1300-G5-D5-p1-down", "base=main\n")
+    assert "-> 20261126-1300-G5-D5-p1-down on gemini-4-hydrogen-high" in out
+    assert "(gemini-4-hydrogen-high," in out
+
+
+def test_agy_only_planner_brief_emits_explicit_minimum_model_tier_table(ops):
+    planner_setup(ops)
+    r = ops.source("lane-runner.sh", "maybe_refill")
+    assert r.returncode == 0, r.stderr
+    brief = next(ops.lq.glob("*refill-p1.brief")).read_text()
+    for tier in ("gemini-4-hydrogen-high", "gemini-4-neon-medium", "gemini-4-neon-high", "gemini-4-carbon-high"):
+        assert tier in brief
+    assert "Always write an explicit model=" in brief
+
+
+def test_start_next_lane_removes_zero_commit_leftover_branch_and_creates_worktree(ops):
+    name = "20261126-1300-G5-D5-p1-stale"
+    wt = ops.codo / f"nexus-q-{name}"
+    ops.git(ops.repo, "worktree", "add", "-q", "-b", f"lane/q-{name}", str(wt), "main")
+    out = start(ops, name, "base=main\n")
+    assert "removed zero-commit leftover branch" in out
+    assert f"started L20261126-5 #5 {name}" in out
+    assert (ops.lq / "started" / f"{name}.brief").exists()
+    assert wt.exists()
+
+
+def test_start_next_lane_refuses_to_delete_leftover_branch_with_commits(ops):
+    name = "20261126-1300-G5-D5-p1-precious"
+    wt = ops.codo / f"nexus-q-{name}"
+    ops.git(ops.repo, "worktree", "add", "-q", "-b", f"lane/q-{name}", str(wt), "main")
+    (wt / "work.txt").write_text("keep me\n")
+    ops.git(wt, "add", "work.txt")
+    ops.git(wt, "commit", "-q", "-m", "valuable work")
+    out = start(ops, name, "base=main\n")
+    assert "removed zero-commit leftover branch" not in out
+    assert "brief stays queued for one retry" in out
+    assert "valuable work" in ops.git(ops.repo, "log", "-1", "--pretty=%s", f"lane/q-{name}")
