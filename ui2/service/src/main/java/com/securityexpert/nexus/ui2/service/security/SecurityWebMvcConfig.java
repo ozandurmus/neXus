@@ -48,6 +48,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/zone-matrix/runs", ActionRegistry.ZONE_MATRIX_EVALUATE),
             // Zone matrix, delivery step 4b-2b (sections 7.1 and 7.2): the read-only stored summary; names masked in the controller.
             Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ),
+            // Zone matrix, delivery step 4b-2 (sections 3.4, 7.1 and 8.1): the audited witness read of one stored finding;
+            // replay_viewer is refused in the controller too, whatever other role it holds.
+            Map.entry("GET /api/v2/zone-matrix/findings/*/witness", ActionRegistry.ZONE_MATRIX_ZONES_READ),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /devices/*/software-history", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/software-history/changes", ActionRegistry.DEVICE_READ),

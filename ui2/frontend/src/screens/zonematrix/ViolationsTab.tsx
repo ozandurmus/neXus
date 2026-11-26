@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 
 import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
-import { StatePanel, Ts, Unknown } from "../../shell/States";
+import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../../shell/States";
 import type { Tone } from "../../shell/tone";
 import { m3 } from "../../theme/m3Theme";
 import { Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
@@ -16,7 +16,8 @@ import {
   type ZoneSummaryHandle,
 } from "./zoneMatrixSummaryUi";
 import {
-  severityWord, statementWord,
+  AUDIT_UNAVAILABLE_TEXT, getFindingWitness, severityWord, statementWord, zoneErrorCode,
+  type FindingWitnessResponse, type StoredWitnessTuple,
   type SummaryCellCount, type SummaryFinding, type SummaryHeadline, type SummaryOutcome, type SummaryResolvedFinding, type ZoneMatrixSummaryResponse,
 } from "./zoneMatrixApi";
 
@@ -157,6 +158,94 @@ function ResolvedPanel({ data }: { readonly data: ZoneMatrixSummaryResponse }) {
   );
 }
 
+/** Said with every witness shown: the server wrote a WITNESS_VIEW audit row before it answered. */
+export const WITNESS_AUDIT_NOTICE = "This view is recorded in the audit log";
+
+/** One tuple as copyable text, ranges exactly as stored; an unreadable part stays "UNKNOWN". */
+export function witnessText(w: StoredWitnessTuple): string {
+  const service = w.protocol === "UNKNOWN" || w.port === "UNKNOWN" ? `service ${w.service || "UNKNOWN"}` : `${w.protocol}/${w.port}`;
+  return `source ${w.source_range || "UNKNOWN"} -> destination ${w.destination_range || "UNKNOWN"} ${service}`;
+}
+
+type WitnessState =
+  | { readonly kind: "idle" }
+  | { readonly kind: "loading" }
+  | { readonly kind: "shown"; readonly data: FindingWitnessResponse }
+  | { readonly kind: "not_stored" }
+  | { readonly kind: "restricted" }
+  | { readonly kind: "failed"; readonly text: string };
+
+/**
+ * Contract 7.1 Violations tab, "open Trace with the witness tuple (only with zone_matrix_zones_read)": the stored witness of
+ * one finding, read only on a click (an audited `WITNESS_VIEW` read, never prefetched), held by this row alone and dropped
+ * when hidden. Trace takes no tuple from its address yet, so the tuple is shown as copyable text rather than a link.
+ */
+function FindingWitness({ finding }: { readonly finding: SummaryFinding }) {
+  const [state, setState] = useState<WitnessState>({ kind: "idle" });
+  const findingId = finding.finding_id;
+  if (!findingId) return <span data-testid="witness-no-id"><Unknown reason="This finding carries no id for a witness read" /></span>;
+  const read = () => {
+    setState({ kind: "loading" });
+    getFindingWitness(findingId)
+      .then((data) => setState({ kind: "shown", data }))
+      .catch((err: unknown) => {
+        const code = zoneErrorCode(err);
+        if (code === "WITNESS_NOT_STORED") setState({ kind: "not_stored" });
+        else if (isRestricted(err)) setState({ kind: "restricted" });
+        else setState({ kind: "failed", text: code === "ZONE_MATRIX_AUDIT_UNAVAILABLE" ? AUDIT_UNAVAILABLE_TEXT
+          : "The stored witness could not be read." });
+      });
+  };
+  const hide = <M3Button emphasis="text" onClick={() => setState({ kind: "idle" })}>Hide witness</M3Button>;
+  switch (state.kind) {
+    case "idle":
+      return <M3Button emphasis="text" onClick={read}>Show witness</M3Button>;
+    case "loading":
+      return <Typography variant="body2" role="status">Reading the stored witness…</Typography>;
+    case "restricted":
+      return <Box data-testid="witness-restricted"><RestrictedPanel area="Witness addresses" /></Box>;
+    case "not_stored":
+      return (
+        <Box data-testid="witness-unknown">
+          <StatePanel variant="unknown" title="Witness UNKNOWN" announce="status"
+            body="This finding stored no witness tuple, so its witness is unknown; it is not an empty witness." />
+          {hide}
+        </Box>
+      );
+    case "failed":
+      return (
+        <Box data-testid="witness-error">
+          <StatePanel variant="error" title="Witness not shown" body={state.text}
+            action={<M3Button emphasis="tonal" onClick={read}>Retry</M3Button>} />
+        </Box>
+      );
+    case "shown": {
+      const names = new Map<string, string>();
+      for (const p of finding.violated_pairs) {
+        if (p.source_zone_id) names.set(p.source_zone_id, p.source_name);
+        if (p.destination_zone_id) names.set(p.destination_zone_id, p.destination_name);
+      }
+      const zone = (id: string | null) => (id ? names.get(id) ?? id : "UNKNOWN");
+      return (
+        <Box data-testid="witness-shown">
+          <Typography variant="body2" data-testid="witness-audit-notice" sx={{ fontWeight: 600 }}>{WITNESS_AUDIT_NOTICE}</Typography>
+          {state.data.cells.map((c, i) => (
+            <Box key={i} data-testid="witness-cell" sx={{ mt: 0.5 }}>
+              <Typography variant="body2">{zone(c.source_zone_id)} -&gt; {zone(c.destination_zone_id)} · NAT view {c.nat_view || "UNKNOWN"}</Typography>
+              {c.witness
+                ? <Box component="code" data-testid="witness-tuple" sx={{ ...mono, display: "block", userSelect: "all" }}>{witnessText(c.witness)}</Box>
+                : <Unknown reason="No witness tuple was stored for this cell" />}
+            </Box>
+          ))}
+          <Hint>Witness {state.data.witnesses_stored} of {state.data.cells_total} violated cells; matrix version {state.data.version_number}.
+            Trace does not take a tuple from a link yet: copy it into Trace.</Hint>
+          {hide}
+        </Box>
+      );
+    }
+  }
+}
+
 /** What is counted, with the part left out said out loud. */
 export function countsText(data: ZoneMatrixSummaryResponse, shown: number): string {
   const base = `${data.returned} of ${data.total_findings} finding${data.total_findings === 1 ? "" : "s"} returned by the server`;
@@ -168,8 +257,9 @@ export function countsText(data: ZoneMatrixSummaryResponse, shown: number): stri
 
 /**
  * Zone matrix delivery step 4, Violations tab (contract 7.1, 7.2, 5.9; ZM-26, ZM-34, ZM-35): the findings of the latest
- * COMPLETE run of each policy, from the stored summary. Names are shown exactly as the server sent them; no witness, block
- * or address is read here.
+ * COMPLETE run of each policy, from the stored summary. Names are shown exactly as the server sent them; the summary carries
+ * no witness, block or address. A session the server lets view blocks gets a per-row "Show witness" (an audited read of that
+ * one finding's stored tuple, only on a click).
  */
 export function ViolationsTab({ summary, pair = null, onPairChange }: {
   readonly summary: ZoneSummaryHandle;
@@ -190,6 +280,8 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
   const [lifecycle, setLifecycle] = useState("");
   const [offset, setOffset] = useState(0);
   const { data, params, setParams } = summary;
+  // The witness read is offered only when the server says this session may view blocks; never for a masked session.
+  const canWitness = data?.can?.view_blocks === true && data?.masked !== true;
 
   const flagOptions = useMemo(
     () => [...new Set((data?.findings ?? []).flatMap((f) => f.flags))].sort(),
@@ -226,6 +318,10 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
           : <span>{ruleLabel(f)}</span>;
       },
     },
+    ...(canWitness ? [{
+      key: "witness", header: "Witness", width: 300, wrap: true,
+      render: (f: SummaryFinding) => <FindingWitness finding={f} />,
+    }] : []),
     { key: "policy", header: "Policy", width: 150, wrap: true, render: (f) => f.policy_name },
     {
       key: "pairs", header: "Violated zone pairs", width: 320, wrap: true,
@@ -294,7 +390,7 @@ export function ViolationsTab({ summary, pair = null, onPairChange }: {
         </Box>
       ),
     },
-  ], []);
+  ], [canWitness]);
 
   const gate = summaryGate(summary, "Zone matrix violations");
   if (gate !== null || data === null) return <Box sx={{ pt: 1.5 }}>{gate}</Box>;

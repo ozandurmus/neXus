@@ -235,4 +235,38 @@ public interface ZoneMatrixRunRepository {
 
     /** The newest runs in any state, newest first: state and counts only (at most {@code limit}, capped at 500). */
     List<Run> runs(int limit);
+
+    /** One stored finding with its opaque database id ({@code zone_matrix_finding.finding_id}); the id is never parsed by readers. */
+    record IdentifiedFinding(Long findingId, Finding finding) {
+        public IdentifiedFinding { Objects.requireNonNull(finding, "finding"); }
+    }
+
+    /**
+     * {@link #findingsOf} with each finding's opaque id, in the same order. A store that keeps no id answers {@code null} ids,
+     * and a reader then offers no per-finding witness read.
+     */
+    default List<IdentifiedFinding> identifiedFindingsOf(String completeRunId) {
+        return findingsOf(completeRunId).stream().map(f -> new IdentifiedFinding(null, f)).toList();
+    }
+
+    /**
+     * The stored witness tuples and NAT views of one finding (section 8.1), with the run and version it was found against.
+     * Readers project it: a masked view never shows it (section 8.2) and every read is on record (section 3.4).
+     */
+    record StoredFindingWitness(long findingId, String runId, String versionId, int versionNumber, String natView,
+            List<Cell> violatedCells) {
+        public StoredFindingWitness {
+            Objects.requireNonNull(runId, "runId");
+            Objects.requireNonNull(versionId, "versionId");
+            violatedCells = List.copyOf(violatedCells);
+        }
+    }
+
+    /**
+     * The stored witness tuples of the finding with this opaque id, when it belongs to a {@code COMPLETE} run; empty for an
+     * unknown id or a finding of a run in any other state. Reads only; writes no audit row (the caller does, first).
+     */
+    default Optional<StoredFindingWitness> findingWitness(long findingId) {
+        return Optional.empty();
+    }
 }

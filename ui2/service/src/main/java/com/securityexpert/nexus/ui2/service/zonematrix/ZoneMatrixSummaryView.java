@@ -333,6 +333,8 @@ public final class ZoneMatrixSummaryView {
     private static Map<String, Object> storedFinding(StoredFinding s, String activeVersionId, Map<String, String> policyNames,
             Labels labels) {
         Map<String, Object> out = finding(s.finding(), s.versionId(), policyNames, labels);
+        // The opaque key of the audited witness read (GET /api/v2/zone-matrix/findings/{findingId}/witness); never the witness.
+        out.put("finding_id", s.findingId() == null ? null : String.valueOf(s.findingId()));
         out.put("run_id", s.runId());
         out.put("version_id", s.versionId());
         out.put("version_number", s.versionNumber());

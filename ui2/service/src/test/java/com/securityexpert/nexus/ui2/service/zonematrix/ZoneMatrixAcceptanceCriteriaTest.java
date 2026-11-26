@@ -508,6 +508,10 @@ class ZoneMatrixAcceptanceCriteriaTest {
                 // step 4b-2 (section 5.1 on demand): the one run route only starts a new run; it is a POST without a run id
                 if (path.equals("/api/v2/zone-matrix/runs") && method.getAnnotation(PostMapping.class) != null
                         && method.getAnnotation(PutMapping.class) == null) continue;
+                // step 4b-2 (sections 7.1, 8.1): the audited witness read of one stored finding is a GET only; it changes nothing
+                if (path.equals("/api/v2/zone-matrix/findings/{findingId}/witness")
+                        && method.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class) != null
+                        && method.getAnnotation(PostMapping.class) == null && method.getAnnotation(PutMapping.class) == null) continue;
                 assertFalse(path.matches(".*(revision|finding|/runs?(/|$)).*"), "no route addresses revisions, runs or findings: " + path);
                 if (path.endsWith("/delete")) assertTrue(path.contains("/draft/"), "a delete-style route only edits the draft: " + path);
             }

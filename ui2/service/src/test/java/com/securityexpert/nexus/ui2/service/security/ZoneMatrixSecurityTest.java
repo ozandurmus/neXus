@@ -25,7 +25,8 @@ class ZoneMatrixSecurityTest {
                 Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
                 Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE),
                 Map.entry("POST /api/v2/zone-matrix/runs", ActionRegistry.ZONE_MATRIX_EVALUATE),
-                Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ));
+                Map.entry("GET /api/v2/zone-matrix/summary", ActionRegistry.ZONE_MATRIX_READ),
+                Map.entry("GET /api/v2/zone-matrix/findings/4711/witness", ActionRegistry.ZONE_MATRIX_ZONES_READ));
         Map<String, String> stepOne = Map.of(
                 "GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ,
                 "GET /api/v2/zone-matrix/versions/00000000-0000-4000-8000-000000000001", ActionRegistry.ZONE_MATRIX_READ,
@@ -67,6 +68,17 @@ class ZoneMatrixSecurityTest {
         for (String role : new String[]{RoleToken.REPLAY_VIEWER, RoleToken.VIEWER, RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN,
                 RoleToken.BACKUP_ADMIN, RoleToken.ONBOARDING_ADMIN}) {
             assertFalse(runRoles.contains(role), role);
+        }
+        // step 4b-2 (sections 3.4, 7.1, 8.1; ZM-33 route-level pin): the stored witness read of one finding is the existing
+        // zone_matrix_zones_read action; security and compliance administrators only. viewer, onboarding_admin and every
+        // other role are refused at the gate, and replay_viewer (aiview) is never in the action (the controller refuses it too).
+        assertEquals(ActionRegistry.ZONE_MATRIX_ZONES_READ,
+                SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("GET /api/v2/zone-matrix/findings/*/witness"));
+        var witnessRoles = registry.find(ActionRegistry.ZONE_MATRIX_ZONES_READ).orElseThrow().requiredRoleTokens();
+        assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN), witnessRoles);
+        for (String role : new String[]{RoleToken.REPLAY_VIEWER, RoleToken.VIEWER, RoleToken.ONBOARDING_ADMIN, RoleToken.OPERATOR,
+                RoleToken.OPERATION_ADMIN, RoleToken.BACKUP_ADMIN}) {
+            assertFalse(witnessRoles.contains(role), role);
         }
         // section 3.4: only compliance_admin confirms a reference (ZM-23)
         assertEquals(Set.of(RoleToken.COMPLIANCE_ADMIN),
