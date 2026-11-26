@@ -62,6 +62,7 @@ interface ZonesWorld {
   readonly active?: (withBlocks: boolean) => ZoneVersionDetail;
   readonly draft?: ((withBlocks: boolean) => ZoneVersionDetail) | null;
   readonly lookup?: (address: string, versionId?: string) => { readonly status: number; readonly body: unknown };
+  readonly createZone?: (body: unknown) => { readonly status: number; readonly body: unknown };
 }
 
 function serveZones(opts: ZonesWorld = {}) {
@@ -118,6 +119,10 @@ function serveZones(opts: ZonesWorld = {}) {
     if (method === "POST" && path === "/api/v2/zone-matrix/lookup" && opts.lookup) {
       const body = parsedBody as { address: string; version_id?: string };
       const res = opts.lookup(body.address, body.version_id);
+      return reply(res.status, res.body);
+    }
+    if (method === "POST" && path === "/api/v2/zone-matrix/draft/zones" && opts.createZone) {
+      const res = opts.createZone(parsedBody);
       return reply(res.status, res.body);
     }
     return reply(404, { error: "NOT_FOUND", reason: "no such route in this test" });
@@ -298,5 +303,89 @@ describe("Contract 7.1 Zones tab conformance", () => {
     fireEvent.change(screen.getByLabelText("Address"), { target: { value: "192.0.2.9" } });
     fireEvent.click(screen.getByRole("button", { name: "Look up" }));
     expect(await screen.findByTestId("lookup-result")).toHaveTextContent("family UNKNOWN, version UNKNOWN");
+  });
+
+  it("range-to-CIDR decomposition in ZoneDialog: previews IPv4/IPv6 ranges before saving, fails closed on invalid ranges, and applies exact CIDRs", async () => {
+    const requests = serveZones({
+      can: ZONES_READ_CAN,
+      draft: (withBlocks) => makeDetail(draftSummary, {
+        zones: [makeZone({ blocks: withBlocks ? ["198.51.100.0/24"] : null })],
+      }),
+      createZone: () => ({
+        status: 200,
+        body: { version_id: "v-draft", revision: 6, content_sha256: HASH_DRAFT, zone_id: "z-range" },
+      }),
+    });
+    await openZonesTab();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add zone" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Name/), { target: { value: "ZONE-RANGE" } });
+
+    // Host-bits-set CIDR is never silently corrected or turned into a decomposition preview.
+    fireEvent.change(within(dialog).getByLabelText("Blocks"), { target: { value: "192.0.2.7/24" } });
+    expect(within(dialog).queryByTestId("cidr-decomposition-preview")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save to draft" })).toBeEnabled();
+
+    // Invalid/reversed range fails closed and keeps Apply and Save disabled.
+    fireEvent.change(within(dialog).getByLabelText("Blocks"), { target: { value: "192.0.2.20 - 192.0.2.10" } });
+    const invalidPreview = within(dialog).getByTestId("cidr-decomposition-preview");
+    expect(within(invalidPreview).getByRole("alert")).toHaveTextContent("Start address must not be greater than end address.");
+    expect(within(dialog).getByRole("button", { name: "Save to draft" })).toBeDisabled();
+
+    // Valid IPv4 and IPv6 non-CIDR ranges offer exact preview before saving, then apply cleanly.
+    fireEvent.change(within(dialog).getByLabelText("Blocks"), {
+      target: { value: "203.0.113.0/25\n192.0.2.10 - 192.0.2.20\n2001:db8::1 - 2001:db8::4" },
+    });
+    const preview = within(dialog).getByTestId("cidr-decomposition-preview");
+    expect(preview).toHaveTextContent("7 CIDR blocks from 2 ranges");
+    const v4List = within(preview).getByRole("list", { name: "CIDR decomposition for 192.0.2.10 - 192.0.2.20" });
+    expect(within(v4List).getAllByRole("listitem").map((el) => el.textContent)).toEqual([
+      "192.0.2.10/31", "192.0.2.12/30", "192.0.2.16/30", "192.0.2.20/32",
+    ]);
+    const v6List = within(preview).getByRole("list", { name: "CIDR decomposition for 2001:db8::1 - 2001:db8::4" });
+    expect(within(v6List).getAllByRole("listitem").map((el) => el.textContent)).toEqual([
+      "2001:db8::1/128", "2001:db8::2/127", "2001:db8::4/128",
+    ]);
+    expect(within(dialog).getByRole("button", { name: "Save to draft" })).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply CIDR decomposition" }));
+    expect(within(dialog).queryByTestId("cidr-decomposition-preview")).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Blocks")).toHaveValue(
+      "203.0.113.0/25\n192.0.2.10/31\n192.0.2.12/30\n192.0.2.16/30\n192.0.2.20/32\n2001:db8::1/128\n2001:db8::2/127\n2001:db8::4/128",
+    );
+
+    // The dedicated Start/End range helper previews single-address /128 and rejects mixed families.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Decompose IP range" }));
+    const helper = within(dialog).getByTestId("range-helper-panel");
+    fireEvent.change(within(helper).getByLabelText("Start address"), { target: { value: "198.51.100.1" } });
+    fireEvent.change(within(helper).getByLabelText("End address"), { target: { value: "2001:db8::1" } });
+    expect(within(helper).getByRole("alert")).toHaveTextContent("Start and end addresses must belong to the same IP family.");
+    expect(within(helper).getByRole("button", { name: "Add CIDRs to blocks" })).toBeDisabled();
+
+    fireEvent.change(within(helper).getByLabelText("Start address"), { target: { value: "2001:0DB8::9" } });
+    fireEvent.change(within(helper).getByLabelText("End address"), { target: { value: "2001:db8::9" } });
+    expect(within(helper).getByRole("list", { name: "Range CIDR preview" })).toHaveTextContent("2001:db8::9/128");
+    fireEvent.click(within(helper).getByRole("button", { name: "Add CIDRs to blocks" }));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to draft" }));
+    expect(await screen.findByText("Zone ZONE-RANGE was saved to the draft. The draft is not published.")).toBeInTheDocument();
+    expect(requests.find((r) => r.method === "POST" && r.url === "/api/v2/zone-matrix/draft/zones")?.body).toEqual({
+      revision: 5,
+      name: "ZONE-RANGE",
+      description: null,
+      role: null,
+      blocks: [
+        "203.0.113.0/25",
+        "192.0.2.10/31",
+        "192.0.2.12/30",
+        "192.0.2.16/30",
+        "192.0.2.20/32",
+        "2001:db8::1/128",
+        "2001:db8::2/127",
+        "2001:db8::4/128",
+        "2001:db8::9/128",
+      ],
+    });
   });
 });

@@ -15,6 +15,7 @@ import { StatePanel } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { TYPE } from "../../theme/tokens";
 import type { ZoneTabProps } from "./ZoneMatrixScreen";
+import { classifyBlockLine, decomposeIpRange } from "./cidrDecomposition";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
   ZONE_ROLES, addressCount, createZone, deleteZone, getZoneVersion, lookupZoneAddress, updateZone, zoneErrorCode, zoneErrorLines,
@@ -23,7 +24,8 @@ import {
 
 export const CANONICAL_BLOCK_NOTE =
   "One block per line, in canonical CIDR form: the network address and its prefix length, for example 192.0.2.0/24. "
-  + "A single address is written as /32 (IPv4) or /128 (IPv6). A block with host bits set, such as 192.0.2.7/24, is refused.";
+  + "A single address is written as /32 (IPv4) or /128 (IPv6). A block with host bits set, such as 192.0.2.7/24, is refused. "
+  + "Enter a range like 192.0.2.10 - 192.0.2.20 to preview its exact CIDR decomposition before saving.";
 
 /** The line next to the Show blocks action and the lookup: both are written to the audit log by the server. */
 export const AUDIT_LINE = "Viewing blocks is recorded in the audit log";
@@ -329,9 +331,47 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
   const [description, setDescription] = useState(zone?.description ?? "");
   const [role, setRole] = useState(zone?.role ?? "");
   const [blocks, setBlocks] = useState((zone?.blocks ?? []).join("\n"));
+  const [showRangeHelper, setShowRangeHelper] = useState(false);
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<readonly string[]>([]);
-  const lines = blockLines(blocks);
+  const lines = useMemo(() => blockLines(blocks), [blocks]);
+  const classifications = useMemo(() => lines.map(classifyBlockLine), [lines]);
+  const rangeProposals = useMemo(
+    () => classifications.filter((c): c is Extract<typeof c, { readonly kind: "range" }> => c.kind === "range"),
+    [classifications],
+  );
+  const rangeErrors = useMemo(
+    () => classifications.filter((c): c is Extract<typeof c, { readonly kind: "invalid_range" }> => c.kind === "invalid_range"),
+    [classifications],
+  );
+  const hasUnappliedRanges = rangeProposals.length > 0 || rangeErrors.length > 0;
+  const decomposedTotal = useMemo(
+    () => rangeProposals.reduce((sum, item) => sum + item.decomposed.cidrs.length, 0),
+    [rangeProposals],
+  );
+  const helperPreview = useMemo(() => {
+    if (rangeStart.trim() === "" && rangeEnd.trim() === "") return null;
+    return decomposeIpRange(rangeStart, rangeEnd);
+  }, [rangeStart, rangeEnd]);
+
+  const applyDecompositions = () => {
+    if (rangeErrors.length > 0 || rangeProposals.length === 0) return;
+    const expanded = classifications.flatMap((c) => (c.kind === "range" ? c.decomposed.cidrs : [c.line]));
+    setBlocks(expanded.join("\n"));
+    setErrors([]);
+  };
+
+  const appendHelperCidrs = () => {
+    if (!helperPreview || !helperPreview.ok) return;
+    const added = helperPreview.result.cidrs.join("\n");
+    setBlocks((prev) => (prev.trim() === "" ? added : `${prev.replace(/\s+$/, "")}\n${added}`));
+    setRangeStart("");
+    setRangeEnd("");
+    setErrors([]);
+  };
+
   const save = async () => {
     const input = { name: name.trim(), description: description.trim() === "" ? null : description.trim(), role: role === "" ? null : role, blocks: lines };
     setBusy(true); setErrors([]);
@@ -363,6 +403,90 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
         </TextField>
         <TextField label="Blocks" multiline minRows={6} maxRows={16} value={blocks} onChange={(e) => setBlocks(e.target.value)}
           placeholder={"192.0.2.0/24\n2001:db8::/32"} helperText={`${lines.length} ${lines.length === 1 ? "block" : "blocks"}. ${CANONICAL_BLOCK_NOTE}`} InputProps={{ sx: mono }} />
+        <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+          <M3Button emphasis="text" disabled={busy} onClick={() => setShowRangeHelper((v) => !v)}>
+            {showRangeHelper ? "Hide range helper" : "Decompose IP range"}
+          </M3Button>
+        </Stack>
+        {showRangeHelper ? (
+          <Box data-testid="range-helper-panel" sx={{ ...panelSx, bgcolor: m3.scLow, p: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Decompose address range to CIDR</Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1.5}>
+              <TextField size="small" label="Start address" placeholder="192.0.2.10" value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)} InputProps={{ sx: mono }} fullWidth />
+              <TextField size="small" label="End address" placeholder="192.0.2.20" value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)} InputProps={{ sx: mono }} fullWidth />
+            </Stack>
+            {helperPreview ? (
+              helperPreview.ok ? (
+                <Stack gap={1}>
+                  <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                    {helperPreview.result.family === "IPV6" ? "IPv6" : "IPv4"}:{" "}
+                    {addressCount(helperPreview.result.addressCount.toString())} {helperPreview.result.addressCount === 1n ? "address" : "addresses"}{" "}
+                    ({helperPreview.result.cidrs.length} CIDR {helperPreview.result.cidrs.length === 1 ? "block" : "blocks"})
+                  </Typography>
+                  <Box component="ul" aria-label="Range CIDR preview" sx={{ m: 0, p: 0, listStyle: "none", maxHeight: 140, overflowY: "auto", ...mono }}>
+                    {helperPreview.result.cidrs.map((cidr) => <li key={cidr}>{cidr}</li>)}
+                  </Box>
+                </Stack>
+              ) : (
+                <Typography variant="body2" role="alert" sx={{ color: m3.error }}>{helperPreview.reason}</Typography>
+              )
+            ) : (
+              <Hint>Enter start and end IPv4 or IPv6 addresses to preview the exact CIDR decomposition.</Hint>
+            )}
+            <Stack direction="row" justifyContent="flex-end">
+              <M3Button emphasis="tonal" disabled={busy || !helperPreview?.ok} onClick={appendHelperCidrs}>Add CIDRs to blocks</M3Button>
+            </Stack>
+          </Box>
+        ) : null}
+        {hasUnappliedRanges ? (
+          <Box data-testid="cidr-decomposition-preview" sx={{ ...panelSx, bgcolor: m3.scLow, p: 1.5 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>CIDR decomposition preview</Typography>
+              {rangeProposals.length > 0 ? (
+                <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                  {decomposedTotal} CIDR {decomposedTotal === 1 ? "block" : "blocks"} from {rangeProposals.length} {rangeProposals.length === 1 ? "range" : "ranges"}
+                </Typography>
+              ) : null}
+            </Stack>
+            {rangeErrors.length > 0 ? (
+              <Box role="alert" sx={{ color: m3.error, display: "flex", flexDirection: "column", gap: 0.5 }}>
+                {rangeErrors.map((err, idx) => (
+                  <Typography key={`${err.line}-${idx}`} variant="body2">
+                    <Box component="span" sx={mono}>{err.line}</Box>: {err.reason}
+                  </Typography>
+                ))}
+              </Box>
+            ) : null}
+            {rangeProposals.map((item, idx) => (
+              <Box key={`${item.line}-${idx}`} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <Typography variant="body2">
+                  <Box component="span" sx={mono}>{item.line}</Box>{" "}
+                  <Box component="span" sx={{ color: m3.onSurfaceVar }}>
+                    ({item.decomposed.family === "IPV6" ? "IPv6" : "IPv4"},{" "}
+                    {addressCount(item.decomposed.addressCount.toString())} {item.decomposed.addressCount === 1n ? "address" : "addresses"})
+                  </Box>
+                </Typography>
+                <Box component="ul" aria-label={`CIDR decomposition for ${item.line}`} sx={{ m: 0, pl: 2, maxHeight: 140, overflowY: "auto", ...mono }}>
+                  {item.decomposed.cidrs.map((cidr) => <li key={cidr}>{cidr}</li>)}
+                </Box>
+              </Box>
+            ))}
+            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+              <Hint>
+                {rangeErrors.length > 0
+                  ? "Fix the invalid address range above before applying or saving."
+                  : "Apply the CIDR decomposition before saving."}
+              </Hint>
+              {rangeProposals.length > 0 ? (
+                <M3Button emphasis="tonal" disabled={busy || rangeErrors.length > 0} onClick={applyDecompositions}>
+                  Apply CIDR decomposition
+                </M3Button>
+              ) : null}
+            </Stack>
+          </Box>
+        ) : null}
         {errors.length > 0 ? (
           <Box role="alert" sx={{ color: m3.error }}>
             {errors.map((line, index) => <Typography key={index} variant="body2" sx={{ fontWeight: index === 0 ? 600 : 400 }}>{line}</Typography>)}
@@ -370,7 +494,7 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
         ) : null}
         <Stack direction="row" gap={1} justifyContent="flex-end">
           <M3Button emphasis="text" disabled={busy} onClick={onClose}>Cancel</M3Button>
-          <M3Button emphasis="filled" disabled={busy || name.trim() === ""} onClick={() => { void save(); }}>Save to draft</M3Button>
+          <M3Button emphasis="filled" disabled={busy || name.trim() === "" || hasUnappliedRanges} onClick={() => { void save(); }}>Save to draft</M3Button>
         </Stack>
       </DialogContent>
     </Dialog>
