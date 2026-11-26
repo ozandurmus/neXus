@@ -289,6 +289,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/log-findings/*/acknowledge", ActionRegistry.LOG_FINDING_ACKNOWLEDGE),
             Map.entry("GET /api/v2/config/log-detection", ActionRegistry.LOG_DETECTION_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/log-detection", ActionRegistry.LOG_DETECTION_SETTINGS_WRITE),
+            // Log detection engine P2 (design sections 6.5 and 9): the template catalog under the same two settings actions.
+            Map.entry("GET /api/v2/config/log-detection/catalogs", ActionRegistry.LOG_DETECTION_SETTINGS_READ),
+            Map.entry("GET /api/v2/config/log-detection/catalogs/*", ActionRegistry.LOG_DETECTION_SETTINGS_READ),
+            Map.entry("POST /api/v2/config/log-detection/catalogs", ActionRegistry.LOG_DETECTION_SETTINGS_WRITE),
+            Map.entry("POST /api/v2/config/log-detection/catalogs/*/freeze", ActionRegistry.LOG_DETECTION_SETTINGS_WRITE),
             // Phase B settings (section 14): the one row of retention, caps and the two switches; security_admin only.
             Map.entry("GET /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_WRITE),

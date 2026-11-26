@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.platform.logtemplate.TemplateMiner;
 
 /**
  * The line shapes of the system-log template census, over <em>masked</em> lines only: the per-source header parse

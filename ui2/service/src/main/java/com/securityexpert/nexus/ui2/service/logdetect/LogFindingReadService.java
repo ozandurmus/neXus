@@ -82,8 +82,9 @@ public final class LogFindingReadService {
         m.put("enabled", s.enabled());
         m.put("shadow", s.enabled() && s.shadow(clock.instant()));
         m.put("shadow_until", iso(s.shadowUntil()));
-        m.put("phase", "P1");
-        m.put("layers", List.of("A"));
+        m.put("phase", s.p2Runs() ? "P2" : "P1");
+        m.put("layers", s.p2Runs() ? List.of("A", "B") : List.of("A"));
+        m.put("p2_enabled", s.p2Enabled());
         m.put("time_basis", "DEVICE_LOCAL");
         return m;
     }
@@ -319,25 +320,41 @@ public final class LogFindingReadService {
         m.put("enabled", s.enabled());
         m.put("shadow_until", iso(s.shadowUntil()));
         m.put("shadow", s.enabled() && s.shadow(clock.instant()));
+        m.put("p2_enabled", s.p2Enabled());
+        m.put("p2_runs", s.p2Runs());
         m.put("updated_at", iso(s.updatedAt()));
         m.put("updated_by", s.updatedBy() == null ? null : "recorded");
         return m;
     }
 
-    /** {@code enabled} and an optional {@code shadow_days} (0 to 90): the shadow period starts now. */
+    /**
+     * {@code enabled} (the P1 switch) and an optional {@code shadow_days} (0 to 90: the shadow period starts now), and/or
+     * {@code p2_enabled} (the P2 switch, V273). One audited write of the one settings row, by the same action. P2 can be
+     * switched on only while P1 is on and its shadow period has ended (design section 10: no phase starts before the
+     * previous phase's exit check, which follows the shadow period); switching it off is always allowed.
+     */
     public Answer updateSettings(String actorFingerprint, Map<String, Object> body) {
         if (actorFingerprint == null || actorFingerprint.isBlank()) {
             return Answer.refused(403, "LOG_DETECTION_SETTINGS_NOT_PERMITTED", "No authenticated session.");
         }
-        if (body == null || body.isEmpty() || !body.containsKey("enabled") || !(body.get("enabled") instanceof Boolean enabled)) {
-            return Answer.refused(400, "LOG_DETECTION_SETTINGS_INVALID", "The body must carry enabled (true or false).");
+        if (body == null || body.isEmpty() || (!body.containsKey("enabled") && !body.containsKey("p2_enabled"))) {
+            return Answer.refused(400, "LOG_DETECTION_SETTINGS_INVALID", "The body must carry enabled or p2_enabled (true or false).");
         }
         for (String key : body.keySet()) {
-            if (!key.equals("enabled") && !key.equals("shadow_days")) {
+            if (!key.equals("enabled") && !key.equals("shadow_days") && !key.equals("p2_enabled")) {
                 return Answer.refused(400, "LOG_DETECTION_SETTINGS_INVALID", key + ": not a log detection setting");
             }
         }
-        Instant shadowUntil = repository.settings().shadowUntil();
+        Settings current = repository.settings();
+        if (body.containsKey("enabled") && !(body.get("enabled") instanceof Boolean)) {
+            return Answer.refused(400, "LOG_DETECTION_SETTINGS_INVALID", "enabled: must be true or false");
+        }
+        if (body.containsKey("p2_enabled") && !(body.get("p2_enabled") instanceof Boolean)) {
+            return Answer.refused(400, "LOG_DETECTION_SETTINGS_INVALID", "p2_enabled: must be true or false");
+        }
+        boolean enabled = body.containsKey("enabled") ? (Boolean) body.get("enabled") : current.enabled();
+        boolean p2Enabled = body.containsKey("p2_enabled") ? (Boolean) body.get("p2_enabled") : current.p2Enabled();
+        Instant shadowUntil = current.shadowUntil();
         if (body.containsKey("shadow_days")) {
             Object v = body.get("shadow_days");
             if (!(v instanceof Number n) || n.doubleValue() != Math.rint(n.doubleValue()) || n.intValue() < 0 || n.intValue() > 90) {
@@ -345,7 +362,19 @@ public final class LogFindingReadService {
             }
             shadowUntil = n.intValue() == 0 ? null : clock.instant().plus(java.time.Duration.ofDays(n.intValue()));
         }
-        repository.writeSettings(actorFingerprint, enabled, shadowUntil);
+        boolean switchingP2On = p2Enabled && !current.p2Enabled();
+        if (switchingP2On && !enabled) {
+            return Answer.refused(409, "LOG_DETECTION_P2_NEEDS_P1", "P2 runs only together with P1: switch P1 on first.");
+        }
+        if (switchingP2On && shadowUntil != null && shadowUntil.isAfter(clock.instant())) {
+            return Answer.refused(409, "LOG_DETECTION_P2_BEFORE_P1_EXIT",
+                    "P2 cannot start while the P1 shadow period runs (until " + shadowUntil + "); it starts after the P1 exit check.");
+        }
+        if (body.containsKey("p2_enabled")) {
+            repository.writeSettings(actorFingerprint, enabled, shadowUntil, p2Enabled);
+        } else {
+            repository.writeSettings(actorFingerprint, enabled, shadowUntil);
+        }
         return Answer.ok(settings());
     }
 
@@ -356,7 +385,8 @@ public final class LogFindingReadService {
         m.put("finding_id", f.findingId());
         m.put("device_id", f.deviceId());
         m.put("source_key", f.sourceKey());
-        m.put("layer", "A");
+        m.put("phase", f.phase());
+        m.put("layer", f.layerB() == null ? "A" : "B");
         m.put("rule_id", f.ruleId());
         m.put("rule_version", f.ruleVersion());
         m.put("kind", f.kind());
@@ -370,11 +400,31 @@ public final class LogFindingReadService {
         m.put("severity_rule", f.severityRule());
         Map<String, Object> score = new LinkedHashMap<>();
         score.put("s", f.severityWeight());
-        score.put("r", null);
-        score.put("c", null);
-        score.put("score", null);
-        score.put("note", "P1 has layer A only: rarity (R) and change (C) arrive with layer B");
+        if (f.layerB() == null) {
+            score.put("r", null);
+            score.put("c", null);
+            score.put("score", null);
+            score.put("note", "layer A finding: rarity (R) and change (C) belong to layer B");
+        } else {
+            score.put("r", round(f.layerB().rarity(), 4));
+            score.put("c", round(f.layerB().change(), 4));
+            score.put("score", round(f.layerB().score(), 2));
+            score.put("note", "100 x S x R x C, used to order findings only; severity comes from rules");
+        }
         m.put("score", score);
+        if (f.layerB() != null) {
+            Map<String, Object> b = new LinkedHashMap<>();
+            b.put("template_id", f.layerB().templateId());
+            b.put("template_text", f.layerB().templateText());
+            b.put("kinds", f.layerB().kinds());
+            b.put("z", f.layerB().z() == null ? null : round(f.layerB().z(), 2));
+            b.put("baseline_median", f.layerB().baselineMedian());
+            b.put("baseline_mad", f.layerB().baselineMad());
+            b.put("device_first_seen", f.layerB().deviceFirstSeen() == null ? null : f.layerB().deviceFirstSeen().toString());
+            b.put("fleet_first_seen", f.layerB().fleetFirstSeen() == null ? null : f.layerB().fleetFirstSeen().toString());
+            b.put("prevalence", f.prevalenceDevices() + " other of " + f.cohortDevices() + " cohort devices");
+            m.put("layer_b", b);
+        }
         m.put("provenance", f.provenance());
         Map<String, Object> counts = new LinkedHashMap<>();
         counts.put("lines", f.eventCount());
@@ -404,13 +454,18 @@ public final class LogFindingReadService {
         versions.put("masking_rule_set", f.maskingRuleSet());
         versions.put("marker_list", f.markerListVersion());
         versions.put("config", f.configVersion());
-        versions.put("catalog", null);
+        versions.put("catalog", f.layerB() == null ? null : f.layerB().catalogVersion());
+        versions.put("normaliser", f.layerB() == null ? null : f.layerB().normaliserVersion());
         m.put("versions", versions);
         m.put("review_state", f.reviewState());
         m.put("review_at", iso(f.reviewAt()));
         m.put("first_raised_at", iso(f.firstRaisedAt()));
         m.put("updated_at", iso(f.updatedAt()));
         return m;
+    }
+
+    private static double round(double v, int scale) {
+        return java.math.BigDecimal.valueOf(v).setScale(scale, java.math.RoundingMode.HALF_UP).doubleValue();
     }
 
     private static String iso(Instant instant) {
