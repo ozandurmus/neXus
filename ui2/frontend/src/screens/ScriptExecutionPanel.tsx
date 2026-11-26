@@ -65,6 +65,7 @@ import {
   readFileAsBase64,
   resolveRunAsOptions,
   resolveScheduleZone,
+  validateFiveFieldCronShape,
 } from "./ScriptFormHelpers";
 import { ScriptRunsSection } from "./ScriptRunsSection";
 
@@ -483,13 +484,14 @@ function ScriptSettingsAndDetailCard({
   const effectiveRunAs = runAsOptions.includes(runAs) ? runAs : defaultRunAs;
   const parsedTimeout = Number(timeoutSeconds);
   const timeoutValid = Number.isInteger(parsedTimeout) && parsedTimeout >= 1 && parsedTimeout <= 3600;
+  const scheduleError = validateFiveFieldCronShape(schedule);
   const scheduleChanged = (schedule.trim() || null) !== (script.schedule ?? null);
   const credentialRefsChanged =
     credentialRefs.length !== script.credential_refs.length ||
     credentialRefs.some((refId, idx) => refId !== script.credential_refs[idx]);
 
   const handleSaveSettings = async () => {
-    if (!canEdit || busy || !timeoutValid) return;
+    if (!canEdit || busy || !timeoutValid || scheduleError !== null) return;
     setBusy(true);
     setError(null);
     setSavedNote(null);
@@ -676,8 +678,12 @@ function ScriptSettingsAndDetailCard({
                 placeholder="0 2 * * *"
                 value={schedule}
                 onChange={(e) => setSchedule(e.target.value)}
+                error={scheduleError !== null}
                 InputProps={{ sx: { fontFamily: MONO } }}
-                helperText={`minute hour day-of-month month day-of-week in ${scheduleZone} (leave blank to clear)`}
+                helperText={
+                  scheduleError ??
+                  `minute hour day-of-month month day-of-week in ${scheduleZone} (leave blank to clear)`
+                }
               />
               {schedule ? (
                 <M3Button emphasis="text" disabled={busy} onClick={() => setSchedule("")}>
@@ -782,7 +788,7 @@ function ScriptSettingsAndDetailCard({
             <Stack direction="row" spacing={1.5}>
               <M3Button
                 emphasis="filled"
-                disabled={busy || !timeoutValid || !effectiveRunAs}
+                disabled={busy || !timeoutValid || scheduleError !== null || !effectiveRunAs}
                 onClick={() => void handleSaveSettings()}
               >
                 {busy ? "Saving…" : "Save settings"}

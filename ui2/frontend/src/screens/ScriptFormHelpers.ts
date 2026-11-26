@@ -176,6 +176,30 @@ export function parseEgressInput(raw: string): string[] {
   return out;
 }
 
+/**
+ * Client-side five-field cron shape check ({@code minute hour day-of-month month day-of-week}).
+ * Full calendar/range evaluation stays authoritative on the server ({@code ScriptSchedule.normalizeFiveFieldCron}).
+ */
+export function validateFiveFieldCronShape(raw: string): string | null {
+  if (raw.trim() === "") {
+    return null;
+  }
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\r\n]/.test(raw)) {
+    return "Schedule must not contain control characters or line breaks.";
+  }
+  const fields = raw.trim().split(/\s+/);
+  if (fields.length === 6) {
+    return "Six-field cron (with seconds) is not supported; enter five fields: minute hour day-of-month month day-of-week.";
+  }
+  if (fields.length !== 5) {
+    return "Schedule must have exactly five cron fields: minute hour day-of-month month day-of-week.";
+  }
+  if (fields.some((field) => !/^[A-Za-z0-9*,/?#-]+$/.test(field))) {
+    return "Schedule contains unsupported characters; use standard five-field cron tokens.";
+  }
+  return null;
+}
+
 export function hasRunCapability(
   list: ScriptListResponse | null,
   detail?: ScriptSummary | null,

@@ -162,9 +162,10 @@ public final class PolicyHygiene {
         var sideResolver = Resolver.shadowing(snapshot, side);
         var typedResolver = Resolver.shadowing(snapshot, typedBudget);
         boolean pan = snapshot.metadata().vendor().equals("PAN");
+        boolean placementSupersets = pan || snapshot.metadata().vendor().equals("FGT");
         Map<String, Assessment> results = new LinkedHashMap<>();
         // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
-        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), pan, nonContainment, pan ? zones : ZoneUniverse.UNKNOWN));
+        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), placementSupersets, nonContainment, pan ? zones : ZoneUniverse.UNKNOWN));
         boolean budgetReached = false;
         for (Section section : snapshot.sections()) {
             if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) {
@@ -289,16 +290,17 @@ public final class PolicyHygiene {
      * <li>An earlier rule without a full match no longer makes every later rule UNKNOWN "earlier rule has unsupported
      * constraints" when it is a {@link Partial} prior proven disjoint from the later rule. Partial priors never cover (no
      * REDUNDANT or CONFLICT from them) and are consulted only where the scan would have given that very reason.</li>
-     * <li>Palo Alto zone supersets ({@link #zoneSupersets}): an earlier universal rule with the same install-on whose
-     * from- and to-zones hold the later rule's ({@link PolicyNormalization#zonesCover}) is a coverage candidate too, and
-     * no longer makes the rule "zone or install-on coverage is unproven". An overlapping prior with the same install-on
-     * whose zones provably do not hold the rule's ({@link PolicyNormalization#zonesCannotCover}) cannot cover it and is
-     * passed over, as a partially overlapping address or service is; "unproven" remains only where the relation cannot
-     * be decided (any mixed with names, a lone any against names, unequal install-on). The compatible (former)
-     * candidates are searched first and win when one covers, so
+     * <li>Palo Alto zone and FortiGate L3 interface supersets ({@link #zoneSupersets}): an earlier universal rule with the
+     * same install-on whose from- and to-zones or L3 interface sets ({@link PolicyNormalization#zonesCover}; FortiGate
+     * zone and SD-WAN zone placements are rejected before reaching {@code Earlier}, A0-FG-9) hold the later rule's is a
+     * coverage candidate too, and no longer makes the rule "zone or install-on coverage is unproven". An overlapping prior
+     * with the same install-on whose placements provably do not hold the rule's ({@link PolicyNormalization#zonesCannotCover})
+     * cannot cover it and is passed over, as a partially overlapping address or service is; "unproven" remains only where
+     * the relation cannot be decided (any mixed with names, a lone any against names without a {@link ZoneUniverse},
+     * unequal install-on). The compatible (former) candidates are searched first and win when one covers, so
      * every rule the scan covered keeps its covering rule; superset candidates are consulted only where the scan said
-     * "zone or install-on coverage is unproven". The same candidates may cover a later intrazone or interzone rule,
-     * which otherwise stays "zone rule type constraint". Install-on stays exact equality.</li>
+     * "zone or install-on coverage is unproven". For Palo Alto the same candidates may cover a later intrazone or
+     * interzone rule, which otherwise stays "zone rule type constraint". Install-on stays exact equality.</li>
      * <li>Selector pass-over ({@link #undecidedMayCover}): a prior whose placement relation to the rule is undecided
      * (the reason for "zone or install-on coverage is unproven") but whose selectors do not contain the rule's on at
      * least one of the four dimensions can never be the single earlier rule that covers it, whatever the placement
@@ -353,7 +355,11 @@ public final class PolicyHygiene {
         private final Map<Key, Bucket> buckets = new HashMap<>();
         private final List<Bucket> keys = new ArrayList<>();
         private final Map<Key, int[]> overlap = new HashMap<>();
-        /** Palo Alto only: zone supersets cover. Check Point placements stay exact (install-on is never a superset). */
+        /**
+         * Palo Alto zones and FortiGate L3 interface sets (A0-FG-9; zone/SD-WAN-zone placements fail normalization before
+         * reaching {@code Earlier}): placement supersets cover and non-containing overlaps are passed over. Check Point and
+         * Cisco ASA placements stay exact (install-on is never a superset).
+         */
         final boolean zoneSupersets;
         /**
          * Per install-on key, an inverted zone index of the buckets, each side (from, to) on its own: a lone any, a set

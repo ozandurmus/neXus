@@ -12,6 +12,7 @@ import {
   parseEgressInput,
   resolveScheduleZone,
   stemFromFileName,
+  validateFiveFieldCronShape,
 } from "../src/screens/ScriptFormHelpers";
 
 function makeRunSummary(overrides: Partial<ScriptRunSummary> = {}): ScriptRunSummary {
@@ -173,6 +174,68 @@ describe("parseEgressInput", () => {
   it("returns an empty array for empty or whitespace/separator-only input", () => {
     expect(parseEgressInput("")).toEqual([]);
     expect(parseEgressInput("   \n , \n\t ")).toEqual([]);
+  });
+});
+
+describe("validateFiveFieldCronShape", () => {
+  it("returns null for blank or whitespace-only schedules", () => {
+    expect(validateFiveFieldCronShape("")).toBeNull();
+    expect(validateFiveFieldCronShape("   ")).toBeNull();
+    expect(validateFiveFieldCronShape("\t  \t")).toBeNull();
+  });
+
+  it("returns null for valid five-field cron expressions", () => {
+    expect(validateFiveFieldCronShape("0 2 * * *")).toBeNull();
+    expect(validateFiveFieldCronShape("  0   2   *   *   *  ")).toBeNull();
+    expect(validateFiveFieldCronShape("0\t2\t*\t*\t*")).toBeNull();
+    expect(validateFiveFieldCronShape("*/15 9-17 * * MON-FRI")).toBeNull();
+    expect(validateFiveFieldCronShape("30 4 1,15 * ?")).toBeNull();
+    expect(validateFiveFieldCronShape("0 9 ? * FRI#2")).toBeNull();
+    expect(validateFiveFieldCronShape("0 0 L * *")).toBeNull();
+  });
+
+  it("returns the explicit six-field message when six fields are entered", () => {
+    const sixFieldMessage =
+      "Six-field cron (with seconds) is not supported; enter five fields: minute hour day-of-month month day-of-week.";
+    expect(validateFiveFieldCronShape("0 0 2 * * *")).toBe(sixFieldMessage);
+    expect(validateFiveFieldCronShape("  0 */5 9-17 * * MON-FRI  ")).toBe(sixFieldMessage);
+  });
+
+  it("returns the five-field count message for 1-to-4 or 7+ tokens", () => {
+    const fiveFieldMessage =
+      "Schedule must have exactly five cron fields: minute hour day-of-month month day-of-week.";
+    expect(validateFiveFieldCronShape("@daily")).toBe(fiveFieldMessage);
+    expect(validateFiveFieldCronShape("0 2")).toBe(fiveFieldMessage);
+    expect(validateFiveFieldCronShape("0 2 *")).toBe(fiveFieldMessage);
+    expect(validateFiveFieldCronShape("0 2 * *")).toBe(fiveFieldMessage);
+    expect(validateFiveFieldCronShape("0 0 2 * * * 2026")).toBe(fiveFieldMessage);
+  });
+
+  it("rejects line breaks, ASCII control characters, and unsupported cron characters", () => {
+    expect(validateFiveFieldCronShape("0 2 * *\n*")).toBe(
+      "Schedule must not contain control characters or line breaks.",
+    );
+    expect(validateFiveFieldCronShape("0 2 * *\r*")).toBe(
+      "Schedule must not contain control characters or line breaks.",
+    );
+    expect(validateFiveFieldCronShape("0 2 * * *\n")).toBe(
+      "Schedule must not contain control characters or line breaks.",
+    );
+    expect(validateFiveFieldCronShape("0 2 * * *\x00")).toBe(
+      "Schedule must not contain control characters or line breaks.",
+    );
+    expect(validateFiveFieldCronShape("\x070 2 * * *")).toBe(
+      "Schedule must not contain control characters or line breaks.",
+    );
+    expect(validateFiveFieldCronShape("0 2 * * *\x7f")).toBe(
+      "Schedule must not contain control characters or line breaks.",
+    );
+
+    const unsupportedCharsMessage =
+      "Schedule contains unsupported characters; use standard five-field cron tokens.";
+    expect(validateFiveFieldCronShape("0 2 * * *;rm")).toBe(unsupportedCharsMessage);
+    expect(validateFiveFieldCronShape("@yearly * * * *")).toBe(unsupportedCharsMessage);
+    expect(validateFiveFieldCronShape("0 2 * * $1")).toBe(unsupportedCharsMessage);
   });
 });
 
