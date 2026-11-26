@@ -21,7 +21,7 @@ log() { ops_log "$@"; }
 # credentials, failover, authorization, redaction/sanitizer, security, job claim/lease and endpoint admission.
 GUARD='^(\.github/|\.githooks/|deploy/|scripts/|tools/delivery/|security/|ui2/service/src/main/resources/db/migration/|ui2/capability-registry/src/main/resources/capabilities/|ui2/sanitizer/)|^ui2/[^/]+/src/(main|test)/java/.*/(transport|credential|failover|authz|redaction|security|lease|admission)/|Allowlist\.java$|GateRegistry'
 # Rendered files: on conflict take the current tree's copy and re-render after all lanes are applied.
-GEN='^(docs/design/DECISION_RECORD_SUCCESSOR_INDEX\.md|ui2/service/src/test/resources/authorization/route-authorization-decision-table\.golden\.txt|tools/security/aiview_leak_audit/routes\.json)$'
+GEN='^(docs/design/DECISION_RECORD_SUCCESSOR_INDEX\.md|ui2/service/src/test/resources/authorization/route-authorization-decision-table\.golden\.txt|tools/security/aiview_leak_audit/routes\.json|project/QUEUE\.md)$'
 # Another ship or deploy (a peer session's chain included); agent prompts that only mention the names do not count.
 busy() {
   for p in $(pgrep -f 'shipq3[.]sh|ship-after[.]sh|hosta_deploy[.]sh|module_deploy[.]py|standalone_orchestrate[.]py ship|hosta_e2e[.]sh'); do
@@ -195,6 +195,9 @@ the lane's change are kept. Run the tests the change touches, then commit with t
     git reset -q --soft origin/main
     if [ "$G" = 1 ]; then
       python3 tools/delivery/successor_index.py render >/dev/null 2>&1; git add -A docs
+      # project/QUEUE.md is rendered from project/*.json (GOV.ORCH.5): re-render it from the merged JSON so a backlog lane
+      # never needs a port lane only for this file (9 such conflicts 2026-11-26).
+      python3 tools/delivery/project_queue.py render >/dev/null 2>&1; git add project/QUEUE.md
       (cd ui2 && UI2_DECISION_TABLE_RECORD=$PWD/service/src/test/resources/authorization/route-authorization-decision-table.golden.txt \
         ./gradlew -q :service:test --tests '*RouteAuthorizationDecisionTableTest*' --offline >/dev/null 2>&1)
       git add ui2/service/src/test/resources/authorization/route-authorization-decision-table.golden.txt 2>/dev/null
