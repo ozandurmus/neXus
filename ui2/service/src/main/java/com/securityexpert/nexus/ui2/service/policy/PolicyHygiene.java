@@ -23,12 +23,14 @@ public final class PolicyHygiene {
      * that pair is {@link #DEFAULT_PORTS_UNKNOWN}.
      */
     static final String APPLICATION_OVERLAP_UNKNOWN = "application overlap is unknown";
+    /** The reason of a rule whose selector names an access-role or identity object; kept out of {@link CutoverAssessment#NARROWING_REASONS}. */
+    public static final String ACCESS_ROLE_CONSTRAINT = "access-role or identity constraint";
     public static final Set<String> CLASSES = Set.of("shadowed", "conflict", "disabled", "unused", "expired", "broad", "unknown");
     public static final Set<String> SEVERITIES = Set.of("HIGH", "MEDIUM", "LOW");
     /** Every shadow reason this class (and PolicyNormalization) can emit; PolicyPrivacy projects these unchanged, so a new reason must be added here. */
     public static final Set<String> REASONS = Set.of(
         "analysis budget", "unsupported rulebase", "negated selector", "missing selector", "enabled state is unknown",
-        "non-terminal or unknown action", "time or content constraint", "user or category constraint", "zone rule type constraint",
+        "non-terminal or unknown action", "time or content constraint", "user or category constraint", ACCESS_ROLE_CONSTRAINT, "zone rule type constraint",
         "unresolved install-on selector", "unsupported rule constraint", "time evidence not collected", "unresolved object",
         "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type", "unsupported address representation",
         "missing address values", "unsupported object members", "ambiguous object values", "unsupported service constraint",

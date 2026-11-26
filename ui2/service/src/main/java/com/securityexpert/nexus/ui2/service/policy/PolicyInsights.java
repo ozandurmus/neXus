@@ -58,7 +58,7 @@ public final class PolicyInsights {
     static final String LOGS = "LOGS", COLLECTION = "COLLECTION", NOT_RESOLVABLE = "NOT_RESOLVABLE";
     static final Set<String> REASON_CLASSES = Set.of(LOGS, COLLECTION, NOT_RESOLVABLE);
     private static final Set<String> LOG_RESOLVABLE = Set.of("time or content constraint", "user or category constraint",
-        PolicyHygiene.APPLICATION_OVERLAP_UNKNOWN, PolicyHygiene.DEFAULT_PORTS_UNKNOWN);
+        PolicyHygiene.ACCESS_ROLE_CONSTRAINT, PolicyHygiene.APPLICATION_OVERLAP_UNKNOWN, PolicyHygiene.DEFAULT_PORTS_UNKNOWN);
     private static final Set<String> COLLECTION_RESOLVABLE = Set.of("snapshot collection incomplete", "time evidence not collected",
         "zone evidence not collected", "install-on evidence not collected");
     /**
@@ -73,17 +73,24 @@ public final class PolicyInsights {
     /** {@code raiseGrade}/{@code needs}: the grade reachable and what it needs ({@link #NONE} when nothing raises it). */
     record Insight(String id, String type, String grade, String scope, List<RuleRef> rules, List<String> objectIds,
             String raiseGrade, String needs, List<String> caveats, List<String> evidence, Map<String, Object> counter) {}
-    /** One row of the not-decidable list: the engine's reason, its class and the number of rules behind it. */
+    /** One row of the not-readable list: the rule's own engine reason, its class and the number of unreadable rules carrying it. */
     record Blocked(String shadowReason, String reasonClass, int rules) {}
+    /** One row of readable rules waiting behind an earlier rule ({@link PolicyHygiene.Assessment#blockingRuleNumber}). */
+    record Waiting(String blockingRuleId, Integer blockingRuleNumber, String shadowReason, String reasonClass, int rules) {}
+    private record WaitingKey(String blockingRuleId, Integer blockingRuleNumber, String shadowReason, String reasonClass) {}
     /**
-     * The package numbers of design section 3.2 over enabled security rules: {@code decided} from the policy alone,
-     * {@code upToWithLogs} the ceiling with logs (decided plus the rules whose only blocking reason is log-resolvable;
-     * a ceiling, known before any log exists), and the rest by reason. {@code decided} and the three classes sum to
-     * {@code rules}. {@code disabledRules} and {@code outsideSecurityRules} (NAT rulebase) are the rules left out, so the
-     * Hygiene tab's all-rule coverage is {@code rules + disabledRules + outsideSecurityRules}.
+     * The package numbers of design section 3.2 over enabled security rules: {@code decided} from the policy alone
+     * (including {@link PolicyUnionCover#COVERED} PROVEN I3 subjects), {@code upToWithLogs} the ceiling with logs
+     * (decided plus the rules whose blocking reason is log-resolvable; a ceiling, known before any log exists),
+     * {@code notReadable} (rules whose own selectors/constraints could not be read, grouped in {@code notDecidable})
+     * apart from {@code waiting} (readable rules waiting behind an earlier rule, grouped in {@code waitingRules} with
+     * {@code blockingRuleNumber}). {@code decided} and the three classes sum to {@code rules}. {@code disabledRules}
+     * and {@code outsideSecurityRules} (NAT rulebase) are the rules left out, so the Hygiene tab's all-rule coverage is
+     * {@code rules + disabledRules + outsideSecurityRules}.
      */
     record Counts(int rules, int decided, int upToWithLogs, int logResolvable, int collectionResolvable, int notResolvable,
-            List<Blocked> notDecidable, int hitsCollected, int hitsMissing, int disabledRules, int outsideSecurityRules) {}
+            int notReadable, int waiting, List<Blocked> notDecidable, List<Waiting> waitingRules,
+            int hitsCollected, int hitsMissing, int disabledRules, int outsideSecurityRules) {}
     /**
      * The I3 pass in numbers (design Q8: how often the budget is hit is measured before the engine is revisited): subject
      * rules evaluated, covered, not proven for the budget, and not evaluable by reason ({@link PolicyUnionCover#NOT_EVALUABLE_REASONS}).
@@ -122,8 +129,10 @@ public final class PolicyInsights {
             PolicyUnionCover.Result union, PolicyPartialShadow.Result partial) {
         var meta = snapshot.metadata();
         List<Insight> insights = new ArrayList<>();
-        int rules = 0, decided = 0, logs = 0, collection = 0, notResolvable = 0, hitsCollected = 0, hitsMissing = 0, disabled = 0, outside = 0;
+        int rules = 0, decided = 0, notReadable = 0, waiting = 0, logs = 0, collection = 0, notResolvable = 0,
+            hitsCollected = 0, hitsMissing = 0, disabled = 0, outside = 0;
         Map<String, int[]> blocked = new LinkedHashMap<>();
+        Map<WaitingKey, int[]> waitingByBlocker = new LinkedHashMap<>();
         for (var section : snapshot.sections()) {
             if (PolicySnapshot.outsideSecurityEvaluation(meta, section)) { outside += section.rules().size(); continue; }
             for (var rule : section.rules()) {
@@ -136,15 +145,24 @@ public final class PolicyInsights {
                 rules++;
                 if (a.findings().stream().anyMatch(f -> f.findingClass().equals("unknown") && PolicyQueryService.HITS_MISSING_EVIDENCE.contains(f.evidence()))) hitsMissing++;
                 else hitsCollected++;
-                if (!"UNKNOWN".equals(a.shadowStatus())) decided++;
-                else {
+                var cover = union.rules().get(rule.id());
+                boolean i3Proven = cover != null && PolicyUnionCover.COVERED.equals(cover.status());
+                if (!"UNKNOWN".equals(a.shadowStatus()) || i3Proven) decided++;
+                else if (PolicyHygiene.EARLIER_UNSUPPORTED.equals(a.shadowReason())) {
+                    waiting++;
                     String reason = effectiveReason(a, hygiene);
+                    String cls = reasonClass(reason);
+                    waitingByBlocker.computeIfAbsent(new WaitingKey(a.blockingRuleId(), a.blockingRuleNumber(), reason, cls), k -> new int[1])[0]++;
+                    switch (cls) { case LOGS -> logs++; case COLLECTION -> collection++; default -> notResolvable++; }
+                } else {
+                    notReadable++;
+                    String reason = ownReason(a);
                     String cls = reasonClass(reason);
                     blocked.computeIfAbsent(reason + "\u0000" + cls, k -> new int[1])[0]++;
                     switch (cls) { case LOGS -> logs++; case COLLECTION -> collection++; default -> notResolvable++; }
                 }
                 shadow(meta, rule, a, hygiene, section, insights);
-                unionCover(meta, rule, union.rules().get(rule.id()), insights);
+                unionCover(meta, rule, cover, insights);
                 partialShadow(meta, rule, partial.rules().get(rule.id()), insights);
                 for (var f : a.findings()) {
                     if (f.findingClass().equals("expired")) insights.add(insight(meta, "I9", PROVEN, rule, List.of(), NONE, PROVEN, List.of(f.evidence()), Map.of()));
@@ -159,7 +177,14 @@ public final class PolicyInsights {
             String[] key = e.getKey().split("\u0000", -1);
             return new Blocked(key[0], key[1], e.getValue()[0]);
         }).sorted(Comparator.comparingInt(Blocked::rules).reversed().thenComparing(Blocked::shadowReason)).toList();
-        var counts = new Counts(rules, decided, decided + logs, logs, collection, notResolvable, notDecidable, hitsCollected, hitsMissing, disabled, outside);
+        List<Waiting> waitingRules = waitingByBlocker.entrySet().stream()
+            .map(e -> new Waiting(e.getKey().blockingRuleId(), e.getKey().blockingRuleNumber(), e.getKey().shadowReason(), e.getKey().reasonClass(), e.getValue()[0]))
+            .sorted(Comparator.comparingInt(Waiting::rules).reversed()
+                .thenComparing(Waiting::blockingRuleNumber, Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(w -> w.blockingRuleId() == null ? "" : w.blockingRuleId()))
+            .toList();
+        var counts = new Counts(rules, decided, decided + logs, logs, collection, notResolvable,
+            notReadable, waiting, notDecidable, waitingRules, hitsCollected, hitsMissing, disabled, outside);
         insights.sort(Comparator.comparingInt((Insight i) -> TYPES.indexOf(i.type())).thenComparingInt(i -> GRADES.indexOf(i.grade()))
             .thenComparingInt(i -> i.rules().isEmpty() ? Integer.MAX_VALUE : i.rules().get(0).number()).thenComparing(Insight::id));
         Map<String, Integer> byType = new LinkedHashMap<>(), byGrade = new LinkedHashMap<>();
@@ -172,9 +197,13 @@ public final class PolicyInsights {
         return new Report(counts, List.copyOf(insights), byType, byGrade, snapshot.failures().isEmpty(), meta.collectedAt(), unionCover, partialShadow);
     }
 
+    private static String ownReason(PolicyHygiene.Assessment a) {
+        return a.shadowReason() == null || a.shadowReason().isBlank() ? PolicyQueryService.NO_REASON : a.shadowReason();
+    }
+
     /** The reason that keeps a rule undecided; behind an earlier unreadable rule it is that rule's own reason. */
     private static String effectiveReason(PolicyHygiene.Assessment a, PolicyHygiene.Result hygiene) {
-        String reason = a.shadowReason() == null || a.shadowReason().isBlank() ? PolicyQueryService.NO_REASON : a.shadowReason();
+        String reason = ownReason(a);
         if (PolicyHygiene.EARLIER_UNSUPPORTED.equals(reason) && a.blockingRuleId() != null) {
             var blocker = hygiene.rules().get(a.blockingRuleId());
             if (blocker != null && blocker.shadowReason() != null && !blocker.shadowReason().isBlank()

@@ -106,7 +106,7 @@ class PolicyHygieneAccessRoleTest {
         released(cp(cp("r1", 1, "Accept", "role-group", "any", "any"), cp("r2", 2, "Accept", "other-host", "any", "any")), "r2", "r1");
         // The role's own verdict is unchanged: an access role is no address.
         var snapshot = cp(cp("r1", 1, "Accept", "role-net", "any", "any"), cp("r2", 2, "Accept", "other-net", "host", "port"));
-        assertUnknown(snapshot, "r1", "unresolved object");
+        assertUnknown(snapshot, "r1", PolicyHygiene.ACCESS_ROLE_CONSTRAINT);
         assertEquals(assessment(SyntheticPolicies.withoutNetworks(snapshot), "r1"), assessment(snapshot, "r1"));
     }
     @Test void networksThatMayHoldTheLaterSourceKeepItUnknown() {
@@ -159,7 +159,7 @@ class PolicyHygieneAccessRoleTest {
         var extras = new HashMap<String, List<String>>(); extras.put("install-on", null); extras.put("from", null); extras.put("to", null);
         var r1 = SyntheticPolicies.withExtras(cp("r1", 1, "Accept", "role-net", "any", "any"), "Accept", extras);
         var snapshot = cp(r1, cp("r2", 2, "Accept", "other-net", "any", "port"));
-        assertUnknown(snapshot, "r1", "unresolved object");
+        assertUnknown(snapshot, "r1", PolicyHygiene.ACCESS_ROLE_CONSTRAINT);
         var former = SyntheticPolicies.withoutNetworks(snapshot);
         assertNull(PolicyNormalization.partial(former, former.sections().get(0), r1, PolicyNormalization.Resolver.shadowing(former, new PolicyNormalization.Budget(10_000))));
         assertNotNull(PolicyNormalization.partial(snapshot, snapshot.sections().get(0), r1, PolicyNormalization.Resolver.shadowing(snapshot, new PolicyNormalization.Budget(10_000))));
@@ -180,8 +180,8 @@ class PolicyHygieneAccessRoleTest {
         var section = snapshot.sections().get(0); var r1 = section.rules().get(0);
         for (var resolver : List.of(PolicyNormalization.Resolver.shadowing(snapshot, new PolicyNormalization.Budget(10_000)),
                 new PolicyNormalization.Resolver(snapshot.objects(), new PolicyNormalization.Budget(10_000)))) {
-            assertEquals("unresolved object", PolicyNormalization.normalize(snapshot, section, r1, resolver).problem());
-            assertEquals("unresolved object", PolicyNormalization.normalize(snapshot, section, r1, resolver, true).problem());
+            assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, PolicyNormalization.normalize(snapshot, section, r1, resolver).problem());
+            assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, PolicyNormalization.normalize(snapshot, section, r1, resolver, true).problem());
         }
         var partial = PolicyNormalization.partial(snapshot, section, r1, PolicyNormalization.Resolver.shadowing(snapshot, new PolicyNormalization.Budget(10_000)));
         assertNotNull(partial.selectors().get(0));

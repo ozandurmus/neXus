@@ -58,7 +58,7 @@ const d1 = detailOf(i1, shadowRules("Accept")), d2 = detailOf(i2, shadowRules("D
 const d3Same = detailOf(i3Same, unionRules("Accept")), d3Diff = detailOf(i3Diff, unionRules("Drop"));
 const d4 = detailOf(i4, unionRules("Accept"));
 const d10 = detailOf(i10, [rule("r3", 3, "RULE-ALPHA-03", "Accept", "host")]);
-const counts = { rules: 10, decided: 4, upToWithLogs: 7, logResolvable: 3, collectionResolvable: 1, notResolvable: 2, notDecidable: [], hitsCollected: 6, hitsMissing: 4, disabledRules: 1, outsideSecurityRules: 2 };
+const counts = { rules: 10, decided: 4, upToWithLogs: 7, logResolvable: 3, collectionResolvable: 1, notResolvable: 2, notReadable: 4, waiting: 2, notDecidable: [], waitingRules: [], hitsCollected: 6, hitsMissing: 4, disabledRules: 1, outsideSecurityRules: 2 };
 const pageOf = (...insights: PolicyInsight[]): PolicyInsightsPage => ({ vendor: "CP", supported: true, insights, counts, total: insights.length, page: 0, pageSize: 200, days: 90, complete: true, collectedAt: "2026-11-23T08:00:00Z" });
 
 function mount(insights: PolicyInsight[], details: PolicyInsightDetail[], openRule = vi.fn(), openObject = vi.fn()) {

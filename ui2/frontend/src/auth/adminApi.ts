@@ -2522,9 +2522,18 @@ export interface PolicyInsight {
    */
   counter: Record<string, string | number | boolean | string[] | null>;
 }
+export interface PolicyInsightWaiting {
+  blockingRuleId: string | null;
+  blockingRuleNumber: number | null;
+  shadowReason: string;
+  reasonClass: "LOGS" | "COLLECTION" | "NOT_RESOLVABLE";
+  rules: number;
+}
 export interface PolicyInsightCounts {
   rules: number; decided: number; upToWithLogs: number; logResolvable: number; collectionResolvable: number; notResolvable: number;
+  notReadable?: number; waiting?: number;
   notDecidable: { shadowReason: string; reasonClass: "LOGS" | "COLLECTION" | "NOT_RESOLVABLE"; rules: number }[];
+  waitingRules?: PolicyInsightWaiting[];
   hitsCollected: number; hitsMissing: number; disabledRules: number; outsideSecurityRules: number;
 }
 export interface PolicyInsightsPage {

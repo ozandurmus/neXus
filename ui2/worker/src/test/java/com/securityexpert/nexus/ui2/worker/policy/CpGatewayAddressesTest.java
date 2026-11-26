@@ -48,9 +48,27 @@ class CpGatewayAddressesTest {
                 "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[]}",
                 "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.300\"}]}",
                 "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"},{\"name\":\"no-address\"}]}",
-                "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"}],\"cluster-members\":[{\"name\":\"m1\"}]}"))
+                "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"},{\"ipv6-address\":\"\"}]}",
+                "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"\",\"ipv6-address\":\"\"}]}",
+                "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"}],\"cluster-members\":[{\"name\":\"m1\"}]}",
+                "{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"}],\"cluster-members\":[{\"name\":\"m1\",\"ip-address\":\"\"}]}"))
             assertFalse(parse(object).complete(), object);
         assertTrue(parse("{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"},{\"ipv6-address\":\"2001:db8::1\"}]}").complete());
+        assertTrue(parse("{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"ipv4-address\":\"\",\"interfaces\":[{\"ipv4-address\":\"192.0.2.1\"},{\"ipv4-address\":\"\",\"ipv6-address\":\"2001:db8::1\"}]}").complete());
+    }
+
+    @Test void wrapperSubListsCompleteOnlyWhenUntruncated() throws Exception {
+        var wrapped = parse("{\"uid\":\"u1\",\"type\":\"CpmiGatewayCluster\",\"ipv4-address\":\"192.0.2.1\","
+            + "\"interfaces\":{\"objects\":[{\"ipv4-address\":\"192.0.2.1\"}],\"from\":1,\"to\":1,\"total\":1},"
+            + "\"cluster-members\":{\"objects\":[{\"ip-address\":\"192.0.2.2\",\"ipv4-address\":\"\","
+            + "\"interfaces\":{\"objects\":[{\"ipv4-address\":\"192.0.2.2\"}],\"total\":1}}],\"total\":1}}");
+        assertEquals(new CpObjectInventory.GatewayAddresses(List.of("192.0.2.1", "192.0.2.2"), true), wrapped);
+
+        // A paged wrapper whose total exceeds objects.size() (or carries from/to without total) must fail closed.
+        assertFalse(parse("{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"ipv4-address\":\"192.0.2.1\","
+            + "\"interfaces\":{\"objects\":[{\"ipv4-address\":\"192.0.2.1\"}],\"from\":1,\"to\":1,\"total\":2}}").complete());
+        assertFalse(parse("{\"uid\":\"u1\",\"type\":\"simple-gateway\",\"ipv4-address\":\"192.0.2.1\","
+            + "\"interfaces\":{\"objects\":[{\"ipv4-address\":\"192.0.2.1\"}],\"from\":1,\"to\":1}}").complete());
     }
 
     @Test void onlyGatewayClassObjectsCarryAddresses() throws Exception {
