@@ -6,7 +6,9 @@ import static com.securityexpert.nexus.ui2.service.policy.PolicyHygieneTest.*;
 import static com.securityexpert.nexus.ui2.service.policy.PolicyHygieneCheckPointScopeTest.assertUnknown;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
+import com.securityexpert.nexus.ui2.service.support.CpuTimeGuard;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Partial priors: an earlier rule that cannot be fully resolved (a Check Point access-role source, a user, time or
@@ -164,34 +166,65 @@ class PolicyHygienePartialPriorTest {
         assertUnknown(pan(maybe, pan("r2", "any", "host", "port", "allow")), "r2", UNSUPPORTED);
         assertClean(pan(pan("r1", "any", "net", "port", "ask"), pan("r2", "any", "other-net", "port", "allow")), "r2");
     }
-    @Test void partialPriorWorkIsBoundedAndRunningOutKeepsTheFormerVerdict() {
-        // 3,000 access-role rules on distinct destinations, then 3,000 rules on a disjoint network.
-        var objects = partialObjects(); List<Rule> rules = new ArrayList<>(); int n = 3000;
+    /** {@code n} access-role rules on distinct destinations, then {@code n} rules on a disjoint network (the rules, their objects). */
+    private record PartialPriorPolicy(List<Rule> rules, Map<String, PolicyObject> objects) {
+        PolicySnapshot snapshot(int ruleCount) {
+            var base = sections("CP", new Section("s1", "OBJ-SECTION-01", "CP access layer", null, rules.subList(0, ruleCount)));
+            return new PolicySnapshot(base.metadata(), base.sections(), objects);
+        }
+    }
+    private static PartialPriorPolicy partialPriorPolicy(int n) {
+        var objects = partialObjects(); List<Rule> rules = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             String id = "d" + i; objects.put(id, object(id, "host", "ipv4-address: 192.0.2." + (i % 250)));
             objects.put("p" + i, object("p" + i, "service-tcp", "protocol: tcp", "port: " + (1000 + i)));
             rules.add(cp("a" + i, i + 1, "Accept", "role", id, "p" + i));
         }
         for (int i = 0; i < n; i++) rules.add(cp("b" + i, n + i + 1, "Accept", "any", "other-host", "p" + i));
-        var base = sections("CP", new Section("s1", "OBJ-SECTION-01", "CP access layer", null, rules));
-        var snapshot = new PolicySnapshot(base.metadata(), base.sections(), objects);
-        long started = System.nanoTime();
-        var result = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
-        long millis = (System.nanoTime() - started) / 1_000_000;
+        return new PartialPriorPolicy(rules, objects);
+    }
+    /**
+     * Cost of {@code n} partial priors x {@code n} later rules (each later rule checks every prior): thread CPU time, the
+     * minimum of three runs after a warm-up, the last result for the caller's assertions.
+     */
+    private static long partialPriorNanos(PartialPriorPolicy policy, AtomicReference<PolicyHygiene.Result> result) {
+        var snapshot = policy.snapshot(policy.rules().size());
+        PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
+        return CpuTimeGuard.minNanos(3, () -> result.set(PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK)));
+    }
+    @Test void partialPriorWorkIsBoundedAndRunningOutKeepsTheFormerVerdict() {
+        // 3,000 access-role rules on distinct destinations, then 3,000 rules on a disjoint network.
+        int n = 3000;
+        var policy = partialPriorPolicy(n);
+        var last = new AtomicReference<PolicyHygiene.Result>();
+        long nanos = partialPriorNanos(policy, last);
+        var result = last.get();
+        long millis = CpuTimeGuard.millis(nanos);
         assertFalse(result.budgetReached());
         for (int i = 0; i < n; i++) assertEquals("NOT_SHADOWED", result.rules().get("b" + i).shadowStatus(), "b" + i);
-        assertTrue(millis < 20_000, millis + " ms");
+        assertTrue(millis < 20_000, millis + " ms (" + (CpuTimeGuard.cpuTimed() ? "thread CPU" : "wall clock") + ")");
+        // Machine-speed independent growth guard: the check set is n priors x n later rules, so 4x n costs about 16x. Ten runs
+        // on a laptop JVM, 2026-11-26, 750 against 3,000 rules each side: growth 10.4-17.1; the limit of 35 is over twice the
+        // largest. Work per prior pair that itself grows with n (a scratch copy with a per-rule scan of order n^2/40 gave
+        // 36 here) fails it. The time itself is this thread's CPU time (analyze runs on the calling thread), the minimum
+        // of three samples after a warm-up, so a loaded host cannot trip the 20 s bound.
+        var half = new AtomicReference<PolicyHygiene.Result>();
+        long halfNanos = partialPriorNanos(partialPriorPolicy(n / 4), half);
+        double growth = (double) nanos / Math.max(1L, halfNanos);
+        assertTrue(growth < MAX_GROWTH_FOR_4X_N, "4x the partial priors and later rules must not cost " + MAX_GROWTH_FOR_4X_N
+            + "x: " + CpuTimeGuard.millis(halfNanos) + " ms vs " + millis + " ms");
         // A per-rule window too small for 3,000 partial-prior checks: the later rule keeps the former verdict, and the
         // snapshot-wide budget is untouched by the partial work (no budget verdict anywhere).
-        var one = sections("CP", new Section("s1", "OBJ-SECTION-01", "CP access layer", null, rules.subList(0, n + 1)));
-        var small = new PolicySnapshot(one.metadata(), one.sections(), objects);
+        var small = policy.snapshot(n + 1);
         var tight = PolicyHygiene.analyze(small, 90, NOW, PolicyHygiene.TOTAL_WORK, 1500, small.objects());
         assertFalse(tight.budgetReached());
         assertEquals(UNSUPPORTED, tight.rules().get("b0").shadowReason());
         for (int i = 0; i < n; i++) assertEquals(PolicyHygiene.ACCESS_ROLE_CONSTRAINT, tight.rules().get("a" + i).shadowReason(), "a" + i);
         assertClean(small, "b0");
-        System.out.println("PARTIAL PRIOR SCALE " + n + " partial priors x " + n + " later rules: " + millis + " ms");
+        System.out.println("PARTIAL PRIOR SCALE " + n + " partial priors x " + n + " later rules: " + millis + " ms, " + n / 4 + " x " + n / 4 + ": "
+            + CpuTimeGuard.millis(halfNanos) + " ms, growth " + String.format("%.2f", growth));
     }
+    static final double MAX_GROWTH_FOR_4X_N = 35.0;
     private static Map<String, PolicyObject> with(Map<String, PolicyObject> objects, PolicyObject extra) {
         var out = new HashMap<>(objects); out.put(extra.id(), extra); return out;
     }
