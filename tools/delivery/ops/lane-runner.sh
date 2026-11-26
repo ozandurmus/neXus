@@ -238,6 +238,7 @@ planner_due() {
 agy_state_blob() {
   {
     echo "## Inlined ops state (AGY_ONLY: you cannot read files outside this worktree)"
+    echo "All required ops state is already provided inline below; do NOT call read_file on paths outside your current worktree."
     echo; echo "### status.sh"; bash "$OPS_DIR/status.sh" 2>&1 | head -c 6000
     echo; echo "### open briefs (queued / started / hold)"
     { ls "$Q"/*.brief 2>/dev/null | sed 's#.*/#queued: #; s#\.brief$##'

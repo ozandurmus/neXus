@@ -311,6 +311,7 @@ def test_agy_only_planner_brief_carries_the_inlined_state_and_runs_on_agy(ops):
     brief = next(ops.lq.glob("*refill-p1.brief")).read_text()
     meta = next(ops.lq.glob("*refill-p1.meta")).read_text()
     assert "QUEUE-MARKER-LINE" in brief and "held-one" in brief and "### status.sh" in brief and "planner-out/" in brief
+    assert "All required ops state is already provided inline below; do NOT call read_file on paths outside your current worktree." in brief
     assert "exactly 3 lane briefs" in brief and len(brief) < 45000
     assert "engine=agy" in meta and "planner_out=1" in meta and "pin_claude" not in meta and "adddir" not in meta
     assert "claude_model" not in meta

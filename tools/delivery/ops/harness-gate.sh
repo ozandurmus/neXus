@@ -79,14 +79,26 @@ gate_ship_entry() {
     echo "harness=$tag"; echo "harness_report=$report"; } > "$dir/$n.ship"
 }
 
-# gate_failed_checks <report>: "- <check>: <detail>" for every failed or errored check of the report.
+# gate_failed_checks <report>: "- <check>: <detail>" plus bounded output_tail for every failed or errored check of the report.
 gate_failed_checks() {
   python3 -c "import json,sys
 try:
     r=json.load(open(sys.argv[1]))
 except Exception:
     sys.exit(0)
-print('\n'.join('- '+c.get('id','?')+': '+str(c.get('detail',''))[:300] for c in r.get('checks',[]) if c.get('status') in ('fail','error')))" "$1" 2>/dev/null
+out=[]
+for c in r.get('checks',[]):
+    if c.get('status') not in ('fail','error'):
+        continue
+    out.append('- '+str(c.get('id','?'))+': '+str(c.get('detail',''))[:300])
+    tail=str(c.get('output_tail') or '').strip()
+    if tail:
+        bounded='\n'.join(tail.splitlines()[-40:])
+        if len(bounded)>2500:
+            bounded=bounded[-2500:]
+        out.append('  output_tail:')
+        out.extend('    '+ln for ln in bounded.splitlines())
+print('\n'.join(out))" "$1" 2>/dev/null
 }
 
 # gate_tier_b <name>: production code outside the Estate UI gets a review before batching (PO 2026-11-23).
@@ -106,8 +118,8 @@ gate_repair() {
   g=$(echo "$n" | grep -oE 'G[0-9]+' | head -1)
   rn=$(bash "$OPS_DIR/lanename.sh" fix)-harness-repair-${g:-lane}
   cp "$Q/done/$n.brief" "$Q/$rn.tmp" 2>/dev/null || cp "$Q/started/$n.brief" "$Q/$rn.tmp" || return 1
-  printf '\n\n## Repair turn (lane harness, %s)\nThe harness rejected your commit. Fix exactly these checks on your branch, rerun them, commit:\n%s\nHarness report: %s (full logs in %s).\n' \
-    "$(date '+%F %T')" "$fails" "$report" "$L/harness-$n" >> "$Q/$rn.tmp"
+  printf '\n\n## Repair turn (lane harness, %s)\nThe harness rejected your commit. Fix exactly these checks on your branch, rerun them, commit:\n%s\nAll failure output is inlined above; do NOT call read_file on paths outside your worktree.\n' \
+    "$(date '+%F %T')" "$fails" >> "$Q/$rn.tmp"
   { grep -vE '^(base|repair_of)=' "$meta"; echo "base=lane/q-$n"; echo "repair_of=$n"; } > "$Q/$rn.meta"
   mv "$Q/$rn.tmp" "$Q/$rn.brief"
   GATE_REPAIR_NAME=$rn
