@@ -11,6 +11,7 @@ import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel, Ts } from "../../shell/States";
 import type { Tone } from "../../shell/tone";
+import { parseTraceTuple, traceTupleHref } from "../../shell/traceTupleLink";
 import { useFetchOnMount } from "../../shell/useFetchOnMount";
 import { m3 } from "../../theme/m3Theme";
 import { RADIUS } from "../../theme/tokens";
@@ -18,11 +19,75 @@ import type { ZoneTabProps } from "./ZoneMatrixScreen";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
   evaluateZoneMatrixPolicy, listZoneMatrixPolicies, severityWord, statementWord, zoneErrorLines,
-  type EvaluationOutcome, type EvaluationRuleRow, type EvaluationZoneGap, type ZoneMatrixEvaluationResponse,
-  type ZoneMatrixNotEvaluatedItem, type ZoneMatrixPoliciesResponse,
+  type EvaluationOutcome, type EvaluationRuleRow, type EvaluationWitness, type EvaluationZoneGap,
+  type ZoneMatrixEvaluationResponse, type ZoneMatrixNotEvaluatedItem, type ZoneMatrixPoliciesResponse,
 } from "./zoneMatrixApi";
 
 const PAGE_SIZE = 50;
+const WITNESS_AUDIT_NOTICE = "This view is recorded in the audit log";
+
+function readOutcomeCount(
+  counts: Readonly<Record<string, number>> | undefined,
+  key: EvaluationOutcome,
+): number | null {
+  const value = counts?.[key];
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Contract 7.2 (ZM-7, ZM-26): an evaluation is proven exact only when it actually evaluated with COMPLETE coverage,
+ * no uncollected-scope coverage items, the server marks the headline exact, explicit non-missing outcome counts are
+ * present, and there are zero collection failures, undecided rules, or incomplete or non-evaluated policies.
+ */
+export function evaluationProven(result: ZoneMatrixEvaluationResponse): boolean {
+  return (
+    result.evaluated === true &&
+    result.coverage === "COMPLETE" &&
+    Array.isArray(result.coverage_items) &&
+    result.coverage_items.length === 0 &&
+    result.headline.exact === true &&
+    result.failure_count === 0 &&
+    readOutcomeCount(result.outcome_counts, "VIOLATION") !== null &&
+    readOutcomeCount(result.outcome_counts, "NOT_EVALUABLE") === 0 &&
+    readOutcomeCount(result.outcome_counts, "UNKNOWN") === 0 &&
+    result.headline.not_evaluable_rules === 0 &&
+    result.headline.unknown_rules === 0 &&
+    result.headline.incomplete_policies === 0 &&
+    result.headline.not_evaluated_policies === 0
+  );
+}
+
+/**
+ * Contract 7.2 (ZM-7, ZM-26): fail-closed headline sentence. Never displays a bare `"0 ..."` or an unprefixed
+ * exact positive count when `proven` is false, even if the server response claimed `headline.exact: true`.
+ */
+export function evaluationHeadlineText(
+  result: ZoneMatrixEvaluationResponse,
+  proven: boolean = evaluationProven(result),
+): string {
+  const raw = (result.headline.text ?? "").trim();
+  if (proven) return raw;
+  if (!raw || /^0\b/.test(raw)) return "no proven violations in evaluated rules";
+  if (/^[1-9]\d*\b/.test(raw)) return `at least ${raw}`;
+  return raw;
+}
+
+/**
+ * Contract 7.1 fail-closed "Open in Trace" deep link for one evaluation witness tuple, or `null` for ranges, CIDRs,
+ * IPv6 addresses, port ranges, non-TCP/UDP protocols, `any`, or `UNKNOWN`.
+ */
+export function evaluationWitnessTraceHref(witness: EvaluationWitness): string | null {
+  const parts = witness.service.split("/");
+  if (parts.length !== 2) return null;
+  const [protocol, port] = parts;
+  const href = traceTupleHref({
+    src: witness.source_range,
+    dst: witness.destination_range,
+    protocol,
+    port,
+  });
+  return parseTraceTuple(href.slice(href.indexOf("#"))) ? href : null;
+}
 
 const OUTCOME_DISPLAY: Readonly<Record<EvaluationOutcome, { readonly label: string; readonly tone: Tone }>> = {
   VIOLATION: { label: "Violation", tone: "bad" },
@@ -88,7 +153,7 @@ export function EvaluateTab({ data, notify }: ZoneTabProps) {
       setResult(evaluated);
       setPageOffset(0);
       setSelectedRuleKey(null);
-      if ((evaluated.outcome_counts.VIOLATION ?? 0) === 0 && evaluated.rules.length > 0) {
+      if (readOutcomeCount(evaluated.outcome_counts, "VIOLATION") === 0 && evaluated.rules.length > 0) {
         setOutcomeFilter("ALL");
       } else {
         setOutcomeFilter("VIOLATION");
@@ -272,12 +337,45 @@ export function EvaluateTab({ data, notify }: ZoneTabProps) {
         </Stack>
       </Box>
 
-      {result ? (
+      {result ? (() => {
+        const proven = evaluationProven(result);
+        const violationCount = readOutcomeCount(result.outcome_counts, "VIOLATION");
+        const compliantCount = readOutcomeCount(result.outcome_counts, "COMPLIANT");
+        const notEvaluableCount = readOutcomeCount(result.outcome_counts, "NOT_EVALUABLE");
+        const unknownCount = readOutcomeCount(result.outcome_counts, "UNKNOWN");
+        const hasViolations = result.headline.distinct_violating_rules > 0 || (violationCount !== null && violationCount > 0);
+        const headlineTone: Tone = hasViolations
+          ? "bad"
+          : !result.evaluated
+            ? "unknown"
+            : proven
+              ? "ok"
+              : "warn";
+        const headlineText = evaluationHeadlineText(result, proven);
+        const violationsLabel = violationCount === null
+          ? "Violations: UNKNOWN"
+          : proven
+            ? `Violations: ${violationCount}`
+            : `Violations: at least ${violationCount}`;
+        const violationsFilterLabel = violationCount === null
+          ? "Violations (UNKNOWN)"
+          : proven
+            ? `Violations (${violationCount})`
+            : `Violations (at least ${violationCount})`;
+        const allowWitnessView = Boolean(canViewBlocks && result.can.view_blocks && result.witnesses_included);
+        const policyHref = result.policy_id && selectedRule?.rule_id
+          ? `?screen=policy&policy_id=${encodeURIComponent(result.policy_id)}&rule=${encodeURIComponent(selectedRule.rule_id)}&standard=1`
+          : null;
+        const hasAnyWitness = Boolean(
+          allowWitnessView && selectedRule?.violated_cells.some((cell) => cell.witness !== null),
+        );
+
+        return (
         <>
-          <Box data-testid="evaluation-headline" sx={panelSx}>
+          <Box data-testid="evaluation-headline" data-proven={proven ? "yes" : "no"} sx={panelSx}>
             <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center">
               <StatusChip
-                tone={result.headline.distinct_violating_rules > 0 ? "bad" : (result.headline.exact ? "ok" : "warn")}
+                tone={headlineTone}
                 label={result.coverage === "COMPLETE" ? "Coverage complete" : "Coverage incomplete"}
               />
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
@@ -286,20 +384,20 @@ export function EvaluateTab({ data, notify }: ZoneTabProps) {
                 {" "}· Engine <Box component="span" sx={mono}>{result.engine_version}</Box> ({result.duration_ms} ms)
               </Typography>
             </Stack>
-            <Typography variant="body1" sx={{ fontWeight: 600 }}>{result.headline.text}</Typography>
+            <Typography variant="body1" sx={{ fontWeight: 600 }}>{headlineText}</Typography>
             {result.headline.outside_headline_text ? (
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{result.headline.outside_headline_text}</Typography>
             ) : null}
 
             <Stack direction="row" flexWrap="wrap" gap={1.5} data-testid="evaluation-counts">
-              <StatusChip tone={(result.outcome_counts.VIOLATION ?? 0) > 0 ? "bad" : "neutral"}
-                label={`Violations: ${result.outcome_counts.VIOLATION ?? 0}`} />
-              <StatusChip tone="neutral"
-                label={`Allowed by matrix: ${result.outcome_counts.COMPLIANT ?? 0}`} />
-              <StatusChip tone={(result.outcome_counts.NOT_EVALUABLE ?? 0) > 0 ? "warn" : "neutral"}
-                label={`Not evaluable: ${result.outcome_counts.NOT_EVALUABLE ?? 0}`} />
-              <StatusChip tone={(result.outcome_counts.UNKNOWN ?? 0) > 0 ? "unknown" : "neutral"}
-                label={`Outcome unknown: ${result.outcome_counts.UNKNOWN ?? 0}`} />
+              <StatusChip tone={violationCount === null ? "unknown" : violationCount > 0 ? "bad" : "neutral"}
+                label={violationsLabel} />
+              <StatusChip tone={compliantCount === null ? "unknown" : "neutral"}
+                label={`Allowed by matrix: ${compliantCount === null ? "UNKNOWN" : compliantCount}`} />
+              <StatusChip tone={notEvaluableCount === null ? "unknown" : notEvaluableCount > 0 ? "warn" : "neutral"}
+                label={`Not evaluable: ${notEvaluableCount === null ? "UNKNOWN" : notEvaluableCount}`} />
+              <StatusChip tone={unknownCount === null || unknownCount > 0 ? "unknown" : "neutral"}
+                label={`Outcome unknown: ${unknownCount === null ? "UNKNOWN" : unknownCount}`} />
               <StatusChip tone="neutral"
                 label={`Not applicable: ${result.not_applicable.total} (disabled ${result.not_applicable.disabled}, deny ${result.not_applicable.deny_type}, non-security ${result.not_applicable.outside_security_rulebase}, inline-decided ${result.not_applicable.apply_layer_decided_by_inline}, schedule ended ${result.not_applicable.schedule_ended})`} />
             </Stack>
@@ -324,10 +422,10 @@ export function EvaluateTab({ data, notify }: ZoneTabProps) {
               <TextField select size="small" label="Outcome filter" value={outcomeFilter}
                 onChange={(e) => { setPageOffset(0); setOutcomeFilter(e.target.value); }} sx={{ minWidth: 185 }}>
                 <MenuItem value="ALL">All outcomes ({result.rules.length})</MenuItem>
-                <MenuItem value="VIOLATION">Violations ({result.outcome_counts.VIOLATION ?? 0})</MenuItem>
-                <MenuItem value="NOT_EVALUABLE">Not evaluable ({result.outcome_counts.NOT_EVALUABLE ?? 0})</MenuItem>
-                <MenuItem value="UNKNOWN">Outcome unknown ({result.outcome_counts.UNKNOWN ?? 0})</MenuItem>
-                <MenuItem value="COMPLIANT">Allowed by matrix ({result.outcome_counts.COMPLIANT ?? 0})</MenuItem>
+                <MenuItem value="VIOLATION">{violationsFilterLabel}</MenuItem>
+                <MenuItem value="NOT_EVALUABLE">Not evaluable ({notEvaluableCount === null ? "UNKNOWN" : notEvaluableCount})</MenuItem>
+                <MenuItem value="UNKNOWN">Outcome unknown ({unknownCount === null ? "UNKNOWN" : unknownCount})</MenuItem>
+                <MenuItem value="COMPLIANT">Allowed by matrix ({compliantCount === null ? "UNKNOWN" : compliantCount})</MenuItem>
               </TextField>
 
               <TextField select size="small" label="Severity filter" value={severityFilter}
@@ -362,25 +460,58 @@ export function EvaluateTab({ data, notify }: ZoneTabProps) {
 
             {selectedRule ? (
               <Box data-testid="rule-finding-detail" sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: `${RADIUS.card}px`, p: 1.5, bgcolor: m3.scLow }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Rule #{selectedRule.rule_number} · {selectedRule.rule_name || selectedRule.rule_uid}
-                </Typography>
+                <Stack direction="row" flexWrap="wrap" justifyContent="space-between" alignItems="center" gap={1}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Rule #{selectedRule.rule_number} · {selectedRule.rule_name || selectedRule.rule_uid}
+                  </Typography>
+                  {policyHref ? (
+                    <Box
+                      component="a"
+                      href={policyHref}
+                      data-testid="evaluate-open-policy-link"
+                      sx={{ fontSize: "0.875rem", fontWeight: 500 }}
+                    >
+                      Open in Policy
+                    </Box>
+                  ) : null}
+                </Stack>
                 <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
                   Rule UID: <Box component="span" sx={mono}>{selectedRule.rule_uid}</Box>
                   {selectedRule.covering_rule_id ? <> · Covered by earlier deny rule <Box component="span" sx={mono}>{selectedRule.covering_rule_id}</Box></> : null}
                 </Typography>
-                {selectedRule.violated_cells.map((cell, idx) => (
-                  <Box key={`${cell.source}-${cell.destination}-${cell.nat_view}-${idx}`} sx={{ mt: 1 }}>
-                    <Typography variant="body2">
-                      <strong>{cell.source_name} {"->"} {cell.destination_name}</strong> ({cell.nat_view}) · Matrix statement: {statementWord(cell.statement)} · Severity: {severityWord(cell.severity)} · Disallowed services: <Box component="span" sx={mono}>{cell.not_allowed_services.join(", ")}</Box>
-                    </Typography>
-                    {cell.witness ? (
-                      <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                        Witness: <Box component="span" sx={mono}>{cell.witness.source_range} {"->"} {cell.witness.destination_range}</Box> on <Box component="span" sx={mono}>{cell.witness.service}</Box>
+                {hasAnyWitness ? (
+                  <Typography variant="body2" data-testid="evaluate-witness-audit-notice" sx={{ mt: 1, fontWeight: 600 }}>
+                    {WITNESS_AUDIT_NOTICE}
+                  </Typography>
+                ) : null}
+                {selectedRule.violated_cells.map((cell, idx) => {
+                  const witness = allowWitnessView ? cell.witness : null;
+                  const traceHref = witness ? evaluationWitnessTraceHref(witness) : null;
+                  return (
+                    <Box key={`${cell.source}-${cell.destination}-${cell.nat_view}-${idx}`} sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        <strong>{cell.source_name} {"->"} {cell.destination_name}</strong> ({cell.nat_view}) · Matrix statement: {statementWord(cell.statement)} · Severity: {severityWord(cell.severity)} · Disallowed services: <Box component="span" sx={mono}>{cell.not_allowed_services.join(", ")}</Box>
                       </Typography>
-                    ) : null}
-                  </Box>
-                ))}
+                      {witness ? (
+                        <Box sx={{ mt: 0.25 }}>
+                          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                            Witness: <Box component="span" sx={mono}>{witness.source_range} {"->"} {witness.destination_range}</Box> on <Box component="span" sx={mono}>{witness.service}</Box>
+                          </Typography>
+                          {traceHref ? (
+                            <Box
+                              component="a"
+                              href={traceHref}
+                              data-testid="evaluate-witness-trace-link"
+                              sx={{ display: "inline-block", fontSize: "0.875rem", fontWeight: 500 }}
+                            >
+                              Open in Trace
+                            </Box>
+                          ) : null}
+                        </Box>
+                      ) : null}
+                    </Box>
+                  );
+                })}
                 {selectedRule.undecided_parts.length > 0 ? (
                   <Typography variant="body2" sx={{ mt: 1, color: m3.onSurfaceVar }}>
                     Undecided sub-matches: {selectedRule.undecided_parts.join("; ")}
@@ -405,7 +536,8 @@ export function EvaluateTab({ data, notify }: ZoneTabProps) {
             </Box>
           ) : null}
         </>
-      ) : null}
+        );
+      })() : null}
 
       {notEvaluated.length > 0 ? (
         <Box data-testid="not-evaluated-sources" sx={panelSx}>
