@@ -265,14 +265,14 @@ class PolicyMergeTest {
         assertEquals(Map.of(PolicyUnionCover.INCOMPLETE, 2), incompleteMerge.notEvaluable());
         assertEquals(List.of(Map.of("mergeReason", PolicyUnionCover.INCOMPLETE, "rules", 2)), report(incomplete).merge().notEvaluable());
 
-        var pan = PolicyHygieneTest.snapshot(List.of(
-            PolicyHygieneTest.rule("r1", "net", "any", "allow", true),
-            PolicyHygieneTest.rule("r2", "any", "any", "allow", true)), PolicyHygieneTest.objects());
-        var panMerge = PolicyMerge.analyze(pan);
-        assertEquals(0, panMerge.evaluated());
-        assertTrue(panMerge.pairs().isEmpty());
-        assertEquals(Set.of(PolicyUnionCover.UNSUPPORTED_VENDOR), panMerge.notEvaluable().keySet());
-        assertTrue(PolicyInsightsTest.of(PolicyInsightsTest.report(pan), "I5").isEmpty());
+        for (String vendor : List.of("ASA", "FGT")) {
+            var unsup = PolicyUnionCoverTest.unsupportedVendorSnapshot(vendor);
+            var unsupMerge = PolicyMerge.analyze(unsup);
+            assertEquals(0, unsupMerge.evaluated(), vendor);
+            assertTrue(unsupMerge.pairs().isEmpty(), vendor);
+            assertEquals(Set.of(PolicyUnionCover.UNSUPPORTED_VENDOR), unsupMerge.notEvaluable().keySet(), vendor);
+            assertTrue(PolicyInsightsTest.of(PolicyInsightsTest.report(unsup), "I5").isEmpty(), vendor);
+        }
     }
 
     @Test void anExhaustedBudgetIsNotEvaluableNeverACandidate() {
@@ -382,5 +382,206 @@ class PolicyMergeTest {
         assertEquals("analysis budget", PolicyPrivacy.mask("analysis budget", "mergeReason", names, ips));
         assertEquals("UNKNOWN", PolicyPrivacy.mask("OBJ-RULE-1", "mergeReason", names, ips));
         for (String e : List.of(PolicyInsights.I5_MERGE, PolicyInsights.I5_BUDGET)) assertEquals(e, PolicyPrivacy.mask(e, "evidence", names, ips));
+    }
+
+    @Test void paloAltoMergesSourceDestinationAndSourcePortServicesRespectingProfilesZonesPhasesAndAnchors() {
+        String za = PolicyUnionCoverTest.ZA, zb = PolicyUnionCoverTest.ZB, zc = PolicyUnionCoverTest.ZC;
+
+        // 1. Source, destination, service and source-port service (0..1023 U 1024..65535 == 0..65535) merges on PAN.
+        Map<String, List<String>> profGrp = Map.of("profile-setting/group", List.of("PROF-ALPHA"));
+        Map<String, Section> validCases = new LinkedHashMap<>();
+        validCases.put("source", PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "lo", "other", "svc-p1", Map.of("profile-setting/group", List.of("PROF-ALPHA"), "log-setting", List.of("LOG-FWD-ALPHA"))),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("profile-setting/group", List.of("PROF-ALPHA"), "log-setting", List.of("LOG-FWD-ALPHA")))));
+        validCases.put("destination", PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "lo", "lo", "svc-p1", profGrp),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "lo", "hi", "svc-p1", profGrp)));
+        validCases.put("service", PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "lo", "other", "svc-p1-s-lo", Map.of("profile-setting/group", List.of("PROF-ALPHA"), "target/negate", List.of("no"))),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "lo", "other", "svc-p1-s-hi", Map.of("profile-setting/group", List.of("PROF-ALPHA"), "target/negate", List.of("no")))));
+
+        for (var entry : validCases.entrySet()) {
+            var snap = PolicyUnionCoverTest.panSnapshot(entry.getValue());
+            var merge = PolicyMerge.analyze(snap);
+            assertPartsSumToEvaluated(merge);
+            assertEquals(1, merge.candidates(), entry.getKey());
+            var pair = merge.pairs().get("r1");
+            assertEquals(entry.getKey(), pair.differingCell());
+            var budget = new PolicyNormalization.Budget(PolicyMerge.TOTAL_WORK);
+            var resolver = PolicyNormalization.Resolver.shadowing(snap, budget);
+            var boxA = PolicyRegion.Box.of(PolicyNormalization.normalize(snap, entry.getValue(), pair.surviving(), resolver).selectors());
+            var boxB = PolicyRegion.Box.of(PolicyNormalization.normalize(snap, entry.getValue(), pair.merged(), resolver).selectors());
+            Rule merged = PolicyMerge.mergedRule("PAN", pair.surviving(), pair.merged(), pair.differingDim());
+            var mergedBox = PolicyRegion.Box.of(PolicyNormalization.normalize(snap, entry.getValue(), merged, resolver).selectors());
+            assertNotNull(mergedBox);
+            assertEquals(List.of(), PolicyRegion.minus(boxA, mergedBox, budget));
+            assertEquals(List.of(), PolicyRegion.minus(boxB, mergedBox, budget));
+            assertTrue(PolicyRegion.residual(mergedBox, List.of(boxA, boxB), budget).covered());
+        }
+
+        // 2. Profile group, absent/individual profiles (uncollected data-filtering), log-setting, log-start/end, or start=UNKNOWN -> DIFFERENT_EFFECT.
+        Rule base1 = PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "lo", "other", "svc-p1", profGrp);
+        List<Rule> differentEffects = List.of(
+            PolicyUnionCoverTest.panRule("r2", 2, "deny", List.of(za), List.of(zb), "hi", "other", "svc-p1", profGrp),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of()),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("profile-setting/group", List.of("PROF-BRAVO"))),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("profile-setting/profiles/virus", List.of("AV-ALPHA"))),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("profile-setting/group", List.of("PROF-ALPHA"), "log-setting", List.of("LOG-FWD-ALPHA"))),
+            PolicyReorderTest.withLog(PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", profGrp), "start=yes, end=yes"),
+            PolicyReorderTest.withLog(PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", profGrp), "start=UNKNOWN, end=yes"));
+        for (Rule r2 : differentEffects) {
+            var res = PolicyMerge.analyze(PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase", base1, r2)));
+            assertEquals(1, res.differentEffect(), r2.toString());
+        }
+        // Two rules both lacking profile-setting/group (absent or individual profiles) fail closed to DIFFERENT_EFFECT.
+        for (Map<String, List<String>> unclosed : List.of(Map.<String, List<String>>of(), Map.of("profile-setting/profiles/virus", List.of("AV-ALPHA")))) {
+            var res = PolicyMerge.analyze(PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+                PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "lo", "other", "svc-p1", unclosed),
+                PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", unclosed))));
+            assertEquals(1, res.differentEffect(), unclosed.toString());
+        }
+
+        // 3. Different PAN zones (including any vs named zone, or subset vs superset) -> DIFFERENT_INSTALL_ON.
+        for (List<String> z2 : List.of(List.of(zc), List.of("any"), List.of(za, zb))) {
+            var res = PolicyMerge.analyze(PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+                base1, PolicyUnionCoverTest.panRule("r2", 2, "allow", z2, List.of(zb), "hi", "other", "svc-p1", Map.of()))));
+            assertEquals(1, res.differentInstallOn(), z2.toString());
+        }
+
+        // 4. Phase (Pre / Local / Post) and device-group (Shared / DG-TANGO-01) boundaries never form an adjacent merge pair.
+        var acrossScopes = PolicyUnionCoverTest.panSnapshot(
+            PolicyUnionCoverTest.panSection("Shared", "pre-rulebase", base1),
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+                PolicyUnionCoverTest.panRule("r2", 1, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of())),
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "rulebase",
+                PolicyUnionCoverTest.panRule("r3", 1, "allow", List.of(za), List.of(zb), "lo", "other", "svc-p1", Map.of())),
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "post-rulebase",
+                PolicyUnionCoverTest.panRule("r4", 1, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of())));
+        assertEquals(0, PolicyMerge.analyze(acrossScopes).evaluated());
+
+        // 5. PAN anchors (application-default, content App-ID, user, schedule, targeted, intrazone, mixed zones, negated cell) -> ANCHOR_BLOCKED.
+        Rule negatedPan = new Rule("neg", "uuid-neg", 2, "OBJ-RULE-neg", true, new Cell(List.of("hi"), true), cell("other"),
+            cell("svc-p1"), cell("any"), "allow", "start=no, end=yes", "", Map.of("from", List.of(za), "to", List.of(zb)));
+        List<Rule> panAnchors = List.of(
+            PolicyUnionCoverTest.panRule("a1", 2, "allow", List.of(za), List.of(zb), "hi", "other", PolicyUnionCoverTest.panAppDefaultRef(), Map.of()),
+            PolicyUnionCoverTest.panRuleCells("a2", 2, true, "allow", "start=no, end=yes", List.of(za), List.of(zb),
+                List.of("hi"), List.of("other"), List.of("svc-p1"), List.of(PolicyUnionCoverTest.panContentAppRef()), Map.of()),
+            PolicyUnionCoverTest.panRule("a3", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("source-user", List.of("OBJ-USER-01"))),
+            PolicyUnionCoverTest.panRule("a4", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("schedule", List.of("sched-1"))),
+            PolicyUnionCoverTest.panRule("a5", 2, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", Map.of("target-selectors", List.of("SERIAL-ALPHA-01"))),
+            PolicyUnionCoverTest.panRule("a6", 2, "allow", List.of(za), List.of(za), "hi", "other", "svc-p1", Map.of("rule-type", List.of("intrazone"))),
+            PolicyUnionCoverTest.panRule("a7", 2, "allow", List.of("any", za), List.of(zb), "hi", "other", "svc-p1", Map.of()),
+            negatedPan);
+        for (Rule anchor : panAnchors) {
+            var res = PolicyMerge.analyze(PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase", base1, anchor)));
+            assertEquals(1, res.anchorBlocked(), anchor.id());
+        }
+    }
+
+    @Test void paloAltoEveryMergePairAgreesWithBruteForceOracleOnRandomRulebases() {
+        Random random = new Random(2026112604L);
+        int candidates = 0, differentZones = 0, differentEffects = 0, anchorBlocked = 0, budgetStops = 0;
+        Set<PolicyUnionCoverTest.PanPacket> allUniverse = PolicyUnionCoverTest.panRulePackets(
+            PolicyUnionCoverTest.panRule("u", 1, "allow", List.of("any"), List.of("any"), "any", "any", "any", Map.of()),
+            PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT);
+        allUniverse = new HashSet<>(allUniverse);
+        allUniverse.addAll(PolicyUnionCoverTest.panRulePackets(
+            PolicyUnionCoverTest.panRule("u2", 1, "allow", List.of("any"), List.of("any"), "other", "other", "any", Map.of()),
+            PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+
+        for (int trial = 0; trial < 300; trial++) {
+            var realized = PolicyUnionCoverTest.panRealize(
+                PolicyUnionCoverTest.randomPanRulebase(random, trial % 2 == 0, trial % 4 == 0));
+            var items = realized.items();
+            var snapshot = realized.snapshot();
+            var merge = PolicyMerge.analyze(snapshot);
+            assertPartsSumToEvaluated(merge);
+
+            Map<String, PolicyUnionCoverTest.PanSynthetic> byId = new HashMap<>();
+            Map<String, Set<PolicyUnionCoverTest.PanPacket>> pts = new HashMap<>();
+            for (var item : items) {
+                byId.put(item.rule().id(), item);
+                pts.put(item.rule().id(), PolicyUnionCoverTest.panRulePackets(
+                    item.rule(), PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+            }
+            List<PolicyUnionCoverTest.PanSynthetic> enabled = items.stream().filter(PolicyUnionCoverTest.PanSynthetic::enabled).toList();
+
+            for (var pair : merge.pairs().values()) {
+                var a = byId.get(pair.surviving().id());
+                var b = byId.get(pair.merged().id());
+                assertEquals(a.sectionIndex(), b.sectionIndex(), "never across section/phase/DG in trial " + trial);
+                switch (pair.result()) {
+                    case PolicyMerge.ANCHOR_BLOCKED -> { anchorBlocked++; assertTrue(a.anchor() || b.anchor()); }
+                    case PolicyMerge.DIFFERENT_INSTALL_ON -> {
+                        differentZones++;
+                        assertFalse(a.anchor() || b.anchor());
+                        assertFalse(a.rule().extras().get("from").equals(b.rule().extras().get("from"))
+                            && a.rule().extras().get("to").equals(b.rule().extras().get("to")));
+                    }
+                    case PolicyMerge.DIFFERENT_EFFECT -> {
+                        differentEffects++;
+                        assertFalse(PolicyEffectSignature.sameFull("PAN", a.rule(), b.rule()));
+                    }
+                    case PolicyMerge.ALREADY_SHADOWED -> assertTrue(pts.get(a.rule().id()).containsAll(pts.get(b.rule().id())));
+                    case PolicyMerge.DIFFERS_IN_SEVERAL_CELLS -> assertFalse(pts.get(a.rule().id()).containsAll(pts.get(b.rule().id())));
+                    case PolicyMerge.MERGE_CANDIDATE -> {
+                        candidates++;
+                        assertFalse(a.anchor() || b.anchor());
+                        assertTrue(PolicyEffectSignature.sameFull("PAN", a.rule(), b.rule()));
+                        Rule merged = PolicyMerge.mergedRule("PAN", a.rule(), b.rule(), pair.differingDim());
+                        Set<PolicyUnionCoverTest.PanPacket> mergedPts = PolicyUnionCoverTest.panRulePackets(
+                            merged, PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT);
+                        Set<PolicyUnionCoverTest.PanPacket> expectedUnion = new HashSet<>(pts.get(a.rule().id()));
+                        expectedUnion.addAll(pts.get(b.rule().id()));
+                        assertEquals(expectedUnion, mergedPts, "union packet set mismatch in trial " + trial);
+
+                        // First-match equivalence across the entire rulebase under both anchor worlds.
+                        List<PolicyUnionCoverTest.PanSynthetic> after = new ArrayList<>();
+                        for (var x : enabled) {
+                            if (x == a) after.add(new PolicyUnionCoverTest.PanSynthetic(merged, PolicyUnionCoverTest.PanKind.READABLE, a.sectionIndex()));
+                            else if (x != b) after.add(x);
+                        }
+                        Map<String, Set<PolicyUnionCoverTest.PanPacket>> afterPts = new HashMap<>(pts);
+                        afterPts.put(merged.id(), mergedPts);
+                        for (boolean anchorsMatch : new boolean[]{false, true}) {
+                            for (var pkt : allUniverse) {
+                                Rule beforeDec = panFirstMatch(enabled, pkt, anchorsMatch, pts);
+                                Rule afterDec = panFirstMatch(after, pkt, anchorsMatch, afterPts);
+                                if (beforeDec == afterDec) continue;
+                                assertNotNull(beforeDec); assertNotNull(afterDec);
+                                assertTrue(PolicyEffectSignature.sameFull("PAN", beforeDec, afterDec), "effect changed in trial " + trial);
+                            }
+                        }
+                    }
+                    default -> fail("unexpected merge result: " + pair.result());
+                }
+            }
+
+            var limited = PolicyMerge.analyze(snapshot, 15 + random.nextInt(100), 10 + random.nextInt(50));
+            assertPartsSumToEvaluated(limited);
+            for (var e : limited.pairs().entrySet()) {
+                if (PolicyMerge.NOT_PROVEN.equals(e.getValue().result())) {
+                    budgetStops++;
+                    assertEquals(PolicyMerge.BUDGET, e.getValue().reason());
+                } else if (PolicyMerge.OFFERED.contains(e.getValue().result())) {
+                    assertEquals(merge.pairs().get(e.getKey()), e.getValue(), "limited budget produced false PAN merge in trial " + trial);
+                }
+            }
+        }
+        assertTrue(candidates >= 20, "PAN merge candidates exercised: " + candidates);
+        assertTrue(differentZones >= 20, "PAN different-zone pairs exercised: " + differentZones);
+        assertTrue(differentEffects >= 20, "PAN different-effect pairs exercised: " + differentEffects);
+        assertTrue(anchorBlocked >= 20, "PAN anchor-blocked pairs exercised: " + anchorBlocked);
+        assertTrue(budgetStops >= 15, "PAN merge budget stops exercised: " + budgetStops);
+    }
+
+    static Rule panFirstMatch(List<PolicyUnionCoverTest.PanSynthetic> order, PolicyUnionCoverTest.PanPacket pkt,
+            boolean anchorsMatch, Map<String, Set<PolicyUnionCoverTest.PanPacket>> pts) {
+        for (var item : order) {
+            if (!item.enabled()) continue;
+            if (item.anchor() && !anchorsMatch) continue;
+            if (pts.get(item.rule().id()).contains(pkt)) return item.rule();
+        }
+        return null;
     }
 }

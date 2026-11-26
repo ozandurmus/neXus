@@ -122,7 +122,7 @@ final class PolicyProposal {
      */
     static Result propose(PolicySnapshot stored, List<String> subjects, int workLimit, int ruleLimit, boolean scopeLocal, Stats stats) {
         var meta = stored.metadata();
-        if (!"CP".equals(meta.vendor())) return empty(stored, UNSUPPORTED_VENDOR);
+        if (!PolicyUnionCover.SUPPORTED_VENDORS.contains(meta.vendor())) return empty(stored, UNSUPPORTED_VENDOR);
         if (!stored.failures().isEmpty()) return empty(stored, INCOMPLETE);
         Budget budget = new Budget(workLimit);
         Analysis analysis = scopeLocal ? ScopeLocal.of(stored, stats) : null;

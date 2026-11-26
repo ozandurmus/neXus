@@ -305,18 +305,18 @@ class PolicyProposalMergesTest {
     }
 
     @Test void anotherVendorAndIncompleteSnapshotGiveNoStepAndUnchangedSnapshot() {
-        var pan = PolicyHygieneTest.snapshot(List.of(
-            PolicyHygieneTest.rule("r1", "lo", "any", "allow", true),
-            PolicyHygieneTest.rule("r2", "hi", "any", "allow", true)), PolicyHygieneTest.objects());
-        for (var result : List.of(
-                PolicyProposalMerges.allOfferedMerges(pan),
-                PolicyProposalMerges.propose(pan, List.of(new Candidate("r1", "r2"))),
-                PolicyProposalMerges.allOfferedMerges(PolicyProposal.allOfferedMoves(pan)))) {
-            assertEquals(PolicyProposalMerges.UNSUPPORTED_VENDOR, result.emptyReason());
-            assertTrue(result.steps().isEmpty());
-            assertEquals(0, result.accepted());
-            assertFalse(result.budgetStopped());
-            assertSame(pan, result.snapshot());
+        for (String vendor : List.of("ASA", "FGT")) {
+            var unsup = PolicyUnionCoverTest.unsupportedVendorSnapshot(vendor);
+            for (var result : List.of(
+                    PolicyProposalMerges.allOfferedMerges(unsup),
+                    PolicyProposalMerges.propose(unsup, List.of(new Candidate("r1", "r2"))),
+                    PolicyProposalMerges.allOfferedMerges(PolicyProposal.allOfferedMoves(unsup)))) {
+                assertEquals(PolicyProposalMerges.UNSUPPORTED_VENDOR, result.emptyReason(), vendor);
+                assertTrue(result.steps().isEmpty());
+                assertEquals(0, result.accepted());
+                assertFalse(result.budgetStopped());
+                assertSame(unsup, result.snapshot());
+            }
         }
 
         var complete = snapshot(cpSection("s1", null, cp("r1", 1, "Accept", "lo", "any"), cp("r2", 2, "Accept", "hi", "any")));
@@ -547,5 +547,128 @@ class PolicyProposalMergesTest {
         assertEquals(PolicyReorder.NOT_PROVEN, cMergesStopped.packageVerdict());
         assertNull(cMergesStopped.label());
         assertTrue(cMergesStopped.budgetStopped());
+    }
+
+    @Test void paloAltoPostMoveAdjacencyMergesSourcePortChainsCombinedLabelsAndPhaseBoundaries() {
+        String za = PolicyUnionCoverTest.ZA, zb = PolicyUnionCoverTest.ZB, zc = PolicyUnionCoverTest.ZC;
+        Map<String, List<String>> profAlpha = Map.of("profile-setting/group", List.of("PROF-ALPHA"), "log-setting", List.of("LOG-FWD-ALPHA"));
+        Map<String, List<String>> profBravo = Map.of("profile-setting/group", List.of("PROF-BRAVO"), "log-setting", List.of("LOG-FWD-ALPHA"));
+
+        // DG-TANGO-01 Pre: [broad(lo, lo, svc-p2, PROF-ALPHA), m1(other, h0, svc-p1-s-lo, PROF-ALPHA),
+        //                   spec(h0, net, svc-p2, PROF-BRAVO), m2(other, h0, svc-p1-s-hi, PROF-ALPHA)].
+        // Shared Post: [postOnly(other, h0, svc-p2, PROF-ALPHA)] -- never merged across DG/phase!
+        // Reorder promotes spec above broad (SAFE_INSPECTION_CHANGES, CHANGES), making m1 and m2 adjacent;
+        // m1 + m2 then merge in service (svc-p1-s-lo U svc-p1-s-hi == svc-p1)!
+        var stored = PolicyUnionCoverTest.panSnapshot(
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+                PolicyUnionCoverTest.panRule("broad", 1, "allow", List.of(za), List.of(zb), "lo", "lo", "svc-p2", profAlpha),
+                PolicyUnionCoverTest.panRule("m1", 2, "allow", List.of(zc), List.of(zb), "other", "h0", "svc-p1-s-lo", profAlpha),
+                PolicyUnionCoverTest.panRule("spec", 3, "allow", List.of(za), List.of(zb), "h0", "net", "svc-p2", profBravo),
+                PolicyUnionCoverTest.panRule("m2", 4, "allow", List.of(zc), List.of(zb), "other", "h0", "svc-p1-s-hi", profAlpha)),
+            PolicyUnionCoverTest.panSection("Shared", "post-rulebase",
+                PolicyUnionCoverTest.panRule("postOnly", 1, "allow", List.of(zc), List.of(zb), "other", "h0", "svc-p2", profAlpha)));
+
+        assertEquals(0, PolicyMerge.analyze(stored).candidates());
+        var proposal = PolicyProposal.allOfferedMoves(stored);
+        assertEquals(1, proposal.accepted());
+        assertEquals(PolicyReorder.CHANGES, proposal.packageVerdict());
+        assertEquals(PolicyProposal.LABEL_INSPECTION_CHANGES, proposal.label());
+
+        var merges = PolicyProposalMerges.allOfferedMerges(proposal);
+        assertEquals(1, merges.accepted());
+        assertEquals(List.of(new PolicyProposalMerges.Step("m1", "m2", "service", PolicyMerge.MERGE_CANDIDATE, null, true, PolicyReorder.EQUIVALENT)), merges.steps());
+        assertEquals(List.of("spec", "broad", "m1"), merges.snapshot().sections().get(0).rules().stream().map(Rule::id).toList());
+        assertEquals(List.of("postOnly"), merges.snapshot().sections().get(1).rules().stream().map(Rule::id).toList());
+        assertEquals(List.of("svc-p1-s-lo", "svc-p1-s-hi"), merges.snapshot().sections().get(0).rules().get(2).service().refs());
+
+        var combined = PolicyProposalMerges.combine(proposal, merges);
+        assertEquals(PolicyReorder.CHANGES, combined.packageVerdict());
+        assertEquals(PolicyProposal.LABEL_INSPECTION_CHANGES, combined.label());
+        assertTrue(combined.inspectionChanges());
+        assertEquals(1, combined.acceptedMoves());
+        assertEquals(1, combined.acceptedMerges());
+
+        // Budget sweep over PAN chain of three rules (h0, h1, hi -> net) verifies strict prefix property and charge() parity.
+        var panChain = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("a", 1, "allow", List.of(za), List.of(zb), "h0", "other", "svc-p1", profAlpha),
+            PolicyUnionCoverTest.panRule("b", 2, "allow", List.of(za), List.of(zb), "h1", "other", "svc-p1", profAlpha),
+            PolicyUnionCoverTest.panRule("c", 3, "allow", List.of(za), List.of(zb), "hi", "other", "svc-p1", profAlpha)));
+        var chainProp = PolicyProposal.allOfferedMoves(panChain);
+        var fullChain = PolicyProposalMerges.allOfferedMerges(chainProp);
+        assertEquals(2, fullChain.accepted());
+        boolean sawMid = false;
+        for (int work = 0; work < 500; work++) {
+            var lim = PolicyProposalMerges.allOfferedMerges(chainProp, work, work);
+            assertEquals(2, lim.steps().size());
+            if (lim.budgetStopped() && lim.accepted() == 1) sawMid = true;
+            if (!lim.budgetStopped()) assertEquals(fullChain.steps(), lim.steps());
+        }
+        assertTrue(sawMid);
+    }
+
+    @Test void paloAltoProposalMergesDifferentialOracle() {
+        Random random = new Random(2026112606L);
+        Set<PolicyUnionCoverTest.PanPacket> allUniverse = new HashSet<>(PolicyUnionCoverTest.panRulePackets(
+            PolicyUnionCoverTest.panRule("u", 1, "allow", List.of("any"), List.of("any"), "any", "any", "any", Map.of()),
+            PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+        allUniverse.addAll(PolicyUnionCoverTest.panRulePackets(
+            PolicyUnionCoverTest.panRule("u2", 1, "allow", List.of("any"), List.of("any"), "other", "other", "any", Map.of()),
+            PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+
+        int acceptedMerges = 0, budgetStops = 0;
+        for (int trial = 0; trial < 220; trial++) {
+            var realized = PolicyUnionCoverTest.panRealize(
+                PolicyUnionCoverTest.randomPanRulebase(random, trial % 2 == 0, trial % 3 == 0));
+            var items = realized.items();
+            var stored = realized.snapshot();
+            var proposal = PolicyProposal.allOfferedMoves(stored);
+            var merges = PolicyProposalMerges.allOfferedMerges(proposal);
+            var combined = PolicyProposalMerges.combine(proposal, merges);
+            acceptedMerges += merges.accepted();
+
+            Map<String, PolicyUnionCoverTest.PanSynthetic> byId = new HashMap<>();
+            Map<String, Set<PolicyUnionCoverTest.PanPacket>> origPts = new HashMap<>();
+            for (var item : items) {
+                byId.put(item.rule().id(), item);
+                origPts.put(item.rule().id(), PolicyUnionCoverTest.panRulePackets(
+                    item.rule(), PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+            }
+            List<PolicyUnionCoverTest.PanSynthetic> finalItems = new ArrayList<>();
+            Map<String, Set<PolicyUnionCoverTest.PanPacket>> finalPts = new HashMap<>();
+            for (Section s : combined.snapshot().sections()) {
+                for (Rule r : s.rules()) {
+                    var orig = byId.get(r.id());
+                    finalItems.add(new PolicyUnionCoverTest.PanSynthetic(r, orig.kind(), orig.sectionIndex()));
+                    finalPts.put(r.id(), PolicyUnionCoverTest.panRulePackets(
+                        r, PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+                }
+            }
+            boolean fullEq = PolicyReorder.EQUIVALENT.equals(combined.packageVerdict()) && !combined.inspectionChanges();
+            for (boolean anchorsMatch : new boolean[]{false, true}) {
+                for (var pkt : allUniverse) {
+                    Rule beforeDec = PolicyMergeTest.panFirstMatch(items, pkt, anchorsMatch, origPts);
+                    Rule afterDec = PolicyMergeTest.panFirstMatch(finalItems, pkt, anchorsMatch, finalPts);
+                    if (beforeDec == null && afterDec == null) continue;
+                    assertNotNull(beforeDec); assertNotNull(afterDec);
+                    if (beforeDec.id().equals(afterDec.id())) {
+                        assertEquals(beforeDec.action(), afterDec.action());
+                        assertEquals(beforeDec.log(), afterDec.log());
+                        assertEquals(beforeDec.extras(), afterDec.extras());
+                        continue;
+                    }
+                    assertTrue(PolicyEffectSignature.sameVerdict(beforeDec, afterDec), "combined PAN verdict changed in trial " + trial);
+                    if (fullEq) {
+                        assertTrue(PolicyEffectSignature.sameFull("PAN", beforeDec, afterDec), "combined PAN full effect changed in trial " + trial);
+                    }
+                }
+            }
+
+            int lim = 10 + random.nextInt(120);
+            var limMerges = PolicyProposalMerges.allOfferedMerges(proposal, lim, Math.max(1, lim / 2));
+            if (limMerges.budgetStopped()) budgetStops++;
+            else assertEquals(merges.steps(), limMerges.steps());
+        }
+        assertTrue(acceptedMerges >= 15, "PAN proposal merges exercised: " + acceptedMerges);
+        assertTrue(budgetStops >= 10, "PAN proposal merge budget stops exercised: " + budgetStops);
     }
 }

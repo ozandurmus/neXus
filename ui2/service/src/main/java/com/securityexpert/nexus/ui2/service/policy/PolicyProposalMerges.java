@@ -133,7 +133,7 @@ final class PolicyProposalMerges {
     static Result propose(PolicySnapshot snapshot, List<Candidate> candidates, int workLimit, int ruleLimit) {
         Objects.requireNonNull(snapshot, "snapshot");
         var meta = snapshot.metadata();
-        if (!"CP".equals(meta.vendor())) return empty(snapshot, UNSUPPORTED_VENDOR);
+        if (!PolicyUnionCover.SUPPORTED_VENDORS.contains(meta.vendor())) return empty(snapshot, UNSUPPORTED_VENDOR);
         if (!snapshot.failures().isEmpty() || !snapshot.ruleComplete()) return empty(snapshot, INCOMPLETE);
         PolicyMerge.Result initialFull = null;
         List<Candidate> order;
@@ -208,7 +208,7 @@ final class PolicyProposalMerges {
     /** The merge-candidate (and any budget-stopped) pairs of {@code snapshot} in rule order. */
     static List<Candidate> candidatesOf(PolicySnapshot snapshot) {
         var meta = snapshot.metadata();
-        if (!"CP".equals(meta.vendor()) || !snapshot.failures().isEmpty() || !snapshot.ruleComplete()) return List.of();
+        if (!PolicyUnionCover.SUPPORTED_VENDORS.contains(meta.vendor()) || !snapshot.failures().isEmpty() || !snapshot.ruleComplete()) return List.of();
         return candidatePairs(PolicyMerge.analyze(snapshot));
     }
 
@@ -319,7 +319,7 @@ final class PolicyProposalMerges {
                     if (match.problem() != null) {
                         entry = new ChargedEntry(rule, section, ordinal, null, null, true);
                     } else {
-                        Box box = Box.of(match.selectors());
+                        Box box = PolicyUnionCover.mixedPanZones(meta, match) ? null : Box.of(match.selectors());
                         if (box == null || hasNegatedCell(rule) || PolicyPartialShadow.isApplyLayer(rule)) {
                             entry = new ChargedEntry(rule, section, ordinal, null, null, true);
                         } else {

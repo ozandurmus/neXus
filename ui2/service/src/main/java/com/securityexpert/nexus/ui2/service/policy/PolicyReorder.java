@@ -117,7 +117,7 @@ final class PolicyReorder {
         Map<String, Integer> counts = new HashMap<>();
         Map<String, PolicyPartialShadow.Partial> candidates = new HashMap<>();
         partial.rules().forEach((id, p) -> { if (PolicyPartialShadow.PARTIAL.equals(p.status()) && p.sameAction() && !p.overlapping().isEmpty()) candidates.put(id, p); });
-        if (!"CP".equals(meta.vendor()) || !snapshot.failures().isEmpty() || candidates.isEmpty() && !scopeOfAWhole)
+        if (!PolicyUnionCover.SUPPORTED_VENDORS.contains(meta.vendor()) || !snapshot.failures().isEmpty() || candidates.isEmpty() && !scopeOfAWhole)
             return new Result(Map.of(), 0, 0, 0, 0, 0, 0, 0, partial.notEvaluable());
         var scope = new EvaluationScope<List<Entry>>(meta, ArrayList::new);
         Map<String, Position> where = new HashMap<>();
@@ -133,7 +133,7 @@ final class PolicyReorder {
                 Entry entry;
                 try {
                     Match match = normalize(snapshot, section, rule, resolver);
-                    Box box = match.problem() == null ? Box.of(match.selectors()) : null;
+                    Box box = match.problem() == null && !PolicyUnionCover.mixedPanZones(meta, match) ? Box.of(match.selectors()) : null;
                     entry = box == null || PolicyPartialShadow.isApplyLayer(rule) ? new Entry(rule, ordinal, null, null, true) : new Entry(rule, ordinal, match, box, false);
                 } catch (Unknown limit) {
                     entry = new Entry(rule, ordinal, null, null, false);
@@ -177,7 +177,8 @@ final class PolicyReorder {
             List<Entry> parts = new ArrayList<>(List.of(b));
             boolean inspection = !PolicyEffectSignature.sameFull(vendor, b.rule(), r.rule());
             for (Entry c : between) {
-                boolean takesPart = compatible(c.match(), r.match()) || !disjoint(c.match(), r.match(), snapshot.objects());
+                boolean takesPart = ("PAN".equals(vendor) ? PolicyUnionCover.placementCovers(snapshot.metadata(), c.match(), r.match()) : compatible(c.match(), r.match()))
+                    || !disjoint(c.match(), r.match(), snapshot.objects());
                 if (!takesPart || !PolicyPartialShadow.intersects(r.box(), c.box(), budget)) { crossed.add(new Crossed(c.rule(), DISJOINT, false)); continue; }
                 if (!PolicyEffectSignature.sameVerdict(c.rule(), r.rule())) return refused(UNSAFE_DIFFERENT_EFFECT, r, b);
                 boolean differs = !PolicyEffectSignature.sameFull(vendor, c.rule(), r.rule());
@@ -199,8 +200,8 @@ final class PolicyReorder {
                         if (!PolicyEffectSignature.sameFull(vendor, p.rule(), r.rule())) { changedRules++; changedBoxes += piece.boxes().size(); }
                     }
                 }
-                // Only a rule of r's own placement is sure to take its part on every gateway r is installed on.
-                if (compatible(p.match(), r.match()) && compatible(r.match(), p.match())) earlier.add(p.box());
+                // Only a rule whose placement covers r's is sure to take its part across every target/zone pair r matches.
+                if (PolicyUnionCover.placementCovers(snapshot.metadata(), p.match(), r.match())) earlier.add(p.box());
             }
             String result = inspection ? SAFE_INSPECTION_CHANGES : SAFE;
             String equivalence = changedRules == 0 ? EQUIVALENT : CHANGES;

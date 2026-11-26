@@ -61,7 +61,7 @@ final class PolicyPartialShadow {
         Map<String, Partial> rules = new LinkedHashMap<>();
         Map<String, Integer> notEvaluable = new LinkedHashMap<>();
         int evaluated = 0, partial = 0, differentAction = 0, notProven = 0;
-        String everyRule = !"CP".equals(meta.vendor()) ? PolicyUnionCover.UNSUPPORTED_VENDOR
+        String everyRule = !PolicyUnionCover.SUPPORTED_VENDORS.contains(meta.vendor()) ? PolicyUnionCover.UNSUPPORTED_VENDOR
             : !snapshot.failures().isEmpty() ? PolicyUnionCover.INCOMPLETE : null;
         Budget budget = new Budget(workLimit);
         var resolver = Resolver.shadowing(snapshot, budget);
@@ -89,12 +89,12 @@ final class PolicyPartialShadow {
                     continue;
                 }
                 if (match.problem() != null) { if (subject) notEvaluable.merge(PolicyUnionCover.NOT_RESOLVED, 1, Integer::sum); continue; }
-                Box box = Box.of(match.selectors());
+                Box box = PolicyUnionCover.mixedPanZones(meta, match) ? null : Box.of(match.selectors());
                 if (box == null) { if (subject) notEvaluable.merge(PolicyUnionCover.OPAQUE, 1, Integer::sum); continue; }
                 if (subject && scope.unproven) notEvaluable.merge(PolicyUnionCover.ORDER_UNPROVEN, 1, Integer::sum);
                 else if (subject) {
                     evaluated++;
-                    var verdict = partial(rule, match, box, earlier, gaps.contains(earlier), budget);
+                    var verdict = partial(snapshot, rule, match, box, earlier, gaps.contains(earlier), budget);
                     if (verdict != null) {
                         rules.put(rule.id(), verdict);
                         if (verdict.status().equals(NOT_PROVEN)) notProven++; else if (verdict.sameAction()) partial++; else differentAction++;
@@ -109,11 +109,13 @@ final class PolicyPartialShadow {
     }
 
     /**
-     * PARTIAL, NOT_PROVEN, or null: no earlier rule intersects the subject, or the earlier rules together cover it all.
+     * PARTIAL, NOT_PROVEN, or null: no earlier rule intersects the subject, or the earlier rules together cover it all
+     * (or on Palo Alto, whether the subject has any uncovered zone pair is undecided without the virtual system's zone universe).
      * {@code gap}: an earlier rule of the scope was never read for lack of budget, so a PARTIAL cannot be told from a cover
      * or from a different-action overlap and is NOT_PROVEN.
      */
-    private static Partial partial(Rule rule, Match match, Box box, PolicyUnionCover.Earlier earlier, boolean gap, Budget budget) {
+    private static Partial partial(PolicySnapshot snapshot, Rule rule, Match match, Box box, PolicyUnionCover.Earlier earlier, boolean gap, Budget budget) {
+        if ("PAN".equals(snapshot.metadata().vendor())) return panPartial(snapshot, rule, match, box, earlier, gap, budget);
         try {
             List<Match> found = new ArrayList<>(); List<Box> foundBoxes = new ArrayList<>();
             var order = earlier.candidates(match, box.spans(), found, foundBoxes, budget);
@@ -134,6 +136,69 @@ final class PolicyPartialShadow {
         } catch (Unknown limit) {
             return new Partial(NOT_PROVEN, BUDGET, List.of(), false);
         }
+    }
+
+    private static Partial panPartial(PolicySnapshot snapshot, Rule rule, Match match, Box box, PolicyUnionCover.Earlier earlier, boolean gap, Budget budget) {
+        try {
+            List<Match> found = new ArrayList<>(); List<Box> foundBoxes = new ArrayList<>();
+            var order = earlier.panOverlapCandidates(match, box.spans(), snapshot.objects(), found, foundBoxes, budget);
+            List<Match> hitMatches = new ArrayList<>(); List<Box> hitBoxes = new ArrayList<>(); List<Rule> overlapping = new ArrayList<>();
+            var subInstall = match.placements().get("install-on");
+            for (int i : order) {
+                if (!intersects(box, foundBoxes.get(i), budget)) continue;
+                Match prior = found.get(i);
+                if (!prior.placements().get("install-on").equals(subInstall)) return null;
+                hitMatches.add(prior); hitBoxes.add(foundBoxes.get(i)); overlapping.add(prior.rule());
+            }
+            if (overlapping.isEmpty()) return null;
+            List<Set<String>> testFrom = panTestZones(match.placements().get("from"), hitMatches, "from", budget);
+            List<Set<String>> testTo = panTestZones(match.placements().get("to"), hitMatches, "to", budget);
+            boolean hasUncovered = false;
+            for (Set<String> sf : testFrom) {
+                for (Set<String> st : testTo) {
+                    budget.spend();
+                    List<Box> sliceBoxes = new ArrayList<>();
+                    for (int k = 0; k < hitMatches.size(); k++) {
+                        budget.spend();
+                        Match p = hitMatches.get(k);
+                        if (zonesCover(p.placements().get("from"), p.placements().get("to"), sf, st, false)) {
+                            sliceBoxes.add(hitBoxes.get(k));
+                        }
+                    }
+                    if (sliceBoxes.isEmpty()) { hasUncovered = true; break; }
+                    var residual = PolicyRegion.residual(box, sliceBoxes, budget);
+                    if (residual.status() == PolicyRegion.Status.NOT_PROVEN) return new Partial(NOT_PROVEN, BUDGET, List.of(), false);
+                    if (!residual.covered()) { hasUncovered = true; break; }
+                }
+                if (hasUncovered) break;
+            }
+            if (!hasUncovered) return null;
+            if (gap) return new Partial(NOT_PROVEN, BUDGET, List.of(), false);
+            boolean same = true;
+            for (Rule c : overlapping) if (!sameAction(c, rule)) { same = false; break; }
+            return new Partial(PARTIAL, null, List.copyOf(overlapping), same);
+        } catch (Unknown limit) {
+            return new Partial(NOT_PROVEN, BUDGET, List.of(), false);
+        }
+    }
+
+    private static List<Set<String>> panTestZones(Set<String> subjectZones, List<Match> priors, String axis, Budget budget) {
+        Set<String> anyZone = Set.of("any");
+        if (!subjectZones.equals(anyZone)) {
+            List<Set<String>> out = new ArrayList<>(subjectZones.size());
+            for (String z : new TreeSet<>(subjectZones)) { budget.spend(); out.add(Set.of(z)); }
+            return out;
+        }
+        TreeSet<String> named = new TreeSet<>();
+        for (Match p : priors) {
+            budget.spend();
+            Set<String> pz = p.placements().get(axis);
+            if (!pz.equals(anyZone)) named.addAll(pz);
+        }
+        if (named.isEmpty()) return List.of(anyZone);
+        List<Set<String>> out = new ArrayList<>(named.size());
+        for (String z : named) out.add(Set.of(z));
+        return out;
     }
 
     /** Whether two rules have the same action; an Apply Layer rule, on either side, is never the same. */

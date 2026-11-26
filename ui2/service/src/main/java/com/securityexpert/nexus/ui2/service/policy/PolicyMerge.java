@@ -86,7 +86,7 @@ final class PolicyMerge {
         Map<String, Pair> pairs = new LinkedHashMap<>();
         Map<String, Integer> counts = new HashMap<>();
         Map<String, Integer> notEvaluable = new LinkedHashMap<>();
-        String everyRule = !"CP".equals(meta.vendor()) ? PolicyUnionCover.UNSUPPORTED_VENDOR
+        String everyRule = !PolicyUnionCover.SUPPORTED_VENDORS.contains(meta.vendor()) ? PolicyUnionCover.UNSUPPORTED_VENDOR
             : !snapshot.failures().isEmpty() || !snapshot.ruleComplete() ? PolicyUnionCover.INCOMPLETE : null;
         if (everyRule != null) {
             for (Section section : snapshot.sections()) {
@@ -122,7 +122,7 @@ final class PolicyMerge {
                         notEvaluable.merge(PolicyUnionCover.NOT_RESOLVED, 1, Integer::sum);
                         entry = new Entry(rule, section, ordinal, null, null, true);
                     } else {
-                        Box box = Box.of(match.selectors());
+                        Box box = PolicyUnionCover.mixedPanZones(meta, match) ? null : Box.of(match.selectors());
                         if (box == null) {
                             notEvaluable.merge(PolicyUnionCover.OPAQUE, 1, Integer::sum);
                             entry = new Entry(rule, section, ordinal, null, null, true);

@@ -134,11 +134,15 @@ class PolicyPartialShadowTest {
         assertEquals(Map.of(PolicyUnionCover.INCOMPLETE, 2), result.notEvaluable());
     }
     @Test void anotherVendorEvaluatesNothing() {
-        var pan = PolicyHygieneTest.snapshot(List.of(PolicyHygieneTest.rule("r1", "any", "any", "allow", true), PolicyHygieneTest.rule("r2", "any", "any", "allow", true)), PolicyHygieneTest.objects());
-        var result = PolicyPartialShadow.analyze(pan, PolicyHygiene.analyze(pan, 90, NOW, 250000), PolicyUnionCover.analyze(pan, PolicyHygiene.analyze(pan, 90, NOW, 250000)));
-        assertEquals(0, result.evaluated()); assertTrue(result.rules().isEmpty());
-        assertEquals(Set.of(PolicyUnionCover.UNSUPPORTED_VENDOR), result.notEvaluable().keySet(), "every subject of another vendor is not evaluable for that one reason");
-        assertFalse(result.notEvaluable().isEmpty());
+        for (String vendor : List.of("ASA", "FGT")) {
+            var unsup = PolicyUnionCoverTest.unsupportedVendorSnapshot(vendor);
+            var hygiene = PolicyHygiene.analyze(unsup, 90, NOW, 250000);
+            var result = PolicyPartialShadow.analyze(unsup, hygiene, PolicyUnionCover.analyze(unsup, hygiene));
+            assertEquals(0, result.evaluated(), vendor);
+            assertTrue(result.rules().isEmpty(), vendor);
+            assertEquals(Set.of(PolicyUnionCover.UNSUPPORTED_VENDOR), result.notEvaluable().keySet(), "every subject of another vendor is not evaluable for that one reason");
+            assertFalse(result.notEvaluable().isEmpty(), vendor);
+        }
     }
     @Test void theListOfOverlappingRulesIsCappedAndTheRestIsCounted() {
         List<Rule> rules = new ArrayList<>();
@@ -213,5 +217,166 @@ class PolicyPartialShadowTest {
         assertEquals("overlapping", PolicyPrivacy.mask("overlapping", "insightRole", names, ips));
         assertEquals("UNKNOWN", PolicyPrivacy.mask("OBJ-RULE-7", "insightRole", names, ips));
         assertEquals("Evidence withheld in AIView.", PolicyPrivacy.mask("Part of OBJ-RULE-7 overlaps.", "evidence", names, ips));
+    }
+
+    @Test void paloAltoSourcePortOverlapsZoneSupersetsUncollectedZoneUniversePhaseChainsAndAnchors() {
+        String za = PolicyUnionCoverTest.ZA, zb = PolicyUnionCoverTest.ZB, zc = PolicyUnionCoverTest.ZC;
+
+        // 1. Source-port family overlap (P2b note): tcp|s=1024-65535 overlaps plain tcp on the same destination port.
+        var sameActionSp = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "net", "any", "svc-p1-s-hi", Map.of()),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "net", "any", "svc-p1", Map.of())));
+        assertEquals(List.of("r2", "r1"), ids(i4(sameActionSp).get(0)));
+
+        // Different action across source-port family overlap MUST suppress I4 and count differentAction.
+        var diffActionSp = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "deny", List.of(za), List.of(zb), "net", "any", "svc-p1-s-hi", Map.of()),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za), List.of(zb), "net", "any", "svc-p1", Map.of())));
+        assertTrue(i4(diffActionSp).isEmpty(), "deny source-port overlap must never emit I4");
+        assertEquals(1, partial(diffActionSp).differentAction());
+
+        // 2. Partial-zone overlap on concrete zones: [ZA] overlaps [ZA, ZB] and leaves [ZB] provably uncovered.
+        var partialZone = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zc), "net", "any", "svc-p1", Map.of()),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of(za, zb), List.of(zc), "net", "any", "svc-p1", Map.of())));
+        assertEquals(List.of("r2", "r1"), ids(i4(partialZone).get(0)));
+
+        // 3. ZoneUniverse.UNKNOWN fail-closed: p ([ZA], net) before r ([any], net) cannot prove a non-empty rest (ZA might be the only zone).
+        var unknownUniverseCover = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zc), "net", "any", "svc-p1", Map.of()),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of("any"), List.of(zc), "net", "any", "svc-p1", Map.of())));
+        assertTrue(i4(unknownUniverseCover).isEmpty(), "cannot claim I4 when ZA might be the only source zone");
+
+        // When p ([ZA], lo) leaves (ZA, hi) uncovered, non-empty rest IS proven in every zone universe -> I4!
+        var provenOnNamedZone = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase",
+            PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zc), "lo", "any", "svc-p1", Map.of()),
+            PolicyUnionCoverTest.panRule("r2", 2, "allow", List.of("any"), List.of(zc), "net", "any", "svc-p1", Map.of())));
+        assertEquals(List.of("r2", "r1"), ids(i4(provenOnNamedZone).get(0)));
+
+        // 4. Panorama chain (Shared pre -> DG pre -> Local -> DG post -> Shared post) + anchors ignored as overlaps.
+        var chain = PolicyUnionCoverTest.panSnapshot(
+            PolicyUnionCoverTest.panSection("Shared", "pre-rulebase",
+                PolicyUnionCoverTest.panRule("r1", 1, "allow", List.of(za), List.of(zb), "lo", "any", "svc-p1", Map.of()),
+                PolicyUnionCoverTest.panRule("ad", 2, "deny", List.of(za), List.of(zb), "any", "any", PolicyUnionCoverTest.panAppDefaultRef(), Map.of())),
+            PolicyUnionCoverTest.panSection("DG-TANGO-01", "post-rulebase",
+                PolicyUnionCoverTest.panRule("r2", 1, "allow", List.of(za), List.of(zb), "net", "any", "svc-p1", Map.of())));
+        assertEquals(List.of("r2", "r1"), ids(i4(chain).get(0)));
+    }
+
+    @Test void paloAltoI4AgreesWithBruteForceEnumerationOnRandomRulebases() {
+        Random random = new Random(2026112602L);
+        int partials = 0, diffActions = 0, budgetStops = 0;
+        for (int trial = 0; trial < 300; trial++) {
+            var realized = PolicyUnionCoverTest.panRealize(
+                PolicyUnionCoverTest.randomPanRulebase(random, trial % 2 == 0, trial % 3 != 0));
+            var items = realized.items();
+            var snapshot = realized.snapshot();
+            var hygiene = PolicyHygiene.analyze(snapshot, 90, NOW, 250_000);
+            var union = PolicyUnionCover.analyze(snapshot, hygiene);
+            var result = PolicyPartialShadow.analyze(snapshot, hygiene, union);
+
+            Map<String, Set<PolicyUnionCoverTest.PanPacket>> ptsExt = new HashMap<>();
+            for (var item : items) {
+                if (item.readable()) {
+                    ptsExt.put(item.rule().id(), PolicyUnionCoverTest.panRulePackets(
+                        item.rule(), PolicyUnionCoverTest.PAN_WORLD_EXT, PolicyUnionCoverTest.PAN_WORLD_EXT));
+                }
+            }
+
+            Map<String, PolicyPartialShadow.Partial> expected = new LinkedHashMap<>();
+            for (int k = 0; k < items.size(); k++) {
+                var sub = items.get(k);
+                if (!sub.readable()) continue;
+                String id = sub.rule().id();
+                if (Set.of("REDUNDANT", "CONFLICT").contains(hygiene.rules().get(id).shadowStatus())) continue;
+                if (union.rules().containsKey(id) && PolicyUnionCover.COVERED.equals(union.rules().get(id).status())) continue;
+
+                Set<PolicyUnionCoverTest.PanPacket> subExt = ptsExt.get(id);
+                List<Rule> overlapping = new ArrayList<>();
+                for (int j = 0; j < k; j++) {
+                    var prior = items.get(j);
+                    if (!prior.readable()) continue;
+                    if (!Collections.disjoint(subExt, ptsExt.get(prior.rule().id()))) overlapping.add(prior.rule());
+                }
+                if (overlapping.isEmpty()) continue;
+
+                // Minimal valid zone universe over named zones of sub and overlapping priors.
+                List<String> minFrom = minZoneWorld(sub.rule().extras().get("from"), overlapping, "from");
+                List<String> minTo = minZoneWorld(sub.rule().extras().get("to"), overlapping, "to");
+                Set<PolicyUnionCoverTest.PanPacket> subMin = PolicyUnionCoverTest.panRulePackets(sub.rule(), minFrom, minTo);
+                Set<PolicyUnionCoverTest.PanPacket> covMin = new HashSet<>();
+                for (Rule o : overlapping) covMin.addAll(PolicyUnionCoverTest.panRulePackets(o, minFrom, minTo));
+                if (covMin.containsAll(subMin)) continue; // could be wholly covered in minimal zone universe
+
+                boolean same = overlapping.stream().allMatch(o -> o.action().equals(sub.rule().action()));
+                expected.put(id, new PolicyPartialShadow.Partial(PolicyPartialShadow.PARTIAL, null, List.copyOf(overlapping), same));
+                if (same) partials++; else diffActions++;
+            }
+            assertEquals(expected, result.rules(), "PAN I4 mismatch in trial " + trial);
+
+            var limited = PolicyPartialShadow.analyze(snapshot, hygiene, union, 20 + random.nextInt(120), 10 + random.nextInt(60));
+            for (var e : limited.rules().entrySet()) {
+                if (PolicyPartialShadow.NOT_PROVEN.equals(e.getValue().status())) {
+                    budgetStops++;
+                    assertEquals(PolicyPartialShadow.BUDGET, e.getValue().reason());
+                    assertFalse(e.getValue().sameAction());
+                } else {
+                    assertEquals(expected.get(e.getKey()), e.getValue(), "limited budget wrong PAN I4 in trial " + trial);
+                }
+            }
+        }
+        assertTrue(partials >= 30, "PAN same-action partials exercised: " + partials);
+        assertTrue(diffActions >= 15, "PAN different-action overlaps exercised: " + diffActions);
+        assertTrue(budgetStops >= 15, "PAN budget stops exercised: " + budgetStops);
+    }
+
+    @Test void paloAltoBudgetAppliesToDisjointBucketsAndInnerPriorZoneScan() {
+        String za = PolicyUnionCoverTest.ZA, zb = PolicyUnionCoverTest.ZB, zc = PolicyUnionCoverTest.ZC;
+        // Disjoint buckets with workLimit=0 or ruleLimit=1 must fail closed to NOT_PROVEN.
+        List<Rule> disjoint = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            disjoint.add(PolicyUnionCoverTest.panRule("d" + i, i + 1, "allow", List.of("ZONE-DISJOINT-" + i), List.of(zc), "lo", "any", "svc-p1", Map.of()));
+        }
+        disjoint.add(PolicyUnionCoverTest.panRule("sub", 13, "allow", List.of(za), List.of(zb), "net", "any", "svc-p1", Map.of()));
+        var snap = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase", disjoint.toArray(Rule[]::new)));
+        var hygiene = PolicyHygiene.analyze(snap, 90, NOW, 250_000);
+        var union = PolicyUnionCover.analyze(snap, hygiene);
+        var zero = PolicyPartialShadow.analyze(snap, hygiene, union, 0, 0);
+        assertEquals(PolicyPartialShadow.NOT_PROVEN, zero.rules().get("sub").status());
+        assertEquals(PolicyPartialShadow.BUDGET, zero.rules().get("sub").reason());
+        var tight = PolicyPartialShadow.analyze(snap, hygiene, union, 10_000, 1);
+        assertEquals(PolicyPartialShadow.NOT_PROVEN, tight.rules().get("sub").status());
+        assertEquals(PolicyPartialShadow.BUDGET, tight.rules().get("sub").reason());
+
+        // Inner hitMatches x (testFrom x testTo) scan must spend budget per prior checked.
+        List<Rule> manyHits = new ArrayList<>();
+        List<String> zones = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            String z = "ZONE-HIT-" + i;
+            zones.add(z);
+            manyHits.add(PolicyUnionCoverTest.panRule("p" + i, i + 1, "allow", List.of(z), List.of(zb), "lo", "any", "svc-p1", Map.of()));
+        }
+        manyHits.add(PolicyUnionCoverTest.panRule("sub", 9, "allow", zones, List.of(zb), "net", "any", "svc-p1", Map.of()));
+        var hitSnap = PolicyUnionCoverTest.panSnapshot(PolicyUnionCoverTest.panSection("DG-TANGO-01", "pre-rulebase", manyHits.toArray(Rule[]::new)));
+        var hitHygiene = PolicyHygiene.analyze(hitSnap, 90, NOW, 250_000);
+        var hitUnion = PolicyUnionCover.analyze(hitSnap, hitHygiene);
+        boolean sawInnerBudget = false;
+        for (int limit = 1; limit < 120; limit++) {
+            var res = PolicyPartialShadow.analyze(hitSnap, hitHygiene, hitUnion, 10_000, limit);
+            if (res.rules().containsKey("sub") && PolicyPartialShadow.NOT_PROVEN.equals(res.rules().get("sub").status())) {
+                sawInnerBudget = true;
+            }
+        }
+        assertTrue(sawInnerBudget, "tight ruleLimit must stop inner PAN partial scan with NOT_PROVEN");
+    }
+
+    private static List<String> minZoneWorld(List<String> subZones, List<Rule> overlapping, String key) {
+        if (!subZones.equals(List.of("any"))) return subZones;
+        Set<String> named = new TreeSet<>();
+        for (Rule o : overlapping) {
+            List<String> z = o.extras().get(key);
+            if (!z.equals(List.of("any"))) named.addAll(z);
+        }
+        return named.isEmpty() ? List.of(PolicyUnionCoverTest.ZA) : List.copyOf(named);
     }
 }
