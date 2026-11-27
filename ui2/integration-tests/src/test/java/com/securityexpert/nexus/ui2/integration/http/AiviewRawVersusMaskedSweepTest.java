@@ -818,6 +818,7 @@ class AiviewRawVersusMaskedSweepTest {
                 zoneCell(zoneB, zoneA, "HIGH", p.zoneV4B() + "/30", p.zoneV4A() + "/30", p.zoneV4A()),
                 zoneCell(zoneA, zoneB, "CRITICAL", p.zoneV4A() + "/30", p.zoneV4B() + "/30", p.zoneV4B()));
         List<String> pairs = List.of(zoneB + "->" + zoneA, zoneA + "->" + zoneB);
+        long[] violationFindingId = new long[1];
         audited(c, () -> {
             zoneRunStart(c, earlierRun, versionId, sha, e.policyId(), earlierStart);
             zoneFinding(c, earlierRun, e.policyId(), resolvedUid, List.of(), List.of(zoneB + "->" + zoneA), e.ruleId(), 4,
@@ -825,7 +826,7 @@ class AiviewRawVersusMaskedSweepTest {
                     List.of(cells.get(0)), List.of(), earlierStart, latestEnd, "MATRIX_VERSION_CHANGED");
             zoneRunComplete(c, earlierRun, earlierEnd, 1, 0, 0, 0, 1);
             zoneRunStart(c, latestRun, versionId, sha, e.policyId(), latestStart);
-            zoneFinding(c, latestRun, e.policyId(), violationUid, parentPath, pairs, e.ruleId(), 1, e.ruleName(),
+            violationFindingId[0] = zoneFinding(c, latestRun, e.policyId(), violationUid, parentPath, pairs, e.ruleId(), 1, e.ruleName(),
                     "section-1", e.sectionName(), targets, "VIOLATION", null, "CRITICAL", List.of("INLINE_LAYER_COVER"),
                     cells, List.of(), latestStart, null, null);
             zoneFinding(c, latestRun, e.policyId(), "uid-" + UUID.randomUUID(), List.of(), List.of(), "rule-" + UUID.randomUUID(), 2,
@@ -837,6 +838,7 @@ class AiviewRawVersusMaskedSweepTest {
             zoneRunComplete(c, latestRun, latestEnd, 1, 1, 1, 1, 3);
         });
         ids.put("zmRun", latestRun);
+        ids.put("zmFindingId", Long.toString(violationFindingId[0]));
         ids.put("zmFindingUid", violationUid);
         ids.put("zmResolvedUid", resolvedUid);
     }
@@ -882,16 +884,17 @@ class AiviewRawVersusMaskedSweepTest {
                 at(finished), violation, compliant, notEvaluable, unknown, findings, runId);
     }
 
-    private static void zoneFinding(Connection c, String runId, String policyId, String ruleUid, List<String> parentPath,
+    private static long zoneFinding(Connection c, String runId, String policyId, String ruleUid, List<String> parentPath,
             List<String> pairs, String ruleId, int ruleNumber, String ruleName, String sectionId, String sectionName,
             List<String> targets, String outcome, String reason, String severity, List<String> flags,
             List<Map<String, Object>> cells, List<String> undecided, Instant observed, Instant resolvedAt,
             String resolution) throws Exception {
-        exec(c, "insert into zone_matrix_finding(run_id, policy_source_id, rule_uid, inline_parent_path, violated_pairs, "
+        return querySingleLong(c, "insert into zone_matrix_finding(run_id, policy_source_id, rule_uid, inline_parent_path, violated_pairs, "
                 + "rule_id, rule_number, rule_name, section_id, section_name, target_device_ids, outcome, reason, "
                 + "highest_severity, flags, covering_rule_id, violated_cells, undecided_parts, nat_view, first_observed_at, "
                 + "first_observed_any_version, last_observed_at, resolved_at, resolution_reason) values (?, ?, ?, ?::jsonb, "
-                + "?::jsonb, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?)",
+                + "?::jsonb, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?) "
+                + "returning finding_id",
                 runId, policyId, ruleUid, JSON.writeValueAsString(parentPath), JSON.writeValueAsString(pairs), ruleId,
                 ruleNumber, ruleName, sectionId, sectionName, JSON.writeValueAsString(targets), outcome, reason, severity,
                 JSON.writeValueAsString(flags), flags.isEmpty() ? null : "rule-" + UUID.randomUUID(),
@@ -1208,6 +1211,22 @@ class AiviewRawVersusMaskedSweepTest {
         }
     }
 
+    private static long querySingleLong(Connection c, String sql, Object... args) throws SQLException {
+        try (PreparedStatement st = c.prepareStatement(sql)) {
+            for (int i = 0; i < args.length; i++) st.setObject(i + 1, args[i]);
+            try (var rs = st.executeQuery()) {
+                assertTrue(rs.next(), "expected one row from: " + sql);
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    private static long querySingleLong(String sql, Object... args) throws SQLException {
+        try (Connection c = fixture.migrateConnection()) {
+            return querySingleLong(c, sql, args);
+        }
+    }
+
     private static String sha256(String value) throws Exception {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
     }
@@ -1287,6 +1306,7 @@ class AiviewRawVersusMaskedSweepTest {
         if (template.startsWith("/api/v2/policy/objects/")) byName.put("id", e.objectId());
         if (template.startsWith("/devices/{id}")) byName.put("id", e.cpMemberA().id());
         if (template.startsWith("/api/v2/zone-matrix/versions/")) byName.put("id", ids.get("zoneMatrixActive"));
+        if (template.startsWith("/api/v2/zone-matrix/findings/")) byName.put("findingId", ids.get("zmFindingId"));
         if (template.startsWith("/api/v2/cutover/segments/")) byName.put("id", ids.get("segmentId"));
         if (template.startsWith("/api/v2/cutover/assessments/")) byName.put("id", ids.get("assessmentId"));
         if (template.startsWith("/api/v2/scripts/")) byName.put("id", ids.get("scriptId"));
@@ -1398,6 +1418,30 @@ class AiviewRawVersusMaskedSweepTest {
                 .timeout(REQUEST_TIMEOUT).header("Accept", "application/json, text/plain, */*");
         if (cookie != null) request.header("Cookie", "ui2_session=" + cookie);
         HttpResponse<byte[]> response = HTTP.send(request.GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        return new Resp(response.statusCode(), response.headers().firstValue("content-type").orElse(""),
+                new String(response.body(), StandardCharsets.UTF_8));
+    }
+
+    private static String csrfToken(String cookie) throws Exception {
+        Resp status = get("/session/status", cookie);
+        assertEquals(200, status.status(), "aiview session status");
+        String token = JSON.readTree(status.body()).path("csrf_token").asText("");
+        assertFalse(token.isBlank(), "aiview session status must carry csrf_token");
+        return token;
+    }
+
+    private static Resp post(String target, String jsonBody, String cookie, String csrf) throws Exception {
+        String origin = "http://127.0.0.1:" + port;
+        var request = HttpRequest.newBuilder(URI.create(origin + target))
+                .timeout(REQUEST_TIMEOUT)
+                .header("Accept", "application/json, text/plain, */*")
+                .header("Content-Type", "application/json")
+                .header("Origin", origin)
+                .header("X-CSRF-Token", csrf);
+        if (cookie != null) request.header("Cookie", "ui2_session=" + cookie);
+        HttpResponse<byte[]> response = HTTP.send(
+                request.POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8)).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
         return new Resp(response.statusCode(), response.headers().firstValue("content-type").orElse(""),
                 new String(response.body(), StandardCharsets.UTF_8));
     }
@@ -1568,6 +1612,66 @@ class AiviewRawVersusMaskedSweepTest {
         assertEquals("masked", JSON.readTree(report.body()).path("projection").asText(), "aiview's report projection");
         Resp download = get("/api/v2/packet-analysis/captures/" + ids.get("paCapture") + "/download", cookie);
         assertEquals(403, download.status(), "aiview downloads no raw capture");
+    }
+
+    /**
+     * ZONE_MATRIX_CONTRACT.md (FROZEN 2026-11-13, rev 2) sections 3.4, 8.2, 8.4 and acceptance criteria ZM-10 / ZM-33:
+     * aiview ({@code role:replay_viewer}) gets no witness ranges, no CIDR blocks, and cannot trigger evaluation runs,
+     * with zero planted raw values in any response and zero {@code zone_matrix_access_log} side effects.
+     */
+    @Test
+    void zoneMatrixWitnessBlocksAndRunsStayOutOfAiviewReach() throws Exception {
+        assertFalse(AiviewReachableRoutes.aiviewMayCall(ActionRegistry.ZONE_MATRIX_ZONES_READ),
+                "aiview may never hold " + ActionRegistry.ZONE_MATRIX_ZONES_READ);
+        assertFalse(AiviewReachableRoutes.aiviewMayCall(ActionRegistry.ZONE_MATRIX_EVALUATE),
+                "aiview may never hold " + ActionRegistry.ZONE_MATRIX_EVALUATE);
+        String cookie = loginAsAiview();
+        String findingId = ids.get("zmFindingId");
+        String versionId = ids.get("zoneMatrixActive");
+        assertNotNull(findingId, "seeded Zone Matrix finding id");
+        assertNotNull(versionId, "seeded Zone Matrix active version id");
+        long runsBefore = querySingleLong("select count(*) from zone_matrix_run");
+
+        // 1. Finding witness route: refused (403), zero planted raw values, zero WITNESS_VIEW audit rows.
+        Resp witness = get("/api/v2/zone-matrix/findings/" + findingId + "/witness", cookie);
+        assertEquals(403, witness.status(), "aiview is refused Zone Matrix finding witness");
+        assertEquals(Map.of(), count(witness.body(), estate.raw()),
+                "refused Zone Matrix witness response leaks no seeded raw values");
+        assertEquals(0L, querySingleLong("select count(*) from zone_matrix_access_log where kind = ?", "WITNESS_VIEW"),
+                "refused aiview witness read writes zero WITNESS_VIEW audit rows");
+
+        // 2. Version detail with blocks requested (?includeBlocks=true and ZoneMatrixController's ?blocks=1):
+        //    ZoneMatrixController#version forces View.MASKED for replay_viewer (200 with blocks: null), zero raw values,
+        //    and zero BLOCKS_VIEW audit rows.
+        for (String query : List.of("?includeBlocks=true", "?blocks=1")) {
+            Resp version = get("/api/v2/zone-matrix/versions/" + versionId + query, cookie);
+            assertEquals(200, version.status(), "aiview version read with " + query + " answers 200 in View.MASKED");
+            var tree = JSON.readTree(version.body());
+            assertEquals(versionId, tree.path("version_id").asText(), "seeded active version is returned");
+            assertFalse(tree.path("can").path("view_blocks").asBoolean(true), "can.view_blocks is false for aiview");
+            var zones = tree.path("zones");
+            assertTrue(zones.isArray() && zones.size() >= 2, "seeded zones are present in version response");
+            for (var zone : zones) {
+                assertTrue(zone.has("blocks") && zone.get("blocks").isNull(),
+                        "zone blocks must be null for aiview (" + query + ")");
+                assertTrue(zone.has("description") && zone.get("description").isNull(),
+                        "zone description must be null for aiview (" + query + ")");
+            }
+            assertEquals(Map.of(), count(version.body(), estate.raw()),
+                    "version response with " + query + " leaks no seeded raw values");
+        }
+        assertEquals(0L, querySingleLong("select count(*) from zone_matrix_access_log where kind = ?", "BLOCKS_VIEW"),
+                "aiview version reads write zero BLOCKS_VIEW audit rows");
+
+        // 3. On-demand evaluation run trigger: refused (403), zero planted raw values, no new run row.
+        String csrf = csrfToken(cookie);
+        String runBody = JSON.writeValueAsString(Map.of("policy_id", estate.policyId(), "version_id", versionId));
+        Resp runsResp = post("/api/v2/zone-matrix/runs", runBody, cookie, csrf);
+        assertEquals(403, runsResp.status(), "aiview is refused POST /api/v2/zone-matrix/runs");
+        assertEquals(Map.of(), count(runsResp.body(), estate.raw()),
+                "refused Zone Matrix runs response leaks no seeded raw values");
+        assertEquals(runsBefore, querySingleLong("select count(*) from zone_matrix_run"),
+                "refused POST /api/v2/zone-matrix/runs creates no zone_matrix_run row");
     }
 
     /** The counter itself: every spelling it claims to catch is caught, and a longer address is not a match. */

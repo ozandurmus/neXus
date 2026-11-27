@@ -88,16 +88,31 @@ public final class PanoramaPolicyCollector {
         return "concat('" + value.replace("'", "',\"'\",'") + "')";
     }
 
+    /**
+     * Opt-in collection bounds for event-triggered Panorama runs (PO 2026-11-26 Q6 safeguard 5):
+     * {@code skipHits} skips all managed-firewall hit-count reads (security and NAT) so the run contacts Panorama only;
+     * {@code ancestorOnly} downloads only {@code /config/shared} plus the target DG's ancestor chain when
+     * {@code scope.domainRef()} targets a single device group. Default scheduled runs use {@link #DEFAULT}.
+     */
+    public record Options(boolean skipHits, boolean ancestorOnly) {
+        public static final Options DEFAULT = new Options(false, false);
+    }
+
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope, BooleanSupplier lease) {
+        return collect(run, scope, lease, Options.DEFAULT);
+    }
+
+    public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
+            BooleanSupplier lease, Options options) {
         List<PolicySnapshot> snapshots = new ArrayList<>();
-        var failures = collect(run, scope, lease, snapshots::add);
+        var failures = collect(run, scope, lease, snapshots::add, new PolicyObservations(), options);
         return snapshots.stream().map(s -> new PolicySnapshot(s.metadata(), s.sections(), s.objects(), failures)).toList();
     }
 
     /** Production path publishes immediately; only lineage XML is retained, never sibling snapshots. */
     public List<CollectionFailure> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
             BooleanSupplier lease, Consumer<PolicySnapshot> publish) {
-        return collect(run, scope, lease, publish, new PolicyObservations());
+        return collect(run, scope, lease, publish, new PolicyObservations(), Options.DEFAULT);
     }
 
     /**
@@ -106,6 +121,12 @@ public final class PanoramaPolicyCollector {
      */
     public List<CollectionFailure> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
             BooleanSupplier lease, Consumer<PolicySnapshot> publish, PolicyObservations observations) {
+        return collect(run, scope, lease, publish, observations, Options.DEFAULT);
+    }
+
+    public List<CollectionFailure> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
+            BooleanSupplier lease, Consumer<PolicySnapshot> publish, PolicyObservations observations, Options options) {
+        Objects.requireNonNull(options, "options");
         Instant jobStart = windows.now();
         PolicyCollectionTrace.step("PANORAMA_TARGET", scope.sourceId());
         if (!"palo_alto".equals(run.vendor()) || run.managementAddress() == null || run.managementAddress().isBlank())
@@ -148,6 +169,8 @@ public final class PanoramaPolicyCollector {
             Map<String, String> parents = new LinkedHashMap<>();
             hierarchy(hierarchy, "", parents, 0);
             if (!parents.keySet().equals(members.keySet())) throw failure();
+            // Parent-first order allows inheritance without retaining unrelated DG responses.
+            List<String> order = collectionOrder(scope, parents, options);
             var shared = result(read(target, checked(0, "", key, lease), timer, deadline, bytes), "shared");
             Map<String, List<String>> predefined = predefinedApplications(target, key, lease, timer, deadline, bytes);
             var document = shared.getOwnerDocument();
@@ -157,8 +180,6 @@ public final class PanoramaPolicyCollector {
             Element local = document.createElement("entry"); local.setAttribute("name", "localhost.localdomain"); devices.appendChild(local);
             Element deviceGroups = document.createElement("device-group"); local.appendChild(deviceGroups);
             List<CollectionFailure> failures = new ArrayList<>();
-            // Parent-first order allows inheritance without retaining unrelated DG responses.
-            List<String> order = new ArrayList<>(parents.keySet());
             PolicyCollectionTrace.packages((int) order.stream().filter(name -> scope.domainRef().isEmpty()
                 || scope.domainRef().equals(ref(scope.sourceId(), "device-group", name))).count());
             String collectedAt = Instant.now().toString();
@@ -213,10 +234,12 @@ public final class PanoramaPolicyCollector {
                                 "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " nonSecurityRules=" + otherRules + " objects=" + objects);
                         throw PolicyCollectionTrace.failure("SIZE_LIMIT");
                     }
-                    if (natTrial[0] == null && completeness.panNatHitsTrialFirewall().isPresent())
-                        for (Target candidate : snapshot.metadata().targets())
-                            if (natTrial[0] == null && completeness.panNatHitsTargets(candidate.deviceId())) natTrial[0] = candidate;
-                    snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.throttledAutomatic(), failures);
+                    if (!options.skipHits()) {
+                        if (natTrial[0] == null && completeness.panNatHitsTrialFirewall().isPresent())
+                            for (Target candidate : snapshot.metadata().targets())
+                                if (natTrial[0] == null && completeness.panNatHitsTargets(candidate.deviceId())) natTrial[0] = candidate;
+                        snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.throttledAutomatic(), failures);
+                    }
                     if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
@@ -251,13 +274,28 @@ public final class PanoramaPolicyCollector {
             if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
             if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
             if ((!scope.domainRef().isEmpty() || !members.isEmpty()) && published == 0) throw failure();
-            completenessReaders(scope, target, key, lease, timer, deadline, bytes, jobStart, natTrial[0]);
+            completenessReaders(scope, target, key, lease, timer, deadline, bytes, jobStart, options.skipHits() ? null : natTrial[0]);
             return List.copyOf(failures);
         } finally {
             timer.shutdownNow();
             if (key != null) Arrays.fill(key, '\0');
             Arrays.fill(credential.password(), '\0');
         }
+    }
+
+    private static List<String> collectionOrder(PolicyCollectionRepository.Request scope, Map<String, String> parents, Options options) {
+        if (!options.ancestorOnly() || scope.domainRef().isEmpty()) return new ArrayList<>(parents.keySet());
+        String targetDg = parents.keySet().stream()
+                .filter(name -> scope.domainRef().equals(ref(scope.sourceId(), "device-group", name)))
+                .findFirst()
+                .orElseThrow(() -> PolicyCollectionTrace.failure("DEVICE_GROUP_NOT_FOUND"));
+        List<String> chain = new ArrayList<>();
+        Set<String> visited = new HashSet<>();
+        for (String group = targetDg; group != null && !group.isEmpty(); group = parents.get(group)) {
+            if (!parents.containsKey(group) || !visited.add(group) || chain.size() >= 32) throw failure();
+            chain.add(0, group);
+        }
+        return chain;
     }
     /** The fixed code at the end of a traced failure reason ("step: CODE"), or a generic one. */
     static String failureCode(String reason) {
