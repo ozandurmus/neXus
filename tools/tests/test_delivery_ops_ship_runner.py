@@ -439,3 +439,59 @@ def test_status_prints_agy_only_on(ops):
     assert "AGY_ONLY" not in ops.bash(f'bash "{OPS}/status.sh"').stdout
     (ops.lq / "AGY_ONLY").touch()
     assert "AGY_ONLY on" in ops.bash(f'bash "{OPS}/status.sh"').stdout
+
+
+# ---- relative-path guards and inline logs in fix briefs ----------------------------------------------------------------
+
+REL_PATH_GUARD = "Always read/edit files using repo-relative paths inside your current worktree; never call read_file on paths outside it."
+
+
+def test_review_decide_strips_worktree_paths_and_adds_relative_path_guard(ops):
+    ship_entry(ops)
+    review_text = (
+        "Defects:\n"
+        "- [FooService.java](file:///Users/dev/Codo/nexus-q-20261126-1200-G7-D3-p1-sample/ui2/service/src/FooService.java#L12) swallows error\n"
+        "- /Users/dev/Codo/nexus-q-20261126-1200-G7-D3-p1-sample/ui2/frontend/src/App.tsx:45 missing check\n"
+        '- See ("/tmp/other/nexus-q-999-bar/scripts/helper.py")\n'
+        "VERDICT: BLOCK\n"
+    )
+    decide(ops, review_text)
+    brief = next(ops.lq.glob("*-fix-blocked-p1-sample.brief")).read_text()
+    assert REL_PATH_GUARD in brief
+    assert "the inline review below" in brief
+    assert str(ops.logs) not in brief and f"review-{LANE}.md" not in brief
+    assert "[FooService.java](ui2/service/src/FooService.java#L12)" in brief
+    assert "ui2/frontend/src/App.tsx:45 missing check" in brief
+    assert 'See ("scripts/helper.py")' in brief
+    assert "nexus-q-" not in brief and "file://" not in brief and "/Users/dev" not in brief
+
+
+def test_ship_fix_brief_inlines_bounded_logs_strips_worktree_paths_and_adds_guard(ops):
+    inflight(
+        ops,
+        "B7",
+        [LANE],
+        ["FAILED batch/B7: unit tests did not pass (FAIL file:///Users/dev/Codo/nexus-q-123-foo/ui2/BarTest.java)"],
+    )
+    pretest_lines = ["FAIL /Users/dev/Codo/nexus-q-123-foo/ui2/service/BarTest.java:10 assertion failed"]
+    pretest_lines.extend(f"PASS benign-line-{i:02d}" for i in range(1, 46))
+    pretest_lines.append("ERROR: build failed in /Users/dev/Codo/nexus-shiprun/ui2/frontend/src/App.tsx")
+    (ops.logs / "pretest-ship-B7.out").write_text("\n".join(pretest_lines) + "\n")
+
+    ship_lines = [f"INFO step-{i:02d}" for i in range(1, 41)]
+    ship_lines.append("PREVIEW E2E FAILED TEST: file:///tmp/wt/nexus-q-123-foo/ui2/e2e/login.spec.ts")
+    (ops.logs / "ship-B7.log").write_text("\n".join(ship_lines) + "\n")
+
+    run_finish(ops, "B7")
+    brief = next(ops.lq.glob("*-fix-*.brief")).read_text()
+    assert REL_PATH_GUARD in brief
+    assert str(ops.logs) not in brief and "Read the logs" not in brief
+    assert "Shipping it failed: FAILED batch/B7: unit tests did not pass (FAIL ui2/BarTest.java)" in brief
+    assert "### pretest-ship-B7.out (bounded inline excerpt)" in brief
+    assert "FAIL ui2/service/BarTest.java:10 assertion failed" in brief
+    assert "ERROR: build failed in ui2/frontend/src/App.tsx" in brief
+    assert "benign-line-02" not in brief
+    assert "### ship-B7.log (bounded inline excerpt)" in brief
+    assert "PREVIEW E2E FAILED TEST: ui2/e2e/login.spec.ts" in brief
+    assert "step-02" not in brief
+    assert "nexus-q-" not in brief and "nexus-shiprun" not in brief and "file://" not in brief and "/Users/dev" not in brief
