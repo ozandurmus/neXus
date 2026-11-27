@@ -19,11 +19,14 @@
 -- (ADDR) from the canonical version content, static-route preview destinations, next hops and representative hosts
 -- (ADDR), requesters (USER) and units (CLUSTER).  A block "a/n" also yields its address part "a" (ADDR, trailing
 -- separators removed the way the probe tokenizes) so a block printed as text is found by its network address.
--- Later planes (V251 - V273 and older actor columns): Script Execution script names and declared egress host:port
+-- Later planes (V251 - V274 and older actor columns): Script Execution script names and declared egress host:port
 -- targets and the LDAP servers (HOST, or ADDR for an IP literal), failover / cluster-run references (CLUSTER),
--- Infoblox grid member and notification / support-upload hosts (HOST, ADDR), Zone Matrix violated-cell witness ranges
--- (ADDR), and the person or principal columns of older and newer migrations (USER).  Opaque ids, actor fingerprints,
--- device-id lists and closed enums are not sources.
+-- Infoblox / Management Center grid member and notification / support-upload hosts (HOST, ADDR), log detection
+-- evidence/finding key tokens (ADDR, SERIAL), Zone Matrix violated-cell witness ranges (ADDR), and the person or
+-- principal columns of older and newer migrations (USER).  Opaque ids, actor fingerprints, device-id lists, closed
+-- enums, V271 grid_member.health_messages (pre-masked text, never raw vendor JSON), V273 closed-vocabulary template
+-- columns (log_template / log_provisional_template / log_finding.template_text), and V274 support_bundle_request
+-- closed-vocabulary / UUID columns (previous_request_id, auto_retry, hold_reasons, retry_outcome) are not sources.
 \set ON_ERROR_STOP on
 BEGIN READ ONLY;
 
@@ -84,10 +87,16 @@ WITH plain(cat, tbl, col) AS (VALUES
     ('USER',    'script_version',           'created_by'),
     ('USER',    'script_run',               'requested_by'),
     -- SNMP polling (V268), log detection (V272, V273), failover actor authority (V260): the people and principals who acted.
+    -- log_finding_action.actor is an actor fingerprint (tier 2 in V272) kept as USER defense-in-depth alongside *_by columns;
+    -- log_finding.key_token and log_event_count.key_token normally hold closed labels or keyed opaque tokens (k-<12 hex>)
+    -- and are included as ADDR/SERIAL defense-in-depth so any unexpected raw address or serial is caught.
     ('USER',    'snmp_polling_settings',    'updated_by'),
     ('USER',    'snmp_polling_override',    'updated_by'),
     ('USER',    'log_detection_settings',   'updated_by'),
     ('USER',    'log_finding',              'review_by'),
+    ('ADDR',    'log_finding',              'key_token'),
+    ('SERIAL',  'log_finding',              'key_token'),
+    ('ADDR',    'log_event_count',          'key_token'),
     ('USER',    'log_finding_action',       'actor'),
     ('USER',    'log_template_catalog',     'created_by'),
     ('USER',    'log_template_catalog',     'frozen_by'),

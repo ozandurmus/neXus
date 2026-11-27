@@ -159,3 +159,29 @@ def test_reference_sql_categories_are_the_ones_the_probe_knows():
     sql = (DIR / "export_reference.sql").read_text(encoding="utf-8")
     code = "\n".join(re.sub(r"--.*$", "", line) for line in sql.splitlines())
     assert {"IPV4", "NAME_WORD"} <= known and all(f"'{c}'" in code for c in ("IPV4", "NAME_WORD"))
+
+
+def test_reference_sql_covers_v272_v273_log_detection_sources():
+    plain_sources = {(cat, tbl, col) for kind, cat, tbl, col, _shape in _sql_sources() if kind == "plain"}
+    expected = {
+        ("USER", "log_detection_settings", "updated_by"),
+        ("USER", "log_finding", "review_by"),
+        ("ADDR", "log_finding", "key_token"),
+        ("SERIAL", "log_finding", "key_token"),
+        ("ADDR", "log_event_count", "key_token"),
+        ("USER", "log_template_catalog", "created_by"),
+        ("USER", "log_template_catalog", "frozen_by"),
+    }
+    missing = sorted(expected - plain_sources)
+    assert not missing, f"export_reference.sql missing V272/V273 sources: {missing}"
+    # V271 pre-masked text and V274 closed-vocabulary / UUID columns must stay excluded from raw identity sources.
+    excluded = {
+        ("grid_member", "health_messages"),
+        ("grid_member", "health_state"),
+        ("support_bundle_request", "previous_request_id"),
+        ("support_bundle_request", "hold_reasons"),
+        ("support_bundle_request", "retry_outcome"),
+    }
+    all_cols = {(tbl, col) for _kind, _cat, tbl, col, _shape in _sql_sources()}
+    unexpected = sorted(excluded & all_cols)
+    assert not unexpected, f"export_reference.sql must not export non-identity V271/V274 columns: {unexpected}"
