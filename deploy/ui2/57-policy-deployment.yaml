@@ -80,10 +80,10 @@ spec:
         # Console log format (json|text, default text; flip to json for one JSON object per line):
         # - name: UI2_LOG_FORMAT
         #   value: "json"
-        # Development mode (PO 2026-11-03): the job window spans the whole 6-hour slot, so manual jobs are never
-        # refused as OUTSIDE_JOB_WINDOW. Remove (default 60) when scheduled operation resumes.
+        # PO_DECISION_RECORD_2026_11_26_POLICY_CHANGE_EVENT_TRIGGER.md Q6 safeguard 6: enforce the 60-minute
+        # scheduled job window on the policy worker (replaces the prior development-mode "360" setting).
         - name: UI2_JOB_WINDOW_MINUTES
-          value: "360"
+          value: "60"
         # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
         - name: NEXUS_FAILOVER_MUTATION_ENABLED
           value: "true"
