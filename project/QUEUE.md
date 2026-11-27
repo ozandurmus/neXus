@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-26T20:26:11Z
+Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-27T20:51:06Z
 
 ## Now
 - NXS-LOCAL-0422 — Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening (automated_validated)

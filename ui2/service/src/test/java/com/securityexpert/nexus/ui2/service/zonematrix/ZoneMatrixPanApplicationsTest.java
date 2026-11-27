@@ -277,6 +277,9 @@ class ZoneMatrixPanApplicationsTest {
     @Test
     void app_entryIsEvaluableInTheVocabulary() {
         assertNull(ServiceEntry.parse("app:pan:web-browsing").notEvaluableReason());
-        assertNotNull(ServiceEntry.parse("icmp/8").notEvaluableReason());
+        assertNull(ServiceEntry.parse("icmp/8").notEvaluableReason());
+        assertNull(ServiceEntry.parse("icmp/8/0").notEvaluableReason());
+        assertNotNull(ServiceEntry.parse("icmp6/128").notEvaluableReason());
+        assertNotNull(ServiceEntry.parse("ipproto/50").notEvaluableReason());
     }
 }

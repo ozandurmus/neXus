@@ -503,6 +503,20 @@ export const evaluateZoneMatrixPolicy = (policyId: string, versionId?: string | 
     include_witnesses: includeWitnesses,
   });
 
+export interface ZoneMatrixRunSubmission {
+  readonly run_id: string;
+  readonly already_running: boolean;
+  readonly state: string;
+}
+
+/** Starts an on-demand durable evaluation run on the bounded run pool (contract 5.1, `zone_matrix_evaluate`). */
+export const startZoneMatrixRun = (policyId: string, versionId?: string | null) =>
+  apiCall<ZoneMatrixRunSubmission>(
+    `${BASE}/runs`,
+    "POST",
+    versionId ? { policy_id: policyId, version_id: versionId } : { policy_id: policyId },
+  );
+
 /** The stored outcomes the summary route keeps (a COMPLIANT rule is not stored). */
 export type SummaryOutcome = "VIOLATION" | "UNKNOWN" | "NOT_EVALUABLE";
 export type SummaryState = "READY" | "NO_ACTIVE_VERSION" | "NO_EVALUABLE_POLICY" | "NO_COMPLETE_RUN";

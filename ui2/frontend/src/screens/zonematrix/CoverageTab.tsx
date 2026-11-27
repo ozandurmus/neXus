@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 import { DataTable, type DataColumn } from "../../shell/DataTable";
-import { StatusChip } from "../../shell/M3Widgets";
+import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel, Ts, Unknown } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { Hint, SectionTitle, panelSx } from "./zoneMatrixUi";
@@ -13,7 +14,10 @@ import {
   SummaryReadFailure, ThresholdNote, ageText, flagWords, stalenessReasonWords, summaryGate, useEnsureSummary,
   type ZoneSummaryHandle,
 } from "./zoneMatrixSummaryUi";
-import type { SummaryNotEvaluated, SummaryPolicy, SummaryRun } from "./zoneMatrixApi";
+import {
+  startZoneMatrixRun, zoneErrorLines,
+  type SummaryNotEvaluated, type SummaryPolicy, type SummaryRun,
+} from "./zoneMatrixApi";
 
 function RunCell({ run, label }: { readonly run: SummaryRun | null; readonly label: string }) {
   if (run === null) return <Box>{label}: <Unknown reason="No such run is stored" /></Box>;
@@ -33,6 +37,38 @@ function RunCell({ run, label }: { readonly run: SummaryRun | null; readonly lab
 export function CoverageTab({ summary }: { readonly summary: ZoneSummaryHandle }) {
   useEnsureSummary(summary);
   const { data } = summary;
+  const [inFlightPolicies, setInFlightPolicies] = useState<ReadonlySet<string>>(() => new Set());
+  const [submissionNotice, setSubmissionNotice] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<readonly string[] | null>(null);
+
+  const canTriggerRun = Boolean(data?.can?.evaluate) && data !== null && !data.masked && data.active_version !== null;
+
+  const triggerRun = useCallback(async (policyId: string) => {
+    setSubmissionNotice(null);
+    setSubmissionError(null);
+    setInFlightPolicies((prev) => {
+      const next = new Set(prev);
+      next.add(policyId);
+      return next;
+    });
+    try {
+      const res = await startZoneMatrixRun(policyId);
+      setSubmissionNotice(
+        res.already_running
+          ? `Run ${res.run_id} is already running (${res.state}). Stored findings update only after the run finishes COMPLETE.`
+          : `Run ${res.run_id} queued (${res.state}). Stored findings update only after the run finishes COMPLETE.`,
+      );
+      summary.reload();
+    } catch (err: unknown) {
+      setSubmissionError(zoneErrorLines(err));
+    } finally {
+      setInFlightPolicies((prev) => {
+        const next = new Set(prev);
+        next.delete(policyId);
+        return next;
+      });
+    }
+  }, [summary]);
 
   const columns: readonly DataColumn<SummaryPolicy>[] = useMemo(() => [
     {
@@ -76,14 +112,34 @@ export function CoverageTab({ summary }: { readonly summary: ZoneSummaryHandle }
     },
     {
       key: "runs", header: "Runs", width: 330, wrap: true,
-      render: (p) => (
-        <Box>
-          <RunCell run={p.latest_run} label="Latest run" />
-          <RunCell run={p.latest_complete_run} label="Latest complete run" />
-        </Box>
-      ),
+      render: (p) => {
+        const busy = inFlightPolicies.has(p.policy_id) || p.latest_run?.state === "RUNNING";
+        return (
+          <Box>
+            <RunCell run={p.latest_run} label="Latest run" />
+            <RunCell run={p.latest_complete_run} label="Latest complete run" />
+            {canTriggerRun ? (
+              <Box
+                sx={{ mt: 0.75 }}
+                ref={(node: HTMLDivElement | null) => {
+                  const btn = node?.querySelector("button");
+                  if (btn) btn.setAttribute("data-testid", `run-policy-${p.policy_id}`);
+                }}
+              >
+                <M3Button
+                  emphasis="outlined"
+                  disabled={busy}
+                  onClick={() => { void triggerRun(p.policy_id); }}
+                >
+                  {busy ? "Running…" : "Run evaluation"}
+                </M3Button>
+              </Box>
+            ) : null}
+          </Box>
+        );
+      },
     },
-  ], []);
+  ], [canTriggerRun, inFlightPolicies, triggerRun]);
 
   const notEvaluatedColumns: readonly DataColumn<SummaryNotEvaluated>[] = useMemo(() => [
     { key: "vendor", header: "Vendor", width: 110, mono: true, render: (r) => r.vendor },
@@ -106,6 +162,18 @@ export function CoverageTab({ summary }: { readonly summary: ZoneSummaryHandle }
         <SectionTitle note="Every stored Check Point and Palo Alto policy. A policy that is stale or incomplete is never counted as clean.">
           Policies evaluated
         </SectionTitle>
+        {submissionNotice !== null ? (
+          <Alert severity="info" data-testid="zone-run-submission-notice">
+            {submissionNotice}
+          </Alert>
+        ) : null}
+        {submissionError !== null ? (
+          <Alert severity="error" data-testid="zone-run-submission-error">
+            {submissionError.map((line, index) => (
+              <Typography key={index} variant="body2">{line}</Typography>
+            ))}
+          </Alert>
+        ) : null}
         <DataTable
           ariaLabel="Policy coverage"
           columns={columns}

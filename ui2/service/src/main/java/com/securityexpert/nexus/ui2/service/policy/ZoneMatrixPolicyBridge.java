@@ -31,7 +31,15 @@ public final class ZoneMatrixPolicyBridge {
     public static final Set<String> ALLOW_ACTIONS = Set.of("Accept", "allow");
     public static final Set<String> ASK_INFORM_ACTIONS = Set.of("Ask", "Inform");
     public static final Set<String> CATCH_ALL_TERMINAL_ACTIONS = Set.of("Accept", "Drop", "Reject");
+    public static final List<String> PORT_PROTOCOLS = List.of("tcp", "udp", "icmp");
     private static final Set<String> PAN_DEFAULT_SECTIONS = Set.of(PAN_PRE_DEFAULT, PAN_POST_DEFAULT, PAN_LOCAL_DEFAULT);
+    private static final List<PortRange> FULL_PORT_RANGE = List.of(new PortRange(0, 65535));
+    private static final Map<String, List<PortRange>> ALL_PORTS;
+    static {
+        Map<String, List<PortRange>> m = new TreeMap<>();
+        for (String proto : PORT_PROTOCOLS) m.put(proto, FULL_PORT_RANGE);
+        ALL_PORTS = Collections.unmodifiableMap(m);
+    }
 
     /** Inclusive IPv4 interval {@code [start, end]} in {@code 0..0xFFFFFFFFL}. */
     public record IpRange(long start, long end) {
@@ -41,7 +49,7 @@ public final class ZoneMatrixPolicyBridge {
         }
     }
 
-    /** Inclusive TCP/UDP port interval {@code [low, high]} in {@code 0..65535}. */
+    /** Inclusive TCP/UDP port or encoded ICMP {@code type * 256 + code} interval {@code [low, high]} in {@code 0..65535}. */
     public record PortRange(int low, int high) {
         public PortRange {
             if (low < 0 || high > 65535 || low > high)
@@ -1186,8 +1194,14 @@ public final class ZoneMatrixPolicyBridge {
                 }
                 return new ServicePart(uAny, lAny, cpApp, uMap, lMap, null);
             }
+            if (cp && "service-icmp".equals(o.type())) {
+                return resolveCpServiceIcmp(o, budget);
+            }
             if (Set.of("service", "service-tcp", "service-udp").contains(o.type())) {
                 PolicyObject cleaned = stripCosmeticObject(o);
+                if (cp && "service".equals(o.type()) && hasIcmpProtocolValue(cleaned)) {
+                    return resolveCpServiceIcmp(cleaned, budget);
+                }
                 Resolver plain = new Resolver(Map.of(o.id(), cleaned), budget);
                 Selector sel = plain.service(cleaned);
                 Map<String, List<PortRange>> ports = new TreeMap<>();
@@ -1209,6 +1223,61 @@ public final class ZoneMatrixPolicyBridge {
         } finally {
             path.remove(id);
         }
+    }
+
+    /**
+     * Delivery step 7d ({@code docs/design/ZONE_MATRIX_CONTRACT.md} §§4.2, 5.4, 10.1 item 7;
+     * {@code PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md} {@code A0-I1}): resolves a Check Point
+     * {@code service-icmp} object (native {@code service-icmp} or snapshot-mapped {@code service} carrying
+     * {@code protocol: icmp}) iff both {@code icmp-type} and {@code icmp-code} are explicitly stored in {@code 0..255}
+     * with no unmodelled fields, matching {@link PolicyNormalization.Resolver} hygiene model R1.
+     */
+    private static ServicePart resolveCpServiceIcmp(PolicyObject o, Budget budget) {
+        PolicyObject cleaned = stripCosmeticObject(o);
+        if (!cleaned.members().isEmpty()) {
+            return ServicePart.fail("unsupported service constraint");
+        }
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String value : cleaned.values()) {
+            budget.spend();
+            int split = value.indexOf(": ");
+            String key = split < 0 ? "literal" : value.substring(0, split);
+            String val = split < 0 ? value : value.substring(split + 2);
+            if (!Set.of("protocol", "icmp-type", "icmp-code").contains(key)) {
+                return ServicePart.fail("unsupported service constraint");
+            }
+            if (fields.put(key, val) != null) {
+                return ServicePart.fail("unsupported service constraint");
+            }
+        }
+        if (!"icmp".equals(fields.get("protocol"))) {
+            return ServicePart.fail("unsupported service constraint");
+        }
+        String rawType = fields.get("icmp-type");
+        String rawCode = fields.get("icmp-code");
+        if (rawType == null || rawCode == null) {
+            return ServicePart.fail("unsupported service constraint");
+        }
+        budget.spend();
+        try {
+            int type = Integer.parseInt(rawType.trim());
+            int code = Integer.parseInt(rawCode.trim());
+            if (type < 0 || type > 255 || code < 0 || code > 255) {
+                return ServicePart.fail("unsupported service constraint");
+            }
+            int encoded = type * 256 + code;
+            Map<String, List<PortRange>> ports = Map.of("icmp", List.of(new PortRange(encoded, encoded)));
+            return new ServicePart(false, false, false, ports, ports, null);
+        } catch (NumberFormatException invalid) {
+            return ServicePart.fail("unsupported service constraint");
+        }
+    }
+
+    private static boolean hasIcmpProtocolValue(PolicyObject o) {
+        for (String v : o.values()) {
+            if ("protocol: icmp".equals(v)) return true;
+        }
+        return false;
     }
 
     private static boolean isCpApplicationObject(PolicyObject o) {
@@ -1491,17 +1560,17 @@ public final class ZoneMatrixPolicyBridge {
 
     private static Map<String, List<PortRange>> normalizePortMap(Map<String, List<PortRange>> raw, Budget budget) {
         Map<String, List<PortRange>> out = new TreeMap<>();
-        raw.forEach((proto, list) -> {
+        for (String proto : PORT_PROTOCOLS) {
+            List<PortRange> list = raw.get(proto);
+            if (list == null || list.isEmpty()) continue;
             budget.spend();
             List<PortRange> merged = mergePortRanges(list);
             if (!merged.isEmpty()) out.put(proto, merged);
-        });
+        }
         return Collections.unmodifiableMap(out);
     }
 
     public static Map<String, List<PortRange>> allPorts() {
-        return Map.of(
-                "tcp", List.of(new PortRange(0, 65535)),
-                "udp", List.of(new PortRange(0, 65535)));
+        return ALL_PORTS;
     }
 }

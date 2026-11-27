@@ -64,7 +64,9 @@ class ZoneMatrixStepTwoTest {
                 "icmp/8/300", "ipproto/256", "app:pan:", "app:pan:two words", "set:", "set:a b", "sctp/80", ""))
             assertThrows(IllegalArgumentException.class, () -> ServiceEntry.parse(bad), bad);
         assertNull(ServiceEntry.parse("tcp/443").notEvaluableReason());
-        assertNotNull(ServiceEntry.parse("icmp/8").notEvaluableReason());
+        assertNull(ServiceEntry.parse("icmp/8").notEvaluableReason()); // evaluable since step 7d (section 4.2, A0-I1)
+        assertNull(ServiceEntry.parse("icmp/8/0").notEvaluableReason());
+        assertNotNull(ServiceEntry.parse("icmp6/128").notEvaluableReason());
         assertNotNull(ServiceEntry.parse("ipproto/50").notEvaluableReason());
         assertNull(ServiceEntry.parse("app:pan:web-browsing").notEvaluableReason()); // evaluable since step 7 (section 4.3)
         var coverage = ServiceEntry.Coverage.of(List.of(ServiceEntry.parse("tcp/80-90"), ServiceEntry.parse("tcp/91"), ServiceEntry.parse("icmp/8")));
@@ -284,7 +286,7 @@ class ZoneMatrixStepTwoTest {
         String app = zone("security-1", "Z-APP", "APPLICATION", "198.51.100.0/24");
         String db = zone("security-1", "Z-DB", "DATABASE", "203.0.113.0/25");
         service.saveServiceSet("security-1", revision(), "core-db", List.of("tcp/5432"));
-        service.setCell("security-1", revision(), new CellInput(app, db, "ALLOW_LISTED", List.of("set:core-db", "icmp/8"), "HIGH",
+        service.setCell("security-1", revision(), new CellInput(app, db, "ALLOW_LISTED", List.of("set:core-db", "icmp/8", "icmp6/128"), "HIGH",
                 "synthetic note", "Synthetic standard 1"));
         var content = draftContent();
         service.confirmReference("compliance-1", false, revision(), app, db, content.cellSha256(content.matrix().cell(app, db).orElseThrow()));
@@ -298,8 +300,11 @@ class ZoneMatrixStepTwoTest {
         assertTrue(((String) cell.get("confirmed_by")).startsWith("USER-"));
         assertEquals("CONFIRMED", cell.get("reference_status"));
         var services = (List<Map<String, Object>>) cell.get("services");
-        assertEquals("set:SET-1", services.get(1).get("entry"));
-        assertEquals(false, services.get(0).get("evaluable"));
+        assertEquals("icmp/8", services.get(0).get("entry"));
+        assertEquals(true, services.get(0).get("evaluable"));
+        assertEquals("icmp6/128", services.get(1).get("entry"));
+        assertEquals(false, services.get(1).get("evaluable"));
+        assertEquals("set:SET-1", services.get(2).get("entry"));
         assertEquals("SET-1", ((List<Map<String, Object>>) masked.get("service_sets")).get(0).get("name"));
         assertFalse(masked.toString().contains("Z-APP") || masked.toString().contains("core-db") || masked.toString().contains("compliance-1"));
         var names = (Map<String, Object>) service.version(id, View.NAMES, "viewer-1", false).get("matrix");
