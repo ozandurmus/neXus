@@ -18,13 +18,55 @@ const DEFAULT_MACHINE = 'http://ui2-service-internal.ui2.svc.cluster.local:8086/
 const MAX_BODY_BYTES = 4 * 1024 * 1024;     // bytes scanned per response; the rest is counted as truncated
 const SKIP_ABOVE_BYTES = 32 * 1024 * 1024;  // declared size above this is not downloaded
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const ID_KEY = /^(id|uuid|key|ref|[a-z]+_id|[a-z]+_ref|[a-z]+Id|[a-z]+Ref)$/;
-const ID_VALUE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{5,63}$/;
+const ID_KEY = /^(id|uuid|key|ref|[a-z][a-z0-9_]*_(?:id|ref)|[a-z][A-Za-z0-9]*(?:Id|Ref))$/;
+const ID_VALUE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{1,63}$/;
+const NON_ID_WORDS = new Set([
+  'true', 'false', 'null', 'undefined', 'none', 'unknown', 'na', 'n_a',
+  'yes', 'no', 'on', 'off', 'ok',
+  'pass', 'fail', 'passed', 'failed', 'warn', 'warning', 'error', 'success',
+  'pending', 'running', 'queued', 'completed', 'cancelled', 'canceled', 'skipped',
+  'active', 'inactive', 'enabled', 'disabled', 'open', 'closed',
+  'ready', 'healthy', 'unhealthy', 'up', 'down', 'degraded',
+  'draft', 'published', 'archived', 'deleted',
+]);
+const GENERIC_ID_KEYS = new Set(['id', 'uuid', 'key', 'ref']);
+
+const DEVICE_SPEC = { keys: ['device_id', 'deviceId', 'id'], sources: ['/devices', '/api/v2/policy/devices', '/api/v2/lifecycle'] };
+const DETAIL_ROUTE_SPECS = {
+  '/api/v2/policy/policies': { keys: ['policy_id', 'policyId', 'id'], sources: ['/api/v2/policy/devices', '/api/v2/zone-matrix/policies'] },
+  '/api/v2/policy/domains': { keys: ['domain_id', 'domainId', 'domain_ref', 'domainRef'], sources: ['/api/v2/policy/devices'] },
+  '/api/v2/policy/devices': DEVICE_SPEC,
+  '/api/v2/devices': DEVICE_SPEC,
+  '/devices': DEVICE_SPEC,
+  '/api/v2/zone-matrix/versions': { keys: ['version_id', 'versionId', 'id'], sources: ['/api/v2/zone-matrix/versions'] },
+  '/api/v2/scripts/runs': { keys: ['run_id', 'last_run_id', 'runId', 'lastRunId'], sources: ['/api/v2/scripts'] },
+  '/api/v2/scripts': { keys: ['script_id', 'scriptId', 'id'], sources: ['/api/v2/scripts'] },
+  '/clusters': { keys: ['cluster_id', 'clusterId', 'cluster_member_ref', 'clusterMemberRef', 'cluster_ref', 'id'], sources: ['/clusters', '/api/v2/cp-failover/units'] },
+  '/api/v2/compliance/controls': { keys: ['control_id', 'controlId', 'id'], sources: ['/compliance/controls', '/api/v2/compliance/controls'] },
+  '/api/v2/log-findings': { keys: ['finding_id', 'findingId', 'id'], sources: ['/api/v2/log-findings'] },
+};
+
+function harvestableId(value) {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? String(value) : null;
+  }
+  if (typeof value === 'string') {
+    if (!ID_VALUE.test(value) || NON_ID_WORDS.has(value.toLowerCase())) return null;
+    return value;
+  }
+  return null;
+}
 
 
 /** Pools of identifiers seen in responses, used to fill the "synthetic-ref" placeholders. Never printed. */
-class IdPool {
-  constructor() { this.byPrefix = new Map(); this.byRoute = new Map(); this.global = new Set(); }
+export class IdPool {
+  constructor() {
+    this.byPrefix = new Map();
+    this.byRoute = new Map();
+    this.byKey = new Map();
+    this.byRouteKey = new Map();
+    this.global = new Set();
+  }
   addTo(map, key, id) {
     let set = map.get(key);
     if (!set) map.set(key, set = new Set());
@@ -47,8 +89,14 @@ class IdPool {
         if (Array.isArray(node)) { node.slice(0, 50).forEach(n => walk(n, depth + 1)); return; }
         if (typeof node !== 'object') return;
         for (const [k, v] of Object.entries(node)) {
-          if (typeof v === 'string' && ID_KEY.test(k) && ID_VALUE.test(v)) this.addTo(this.byRoute, route, v);
-          else walk(v, depth + 1);
+          const id = ID_KEY.test(k) ? harvestableId(v) : null;
+          if (id !== null) {
+            this.addTo(this.byRoute, route, id);
+            this.addTo(this.byKey, k, id);
+            this.addTo(this.byRouteKey, `${route}\0${k}`, id);
+          } else {
+            walk(v, depth + 1);
+          }
         }
       };
       walk(doc, 0);
@@ -57,8 +105,22 @@ class IdPool {
   candidates(template, placeholder) {
     const prefix = template.slice(0, template.indexOf(placeholder)).replace(/\/$/, '');
     const out = [];
-    for (const id of [...(this.byPrefix.get(prefix) ?? []), ...(this.byRoute.get(prefix) ?? [])]) if (!out.includes(id)) out.push(id);
-    if (!out.length) for (const id of this.global) out.push(id);
+    const addAll = iter => {
+      if (!iter) return;
+      for (const id of iter) if (!out.includes(id)) out.push(id);
+    };
+    const spec = DETAIL_ROUTE_SPECS[prefix];
+    if (spec) {
+      for (const key of spec.keys) {
+        for (const source of spec.sources) addAll(this.byRouteKey.get(`${source}\0${key}`));
+      }
+      for (const key of spec.keys) {
+        if (!GENERIC_ID_KEYS.has(key)) addAll(this.byKey.get(key));
+      }
+    }
+    addAll(this.byPrefix.get(prefix));
+    if (!spec || !out.length) addAll(this.byRoute.get(prefix));
+    if (!out.length) addAll(this.global);
     return out;
   }
 }

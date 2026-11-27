@@ -375,6 +375,9 @@ describe("support bundles screen", () => {
       kinds, module_draining: true, collection_window_open: true, collection_window_ends_at: "2026-11-25T22:00:00Z",
     } as never);
     render(<SupportBundlesScreen />);
-    expect(await screen.findByText(/A module drain and a collection window are active; this will wait until/)).toBeTruthy();
+    const alert = (await screen.findByText(/A module drain and a collection window are active; this will wait until/)).closest('[role="alert"]');
+    expect(alert).toBeTruthy();
+    expect(alert?.getAttribute("data-status-alert")).toBe("operational");
+    expect(alert?.getAttribute("data-fact")).toBe("wait-warning");
   });
 });

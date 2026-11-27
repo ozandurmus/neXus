@@ -70,7 +70,7 @@
       "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
       "status": "in_progress",
       "priority": "P1",
-      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b), slice 2 (V258, 084c89d7) and slice 3 run-end notifications (V266, 8420aaf1) on main; not real-env validated. Real-env checklist DRAFT (cbc1713c).",
+      "target": "PO decision record 2026-09-22 (automation...; Slice 1 (V251, f141bb2b), slice 2 (V258, 084c89d7) and slice 3 run-end notifications (V266, 8420aaf1) on main; create-dialog mail-on-failure and cron checks 77fcb654, notifier PostgreSQL tests 3163afa7; not real-env validated. Real-env checklist DRAFT (cbc1713c).",
       "note": ""
     },
     {
@@ -88,7 +88,7 @@
       "title": "Masking leak audit: compare aiview responses against the...",
       "status": "in_progress",
       "priority": "P1",
-      "target": "PO 2026-09-22 proposal (separate masked...",
+      "target": "PO 2026-09-22 proposal (separate masked...; sweep round 10 1c19b650, hygiene.csv 6b6dc81d, advisories b583cef7, zone matrix witness refusal b164c55d; automated only",
       "note": ""
     },
     {
@@ -302,7 +302,7 @@
       "title": "Zone matrix: freeze contract, then deliver in steps",
       "status": "in_progress",
       "priority": "P1",
-      "target": "Council 2026-11-13; bank inputs pending; step 6a builder 287515a6, step 7a 0fd6a834",
+      "target": "Council 2026-11-13; bank inputs pending; step 6a builder 287515a6, step 7a 0fd6a834, step 7c negated IPv4 cells e4e2e13e; real-env checklist DRAFT (b855719f)",
       "note": ""
     },
     {
@@ -320,7 +320,7 @@
       "title": "ASA and FortiGate policy model for lookup and hygiene",
       "status": "in_progress",
       "priority": "P1",
-      "target": "ACI decision 2026-11-14",
+      "target": "ACI decision 2026-11-14; hygiene pins a845e91c and 77fcb654; real-env checklist DRAFT d7386ead, not run",
       "note": ""
     },
     {
@@ -599,7 +599,7 @@
       "title": "Zone matrix step 4b-2: run lifecycle, triggers, routes and tabs",
       "status": "in_progress",
       "priority": "P1",
-      "target": "85a28224: lifecycle and triggers; 3252272a: stored-summary route; 6d3149e1: Overview attention row; tabs and other routes open",
+      "target": "85a28224: lifecycle and triggers; 3252272a: stored-summary route; 6d3149e1: Overview attention row; run route 586cb710; Violations, Coverage and Evaluate tabs (8768cb55, d7149b40) and zone CIDR preview (b583cef7) on main; evidence-report wiring open",
       "note": ""
     },
     {
