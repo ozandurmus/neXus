@@ -377,6 +377,49 @@ def test_cancel_kills_surviving_child_in_process_group_after_leader_exits(tmp_pa
         os.killpg(pgid, 0)
 
 
+def test_cancel_resignals_child_forked_before_leader_exits(tmp_path, monkeypatch):
+    """If the leader forks a child in the race window between the first killpg(SIGTERM) and leader exit, cancel()
+    must re-signal the process group once the leader has exited instead of waiting out the full SIGTERM grace."""
+    state = {"leader_alive": True, "child_alive": True, "signals": []}
+
+    class RacingProc:
+        pid = 424242
+
+        def poll(self):
+            return None if state["leader_alive"] else -signal.SIGTERM
+
+        def wait(self, timeout=None):
+            state["leader_alive"] = False
+            return -signal.SIGTERM
+
+    def fake_killpg(pgid, sig):
+        assert pgid == RacingProc.pid
+        if sig == 0:
+            if not (state["leader_alive"] or state["child_alive"]):
+                raise ProcessLookupError
+            return
+        state["signals"].append(sig)
+        if sig == signal.SIGTERM:
+            if state["leader_alive"]:
+                # First SIGTERM kills the leader, while a child forked mid-signal survives in the same group.
+                state["leader_alive"] = False
+            else:
+                # Re-signal after leader exit reaches the surviving child immediately.
+                state["child_alive"] = False
+        elif sig == signal.SIGKILL:
+            state["leader_alive"] = False
+            state["child_alive"] = False
+
+    monkeypatch.setattr(os, "killpg", fake_killpg)
+    handle = so._SecurityPregate(tmp_path / "v.txt")
+    assert handle.attach(RacingProc()) is True
+    t0 = time.monotonic()
+    handle.cancel(grace=5.0)
+    assert time.monotonic() - t0 < 1.0
+    assert state["signals"] == [signal.SIGTERM, signal.SIGTERM]
+    assert not state["leader_alive"] and not state["child_alive"]
+
+
 def test_close_before_the_process_is_attached_still_kills_it_and_never_leaves_a_verdict(tmp_path):
     """The review's orphan race: the ship gives up while the runner thread is still inside popen. close() must wait for
     the thread, which then kills the group it started; the verdict file is gone afterwards and stays gone."""

@@ -1158,6 +1158,7 @@ class _SecurityPregate:
         if proc.poll() is not None and not self._group_alive(proc.pid):
             return
         for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, 5.0)):
+            leader_was_alive = proc.poll() is None
             try:
                 os.killpg(proc.pid, sig)
             except (ProcessLookupError, PermissionError, OSError):
@@ -1168,6 +1169,13 @@ class _SecurityPregate:
                     proc.wait(timeout=max(0.0, deadline - time.monotonic()))
                 except subprocess.TimeoutExpired:
                     continue
+            if leader_was_alive and self._group_alive(proc.pid):
+                # A child forked by the leader in the race window between the first killpg and leader exit may have
+                # missed the signal; now that the leader has exited and cannot fork again, re-signal the group once.
+                try:
+                    os.killpg(proc.pid, sig)
+                except (ProcessLookupError, PermissionError, OSError):
+                    break
             while self._group_alive(proc.pid):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
