@@ -51,7 +51,7 @@ export const INPUT_HINT = "IPv4 hosts only (no prefix); the source port is not m
 function useMasked(): boolean {
   const [masked, setMasked] = useState(responsesAreMasked());
   useEffect(() => {
-    const on = () => setMasked(true);
+    const on = () => setMasked(responsesAreMasked());
     window.addEventListener("nx-masked", on);
     return () => window.removeEventListener("nx-masked", on);
   }, []);

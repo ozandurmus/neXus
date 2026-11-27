@@ -1,6 +1,7 @@
 #!/bin/bash
 # Tier B pre-merge review (PO 2026-11-23): a lane that changes production code outside the Estate UI is reviewed by
 # Sonnet before the ship runner may batch it. Usage: b-review.sh <lane-name>
+# COPILOT_ONLY: leave review=pending for the Copilot PO session without invoking Claude or Antigravity.
 # The lane's ship-queue entry carries review=pending until this script writes a verdict:
 #   PASS  -> the review=pending line is removed and reviewed=sonnet added; the ship runner then batches it.
 #   BLOCK -> FIRST block (2026-11-24 review): the review goes back to the author once. The entry moves to
@@ -62,6 +63,10 @@ review_main() {
   local n=$1 f br mb diff lines out src wt wt2
   f=$SQ/$n.ship
   [ -e "$f" ] || exit 0
+  # COPILOT_ONLY (PO 2026-11-27): no Claude/agy review; the entry keeps review=pending for the Copilot PO session.
+  if [ -e "$J/lane-queue/COPILOT_ONLY" ]; then
+    echo "$(date '+%F %T') B-REVIEW DEFERRED $n: COPILOT_ONLY, review by the Copilot PO session" >> "$L/ship-runner.log"; exit 0
+  fi
   br=$(grep '^branch=' "$f" | cut -d= -f2); mb=$(git -C "$R" merge-base "$br" origin/main)
   diff=$(git -C "$R" diff "$mb" "$br" -- . ':(exclude)*.lock' ':(exclude)*lockfile*')
   lines=$(printf '%s\n' "$diff" | wc -l | tr -d ' ')

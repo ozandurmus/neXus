@@ -438,6 +438,20 @@ def test_b_review_under_agy_only_uses_neon_xhigh_and_never_claude(ops):
     assert not list(ops.repo.glob(".review-*")) and not list(ops.codo.glob("**/.review-*.diff"))
 
 
+def test_b_review_under_copilot_only_leaves_entry_pending_without_invoking_reviewers(ops):
+    f = ship_entry(ops)
+    (ops.lq / "COPILOT_ONLY").touch()
+    ops.fake("claude", f'echo claude >> "{ops.tmp}/reviewer-calls"; exit 99')
+    ops.fake("agy", f'echo agy >> "{ops.tmp}/reviewer-calls"; exit 99')
+
+    r = ops.source("b-review.sh", f"review_main {LANE}")
+
+    assert r.returncode == 0, r.stderr
+    assert f.exists() and "review=pending" in f.read_text()
+    assert not (ops.tmp / "reviewer-calls").exists()
+    assert "B-REVIEW DEFERRED" in (ops.logs / "ship-runner.log").read_text()
+
+
 @pytest.mark.parametrize("agy_only,expected_model", [
     (True, "gemini-4-neon-xhigh"),
     (False, "gemini-4-neon-high"),

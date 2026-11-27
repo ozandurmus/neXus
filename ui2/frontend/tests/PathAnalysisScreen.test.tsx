@@ -89,8 +89,12 @@ describe("the path query form", () => {
   it("switches to the masked hint when the masking header arrives after mount", () => {
     renderScreen();
     expect(screen.getByTestId("path-input-hint")).toHaveAttribute("data-masked", "false");
+    responsesAreMasked.mockReturnValue(true);
     act(() => { window.dispatchEvent(new Event("nx-masked")); });
     expect(screen.getByTestId("path-input-hint")).toHaveAttribute("data-masked", "true");
+    responsesAreMasked.mockReturnValue(false);
+    act(() => { window.dispatchEvent(new Event("nx-masked")); });
+    expect(screen.getByTestId("path-input-hint")).toHaveAttribute("data-masked", "false");
   });
 
   it("prefills the four tuple fields from the URL fragment, shows the prefill note, never auto-runs, and clears the note on edit or submit", async () => {
