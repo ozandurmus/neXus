@@ -12,6 +12,7 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunReposito
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.NewRun;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ResolvedByVersionFinding;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Witness;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ZoneDefinitionGap;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredSummary;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService.PolicyCatalog;
@@ -106,6 +107,11 @@ class ZoneMatrixSummaryViewTest {
     private static String hoursAgo(int h) { return NOW.minus(Duration.ofHours(h)).toString(); }
 
     private void completeRun(String policy, String coverage, int failures, List<Finding> findings) {
+        completeRun(policy, coverage, failures, findings, List.of());
+    }
+
+    private void completeRun(String policy, String coverage, int failures, List<Finding> findings,
+            List<ZoneDefinitionGap> gaps) {
         String runId = UUID.randomUUID().toString();
         String sha = versions.rows.get(activeId).contentSha256();
         runs.start(new NewRun(runId, activeId, 1, sha, policy, "test", NOW.minus(Duration.ofMinutes(10)), NOW.minus(Duration.ofHours(1))));
@@ -116,7 +122,8 @@ class ZoneMatrixSummaryViewTest {
                 new Counts(violation, 3, notEvaluable, unknown, 0, findings.size()),
                 new Coverage(coverage, coverage.equals("COMPLETE") ? List.of() : List.of("RULEBASE_TRUNCATED"), failures, true,
                         "CP", NOW.minus(Duration.ofHours(1)), 12),
-                findings));
+                findings,
+                gaps));
     }
 
     private void failedRun(String policy) {
@@ -661,6 +668,156 @@ class ZoneMatrixSummaryViewTest {
         assertEquals(true, capped.get("cell_counts_capped"));
         assertEquals(order.subList(0, 3), cellRows(capped).stream()
                 .map(r -> r.get("highest_severity") + ":" + r.get("source_zone_id")).toList(), "the cap keeps the head of the order");
+    }
+
+    @Test
+    void zoneDefinitionGapsAggregateActiveVersionRunsAndMaskRangesAndNamesFailClosed() throws Exception {
+        activeVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        policy("P-OLD", "PAN", hoursAgo(1));
+        String plantedSection = "PLANTED-SECTION-CORE";
+        List<String> ranges = List.of("192.0.2.0/24", "2001:db8::/32");
+        completeRun("P-CUR", "COMPLETE", 0, List.of(), List.of(
+                new ZoneDefinitionGap("r-gap-1", 11, RULE_NAME, plantedSection, ranges)));
+
+        // An older-version COMPLETE run must not contribute gaps to the active-version summary.
+        String oldRunId = UUID.randomUUID().toString();
+        runs.start(new NewRun(oldRunId, "older-version-id", 0, "0".repeat(64), "P-OLD", "test",
+                NOW.minus(Duration.ofMinutes(10)), NOW.minus(Duration.ofHours(1))));
+        assertTrue(runs.complete(oldRunId, NOW.minus(Duration.ofMinutes(5)), 100, new Counts(0, 1, 0, 0, 0, 0),
+                new Coverage("COMPLETE", List.of(), 0, true, "PAN", NOW.minus(Duration.ofHours(1)), 1),
+                List.of(), List.of(new ZoneDefinitionGap("r-old", 1, "OLD-RULE", "OLD-SEC", List.of("192.0.2.128/25")))));
+
+        StoredSummary summary = runService().storedSummary();
+        assertEquals(1, summary.zoneDefinitionGaps().size(), "only active-version COMPLETE runs contribute");
+
+        // security_admin (policy_read + zone_matrix_zones_read): sees range_count and raw names, never ranges.
+        var secAdmin = ZoneMatrixSummaryView.project(summary,
+                zoneMatrix.summaryLabels(View.NAMES, true, true), ZoneMatrixSummaryView.Query.defaults());
+        List<Map<String, Object>> secGaps = get(secAdmin, "zone_definition_gaps");
+        assertEquals(1, secGaps.size());
+        Map<String, Object> secRow = secGaps.get(0);
+        assertEquals("P-CUR", secRow.get("policy_source_id"));
+        assertEquals(POLICY_NAME + "-P-CUR", secRow.get("policy_name"));
+        assertEquals("r-gap-1", secRow.get("rule_id"));
+        assertEquals(11, secRow.get("rule_number"));
+        assertEquals(RULE_NAME, secRow.get("rule_name"));
+        assertEquals(plantedSection, secRow.get("section_name"));
+        assertEquals(2, secRow.get("range_count"));
+        assertNull(secRow.get("unassigned_private_ranges"));
+        assertEquals(false, secAdmin.get("zone_definition_gaps_complete"), "an older-version policy makes scope incomplete");
+        assertEquals(1, secAdmin.get("zone_definition_gaps_total"), "recorded evidence remains visible");
+
+        // compliance_admin (zone_matrix_zones_read, without policy_read): sees range_count and masked names, never ranges.
+        var compAdmin = ZoneMatrixSummaryView.project(summary,
+                zoneMatrix.summaryLabels(View.NAMES, false, true), ZoneMatrixSummaryView.Query.defaults());
+        Map<String, Object> compRow = this.<List<Map<String, Object>>>get(compAdmin, "zone_definition_gaps").get(0);
+        assertEquals(2, compRow.get("range_count"));
+        assertNull(compRow.get("unassigned_private_ranges"));
+        String compJson = json(compAdmin);
+        for (String planted : List.of(RULE_NAME, plantedSection, POLICY_NAME)) {
+            assertFalse(compJson.contains(planted), "without policy_read, body leaked " + planted);
+        }
+
+        // viewer (no zone_matrix_zones_read, no policy_read) and aiview (replay_viewer, even if flags set true):
+        // unassigned_private_ranges == null, range_count present, names masked, zero raw values.
+        for (var labels : List.of(
+                zoneMatrix.summaryLabels(View.NAMES, false, false),
+                zoneMatrix.summaryLabels(View.MASKED, false, false),
+                zoneMatrix.summaryLabels(View.MASKED, true, true))) {
+            var projected = ZoneMatrixSummaryView.project(summary, labels, ZoneMatrixSummaryView.Query.defaults());
+            List<Map<String, Object>> gapRows = get(projected, "zone_definition_gaps");
+            assertEquals(1, gapRows.size());
+            Map<String, Object> row = gapRows.get(0);
+            assertEquals(2, row.get("range_count"));
+            assertNull(row.get("unassigned_private_ranges"), "summary ranges must always be null");
+            String body = json(projected);
+            for (String planted : List.of(RULE_NAME, plantedSection, POLICY_NAME, "192.0.2.0/24", "2001:db8::/32", "192.0.2.128/25")) {
+                assertFalse(body.contains(planted), "body leaked " + planted);
+            }
+        }
+    }
+
+    @Test
+    void zoneDefinitionGapsApplyPolicyFilterBeforeLimitAndReportMore() {
+        activeVersion();
+        policy("P-A", "CP", hoursAgo(1));
+        policy("P-B", "PAN", hoursAgo(1));
+        List<String> ranges = List.of("192.0.2.0/24");
+        completeRun("P-A", "COMPLETE", 0, List.of(), List.of(
+                new ZoneDefinitionGap("a-1", 1, RULE_NAME, null, ranges)));
+        completeRun("P-B", "COMPLETE", 0, List.of(), List.of(
+                new ZoneDefinitionGap("b-2", 2, RULE_NAME, null, ranges),
+                new ZoneDefinitionGap("b-1", 1, RULE_NAME, null, ranges)));
+        StoredSummary summary = runService().storedSummary();
+
+        var fleet = ZoneMatrixSummaryView.project(summary, masked(), new ZoneMatrixSummaryView.Query(null, null, 1));
+        assertEquals(3, fleet.get("zone_definition_gaps_total"));
+        assertEquals("+2 more", fleet.get("zone_definition_gaps_more_text"));
+
+        var filtered = ZoneMatrixSummaryView.project(summary, masked(), new ZoneMatrixSummaryView.Query("P-B", null, 1));
+        List<Map<String, Object>> rows = get(filtered, "zone_definition_gaps");
+        assertEquals(1, rows.size());
+        assertEquals("P-B", rows.get(0).get("policy_source_id"));
+        assertEquals("b-1", rows.get(0).get("rule_id"), "the cap keeps the first matching row in order");
+        assertEquals(true, filtered.get("zone_definition_gaps_complete"));
+        assertEquals(2, filtered.get("zone_definition_gaps_total"));
+        assertEquals(1, filtered.get("zone_definition_gaps_returned"));
+        assertEquals(1, filtered.get("zone_definition_gaps_more"));
+        assertEquals(true, filtered.get("zone_definition_gaps_capped"));
+        assertEquals("+1 more", filtered.get("zone_definition_gaps_more_text"));
+    }
+
+    @Test
+    void zoneDefinitionGapsDistinguishUnknownFromEvaluatedZeroWithinPolicyScope() {
+        var service = runService();
+        assertUnknownGaps(ZoneMatrixSummaryView.project(service.storedSummary(), masked(), ZoneMatrixSummaryView.Query.defaults()));
+        activeVersion();
+        for (String id : List.of("P-KNOWN", "P-LEGACY", "P-INCOMPLETE", "P-NO-RUN", "P-RUNNING", "P-FAILED")) {
+            policy(id, "CP", hoursAgo(1));
+        }
+        completeRun("P-KNOWN", "COMPLETE", 0, List.of());
+        completeRun("P-LEGACY", "COMPLETE", 0, List.of(), null);
+        completeRun("P-INCOMPLETE", "INCOMPLETE", 1, List.of());
+        completeRun("P-RUNNING", "COMPLETE", 0, List.of());
+        runs.start(new NewRun(UUID.randomUUID().toString(), activeId, 1, versions.rows.get(activeId).contentSha256(),
+                "P-RUNNING", "test", NOW.minus(Duration.ofMinutes(3)), null));
+        failedRun("P-FAILED");
+        StoredSummary summary = service.storedSummary();
+
+        assertUnknownGaps(ZoneMatrixSummaryView.project(summary, masked(), ZoneMatrixSummaryView.Query.defaults()));
+        for (String id : List.of("P-LEGACY", "P-INCOMPLETE", "P-NO-RUN", "P-RUNNING", "P-FAILED")) {
+            assertUnknownGaps(ZoneMatrixSummaryView.project(summary, masked(), new ZoneMatrixSummaryView.Query(id, null, 1)));
+        }
+        var known = ZoneMatrixSummaryView.project(summary, masked(), new ZoneMatrixSummaryView.Query("P-KNOWN", null, 1));
+        assertEquals(true, known.get("zone_definition_gaps_complete"));
+        assertEquals(List.of(), known.get("zone_definition_gaps"));
+        assertEquals(0, known.get("zone_definition_gaps_total"));
+        assertEquals(false, known.get("zone_definition_gaps_capped"));
+    }
+
+    @Test
+    void zoneDefinitionGapsAreUnknownInUnfilteredScopeWhenAPolicyIsNotEvaluated() {
+        activeVersion();
+        policy("P-KNOWN", "CP", hoursAgo(1));
+        policy("P-SKIPPED", "OTHER-VENDOR", hoursAgo(1));
+        completeRun("P-KNOWN", "COMPLETE", 0, List.of());
+        StoredSummary summary = runService().storedSummary();
+        assertEquals(1, summary.notEvaluated().size());
+
+        assertFalse(summary.zoneDefinitionGapsComplete(null));
+        assertTrue(summary.zoneDefinitionGapsComplete("P-KNOWN"));
+        assertFalse(summary.zoneDefinitionGapsComplete("P-SKIPPED"));
+        assertUnknownGaps(ZoneMatrixSummaryView.project(summary, masked(), ZoneMatrixSummaryView.Query.defaults()));
+        assertUnknownGaps(ZoneMatrixSummaryView.project(summary, masked(), new ZoneMatrixSummaryView.Query("P-SKIPPED", null, 1)));
+        assertEquals(true, ZoneMatrixSummaryView.project(summary, masked(),
+                new ZoneMatrixSummaryView.Query("P-KNOWN", null, 1)).get("zone_definition_gaps_complete"));
+    }
+
+    private static void assertUnknownGaps(Map<String, Object> response) {
+        assertEquals(false, response.get("zone_definition_gaps_complete"));
+        assertNull(response.get("zone_definition_gaps"));
+        assertNull(response.get("zone_definition_gaps_total"));
     }
 
     @Test

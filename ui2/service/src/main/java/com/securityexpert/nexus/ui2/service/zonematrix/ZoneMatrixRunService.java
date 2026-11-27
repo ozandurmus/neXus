@@ -217,7 +217,22 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         }
     }
 
-    /** Complete deterministic read projection across stored runs, findings, staleness and version-change resolutions. */
+    /** One stored zone-definition gap from a covered policy's latest {@code COMPLETE} run on the active version (§3.3). */
+    public record StoredZoneDefinitionGap(
+            String policySourceId,
+            String runId,
+            String versionId,
+            int versionNumber,
+            ZoneMatrixRunRepository.ZoneDefinitionGap gap) {
+        public StoredZoneDefinitionGap {
+            Objects.requireNonNull(policySourceId, "policySourceId");
+            Objects.requireNonNull(runId, "runId");
+            Objects.requireNonNull(versionId, "versionId");
+            Objects.requireNonNull(gap, "gap");
+        }
+    }
+
+    /** Complete deterministic read projection across stored runs, findings, staleness, gaps and version-change resolutions. */
     public record StoredSummary(
             Instant evaluatedAt,
             StalenessThreshold stalenessThreshold,
@@ -228,7 +243,8 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             StoredHeadline headline,
             List<ResolvedByVersionFinding> resolvedByVersionChangeLast7Days,
             Map<String, List<ResolvedByVersionFinding>> resolvedByVersionChangeByVersion,
-            List<CellCount> cellCounts) {
+            List<CellCount> cellCounts,
+            List<StoredZoneDefinitionGap> zoneDefinitionGaps) {
         public StoredSummary {
             Objects.requireNonNull(evaluatedAt, "evaluatedAt");
             Objects.requireNonNull(stalenessThreshold, "stalenessThreshold");
@@ -241,6 +257,44 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             resolvedByVersionChangeByVersion = Collections.unmodifiableMap(copy);
             // null = no active version, so no cell counts; an empty list = an active version with no open violation.
             cellCounts = cellCounts == null ? null : List.copyOf(cellCounts);
+            zoneDefinitionGaps = zoneDefinitionGaps == null ? List.of() : List.copyOf(zoneDefinitionGaps);
+        }
+
+        /** Whether gap evidence covers every evaluable policy in the requested scope on the active version. */
+        public boolean zoneDefinitionGapsComplete(String policyId) {
+            if (activeVersion == null || activeVersion.number() == null) return false;
+            // A policy that was not evaluated has no gap evidence: UNKNOWN, never a proven zero.
+            for (NotEvaluatedPolicy skipped : notEvaluated) {
+                if (policyId == null || policyId.equals(skipped.id())) return false;
+            }
+            boolean hasPolicy = false;
+            for (PolicyCoverage policy : policies) {
+                if (policyId != null && !policyId.equals(policy.policyId())) continue;
+                hasPolicy = true;
+                var latest = policy.latestRun();
+                var completed = policy.latestCompleteRun();
+                if (latest == null || completed == null || !ZoneMatrixRunRepository.STATE_COMPLETE.equals(latest.state())
+                        || !latest.runId().equals(completed.runId()) || !activeVersion.versionId().equals(completed.versionId())
+                        || !"COMPLETE".equals(policy.coverage()) || completed.zoneDefinitionGaps() == null) {
+                    return false;
+                }
+            }
+            return hasPolicy;
+        }
+
+        public StoredSummary(
+                Instant evaluatedAt,
+                StalenessThreshold stalenessThreshold,
+                Version activeVersion,
+                List<PolicyCoverage> policies,
+                List<NotEvaluatedPolicy> notEvaluated,
+                List<StoredFinding> findings,
+                StoredHeadline headline,
+                List<ResolvedByVersionFinding> resolvedByVersionChangeLast7Days,
+                Map<String, List<ResolvedByVersionFinding>> resolvedByVersionChangeByVersion,
+                List<CellCount> cellCounts) {
+            this(evaluatedAt, stalenessThreshold, activeVersion, policies, notEvaluated, findings, headline,
+                    resolvedByVersionChangeLast7Days, resolvedByVersionChangeByVersion, cellCounts, List.of());
         }
     }
 
@@ -518,6 +572,7 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         List<PolicyCoverage> policies = new ArrayList<>(evaluableItems.size());
         List<CoveredPolicy> coveredForHeadline = new ArrayList<>(evaluableItems.size());
         List<StoredFinding> storedFindings = new ArrayList<>();
+        List<StoredZoneDefinitionGap> storedGaps = new ArrayList<>();
 
         int stalePolicies = 0;
         int incompletePolicies = 0;
@@ -585,6 +640,16 @@ public final class ZoneMatrixRunService implements AutoCloseable {
 
             if (latestComplete != null) {
                 boolean onActiveVersion = activeVersionId != null && activeVersionId.equals(latestComplete.versionId());
+                if (onActiveVersion && latestComplete.zoneDefinitionGaps() != null) {
+                    for (ZoneMatrixRunRepository.ZoneDefinitionGap g : latestComplete.zoneDefinitionGaps()) {
+                        storedGaps.add(new StoredZoneDefinitionGap(
+                                policyId,
+                                latestComplete.runId(),
+                                latestComplete.versionId(),
+                                latestComplete.versionNumber(),
+                                g));
+                    }
+                }
                 for (ZoneMatrixRunRepository.IdentifiedFinding identified : runs.identifiedFindingsOf(latestComplete.runId())) {
                     ZoneMatrixRunRepository.Finding f = identified.finding();
                     if (f.resolvedAt() != null) continue;
@@ -724,7 +789,8 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                 headline,
                 recentResolved,
                 byVersion,
-                cellCounts);
+                cellCounts,
+                storedGaps);
     }
 
     /**
@@ -950,11 +1016,13 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             long duration = millisSince(t0);
             ZoneMatrixRunRepository.Coverage runCoverage = coverage(snapshot, result);
             ZoneMatrixRunRepository.Counts[] completedCounts = new ZoneMatrixRunRepository.Counts[1];
+            int[] completedGaps = new int[1];
             boolean written;
             try {
                 written = runs.complete(runId, finishedAt, duration, runCoverage, history -> {
                     CompletionPlan plan = planCompletion(policy, result, history, finishedAt);
                     completedCounts[0] = plan.counts();
+                    completedGaps[0] = plan.zoneDefinitionGaps().size();
                     return plan;
                 });
             } catch (RuntimeException e) {
@@ -963,10 +1031,11 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             }
             if (written) {
                 ZoneMatrixRunRepository.Counts counts = completedCounts[0];
-                LOG.info("zone_matrix_run_finished run_id={} policy_id={} version_id={} version_number={} content_sha256={} state={} violation={} compliant={} not_evaluable={} unknown={} not_applicable={} findings={} duration_ms={}",
+                LOG.info("zone_matrix_run_finished run_id={} policy_id={} version_id={} version_number={} content_sha256={} state={} violation={} compliant={} not_evaluable={} unknown={} not_applicable={} findings={} gaps={} duration_ms={}",
                         runId, policy, version.versionId(), version.number(), version.contentSha256(),
                         ZoneMatrixRunRepository.STATE_COMPLETE, counts.violation(), counts.compliant(),
-                        counts.notEvaluable(), counts.unknown(), counts.notApplicable(), counts.findings(), duration);
+                        counts.notEvaluable(), counts.unknown(), counts.notApplicable(), counts.findings(),
+                        completedGaps[0], duration);
             } else {
                 LOG.info("zone_matrix_run_discarded run_id={} policy_id={} version_id={} version_number={} content_sha256={} state={} findings=0 duration_ms={}",
                         runId, policy, version.versionId(), version.number(), version.contentSha256(),
@@ -1122,7 +1191,18 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         }
 
         ZoneMatrixRunRepository.Counts counts = counts(result, toInsert.size());
-        return new CompletionPlan(counts, toInsert, resolutions);
+        return new CompletionPlan(counts, toInsert, resolutions, mapZoneDefinitionGaps(result.zoneDefinitionGaps()));
+    }
+
+    static List<ZoneMatrixRunRepository.ZoneDefinitionGap> mapZoneDefinitionGaps(
+            List<ZoneMatrixEvaluator.ZoneDefinitionGap> gaps) {
+        if (gaps == null || gaps.isEmpty()) return List.of();
+        List<ZoneMatrixRunRepository.ZoneDefinitionGap> out = new ArrayList<>(gaps.size());
+        for (ZoneMatrixEvaluator.ZoneDefinitionGap g : gaps) {
+            out.add(new ZoneMatrixRunRepository.ZoneDefinitionGap(
+                    g.ruleId(), g.ruleNumber(), g.ruleName(), g.sectionName(), g.unassignedPrivateRanges()));
+        }
+        return List.copyOf(out);
     }
 
     private static ZoneMatrixEvaluator.EvaluationResult rekeyPolicy(

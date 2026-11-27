@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Cell;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Witness;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ZoneDefinitionGap;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,18 @@ class ZoneMatrixRunJsonTest {
                 new Cell("UNASSIGNED", "zone-b", "DENY_ALL", "CRITICAL", List.of(), null, null));
         String json = ZoneMatrixRunJson.write(JooqZoneMatrixRunRepository.cellsJson(cells));
         assertEquals(cells, JooqZoneMatrixRunRepository.cells(json));
+    }
+
+    @Test void zoneDefinitionGapsRoundTripAndNullStaysUnknown() {
+        List<ZoneDefinitionGap> gaps = List.of(
+                new ZoneDefinitionGap("0007", 7, "Rule \"gap\"\\1", "Custom section", List.of("192.0.2.0/24", "2001:db8::/32")),
+                new ZoneDefinitionGap("r-null", null, null, null, List.of()));
+        String json = ZoneMatrixRunJson.writeZoneDefinitionGaps(gaps);
+        assertEquals(gaps, ZoneMatrixRunJson.zoneDefinitionGaps(json));
+        assertNull(ZoneMatrixRunJson.zoneDefinitionGaps(null));
+        assertEquals(List.of(), ZoneMatrixRunJson.zoneDefinitionGaps("[]"));
+        assertNull(ZoneMatrixRunJson.writeZoneDefinitionGaps(null));
+        assertEquals("[]", ZoneMatrixRunJson.writeZoneDefinitionGaps(List.of()));
     }
 
     @Test void malformedJsonIsRefusedNotGuessed() {

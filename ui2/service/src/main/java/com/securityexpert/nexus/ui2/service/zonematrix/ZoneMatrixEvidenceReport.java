@@ -138,6 +138,18 @@ public final class ZoneMatrixEvidenceReport {
     }
 
     /**
+     * One rule touching unassigned private RFC 1918 / IPv6 ULA ranges (section 3.3). Policy, rule and section names
+     * are already projected for the caller's view; {@code unassignedPrivateRanges} is {@code null} when the caller is
+     * masked or lacks either {@code zone_matrix_zones_read} or {@code report_raw_view} (only {@code rangeCount} is shown).
+     */
+    public record ZoneDefinitionGapRow(String policy, String rule, String section, int rangeCount,
+            List<String> unassignedPrivateRanges) {
+        public ZoneDefinitionGapRow {
+            unassignedPrivateRanges = unassignedPrivateRanges == null ? null : List.copyOf(unassignedPrivateRanges);
+        }
+    }
+
+    /**
      * Everything the report prints. {@code periodFrom} is inclusive and {@code periodTo} exclusive; a {@code null}
      * bound means no bound on that side. Counts are {@code Integer} so that a count the caller cannot give prints
      * {@code UNKNOWN} instead of a false zero.
@@ -145,12 +157,23 @@ public final class ZoneMatrixEvidenceReport {
     public record Input(String productVersion, String generatedBy, String viewLabel, Instant periodFrom,
             Instant periodTo, String filterDescription, Integer filteredFindingCount, Integer wholeScopeFindingCount,
             Regulation regulation, MatrixVersion version, List<MatrixCell> cells, StalenessThreshold threshold,
-            List<PolicyScope> policies, List<NotEvaluated> notEvaluated, Summary summary, List<FindingRow> findings) {
+            List<PolicyScope> policies, List<NotEvaluated> notEvaluated, Summary summary, List<FindingRow> findings,
+            List<ZoneDefinitionGapRow> zoneDefinitionGaps, boolean zoneDefinitionGapsComplete) {
         public Input {
             cells = cells == null ? List.of() : List.copyOf(cells);
             policies = policies == null ? List.of() : List.copyOf(policies);
             notEvaluated = notEvaluated == null ? List.of() : List.copyOf(notEvaluated);
             findings = findings == null ? List.of() : List.copyOf(findings);
+            zoneDefinitionGaps = zoneDefinitionGaps == null ? List.of() : List.copyOf(zoneDefinitionGaps);
+        }
+
+        public Input(String productVersion, String generatedBy, String viewLabel, Instant periodFrom,
+                Instant periodTo, String filterDescription, Integer filteredFindingCount, Integer wholeScopeFindingCount,
+                Regulation regulation, MatrixVersion version, List<MatrixCell> cells, StalenessThreshold threshold,
+                List<PolicyScope> policies, List<NotEvaluated> notEvaluated, Summary summary, List<FindingRow> findings) {
+            this(productVersion, generatedBy, viewLabel, periodFrom, periodTo, filterDescription, filteredFindingCount,
+                    wholeScopeFindingCount, regulation, version, cells, threshold, policies, notEvaluated, summary,
+                    findings, List.of(), false);
         }
     }
 
@@ -306,6 +329,12 @@ public final class ZoneMatrixEvidenceReport {
         }
         out.add("Zone, rule, policy and device names are printed as projected for the view stated in the header; zone "
                 + "blocks, witness addresses and the blocks appendix are not part of this content.");
+        if (in.zoneDefinitionGaps().stream().anyMatch(g -> g.unassignedPrivateRanges() != null
+                && !g.unassignedPrivateRanges().isEmpty())) {
+            out.add("This RAW report includes unassigned private ranges in the zone definition gaps table.");
+        } else {
+            out.add("Unassigned private ranges are not part of this content; only recorded range counts are shown.");
+        }
         out.add(thresholdText(in.threshold()));
         if (in.periodFrom() != null || in.periodTo() != null) {
             out.add("Period filter: " + kept + " finding rows are listed (open at any time in the period or resolved "
@@ -477,10 +506,35 @@ public final class ZoneMatrixEvidenceReport {
                 new Column("subject", "Subject"), new Column("kind", "Kind"), new Column("reason", "Reason")),
                 nrows, "None reported by the caller (this is not proof that every device was evaluated).");
 
+        List<List<Cell>> gapRows = new ArrayList<>();
+        for (ZoneDefinitionGapRow g : in.zoneDefinitionGaps()) {
+            String ranges = g.unassignedPrivateRanges() == null
+                    ? "WITHHELD"
+                    : g.unassignedPrivateRanges().isEmpty() ? "" : String.join(", ", g.unassignedPrivateRanges());
+            gapRows.add(List.of(
+                    Cell.text(orUnknown(g.policy())),
+                    Cell.text(orUnknown(g.rule())),
+                    Cell.text(asEntered(g.section())),
+                    Cell.number(g.rangeCount()),
+                    Cell.text(ranges)));
+        }
+        Table gaps = new Table("scope-zone-definition-gaps", "Zone definition gaps (rules touching unassigned private ranges)",
+                List.of(new Column("policy", "Policy"), new Column("rule", "Rule"), new Column("section", "Section"),
+                        new Column("rangeCount", "Unassigned private range count"),
+                        new Column("ranges", "Unassigned private ranges")),
+                gapRows, in.zoneDefinitionGapsComplete()
+                        ? "No zone definition gaps reported."
+                        : "Zone definition gaps: UNKNOWN (evaluation evidence is missing or incomplete).");
+
+        String gapCount = in.zoneDefinitionGapsComplete()
+                ? in.zoneDefinitionGaps().size() + " zone definition gaps."
+                : "zone definition gap total UNKNOWN (evaluation evidence is missing or incomplete)."
+                        + (gapRows.isEmpty() ? "" : " Recorded gap rows shown: " + gapRows.size() + ".");
         List<String> notes = List.of(thresholdText(in.threshold()),
                 "Policies listed: " + in.policies().size() + " evaluated policies; " + in.notEvaluated().size()
-                        + " subjects not evaluated.");
-        return new Section("scope", "Scope and coverage", List.of(), List.of(), List.of(policies, notEvaluated), notes);
+                        + " subjects not evaluated.", "Stored evidence on the active version in the selected policy scope: "
+                        + gapCount);
+        return new Section("scope", "Scope and coverage", List.of(), List.of(), List.of(policies, notEvaluated, gaps), notes);
     }
 
     private static String coverage(String coverage) {

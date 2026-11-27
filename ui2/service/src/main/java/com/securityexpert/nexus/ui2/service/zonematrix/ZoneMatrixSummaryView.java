@@ -8,6 +8,7 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.Poli
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredFinding;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredHeadline;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredSummary;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredZoneDefinitionGap;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService.Refused;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.StalenessThreshold;
 import java.time.Duration;
@@ -42,7 +43,7 @@ import java.util.Set;
 public final class ZoneMatrixSummaryView {
     private ZoneMatrixSummaryView() {}
 
-    /** Default number of findings returned. */
+    /** Default limit for capped summary lists. */
     public static final int DEFAULT_LIMIT = 200;
     /** Largest {@code limit} accepted; a larger value is refused, never clamped. */
     public static final int MAX_LIMIT = 1000;
@@ -63,10 +64,19 @@ public final class ZoneMatrixSummaryView {
         boolean masked();
         /** {@code true} when policy, source, container, rule and section names pass through the masked projection. */
         boolean policyNamesMasked();
+        /**
+         * {@code true} only when the caller holds {@code zone_matrix_zones_read} and is not masked (sections 3.4, 8.2);
+         * defaults to {@code false} (fail-closed).
+         */
+        default boolean canViewZoneBlocks() { return false; }
         String policyName(String raw);
         String sourceName(String raw, String sourceId);
         String containerName(String raw);
         String ruleName(String raw, Integer ruleNumber);
+        /** Section name through the same policy masking as {@link #ruleName}; fails closed when masked. */
+        default String sectionName(String raw) {
+            return (masked() || policyNamesMasked()) && raw != null && !raw.isEmpty() ? "SECTION-MASKED" : raw;
+        }
         /** The zone's name in {@code versionId}'s content as the caller may see it; {@code "UNKNOWN"} when unreadable. */
         String zoneName(String versionId, String zoneId);
     }
@@ -176,6 +186,7 @@ public final class ZoneMatrixSummaryView {
         out.put("findings", findings);
 
         putCellCounts(out, summary, hasActive ? active.versionId() : null, labels, query.limit());
+        putZoneDefinitionGaps(out, summary, policyNames, labels, query);
         out.put("resolved_by_version_change", resolvedByVersion(summary, query.limit(), policyNames, labels));
         return out;
     }
@@ -449,6 +460,43 @@ public final class ZoneMatrixSummaryView {
         out.put("cell_counts_capped", sorted.size() > rows.size());
     }
 
+    /**
+     * Totals and pagination describe recorded rows for the selected policy scope. A false completeness flag means
+     * the rows are partial evidence, not an exact gap count; without any such rows, return null rather than zero.
+     */
+    private static void putZoneDefinitionGaps(Map<String, Object> out, StoredSummary summary,
+            Map<String, String> policyNames, Labels labels, Query query) {
+        boolean complete = summary.zoneDefinitionGapsComplete(query.policyId());
+        List<StoredZoneDefinitionGap> matching = summary.zoneDefinitionGaps().stream()
+                .filter(s -> query.policyId() == null || query.policyId().equals(s.policySourceId()))
+                .sorted(GAP_ORDER)
+                .toList();
+        int returned = Math.min(matching.size(), query.limit());
+        List<Map<String, Object>> rows = new ArrayList<>(returned);
+        for (StoredZoneDefinitionGap s : matching.subList(0, returned)) {
+            ZoneMatrixRunRepository.ZoneDefinitionGap g = s.gap();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("policy_source_id", s.policySourceId());
+            row.put("policy_name", policyNames.getOrDefault(s.policySourceId(), "UNKNOWN"));
+            row.put("rule_id", g.ruleId());
+            row.put("rule_number", g.ruleNumber());
+            row.put("rule_name", labels.ruleName(g.ruleName(), g.ruleNumber()));
+            row.put("section_name", labels.sectionName(g.sectionName()));
+            row.put("range_count", g.unassignedPrivateRanges().size());
+            row.put("unassigned_private_ranges", null); // No raw address view on the summary route.
+            rows.add(row);
+        }
+        int more = matching.size() - returned;
+        boolean hasEvidence = complete || !rows.isEmpty();
+        out.put("zone_definition_gaps", hasEvidence ? rows : null);
+        out.put("zone_definition_gaps_complete", complete);
+        out.put("zone_definition_gaps_total", hasEvidence ? matching.size() : null);
+        out.put("zone_definition_gaps_returned", hasEvidence ? returned : null);
+        out.put("zone_definition_gaps_more", hasEvidence ? more : null);
+        out.put("zone_definition_gaps_capped", hasEvidence ? more > 0 : null);
+        out.put("zone_definition_gaps_more_text", more > 0 ? "+" + more + " more" : null);
+    }
+
     private static Map<String, Object> resolvedByVersion(StoredSummary summary, int limit, Map<String, String> policyNames,
             Labels labels) {
         List<ResolvedByVersionFinding> recent = summary.resolvedByVersionChangeLast7Days().stream()
@@ -520,6 +568,12 @@ public final class ZoneMatrixSummaryView {
             .comparingInt((ZoneMatrixRunService.CellCount c) -> severityRank(c.highestSeverity()))
             .thenComparing(ZoneMatrixRunService.CellCount::sourceZoneId)
             .thenComparing(ZoneMatrixRunService.CellCount::destinationZoneId, Comparator.nullsLast(Comparator.naturalOrder()));
+
+    /** Deterministic ordering of zone definition gaps: policy source id, rule number, rule id. */
+    static final Comparator<StoredZoneDefinitionGap> GAP_ORDER = Comparator
+            .comparing(StoredZoneDefinitionGap::policySourceId)
+            .thenComparing(s -> s.gap().ruleNumber(), Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(s -> s.gap().ruleId(), Comparator.nullsLast(Comparator.naturalOrder()));
 
     private static Long seconds(Duration d) { return d == null ? null : d.toSeconds(); }
 

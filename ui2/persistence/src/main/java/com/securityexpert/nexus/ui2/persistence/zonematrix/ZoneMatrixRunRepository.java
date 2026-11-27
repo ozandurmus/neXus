@@ -130,12 +130,30 @@ public interface ZoneMatrixRunRepository {
         }
     }
 
+    /** One rule whose addresses touch unassigned private RFC 1918 / IPv6 ULA space (section 3.3, V276). */
+    record ZoneDefinitionGap(
+            String ruleId,
+            Integer ruleNumber,
+            String ruleName,
+            String sectionName,
+            List<String> unassignedPrivateRanges) {
+        public ZoneDefinitionGap {
+            unassignedPrivateRanges = unassignedPrivateRanges == null ? List.of() : List.copyOf(unassignedPrivateRanges);
+        }
+    }
+
     /** Lifecycle transition output applied atomically when completing a run. */
-    record CompletionPlan(Counts counts, List<Finding> findingsToInsert, List<ResolutionUpdate> resolutions) {
+    record CompletionPlan(Counts counts, List<Finding> findingsToInsert, List<ResolutionUpdate> resolutions,
+            List<ZoneDefinitionGap> zoneDefinitionGaps) {
         public CompletionPlan {
             Objects.requireNonNull(counts, "counts");
             findingsToInsert = List.copyOf(findingsToInsert);
             resolutions = List.copyOf(resolutions);
+            zoneDefinitionGaps = zoneDefinitionGaps == null ? null : List.copyOf(zoneDefinitionGaps);
+        }
+
+        public CompletionPlan(Counts counts, List<Finding> findingsToInsert, List<ResolutionUpdate> resolutions) {
+            this(counts, findingsToInsert, resolutions, null);
         }
     }
 
@@ -162,12 +180,29 @@ public interface ZoneMatrixRunRepository {
         }
     }
 
-    /** A run row: ids, state, counts and coverage; never zone names, blocks, addresses or rule names. */
+    /**
+     * A run row: ids, state, counts, coverage and stored zone-definition gaps (V276; readers project rule metadata and
+     * unassigned private ranges through fail-closed masking, sections 3.4 and 8.2). Null gaps mean not recorded;
+     * an empty list means the evaluator recorded no gaps.
+     */
     record Run(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,
             String engineVersion, String state, String failureReason, Instant startedAt, Instant finishedAt,
             Instant snapshotCollectedAt, Integer snapshotRuleCount, String vendor, Boolean evaluated, String coverage,
-            List<String> coverageItems, Integer collectionFailures, Counts counts, Long durationMillis) {
-        public Run { coverageItems = coverageItems == null ? List.of() : List.copyOf(coverageItems); }
+            List<String> coverageItems, Integer collectionFailures, Counts counts, Long durationMillis,
+            List<ZoneDefinitionGap> zoneDefinitionGaps) {
+        public Run {
+            coverageItems = coverageItems == null ? List.of() : List.copyOf(coverageItems);
+            zoneDefinitionGaps = zoneDefinitionGaps == null ? null : List.copyOf(zoneDefinitionGaps);
+        }
+
+        public Run(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,
+                String engineVersion, String state, String failureReason, Instant startedAt, Instant finishedAt,
+                Instant snapshotCollectedAt, Integer snapshotRuleCount, String vendor, Boolean evaluated, String coverage,
+                List<String> coverageItems, Integer collectionFailures, Counts counts, Long durationMillis) {
+            this(runId, versionId, versionNumber, contentSha256, policySourceId, engineVersion, state, failureReason,
+                    startedAt, finishedAt, snapshotCollectedAt, snapshotRuleCount, vendor, evaluated, coverage,
+                    coverageItems, collectionFailures, counts, durationMillis, null);
+        }
     }
 
     /** Thrown by {@link #start} when the policy source already has a {@code RUNNING} run (partial unique index). */
@@ -197,14 +232,25 @@ public interface ZoneMatrixRunRepository {
             List<Finding> findings);
 
     /**
+     * Writes every finding, persists {@code zoneDefinitionGaps} (V276), and flips the run to {@code COMPLETE} in one
+     * transaction.
+     */
+    default boolean complete(String runId, Instant finishedAt, long durationMillis, Counts counts, Coverage coverage,
+            List<Finding> findings, List<ZoneDefinitionGap> zoneDefinitionGaps) {
+        return complete(runId, finishedAt, durationMillis, counts, coverage, findings);
+    }
+
+    /**
      * Loads prior {@code COMPLETE}-run finding history for the run's policy source inside the {@code FOR UPDATE}
      * transaction, computes the {@link CompletionPlan}, updates resolved prior open rows (lifecycle columns only),
-     * inserts this run's findings, and flips the run to {@code COMPLETE} atomically.
+     * inserts this run's findings, persists {@code zone_definition_gaps}, and flips the run to {@code COMPLETE}
+     * atomically.
      */
     default boolean complete(String runId, Instant finishedAt, long durationMillis, Coverage coverage,
             Function<PriorHistory, CompletionPlan> planner) {
         CompletionPlan plan = planner.apply(new PriorHistory(null, List.of()));
-        return complete(runId, finishedAt, durationMillis, plan.counts(), coverage, plan.findingsToInsert());
+        return complete(runId, finishedAt, durationMillis, plan.counts(), coverage, plan.findingsToInsert(),
+                plan.zoneDefinitionGaps());
     }
 
     /** Ends a {@code RUNNING} run {@code FAILED}; {@code false} when it was already finished. */

@@ -12,6 +12,7 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunReposito
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Finding;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.NewRun;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Witness;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ZoneDefinitionGap;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.service.report.CsvReportRenderer;
 import com.securityexpert.nexus.ui2.service.report.ReportDocument;
@@ -153,6 +154,11 @@ class ZoneMatrixEvidenceReportInputsTest {
     private static String hoursAgo(int h) { return NOW.minus(Duration.ofHours(h)).toString(); }
 
     private void completeRun(String policy, String coverage, int failures, List<Finding> findings) {
+        completeRun(policy, coverage, failures, findings, List.of());
+    }
+
+    private void completeRun(String policy, String coverage, int failures, List<Finding> findings,
+            List<ZoneDefinitionGap> gaps) {
         String runId = UUID.randomUUID().toString();
         String sha = versions.rows.get(activeId).contentSha256();
         runs.start(new NewRun(runId, activeId, 1, sha, policy, "test", NOW.minus(Duration.ofMinutes(10)), NOW.minus(Duration.ofHours(1))));
@@ -163,7 +169,8 @@ class ZoneMatrixEvidenceReportInputsTest {
                 new Counts(violation, 3, notEvaluable, unknown, 0, findings.size()),
                 new Coverage(coverage, coverage.equals("COMPLETE") ? List.of() : List.of("RULEBASE_TRUNCATED"), failures, true,
                         "CP", NOW.minus(Duration.ofHours(1)), 12),
-                findings));
+                findings,
+                gaps));
     }
 
     private void failedRun(String policy) {
@@ -685,6 +692,140 @@ class ZoneMatrixEvidenceReportInputsTest {
         assertEquals(hash, sha256(csv(ZoneMatrixEvidenceReport.build(
                 assemble(runService().storedSummary(), raw(), request()), NOW), "RAW")),
                 "the CSV bytes and their sha256 are reproducible from the same stored data");
+    }
+
+    @Test
+    void zoneDefinitionGapsNeverLeakRawRangesOrNamesInMaskedReportView() {
+        defaultVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        String gapRule = "planted-gap-rule-rfc1918";
+        String gapSection = "planted-gap-section-core";
+        List<String> ranges = List.of("192.0.2.0/24", "2001:db8::/32");
+        completeRun("P-CUR", "COMPLETE", 0, List.of(), List.of(
+                new ZoneDefinitionGap("r-gap", 14, gapRule, gapSection, ranges)));
+        StoredSummary summary = runService().storedSummary();
+
+        // Masked view (and fail-closed even if flags passed true): no raw ranges, no raw names anywhere.
+        for (var labels : List.of(masked(), zoneMatrix.summaryLabels(View.MASKED, true, true))) {
+            Input in = ZoneMatrixEvidenceReportInputs.assemble(summary, null, labels, MAPPER, request(), NOW, true,
+                    zoneMatrix, CALLER);
+            assertEquals(1, in.zoneDefinitionGaps().size());
+            assertEquals(2, in.zoneDefinitionGaps().get(0).rangeCount());
+            assertNull(in.zoneDefinitionGaps().get(0).unassignedPrivateRanges());
+            Built built = ZoneMatrixEvidenceReport.build(in, NOW);
+            List<String> all = new ArrayList<>(strings(in));
+            all.addAll(strings(built));
+            all.add(new String(csv(built, "MASKED"), StandardCharsets.UTF_8));
+            for (String planted : List.of(gapRule, gapSection, POLICY_NAME, "192.0.2.0/24", "2001:db8::/32")) {
+                assertTrue(all.stream().noneMatch(s -> s.contains(planted)), "masked report leaked " + planted);
+            }
+            var tableRows = table(built, "scope-zone-definition-gaps");
+            assertEquals(1, tableRows.size());
+            assertEquals("2", tableRows.get(0).get(3));
+            assertEquals("WITHHELD", tableRows.get(0).get(4));
+        }
+
+        // Without zone_matrix_zones_read (names only): raw names shown, ranges still withheld.
+        Input namesOnly = assemble(summary, raw(), request());
+        assertNull(namesOnly.zoneDefinitionGaps().get(0).unassignedPrivateRanges());
+        Built namesBuilt = ZoneMatrixEvidenceReport.build(namesOnly, NOW);
+        assertEquals("WITHHELD", table(namesBuilt, "scope-zone-definition-gaps").get(0).get(4));
+
+        // Both raw rights are needed, independently of policy_read. The ranges must also be on record first.
+        Input withZones = ZoneMatrixEvidenceReportInputs.assemble(summary, null,
+                zoneMatrix.summaryLabels(View.NAMES, true, true), MAPPER, request(), NOW, true, zoneMatrix, CALLER);
+        assertEquals(List.of("WITNESS_VIEW"), versions.access);
+        assertEquals(ranges, withZones.zoneDefinitionGaps().get(0).unassignedPrivateRanges());
+        Built zonesBuilt = ZoneMatrixEvidenceReport.build(withZones, NOW);
+        var row = table(zonesBuilt, "scope-zone-definition-gaps").get(0);
+        assertTrue(row.get(1).contains(gapRule) && row.get(1).contains("(rule #14)"));
+        assertEquals(gapSection, row.get(2));
+        assertEquals("2", row.get(3));
+        assertEquals(String.join(", ", ranges), row.get(4));
+    }
+
+    @Test
+    void evidenceGapRangesNeedBothRightsAndASuccessfulAudit() {
+        defaultVersion();
+        policy("P-CUR", "CP", hoursAgo(1));
+        List<String> ranges = List.of("198.51.100.0/24");
+        completeRun("P-CUR", "COMPLETE", 0, List.of(), List.of(new ZoneDefinitionGap("g", 1, RULE_NAME, null, ranges)));
+        StoredSummary summary = runService().storedSummary();
+        var zonesWithoutPolicyRead = zoneMatrix.summaryLabels(View.NAMES, false, true);
+
+        for (Input denied : List.of(assemble(summary, zonesWithoutPolicyRead, request()),
+                ZoneMatrixEvidenceReportInputs.assemble(summary, null, raw(), MAPPER, request(), NOW, true,
+                        zoneMatrix, CALLER))) {
+            assertNull(denied.zoneDefinitionGaps().get(0).unassignedPrivateRanges());
+            Built built = ZoneMatrixEvidenceReport.build(denied, NOW);
+            assertTrue(built.notices().stream().anyMatch(n -> n.contains("Unassigned private ranges are not part")));
+            assertFalse(new String(csv(built, "NAMES"), StandardCharsets.UTF_8).contains(ranges.get(0)));
+        }
+        assertTrue(versions.access.isEmpty(), "a names-only report never audits a raw view");
+
+        versions.failAccess = true;
+        var refusal = assertThrows(ZoneMatrixService.Refused.class, () -> ZoneMatrixEvidenceReportInputs.assemble(
+                summary, null, zonesWithoutPolicyRead, MAPPER, request(), NOW, true, zoneMatrix, CALLER));
+        assertEquals("ZONE_MATRIX_AUDIT_UNAVAILABLE", refusal.code);
+        assertTrue(versions.access.isEmpty());
+
+        versions.failAccess = false;
+        Input permitted = ZoneMatrixEvidenceReportInputs.assemble(summary, null, zonesWithoutPolicyRead, MAPPER,
+                request(), NOW, true, zoneMatrix, CALLER);
+        assertEquals(List.of("WITNESS_VIEW"), versions.access);
+        Built built = ZoneMatrixEvidenceReport.build(permitted, NOW);
+        assertTrue(headerValue(built, "View").startsWith("RAW:"));
+        assertTrue(headerValue(built, "View").contains("raw zone definition gap ranges included"));
+        assertTrue(built.notices().stream().anyMatch(n -> n.contains("This RAW report includes unassigned private ranges")));
+        assertTrue(new String(csv(built, "RAW"), StandardCharsets.UTF_8).contains(ranges.get(0)));
+    }
+
+    @Test
+    void evidenceReportShowsUnknownGapTotalUntilTheSelectedPolicyHasGapEvidence() {
+        assertUnknownGapReport(ZoneMatrixEvidenceReport.build(assemble(runService().storedSummary(), masked(), request()), NOW));
+        defaultVersion();
+        policy("P-KNOWN", "CP", hoursAgo(1));
+        policy("P-LEGACY", "CP", hoursAgo(1));
+        policy("P-PARTIAL", "CP", hoursAgo(1));
+        completeRun("P-KNOWN", "COMPLETE", 0, List.of());
+        completeRun("P-LEGACY", "COMPLETE", 0, List.of(), null);
+        completeRun("P-PARTIAL", "INCOMPLETE", 1, List.of(), List.of(
+                new ZoneDefinitionGap("g", 1, RULE_NAME, null, List.of("192.0.2.0/24"))));
+        StoredSummary summary = runService().storedSummary();
+
+        Built partial = ZoneMatrixEvidenceReport.build(assemble(summary, masked(), request()), NOW);
+        assertUnknownGapReport(partial);
+        assertEquals(1, table(partial, "scope-zone-definition-gaps").size());
+        assertTrue(strings(partial).stream().anyMatch(s -> s.contains("Recorded gap rows shown: 1.")));
+
+        Request legacy = new Request("9.9.9-test", CALLER, null, null, "P-LEGACY", null, null, null);
+        Built unknown = ZoneMatrixEvidenceReport.build(assemble(summary, masked(), legacy), NOW);
+        assertUnknownGapReport(unknown);
+        assertTrue(table(unknown, "scope-zone-definition-gaps").isEmpty());
+
+        Request known = new Request("9.9.9-test", CALLER, null, null, "P-KNOWN", null, null, null);
+        var evaluated = ZoneMatrixEvidenceReport.build(assemble(summary, masked(), known), NOW);
+        assertTrue(strings(evaluated).contains("No zone definition gaps reported."));
+        assertTrue(strings(evaluated).stream().anyMatch(s -> s.contains("0 zone definition gaps")));
+    }
+
+    @Test
+    void evidenceReportShowsUnknownGapTotalInUnfilteredScopeWhenAPolicyIsNotEvaluated() {
+        defaultVersion();
+        policy("P-KNOWN", "CP", hoursAgo(1));
+        policy("P-SKIPPED", "OTHER-VENDOR", hoursAgo(1));
+        completeRun("P-KNOWN", "COMPLETE", 0, List.of());
+        StoredSummary summary = runService().storedSummary();
+        assertEquals(1, summary.notEvaluated().size());
+
+        assertUnknownGapReport(ZoneMatrixEvidenceReport.build(assemble(summary, masked(), request()), NOW));
+    }
+
+    private static void assertUnknownGapReport(Built built) {
+        List<String> text = strings(built);
+        assertTrue(text.stream().anyMatch(s -> s.contains("zone definition gap total UNKNOWN")));
+        assertFalse(text.stream().anyMatch(s -> s.contains("No zone definition gaps reported.")
+                || s.contains("0 zone definition gaps")));
     }
 
     // ------------------------------------------------------------------ ZM-30 pin
