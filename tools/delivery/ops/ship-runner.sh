@@ -73,10 +73,26 @@ in_hold() { [ "${NEXUS_SHIP_WINDOWS:-1}" = 1 ] || return 1; local h m hn; h=$(TZ
   case $h in 00|06|12|18|02) return 0;; esac
   case $hn in 0|6|12|18) [ $((10#$m)) -ge 20 ] && return 0;; esac; return 1; }
 rm_lane_wt() { local n=$1; [ -d "$OPS_CODO/nexus-q-$n" ] && git -C "$REPO" worktree remove --force "$OPS_CODO/nexus-q-$n" 2>/dev/null; return 0; }
+# strip_worktree_paths: rewrite file:// or absolute/relative worktree prefixes down to repo-relative paths.
+strip_worktree_paths() {
+  sed -E 's#file://[^[:space:])>"'\''`]*((nexus-q-|pretest-wt-ship-)[^/]+|nexus-shiprun)/##g; s#[^[:space:]("'\''`<>]*((nexus-q-|pretest-wt-ship-)[^/]+|nexus-shiprun)/##g'
+}
+# inline_log_tail <label> <path>: bounded diagnostic excerpt (matching FAIL/Error lines + last 30 lines) with worktree prefixes stripped.
+inline_log_tail() {
+  local label=$1 path=$2 hits tail_out
+  [ -s "$path" ] || return 0
+  hits=$(grep -iE 'FAIL|ERROR|Exception|AssertionError|Traceback' "$path" | tail -n 30 | strip_worktree_paths | head -c 1800 || true)
+  tail_out=$(tail -n 30 "$path" | strip_worktree_paths | tail -c 1800)
+  printf '\n### %s (bounded inline excerpt)\n' "$label"
+  if [ -n "$hits" ] && [ "$hits" != "$tail_out" ]; then
+    printf 'Matching FAIL/Error lines:\n%s\n' "$hits"
+  fi
+  printf 'Last 30 lines:\n%s\n' "$tail_out"
+}
 # Finish an in-flight batch whose shipq3 wrote DONE: SHIPPED items to done/, a failure back to the queue (retry, split,
 # blame or a fix lane). In-flight items live in ship-queue/inflight/<ID>/ so a pipelined batch cannot pick them again.
 finish_batch() {
-  local ID=$1 D="$SQ/inflight/$1" OUT="$L/ship-$1.out" ok=() names=() f i why culprit names_in hits br mb b n
+  local ID=$1 D="$SQ/inflight/$1" OUT="$L/ship-$1.out" ok=() names=() f i why culprit names_in hits br mb b n clean_why diag
   grep -q '^DONE' "$OUT" 2>/dev/null || return 0
   for f in "$D"/*.ship; do [ -e "$f" ] || continue; ok+=("$f"); names+=("$(field name "$f")"); done
   [ ${#ok[@]} -eq 0 ] && { rm -rf "$D"; return 0; }
@@ -138,10 +154,13 @@ finish_batch() {
     case "$n" in *[0-9]-port-[0-9]*|*[0-9]-fix-[0-9]*) log "ALERT no second fix for $n; left in failed/";;
       *) migfix=""; [[ "$why" == *"not above main"* ]] && migfix=$'\n'"This failure is a migration number clash: rebase onto origin/main, get a new number with bash $OPS_DIR/reserve-migration.sh fix-$n, git mv the migration to that V number, replace every reference to the old number in this branch's files, run the migration/schema tests, commit."
          extra=""; grep -q '^allow_paths=1' "$SQ/failed/$(basename "$f")" && extra="allow_paths=1"   # a fix lane inherits the person's guarded-path approval (271 held 2026-11-23)
+         clean_why=$(printf '%s' "$why" | strip_worktree_paths)
+         diag=$(inline_log_tail "pretest-ship-$ID.out" "$L/pretest-ship-$ID.out"; inline_log_tail "ship-$ID.log" "$L/ship-$ID.log")
          lane_brief "fix-$n" "$br" "# Task: make lane $n pass the ship pipeline
-This worktree is branch $br (finished lane $n). Shipping it failed: $why
-Read the logs with tail/grep (they are long): $L/ship-$ID.log and $L/pretest-ship-$ID.out. Find the failing test or
-check, fix it in this branch's changes (not by weakening the test), run that test and the module's tests, commit.${migfix}" ${extra:+"$extra"};;
+Always read/edit files using repo-relative paths inside your current worktree; never call read_file on paths outside it.
+This worktree is branch $br (finished lane $n). Shipping it failed: $clean_why
+Find the failing test or check from the failure summary (and any inline diagnostic excerpts below), fix it in this branch's
+changes (not by weakening the test), run that test and the module's tests, commit.${migfix}${diag}" ${extra:+"$extra"};;
     esac; rm_lane_wt "$n"
   fi
 }

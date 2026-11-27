@@ -13,9 +13,14 @@ J=$OPS_STATE; SQ=$J/ship-queue; L=$J/logs; R=$OPS_REPO
 # AGY_ONLY (PO decision record 2026-11-26): Claude is out of quota; the tier-B review runs on Antigravity Neon xhigh only.
 agy_only() { [ -e "$J/lane-queue/AGY_ONLY" ]; }
 
+# strip_worktree_paths: rewrite file:// or absolute/relative worktree prefixes down to repo-relative paths.
+strip_worktree_paths() {
+  sed -E 's#file://[^[:space:])>"'\''`]*((nexus-q-|pretest-wt-ship-)[^/]+|nexus-shiprun)/##g; s#[^[:space:]("'\''`<>]*((nexus-q-|pretest-wt-ship-)[^/]+|nexus-shiprun)/##g'
+}
+
 # review_decide <name> <ship-entry> <branch> <review-file>: act on the verdict in the review file.
 review_decide() {
-  local n=$1 f=$2 br=$3 out=$4 desc
+  local n=$1 f=$2 br=$3 out=$4 desc review_body
   # No verdict at all is "review unavailable", never a BLOCK: hold it for a person with an ALERT.
   if ! grep -qE '^VERDICT: (PASS|BLOCK)' "$out"; then
     mkdir -p "$SQ/held"; mv "$f" "$SQ/held/"
@@ -38,13 +43,15 @@ review_decide() {
   local extra=(review_returned=1 pin_claude=1)
   agy_only && extra=(review_returned=1)   # no Claude lane exists while AGY_ONLY is on
   grep -q '^allow_paths=1' "$f" && extra+=(allow_paths=1)
+  review_body=$(head -c 6000 "$out" | strip_worktree_paths)
   lane_brief "fix-blocked-$desc" "$br" "# Task: fix the pre-merge review BLOCK of lane $n
+Always read/edit files using repo-relative paths inside your current worktree; never call read_file on paths outside it.
 This worktree is branch $br (finished lane $n, a clone of its commits). A pre-merge review blocked it. Fix each concrete
 defect it names in this branch's changes, run the tests of the touched module and commit on this branch. Never weaken or
 delete a test to make the review pass; if a finding is not a real defect, say why in the commit message. The result is
 reviewed once more: a second BLOCK goes to a person.
-Review ($out, first 6000 characters):
-$(head -c 6000 "$out")" "${extra[@]}" >> "$L/ship-runner.log"
+Review (the inline review below, first 6000 characters):
+$review_body" "${extra[@]}" >> "$L/ship-runner.log"
   mv "$f" "$SQ/returned/"
   git -C "$R" worktree remove --force "$OPS_CODO/nexus-q-$n" 2>/dev/null
   echo "$(date '+%F %T') B-REVIEW RETURNED $n: first block, fix lane ${LAST_LANE_BRIEF:-?} queued on the same branch; see $out" >> "$L/ship-runner.log"
