@@ -293,7 +293,7 @@ function NewRequest({ kinds, devices, prefill, moduleDraining, windowOpen, windo
     </Box>}
     <TextField label="Run at (empty: now)" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} disabled={busy}
       InputLabelProps={{ shrink: true }} helperText="Any time in the next 7 days. Inside business hours (08:00-20:00) you are asked to confirm." />
-    {warning && <Alert severity="warning" data-fact="wait-warning">{warning}</Alert>}
+    {warning && <Alert severity="warning" data-status-alert="operational" data-fact="wait-warning">{warning}</Alert>}
     {hint && <Alert severity="info" data-fact="collision-hint">{hint}</Alert>}
     <TextField label="Vendor case reference (optional)" value={caseRef} onChange={(e) => setCaseRef(e.target.value)} disabled={busy}
       inputProps={{ maxLength: 40 }} />
