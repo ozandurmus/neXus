@@ -405,6 +405,78 @@ class ZoneMatrixRunServiceTest {
         }
     }
 
+    @Test
+    void zoneDefinitionGapsArePersistedOnCompleteAggregatedOnActiveVersionAndNeverLogged() {
+        var m = new Matrix();
+        Map<String, PolicyObject> objects = new LinkedHashMap<>();
+        objects.put("obj-any", OBJ_ANY);
+        objects.put("rfc1918", addr("rfc1918", "PLANTED-PRIVATE-NET", "10.77.0.0/16"));
+        objects.put("dst", addr("dst", "PLANTED-DST-OBJECT", "198.51.100.77/32"));
+        objects.put("https", svc("https", "HTTPS", "tcp", "443"));
+        List<Rule> rules = List.of(
+                rule("r-gap", 5, "PLANTED-GAP-RULE-NAME", true, "rfc1918", "dst", "https"));
+        PolicySnapshot snap = new PolicySnapshot(
+                new Metadata(POLICY, "src-1", "FW-TANGO-04", "PAN", "dom-1", "DOM-BRAVO-02", "PLANTED-POLICY-NAME",
+                        "2026-11-23T08:00:00Z", "art-1", List.of()),
+                List.of(new Section(PolicySnapshot.ref(POLICY, "PAN device-group", "pre-rulebase"), "PLANTED-CUSTOM-SECTION",
+                        "PAN device-group", null, rules)),
+                objects);
+        m.snapshots.put(POLICY, snap);
+        PolicyCatalog catalogWithView = new PolicyCatalog() {
+            @Override public List<Map<String, Object>> catalogViews() {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", POLICY);
+                row.put("vendor", "PAN");
+                row.put("name", "PLANTED-POLICY-NAME");
+                row.put("sourceId", "src-1");
+                row.put("sourceName", "FW-TANGO-04");
+                row.put("collectedAt", "2026-11-23T08:00:00Z");
+                row.put("ruleCount", 1);
+                return List.of(row);
+            }
+            @Override public Optional<PolicySnapshot> find(String policyId) {
+                return Optional.ofNullable(m.snapshots.get(policyId));
+            }
+        };
+
+        var runs = new FakeRuns();
+        Logger logger = (Logger) LoggerFactory.getLogger(ZoneMatrixRunService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            var service = service(m, runs, catalogWithView, Duration.ofMinutes(5), new DirectExecutor(),
+                    ZoneMatrixRunService.newWatchdog());
+            String runId = service.submit(POLICY, null).runId();
+
+            var storedRun = runs.latestComplete(POLICY).orElseThrow();
+            assertEquals(1, storedRun.zoneDefinitionGaps().size());
+            var gap = storedRun.zoneDefinitionGaps().get(0);
+            assertEquals("r-gap", gap.ruleId());
+            assertEquals(5, gap.ruleNumber());
+            assertEquals("PLANTED-GAP-RULE-NAME", gap.ruleName());
+            assertEquals("PLANTED-CUSTOM-SECTION", gap.sectionName());
+            assertEquals(List.of("10.77.0.0-10.77.255.255"), gap.unassignedPrivateRanges());
+
+            var summary = service.storedSummary();
+            assertEquals(1, summary.zoneDefinitionGaps().size());
+            assertEquals(POLICY, summary.zoneDefinitionGaps().get(0).policySourceId());
+            assertEquals(runId, summary.zoneDefinitionGaps().get(0).runId());
+            assertEquals(gap, summary.zoneDefinitionGaps().get(0).gap());
+
+            List<String> lines = appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+            assertTrue(lines.stream().anyMatch(l -> l.startsWith("zone_matrix_run_finished") && l.contains("gaps=1")),
+                    lines.toString());
+            for (String line : lines) {
+                for (String forbidden : List.of("10.77.0.0", "PLANTED-GAP-RULE-NAME", "PLANTED-CUSTOM-SECTION", "PLANTED-PRIVATE-NET")) {
+                    assertFalse(line.contains(forbidden), "log line leaked " + forbidden + ": " + line);
+                }
+            }
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
     // ------------------------------------------------------------------ fakes
 
     /** Runs every task on the calling thread. */
@@ -450,6 +522,7 @@ class ZoneMatrixRunServiceTest {
             Counts counts;
             Coverage coverage;
             long duration;
+            List<ZoneDefinitionGap> zoneDefinitionGaps;
 
             static Row running(String runId, String policy, String versionId) {
                 Row r = new Row();
@@ -467,7 +540,7 @@ class ZoneMatrixRunServiceTest {
                         coverage == null ? null : coverage.snapshotRuleCount(), coverage == null ? null : coverage.vendor(),
                         coverage == null ? null : coverage.evaluated(), coverage == null ? null : coverage.coverage(),
                         coverage == null ? List.of() : coverage.itemCodes(),
-                        coverage == null ? null : coverage.collectionFailures(), counts, duration);
+                        coverage == null ? null : coverage.collectionFailures(), counts, duration, zoneDefinitionGaps);
             }
         }
 
@@ -496,8 +569,13 @@ class ZoneMatrixRunServiceTest {
 
         @Override public synchronized boolean complete(String runId, Instant finishedAt, long durationMillis,
                 Counts counts, Coverage coverage, List<Finding> list) {
+            return complete(runId, finishedAt, durationMillis, counts, coverage, list, List.of());
+        }
+
+        @Override public synchronized boolean complete(String runId, Instant finishedAt, long durationMillis,
+                Counts counts, Coverage coverage, List<Finding> list, List<ZoneDefinitionGap> gaps) {
             return complete(runId, finishedAt, durationMillis, coverage,
-                    ignored -> new CompletionPlan(counts, list, List.of()));
+                    ignored -> new CompletionPlan(counts, list, List.of(), gaps));
         }
 
         @Override public synchronized boolean complete(String runId, Instant finishedAt, long durationMillis,
@@ -565,6 +643,7 @@ class ZoneMatrixRunServiceTest {
             r.coverage = coverage;
             if (coverage.snapshotCollectedAt() != null) r.snapshotCollectedAt = coverage.snapshotCollectedAt();
             r.duration = durationMillis;
+            r.zoneDefinitionGaps = plan.zoneDefinitionGaps();
             syncFindingsView();
             return true;
         }

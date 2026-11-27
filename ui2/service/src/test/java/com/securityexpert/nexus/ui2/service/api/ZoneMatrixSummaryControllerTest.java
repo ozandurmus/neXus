@@ -16,6 +16,7 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunReposito
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Cell;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Finding;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.Witness;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.ZoneDefinitionGap;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
@@ -27,6 +28,7 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.PolicyCoverage;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredFinding;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredSummary;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredZoneDefinitionGap;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness;
 import java.lang.reflect.Method;
@@ -65,6 +67,7 @@ class ZoneMatrixSummaryControllerTest {
     private final String zoneB = UUID.randomUUID().toString();
     private final String versionId = UUID.randomUUID().toString();
     private ZoneMatrixRunService runs;
+    private ZoneMatrixRepository repository;
     private ZoneMatrixController controller;
     private Set<String> roles = Set.of();
 
@@ -75,7 +78,7 @@ class ZoneMatrixSummaryControllerTest {
                 new ZoneMatrixContent.Zone(zoneB, "Z-PLANTED-BRANCH", "d", "USER", List.of(ZoneBlock.parse("198.51.100.0/24")))));
         var version = new Version(versionId, 1, "ACTIVE", 2, content.canonicalJson(), content.sha256(), null, "a", NOW, "a", NOW,
                 "p", NOW);
-        ZoneMatrixRepository repository = mock(ZoneMatrixRepository.class);
+        repository = mock(ZoneMatrixRepository.class);
         when(repository.find(versionId)).thenReturn(Optional.of(version));
         when(repository.active()).thenReturn(Optional.of(version));
         var service = new ZoneMatrixService(repository, new ZoneMatrixService.Principals() {
@@ -214,6 +217,76 @@ class ZoneMatrixSummaryControllerTest {
         assertEquals(1, body.get("returned"));
         assertEquals(0, body.get("more"));
         assertEquals(false, body.get("capped"));
+    }
+
+    @Test
+    void zoneDefinitionGapsNeverExposeRangesEvenToCallersWithZoneMatrixZonesRead() throws Exception {
+        String gapRule = "planted-gap-rule-rfc1918";
+        String gapSection = "planted-gap-section-branch";
+        List<String> ranges = List.of("192.0.2.0/24", "2001:db8::/32");
+        StoredSummary base = runs.storedSummary();
+        var withGap = new StoredSummary(base.evaluatedAt(), base.stalenessThreshold(), base.activeVersion(),
+                base.policies(), base.notEvaluated(), base.findings(), base.headline(),
+                base.resolvedByVersionChangeLast7Days(), base.resolvedByVersionChangeByVersion(), base.cellCounts(),
+                List.of(new StoredZoneDefinitionGap("P-1", "run-1", versionId, 1,
+                        new ZoneDefinitionGap("rid-gap", 9, gapRule, gapSection, ranges))));
+        when(runs.storedSummary()).thenReturn(withGap);
+
+        // security_admin (policy_read + zone_matrix_zones_read): sees range_count and raw names, never ranges.
+        var secResp = controller.summary(null, null, null, request(false, RoleToken.SECURITY_ADMIN));
+        assertEquals(200, secResp.getStatusCode().value());
+        var secGaps = (List<?>) ((Map<?, ?>) secResp.getBody()).get("zone_definition_gaps");
+        assertEquals(1, secGaps.size());
+        var secGap = (Map<?, ?>) secGaps.get(0);
+        assertEquals("P-1", secGap.get("policy_source_id"));
+        assertEquals(POLICY_NAME, secGap.get("policy_name"));
+        assertEquals("rid-gap", secGap.get("rule_id"));
+        assertEquals(9, secGap.get("rule_number"));
+        assertEquals(gapRule, secGap.get("rule_name"));
+        assertEquals(gapSection, secGap.get("section_name"));
+        assertEquals(2, secGap.get("range_count"));
+        assertNull(secGap.get("unassigned_private_ranges"));
+        String secJson = json(secResp);
+        for (String range : ranges) assertFalse(secJson.contains(range), "security_admin summary leaked a range");
+
+        // compliance_admin (zone_matrix_zones_read, without policy_read): sees range_count and masked names, never ranges.
+        var compResp = controller.summary(null, null, null, request(false, RoleToken.COMPLIANCE_ADMIN));
+        assertEquals(200, compResp.getStatusCode().value());
+        var compGap = (Map<?, ?>) ((List<?>) ((Map<?, ?>) compResp.getBody()).get("zone_definition_gaps")).get(0);
+        assertEquals(2, compGap.get("range_count"));
+        assertNull(compGap.get("unassigned_private_ranges"));
+        String compJson = json(compResp);
+        for (String planted : List.of(gapRule, gapSection, POLICY_NAME, "192.0.2.", "2001:db8:")) {
+            assertFalse(compJson.contains(planted), "compliance_admin without policy_read leaked " + planted);
+        }
+
+        // viewer (no zone_matrix_zones_read, no policy_read) and replay_viewer (aiview, even with admin binding):
+        // unassigned_private_ranges == null, range_count present, masked names, zero raw values.
+        for (var reqSupplier : List.<java.util.function.Supplier<MockHttpServletRequest>>of(
+                () -> request(false, RoleToken.VIEWER),
+                () -> request(true, RoleToken.REPLAY_VIEWER),
+                () -> request(true, RoleToken.REPLAY_VIEWER, RoleToken.SECURITY_ADMIN))) {
+            var resp = controller.summary(null, null, null, reqSupplier.get());
+            assertEquals(200, resp.getStatusCode().value());
+            var gap = (Map<?, ?>) ((List<?>) ((Map<?, ?>) resp.getBody()).get("zone_definition_gaps")).get(0);
+            assertEquals(2, gap.get("range_count"));
+            assertNull(gap.get("unassigned_private_ranges"));
+            String body = json(resp);
+            for (String planted : List.of(gapRule, gapSection, POLICY_NAME, "192.0.2.", "2001:db8:")) {
+                assertFalse(body.contains(planted), "body leaked " + planted);
+            }
+        }
+        verify(repository, never()).recordAccess(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void summaryDoesNotAcceptARawRangeOptIn() throws Exception {
+        var req = request(false, RoleToken.SECURITY_ADMIN);
+        req.addParameter("include_witnesses", "true");
+        var response = controller.summary(null, null, null, req);
+        assertEquals(400, response.getStatusCode().value());
+        assertTrue(json(response).contains("UNKNOWN_PARAMETER"));
+        verify(repository, never()).recordAccess(anyString(), anyString(), anyString());
     }
 
     @Test

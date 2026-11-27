@@ -16,6 +16,7 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvidenceReport.
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvidenceReport.PolicyScope;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvidenceReport.Regulation;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvidenceReport.Summary;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixEvidenceReport.ZoneDefinitionGapRow;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixFindingLifecycle.ResolutionReason;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixFindingLifecycle.Transition;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.NotEvaluatedPolicy;
@@ -23,6 +24,7 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.Poli
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredFinding;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredHeadline;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredSummary;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService.StoredZoneDefinitionGap;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService.Refused;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.PolicyInput;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.PolicyStaleness;
@@ -122,6 +124,16 @@ public final class ZoneMatrixEvidenceReportInputs {
      */
     public static Input assemble(StoredSummary summary, List<ResolvedFinding> resolvedInPeriod, Labels labels,
             ObjectMapper mapper, Request request, Instant now) {
+        return assemble(summary, resolvedInPeriod, labels, mapper, request, now, false, null, null);
+    }
+
+    /**
+     * Raw gap ranges also require the caller's server-side {@code report_raw_view} right and a successful
+     * Zone Matrix access audit. The Reports R1 exporter still must audit the stored file hash before download (§7.3).
+     */
+    public static Input assemble(StoredSummary summary, List<ResolvedFinding> resolvedInPeriod, Labels labels,
+            ObjectMapper mapper, Request request, Instant now, boolean hasReportRawView, ZoneMatrixService zoneMatrix,
+            String actor) {
         Objects.requireNonNull(summary, "summary");
         Objects.requireNonNull(labels, "labels");
         Objects.requireNonNull(mapper, "mapper");
@@ -190,13 +202,24 @@ public final class ZoneMatrixEvidenceReportInputs {
             }
         }
 
+        List<StoredZoneDefinitionGap> gaps = summary.zoneDefinitionGaps().stream()
+                .filter(s -> filter.policyId() == null || filter.policyId().equals(s.policySourceId()))
+                .sorted(ZoneMatrixSummaryView.GAP_ORDER)
+                .toList();
+        boolean showRanges = active != null && !labels.masked() && labels.canViewZoneBlocks() && hasReportRawView
+                && gaps.stream().anyMatch(g -> !g.gap().unassignedPrivateRanges().isEmpty());
+        if (showRanges) {
+            Objects.requireNonNull(zoneMatrix, "zoneMatrix").auditEvidenceGapRanges(actor, active.versionId());
+        }
+        List<ZoneDefinitionGapRow> gapRows = zoneDefinitionGaps(gaps, policyNames, labels, showRanges);
+
         boolean wholeKnown = !period && wholeScopeKnown(summary);
         boolean filteredKnown = !period && filteredScopeKnown(summary, filter.policyId());
 
         return new Input(
                 request.productVersion(),
                 generatedBy,
-                viewLabel(labels),
+                viewLabel(labels, showRanges),
                 request.periodFrom(),
                 request.periodTo(),
                 filterDescription(filter, labels, summary, period, resolvedInPeriod != null),
@@ -209,21 +232,42 @@ public final class ZoneMatrixEvidenceReportInputs {
                 policies,
                 notEvaluated,
                 summary(summary.headline(), summary.resolvedByVersionChangeLast7Days().size()),
-                rows);
+                rows,
+                gapRows,
+                summary.zoneDefinitionGapsComplete(filter.policyId()));
+    }
+
+    private static List<ZoneDefinitionGapRow> zoneDefinitionGaps(List<StoredZoneDefinitionGap> matching,
+            Map<String, String> policyNames, Labels labels, boolean showRanges) {
+        List<ZoneDefinitionGapRow> out = new ArrayList<>(matching.size());
+        for (StoredZoneDefinitionGap s : matching) {
+            ZoneMatrixRunRepository.ZoneDefinitionGap g = s.gap();
+            String rule = labels.ruleName(g.ruleName(), g.ruleNumber());
+            if (g.ruleNumber() != null) {
+                rule = (rule == null || rule.isBlank() ? UNKNOWN : rule) + " (rule #" + g.ruleNumber() + ")";
+            }
+            out.add(new ZoneDefinitionGapRow(
+                    policyNames.getOrDefault(s.policySourceId(), UNKNOWN),
+                    rule,
+                    labels.sectionName(g.sectionName()),
+                    g.unassignedPrivateRanges().size(),
+                    showRanges ? g.unassignedPrivateRanges() : null));
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ header
 
-    private static String viewLabel(Labels labels) {
+    private static String viewLabel(Labels labels, boolean showRanges) {
         if (labels.masked()) {
             return "MASKED: zone names as ZONE-<n>, policy, source, container and rule names through PolicyPrivacy, "
-                    + "actors as USER-<n>; no blocks, no witness addresses";
+                    + "actors as USER-<n>; no blocks, no witness addresses, no zone definition gap ranges";
         }
-        if (labels.policyNamesMasked()) {
-            return "NAMES: zone names as stored; policy, source, container and rule names through PolicyPrivacy "
-                    + "(no policy_read); no blocks, no witness addresses";
-        }
-        return "NAMES: zone, policy, source, container and rule names as stored; no blocks, no witness addresses";
+        String names = labels.policyNamesMasked()
+                ? "zone names as stored; policy, source, container and rule names through PolicyPrivacy (no policy_read)"
+                : "zone, policy, source, container and rule names as stored";
+        return (showRanges ? "RAW: " : "NAMES: ") + names + "; no blocks, no witness addresses"
+                + (showRanges ? "; raw zone definition gap ranges included" : "; no zone definition gap ranges included");
     }
 
     private static String filterDescription(ZoneMatrixSummaryView.Query filter, Labels labels, StoredSummary summary,

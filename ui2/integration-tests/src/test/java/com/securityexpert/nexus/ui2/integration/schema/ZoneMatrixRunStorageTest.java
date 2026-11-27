@@ -445,6 +445,96 @@ class ZoneMatrixRunStorageTest {
         }
     }
 
+    @Test void v276_zoneDefinitionGapsPersistReadBackDecodeNullSafelyAndStayImmutableOnceFinished() throws Exception {
+        try (Connection db = fixture.appConnection(); Statement s = db.createStatement()) {
+            ZoneMatrixRunRepository repository = new JooqZoneMatrixRunRepository(
+                    new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            String policy = "pol-gaps-" + UUID.randomUUID();
+            String runId = UUID.randomUUID().toString();
+            repository.start(run(runId, policy));
+
+            List<ZoneDefinitionGap> gaps = List.of(
+                    new ZoneDefinitionGap("0007", 7, "Rule \"gap\"\\rfc1918", "Branch access",
+                            List.of("192.0.2.0/24", "198.51.100.0/24")),
+                    new ZoneDefinitionGap("r-ula", 12, "Rule IPv6", "Pre rules",
+                            List.of("2001:db8::/32")));
+            assertTrue(repository.complete(runId, FINISHED, 2_000L, COVERAGE,
+                    history -> new CompletionPlan(COUNTS, List.of(), List.of(), gaps)));
+
+            Run stored = repository.latestComplete(policy).orElseThrow();
+            assertEquals(gaps, stored.zoneDefinitionGaps(), "stored zone_definition_gaps read back byte-exact");
+            Run fromList = repository.runs(500).stream().filter(r -> r.runId().equals(runId)).findFirst().orElseThrow();
+            assertEquals(gaps, fromList.zoneDefinitionGaps());
+
+            // Pre-V276 completed row has no gap evidence, not an evaluated empty list.
+            String legacyPolicy = "pol-gaps-null-" + UUID.randomUUID();
+            String legacyRun = UUID.randomUUID().toString();
+            repository.start(run(legacyRun, legacyPolicy));
+            s.execute("UPDATE zone_matrix_run SET state = 'COMPLETE', finished_at = now(), coverage = 'COMPLETE', "
+                    + "count_violation = 0, count_compliant = 1, count_not_evaluable = 0, count_unknown = 0, "
+                    + "count_not_applicable = 0, count_findings = 0, zone_definition_gaps = NULL "
+                    + "WHERE run_id = '" + legacyRun + "'");
+            Run legacy = repository.latestComplete(legacyPolicy).orElseThrow();
+            assertNull(legacy.zoneDefinitionGaps(), "pre-V276 NULL means gaps were not recorded");
+
+            // Guard trigger still forbids modifying zone_definition_gaps after COMPLETE or FAILED.
+            assertThrows(SQLException.class, () -> s.execute(
+                    "UPDATE zone_matrix_run SET zone_definition_gaps = '[]'::jsonb WHERE run_id = '" + runId + "'"));
+            String failedRun = UUID.randomUUID().toString();
+            repository.start(run(failedRun, "pol-gaps-fail-" + UUID.randomUUID()));
+            assertTrue(repository.fail(failedRun, FailureReason.ENGINE_ERROR, FINISHED));
+            assertThrows(SQLException.class, () -> s.execute(
+                    "UPDATE zone_matrix_run SET zone_definition_gaps = '[]'::jsonb WHERE run_id = '" + failedRun + "'"));
+
+            // CHECK constraint refuses non-array JSONB in zone_definition_gaps.
+            String badRun = UUID.randomUUID().toString();
+            repository.start(run(badRun, "pol-gaps-bad-" + UUID.randomUUID()));
+            assertThrows(SQLException.class, () -> s.execute(
+                    "UPDATE zone_matrix_run SET state = 'COMPLETE', finished_at = now(), coverage = 'COMPLETE', "
+                            + "count_violation = 0, count_compliant = 0, count_not_evaluable = 0, count_unknown = 0, "
+                            + "count_not_applicable = 0, count_findings = 0, zone_definition_gaps = '{}'::jsonb "
+                            + "WHERE run_id = '" + badRun + "'"));
+            assertTrue(repository.fail(badRun, FailureReason.STORE_ERROR, FINISHED));
+        }
+    }
+
+    @Test void v276_runningAndFailedAreUnknownButEvaluatedEmptyIsKnown() throws Exception {
+        try (Connection db = fixture.appConnection()) {
+            ZoneMatrixRunRepository repository = new JooqZoneMatrixRunRepository(
+                    new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            String policy = "pol-gaps-state-" + UUID.randomUUID();
+            String failedId = UUID.randomUUID().toString();
+            repository.start(run(failedId, policy));
+            assertNull(repository.latestRun(policy).orElseThrow().zoneDefinitionGaps(), "RUNNING gaps are unknown");
+            assertTrue(repository.fail(failedId, FailureReason.ENGINE_ERROR, FINISHED));
+            assertNull(repository.latestRun(policy).orElseThrow().zoneDefinitionGaps(), "FAILED gaps are unknown");
+
+            String completeId = UUID.randomUUID().toString();
+            repository.start(run(completeId, policy));
+            assertTrue(repository.complete(completeId, FINISHED, 2_000L, COUNTS, COVERAGE, List.of(), List.of()));
+            assertEquals(List.of(), repository.latestComplete(policy).orElseThrow().zoneDefinitionGaps(),
+                    "an explicitly recorded empty array is not SQL NULL");
+        }
+    }
+
+    @Test void v276_migrationIsDryRunnableInsideATransaction() throws Exception {
+        String sql;
+        try (var resource = getClass().getResourceAsStream("/db/migration/V276__zone_matrix_run_definition_gaps.sql")) {
+            assertNotNull(resource);
+            sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        try (Connection db = fixture.migrateConnection(); Statement s = db.createStatement()) {
+            db.setAutoCommit(false);
+            s.execute("ALTER TABLE zone_matrix_run DROP COLUMN zone_definition_gaps");
+            s.execute(sql);
+            db.rollback();
+            db.setAutoCommit(true);
+            assertTrue(bool(s, "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                    + "WHERE table_schema = 'public' AND table_name = 'zone_matrix_run' "
+                    + "AND column_name = 'zone_definition_gaps')"));
+        }
+    }
+
     @Test void migrationIsDryRunnableInsideATransaction() throws Exception {
         String sql;
         try (var resource = getClass().getResourceAsStream("/db/migration/V267__zone_matrix_runs_and_findings.sql")) {

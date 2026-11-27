@@ -22,6 +22,16 @@ def _git(cwd: Path, *args: str, env=None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, env=env)
 
 
+def _bare_git(bare: Path, *args: str) -> subprocess.CompletedProcess:
+    """Run git against a bare repository by explicit ``--git-dir``.
+
+    Discovering a bare repository from its own directory is refused when the
+    host sets ``safe.bareRepository=explicit``; naming the git dir explicitly
+    works under every such setting.
+    """
+    return subprocess.run(["git", f"--git-dir={bare}", *args], capture_output=True, text=True)
+
+
 #: The mirrors borrow the source's objects instead of copying them. A full local clone of a checkout with a large
 #: loose-object store took 50-250 seconds per clone on a loaded machine (four tests, two clones each: the wall time of
 #: the whole tooling suite); the hook under test never reads those objects through any other path.
@@ -58,10 +68,10 @@ def test_fixture_clone_resolves_a_named_branch_from_a_detached_source_head(tmp_p
     assert `_fixture_clone` still lands the clone on `_FIXTURE_BRANCH`."""
     detached_source = tmp_path / "detached-source.git"
     assert _git(tmp_path, "clone", "-q", "--bare", *_SHARE, str(ROOT), str(detached_source)).returncode == 0
-    head_sha = _git(detached_source, "rev-parse", "HEAD").stdout.strip()
-    _git(detached_source, "symbolic-ref", "--delete", "HEAD")
-    assert _git(detached_source, "update-ref", "--no-deref", "HEAD", head_sha).returncode == 0
-    assert _git(detached_source, "symbolic-ref", "-q", "HEAD").returncode != 0
+    head_sha = _bare_git(detached_source, "rev-parse", "HEAD").stdout.strip()
+    _bare_git(detached_source, "symbolic-ref", "--delete", "HEAD")
+    assert _bare_git(detached_source, "update-ref", "--no-deref", "HEAD", head_sha).returncode == 0
+    assert _bare_git(detached_source, "symbolic-ref", "-q", "HEAD").returncode != 0
 
     bare = tmp_path / "origin.git"
     assert _git(tmp_path, "clone", "-q", "--bare", *_SHARE, str(detached_source), str(bare)).returncode == 0
@@ -121,4 +131,4 @@ def test_installed_hook_allows_an_ordinary_fast_forward_push(tmp_path):
 
     result = _git(clone, "push", "origin", push_branch)
     assert result.returncode == 0, result.stderr
-    assert _git(bare, "rev-parse", "--verify", push_branch).returncode == 0
+    assert _bare_git(bare, "rev-parse", "--verify", push_branch).returncode == 0

@@ -87,6 +87,47 @@ final class ZoneMatrixRunJson {
         return List.copyOf(out);
     }
 
+    /** Serializes {@code zone_definition_gaps} (V276) as a JSON array, or SQL NULL when not recorded. */
+    static String writeZoneDefinitionGaps(List<ZoneMatrixRunRepository.ZoneDefinitionGap> gaps) {
+        if (gaps == null) return null;
+        if (gaps.isEmpty()) return "[]";
+        List<Map<String, Object>> out = new ArrayList<>(gaps.size());
+        for (ZoneMatrixRunRepository.ZoneDefinitionGap g : gaps) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("rule_id", g.ruleId());
+            m.put("rule_number", g.ruleNumber());
+            m.put("rule_name", g.ruleName());
+            m.put("section_name", g.sectionName());
+            m.put("unassigned_private_ranges", g.unassignedPrivateRanges());
+            out.add(m);
+        }
+        return write(out);
+    }
+
+    /** Reads {@code zone_definition_gaps} (V276); SQL NULL is unknown, distinct from an evaluated empty array. */
+    static List<ZoneMatrixRunRepository.ZoneDefinitionGap> zoneDefinitionGaps(String json) {
+        Object parsed = parse(json);
+        if (parsed == null) return null;
+        List<ZoneMatrixRunRepository.ZoneDefinitionGap> out = new ArrayList<>();
+        for (Object o : (List<?>) parsed) {
+            Map<?, ?> m = (Map<?, ?>) o;
+            Integer ruleNumber = m.get("rule_number") instanceof Number n ? n.intValue() : null;
+            List<String> ranges = new ArrayList<>();
+            if (m.get("unassigned_private_ranges") instanceof List<?> l) {
+                for (Object r : l) {
+                    if (r != null) ranges.add((String) r);
+                }
+            }
+            out.add(new ZoneMatrixRunRepository.ZoneDefinitionGap(
+                    (String) m.get("rule_id"),
+                    ruleNumber,
+                    (String) m.get("rule_name"),
+                    (String) m.get("section_name"),
+                    ranges));
+        }
+        return List.copyOf(out);
+    }
+
     private static final class Parser {
         private final String s;
         private int pos;

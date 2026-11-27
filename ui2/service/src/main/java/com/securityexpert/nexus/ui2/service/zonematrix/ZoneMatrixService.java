@@ -573,6 +573,14 @@ public final class ZoneMatrixService {
         return new Refused(409, "REQUEST_CHANGED", "the draft changed since you loaded it; reload and try again");
     }
 
+    /** Records raw gap-range access before assembling the raw evidence report. */
+    void auditEvidenceGapRanges(String actor, String versionId) {
+        if (actor == null || actor.isBlank()) {
+            throw new Refused(503, "ZONE_MATRIX_AUDIT_UNAVAILABLE", "the view was refused because its actor is unknown");
+        }
+        record(actor, "WITNESS_VIEW", versionId);
+    }
+
     // ---------------------------------------------------------------- projections
 
     private ZoneMatrixContent content(Version version) {
@@ -1366,14 +1374,24 @@ public final class ZoneMatrixService {
      * blocks are shown).
      */
     public ZoneMatrixSummaryView.Labels summaryLabels(View view, boolean hasPolicyRead) {
+        return summaryLabels(view, hasPolicyRead, false);
+    }
+
+    /**
+     * Name projection and screen rights for evidence report assembly. The summary itself never emits ranges.
+     * The report independently requires {@code report_raw_view} and an access audit.
+     */
+    public ZoneMatrixSummaryView.Labels summaryLabels(View view, boolean hasPolicyRead, boolean hasZonesRead) {
         Objects.requireNonNull(view, "view");
         if (view == View.BLOCKS) throw new IllegalArgumentException("the stored summary never shows blocks");
         boolean maskPolicy = view == View.MASKED || !hasPolicyRead;
+        boolean zonesRead = view != View.MASKED && hasZonesRead;
         Map<String, Optional<ZoneMatrixContent>> contents = new HashMap<>();
         Map<String, ZoneNames> zoneNames = new HashMap<>();
         return new ZoneMatrixSummaryView.Labels() {
             @Override public boolean masked() { return view == View.MASKED; }
             @Override public boolean policyNamesMasked() { return maskPolicy; }
+            @Override public boolean canViewZoneBlocks() { return zonesRead; }
             @Override public String policyName(String raw) { return maskPolicy ? maskPolicyLabel("policy", raw) : raw; }
             @Override public String sourceName(String raw, String sourceId) {
                 return maskPolicy ? maskSourceName(raw, sourceId) : raw;
@@ -1381,6 +1399,9 @@ public final class ZoneMatrixService {
             @Override public String containerName(String raw) { return maskPolicy ? maskDomainName(raw) : raw; }
             @Override public String ruleName(String raw, Integer ruleNumber) {
                 return maskPolicy ? maskRuleName(raw, ruleNumber == null ? 0 : ruleNumber) : raw;
+            }
+            @Override public String sectionName(String raw) {
+                return maskPolicy ? maskSectionName(raw) : raw;
             }
             @Override public String zoneName(String versionId, String zoneId) {
                 if (versionId == null || zoneId == null) return "UNKNOWN";

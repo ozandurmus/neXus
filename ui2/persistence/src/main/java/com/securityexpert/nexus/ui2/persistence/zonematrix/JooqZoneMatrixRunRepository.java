@@ -29,7 +29,7 @@ public final class JooqZoneMatrixRunRepository implements ZoneMatrixRunRepositor
             + "engine_version, state, failure_reason, started_at, finished_at, snapshot_collected_at, snapshot_rule_count, "
             + "vendor, evaluated, coverage, coverage_items::text as coverage_items_json, collection_failures, "
             + "count_violation, count_compliant, count_not_evaluable, count_unknown, count_not_applicable, count_findings, "
-            + "duration_ms";
+            + "duration_ms, zone_definition_gaps::text as zone_definition_gaps_json";
     private static final String FINDING_COLUMNS = "f.policy_source_id, f.rule_uid, "
             + "f.inline_parent_path::text as inline_parent_path_json, f.violated_pairs::text as violated_pairs_json, "
             + "f.rule_id, f.rule_number, f.rule_name, f.section_id, f.section_name, "
@@ -70,11 +70,16 @@ public final class JooqZoneMatrixRunRepository implements ZoneMatrixRunRepositor
 
     @Override public boolean complete(String runId, Instant finishedAt, long durationMillis, Counts counts,
             Coverage coverage, List<Finding> findings) {
+        return complete(runId, finishedAt, durationMillis, counts, coverage, findings, null);
+    }
+
+    @Override public boolean complete(String runId, Instant finishedAt, long durationMillis, Counts counts,
+            Coverage coverage, List<Finding> findings, List<ZoneDefinitionGap> zoneDefinitionGaps) {
         return transactions.inTransaction(dsl -> {
             Record row = dsl.fetchOne("select state from zone_matrix_run where run_id = {0} for update", runId);
             if (row == null || !STATE_RUNNING.equals(row.get("state", String.class))) return false;
             for (Finding f : findings) insertFinding(dsl, runId, f);
-            markRunComplete(dsl, runId, finishedAt, durationMillis, counts, coverage);
+            markRunComplete(dsl, runId, finishedAt, durationMillis, counts, coverage, zoneDefinitionGaps);
             return true;
         });
     }
@@ -120,24 +125,26 @@ public final class JooqZoneMatrixRunRepository implements ZoneMatrixRunRepositor
             }
 
             for (Finding f : plan.findingsToInsert()) insertFinding(dsl, runId, f);
-            markRunComplete(dsl, runId, finishedAt, durationMillis, plan.counts(), coverage);
+            markRunComplete(dsl, runId, finishedAt, durationMillis, plan.counts(), coverage, plan.zoneDefinitionGaps());
             return true;
         });
     }
 
     private static void markRunComplete(DSLContext dsl, String runId, Instant finishedAt, long durationMillis,
-            Counts counts, Coverage coverage) {
+            Counts counts, Coverage coverage, List<ZoneDefinitionGap> zoneDefinitionGaps) {
         int updated = dsl.execute("update zone_matrix_run set state = 'COMPLETE', finished_at = {1}, "
                 + "snapshot_collected_at = {2}::timestamptz, snapshot_rule_count = {3}::integer, vendor = {4}::text, "
                 + "evaluated = {5}, coverage = {6}, coverage_items = {7}::jsonb, collection_failures = {8}, "
                 + "count_violation = {9}, count_compliant = {10}, count_not_evaluable = {11}, count_unknown = {12}, "
-                + "count_not_applicable = {13}, count_findings = {14}, duration_ms = {15} "
+                + "count_not_applicable = {13}, count_findings = {14}, duration_ms = {15}, "
+                + "zone_definition_gaps = {16}::jsonb "
                 + "where run_id = {0} and state = 'RUNNING'",
                 runId, odt(finishedAt), odtOrNull(coverage.snapshotCollectedAt()), coverage.snapshotRuleCount(),
                 coverage.vendor(), coverage.evaluated(), coverage.coverage(),
                 ZoneMatrixRunJson.write(coverage.itemCodes()), coverage.collectionFailures(),
                 counts.violation(), counts.compliant(), counts.notEvaluable(), counts.unknown(),
-                counts.notApplicable(), counts.findings(), durationMillis);
+                counts.notApplicable(), counts.findings(), durationMillis,
+                ZoneMatrixRunJson.writeZoneDefinitionGaps(zoneDefinitionGaps));
         if (updated != 1) throw new IllegalStateException("the zone matrix run left RUNNING inside its own lock");
     }
 
@@ -441,7 +448,8 @@ public final class JooqZoneMatrixRunRepository implements ZoneMatrixRunRepositor
                 ZoneMatrixRunJson.strings(r.get("coverage_items_json", String.class)),
                 r.get("collection_failures", Integer.class),
                 counts,
-                r.get("duration_ms", Long.class));
+                r.get("duration_ms", Long.class),
+                ZoneMatrixRunJson.zoneDefinitionGaps(r.get("zone_definition_gaps_json", String.class)));
     }
 
     private static Instant instant(Record r, String field) {
