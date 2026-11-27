@@ -12,7 +12,7 @@ identity, encryption, RBAC and mutation rules remain authoritative. Retain one i
 Resource figures in the plan are guidance: modest requests, no CPU limits and
 generous memory limits; measured sizing must preserve DB and device budgets.
 Closed roles: `policy`, `backup`, `inventory`, `failover`, `diagnostics`,
-`configuration`, `compliance`, `scheduler`, `general`. Unknown/conflicting roles
+`configuration`, `compliance`, `scheduler`, `event_intake`, `general`. Unknown/conflicting roles
 fail startup; compose only the selected role's executors and secret dependencies.
 
 | Owner role | Exact job_type = capability_id (37 total) |
@@ -27,6 +27,7 @@ fail startup; compose only the selected role's executors and secret dependencies
 | configuration (5) | `cp_configuration_collect`, `pan_configuration_collect`, `fgt_configuration_collect`, `asa_configuration_collect`, `proxysg_configuration_collect` |
 | compliance (0) | No durable claim types; evaluation and cache owner |
 | scheduler (0) | No durable claim types; producers/notifications only |
+| event_intake (0) | No durable claim types; zero-claim event listener pod (`ui2-event-intake`) submitting matured triggers to `ui2-service` over internal HTTP with SHA-256 bearer token; zero device egress, zero credential/artefact store keys, narrow `ui2_event_intake` DB role with zero grants on `jobs`, `policy_collection_request`, `devices`, `credentials`, or `audit_log` |
 | general (temporary) | Exactly the union of modules explicitly assigned to fallback below |
 
 Admission validates the exact pair. Atomic claim SQL requires BOTH allow-lists,
@@ -46,6 +47,30 @@ Every change requires the §3 drain barrier, a compare-and-set generation change
 and a durable audit: module, old/new owner and flag, generation, actor fingerprint,
 PO authorization reference, reason, snapshot id and time. No raw account names.
 A failed module stays queued/alerted; fallback never means wildcard ownership.
+
+### Event intake zero-claim listener amendment, 2026-11-26
+
+Per [PO_DECISION_RECORD_2026_11_26_POLICY_CHANGE_EVENT_TRIGGER.md](PO_DECISION_RECORD_2026_11_26_POLICY_CHANGE_EVENT_TRIGGER.md)
+(`FROZEN — PO APPROVED 2026-11-26`), `Q8`, the contract status remains `FROZEN`
+with the addition of the zero-claim `event_intake` role (`ui2-event-intake`):
+
+- **Runtime and isolation boundaries (`Q8`):** Runs the same container image
+  under the `event_intake` entrypoint role with `PriorityClass: ui2-low`, zero
+  durable `jobs` claims, zero device-network egress, and zero
+  `ui2-credential-store-key`, `ui2-artefact-store-key`, or `/app/artefact-store`
+  PVC mounts. Matured triggers are submitted only via ClusterIP internal HTTP
+  (`POST /internal/event-triggers/submit`) to `ui2-service`, authenticated with
+  a mounted SHA-256-digested bearer token Secret. The narrow `ui2_event_intake`
+  DB role holds zero grants on `jobs`, `policy_collection_request`, `devices`,
+  `credentials`, or `audit_log` (`SELECT` only on enrollment projection plus
+  `SELECT/INSERT/UPDATE/DELETE` on its four intake tables, with
+  `audit_redaction_policy` Tier 1/2 entries).
+- **Deferred implementation artefacts (§2):** The companion SQL migration
+  (`module_runtime_control_module_check` / `ui2_event_intake` role),
+  `gate_registry` updates, Kubernetes manifests
+  (`deploy/ui2/46-database-networkpolicy.yaml` and pod deployment), and
+  `nftables` edits remain deferred until the 1-day SIEM fact-check settles
+  `Q1`/`Q9`.
 
 ## 2. Global endpoint admission
 
