@@ -149,6 +149,10 @@ export function invalidateSessionStatusCache(): void {
 
 export function resetSharedApiCache(): void {
   sharedCache.clear();
+  maskingEpoch += 1;
+  maskedSeen = false;
+  lastResponseMasked = false;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("nx-masked"));
 }
 
 function invalidateDevicesAfter<T>(work: Promise<T>): Promise<T> {
@@ -274,13 +278,14 @@ export async function call<T>(path: string, method: "GET" | "POST" | "PUT" | "PA
     if (businessHoursAck) headers[BUSINESS_HOURS_ACK_HEADER] = "true";
   }
   const timeoutMs = method === "GET" ? 20_000 : 60_000;
+  const epoch = maskingEpoch;
   const response = await fetchWithTimeout(path, {
     method,
     credentials: "include",
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   }, timeoutMs);
-  noteMasking(response);
+  if (epoch === maskingEpoch) noteMasking(response);
   const parsed = await withTimeout(response.json().catch(() => ({})), timeoutMs);
   if (!response.ok) {
     if (response.status === 409 && parsed.code === BUSINESS_HOURS_CONFIRM_REQUIRED && method !== "GET" && !businessHoursAck) {
@@ -314,6 +319,7 @@ export * from "./packetAnalysisApi";
  * The server marks a masked (aiview) response with `X-Nexus-Masked: true`; the shell shows the mask chip on every
  * screen from that header alone -- the browser never infers masking from a role token.
  */
+let maskingEpoch = 0;
 let maskedSeen = false;
 let lastResponseMasked = false;
 export function responsesAreMasked(): boolean {
@@ -2730,9 +2736,10 @@ export function getOfflineAnalysis(id: string): Promise<OfflineAnalysisResult> {
 }
 async function offlineMutation<T>(path: string, method: "POST" | "DELETE", body?: FormData): Promise<T> {
   const token = await csrfToken();
+  const epoch = maskingEpoch;
   const response = await fetchWithTimeout(path, { method, credentials: "include", body,
     headers: token ? { "X-CSRF-Token": token } : {} }, 600_000);
-  noteMasking(response);
+  if (epoch === maskingEpoch) noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) throw { status: response.status, body: parsed } satisfies ApiError;
   return parsed as T;
@@ -2898,9 +2905,10 @@ export const analyzePacketCase = (caseId: string) =>
 export const getPacketReport = (jobId: string) => call<PacketReport>(`${PA}/runs/${encodeURIComponent(jobId)}/report`, "GET");
 export async function deletePacketCase(caseId: string): Promise<{ deleted: boolean }> {
   const token = await csrfToken();
+  const epoch = maskingEpoch;
   const response = await fetchWithTimeout(`${PA}/cases/${encodeURIComponent(caseId)}`, { method: "DELETE", credentials: "include",
     headers: token ? { "X-CSRF-Token": token } : {} }, 60_000);
-  noteMasking(response);
+  if (epoch === maskingEpoch) noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) throw { status: response.status, body: parsed } satisfies ApiError;
   return parsed as { deleted: boolean };
@@ -2944,9 +2952,10 @@ export const alignPacketTelemetry = (telemetryId: string, alignment: PacketTelem
   call<PacketTelemetry>(`${PA}/telemetry/${encodeURIComponent(telemetryId)}`, "PUT", alignment);
 export async function deletePacketTelemetry(telemetryId: string): Promise<{ deleted: boolean }> {
   const token = await csrfToken();
+  const epoch = maskingEpoch;
   const response = await fetchWithTimeout(`${PA}/telemetry/${encodeURIComponent(telemetryId)}`, { method: "DELETE", credentials: "include",
     headers: token ? { "X-CSRF-Token": token } : {} }, 60_000);
-  noteMasking(response);
+  if (epoch === maskingEpoch) noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) throw { status: response.status, body: parsed } satisfies ApiError;
   return parsed as { deleted: boolean };
@@ -3593,9 +3602,10 @@ export async function getSystemLogText(chunkId: string, options: { readonly offs
   const q = new URLSearchParams({ offset: String(options.offset ?? 0) });
   if (options.limit) q.set("limit", String(options.limit));
   if (options.unmasked) q.set("unmasked", "true");
+  const epoch = maskingEpoch;
   const response = await fetchWithTimeout(`/api/v2/system-logs/chunks/${encodeURIComponent(chunkId)}/text?${q.toString()}`,
     { method: "GET", credentials: "include", headers: { Accept: "application/json, text/plain" } }, 30_000);
-  noteMasking(response);
+  if (epoch === maskingEpoch) noteMasking(response);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const error: ApiError = { status: response.status, body };
@@ -4313,12 +4323,13 @@ export function getScriptRun(runId: string): Promise<ScriptRunSummary> {
  * Amendment 2026-11-18 (b) item 11): records one audit row server-side before returning the masked UTF-8 capture.
  */
 export async function downloadScriptRunOutput(runId: string): Promise<string> {
+  const epoch = maskingEpoch;
   const response = await fetchWithTimeout(
     `/api/v2/scripts/runs/${encodeURIComponent(runId)}/output`,
     { credentials: "include" },
     60_000,
   );
-  noteMasking(response);
+  if (epoch === maskingEpoch) noteMasking(response);
   if (!response.ok) {
     const error: ApiError = { status: response.status, body: await response.json().catch(() => ({})) };
     throw error;

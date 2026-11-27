@@ -126,7 +126,7 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
       ) : state === "must-change-password" ? (
         <PasswordChangeScreen
           username={session.displayName ?? ""}
-          onChanged={() => checkSession(true).then(applyStatus)}
+          onChanged={() => { resetSharedApiCache(); return checkSession(true).then(applyStatus); }}
           onSignOut={handleSignOut}
         />
       ) : (

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CATEGORIES, digest, normalize, tokenVariants, Scanner, parseReference } from '../security/aiview_leak_audit/core.mjs';
-import { run } from '../security/aiview_leak_audit/probe.mjs';
+import { IdPool, run } from '../security/aiview_leak_audit/probe.mjs';
 
 const SALT = 'synthetic-salt';
 // Synthetic identities (reserved documentation names and addresses only).
@@ -237,4 +237,182 @@ test('scanner flags Zone Matrix violated-cell witness CIDR/range and reports 0 m
     violated_cells: [{ witness: { source_range: '10.77.8.64/28', destination_range: 'Withheld in AIView' } }],
   }));
   assert.equal(masked.size, 0);
+});
+
+// ---- Typed ID harvesting (numeric, short opaque codes) and cross-prefix route mapping ----
+
+function multiRouteHarness({ routes, respond, failPath } = {}) {
+  const calls = [];
+  const output = [];
+  const io = {
+    print: t => output.push(t),
+    pause: async () => {},
+    readText: path => (path.endsWith('routes.json')
+      ? JSON.stringify({ placeholder: 'synthetic-ref', routes })
+      : referenceText()),
+    request: async url => {
+      const u = new URL(url);
+      calls.push(u.pathname);
+      if (u.pathname === '/internal/machine-session') {
+        return new Response('{}', { status: 200, headers: { 'set-cookie': 'ui2_session=synthetic; HttpOnly' } });
+      }
+      if (u.pathname === '/session/status') {
+        return Response.json({ authenticated: true, role_tokens: ['role:replay_viewer'] });
+      }
+      if (failPath && failPath(u.pathname)) {
+        throw new Error(`upstream failed for ${u.pathname}`);
+      }
+      return respond(u.pathname);
+    },
+  };
+  return { calls, output, io };
+}
+
+test('numeric version_id and id resolve zone-matrix detail route without leaking into table or JSON output', async () => {
+  const h = multiRouteHarness({
+    routes: ['/api/v2/zone-matrix/versions', '/api/v2/zone-matrix/versions/synthetic-ref'],
+    respond: path => {
+      if (path === '/api/v2/zone-matrix/versions') {
+        return Response.json({ versions: [{ version_id: 42817, id: 42817, status: 'PUBLISHED' }] });
+      }
+      if (path === '/api/v2/zone-matrix/versions/42817') {
+        return Response.json({ version_id: 42817, zones: [] });
+      }
+      return Response.json({ error: 'not found' }, { status: 404 });
+    },
+  });
+  const tableResult = await run(args, env, h.io);
+  assert.ok(h.calls.includes('/api/v2/zone-matrix/versions/42817'));
+  assert.equal(tableResult.routes['/api/v2/zone-matrix/versions/synthetic-ref'].ok, 1);
+  assert.equal(tableResult.routes_without_ok_response.length, 0);
+  const tableText = h.output.join('');
+  assert.ok(!tableText.includes('42817'), 'numeric id leaked into table output');
+
+  const jsonOut = [];
+  await run([...args, '--json'], env, { ...h.io, print: t => jsonOut.push(t) });
+  assert.ok(!jsonOut.join('').includes('42817'), 'numeric id leaked into JSON output');
+});
+
+test('cross-prefix policy_id from policy/devices resolves policy detail routes instead of falling back to an unrelated UUID', async () => {
+  const UNRELATED_UUID = '99999999-8888-4777-8666-555555555555';
+  const POLICY_ID = 'pol-cross-prefix-771';
+  const DOMAIN_ID = 'dom-cross-prefix-882';
+  const DEVICE_ID = 'dev-cross-prefix-993';
+  const h = multiRouteHarness({
+    routes: [
+      '/api/v2/overview',
+      '/api/v2/policy/devices',
+      '/api/v2/policy/policies/synthetic-ref/proposal',
+      '/api/v2/policy/policies/synthetic-ref/hygiene',
+      '/api/v2/policy/domains/synthetic-ref/gateways',
+      '/api/v2/policy/devices/synthetic-ref',
+    ],
+    respond: path => {
+      if (path === '/api/v2/overview') return Response.json({ correlation_id: UNRELATED_UUID });
+      if (path === '/api/v2/policy/devices') {
+        return Response.json({
+          policies: [{ policy_id: POLICY_ID, domain_ref: DOMAIN_ID }],
+          devices: [{ deviceId: DEVICE_ID }],
+        });
+      }
+      if (path === `/api/v2/policy/policies/${POLICY_ID}/proposal`) return Response.json({ rules: [] });
+      if (path === `/api/v2/policy/policies/${POLICY_ID}/hygiene`) return Response.json({ classes: [] });
+      if (path === `/api/v2/policy/domains/${DOMAIN_ID}/gateways`) return Response.json({ gateways: [] });
+      if (path === `/api/v2/policy/devices/${DEVICE_ID}`) return Response.json({ policies: [] });
+      return Response.json({ error: 'not found' }, { status: 404 });
+    },
+  });
+  const result = await run([...args, '--details-per-route', '1'], env, h.io);
+  assert.ok(h.calls.includes(`/api/v2/policy/policies/${POLICY_ID}/proposal`));
+  assert.ok(h.calls.includes(`/api/v2/policy/policies/${POLICY_ID}/hygiene`));
+  assert.ok(h.calls.includes(`/api/v2/policy/domains/${DOMAIN_ID}/gateways`));
+  assert.ok(h.calls.includes(`/api/v2/policy/devices/${DEVICE_ID}`));
+  assert.ok(!h.calls.some(p => p.includes(UNRELATED_UUID)), 'fell back to unrelated UUID');
+  assert.equal(result.routes_without_ok_response.length, 0);
+  const text = h.output.join('');
+  for (const id of [UNRELATED_UUID, POLICY_ID, DOMAIN_ID, DEVICE_ID]) {
+    assert.ok(!text.includes(id), 'harvested identifier leaked into table output');
+  }
+});
+
+test('short compliance control IDs like CIS-1 resolve /api/v2/compliance/controls/synthetic-ref', async () => {
+  const h = multiRouteHarness({
+    routes: ['/compliance/controls', '/api/v2/compliance/controls/synthetic-ref'],
+    respond: path => {
+      if (path === '/compliance/controls') {
+        return Response.json({ controls: [{ control_id: 'CIS-1', status: 'active' }] });
+      }
+      if (path === '/api/v2/compliance/controls/CIS-1') {
+        return Response.json({ control_id: 'CIS-1', title: 'Synthetic Control' });
+      }
+      return Response.json({ error: 'not found' }, { status: 404 });
+    },
+  });
+  const result = await run(args, env, h.io);
+  assert.ok(h.calls.includes('/api/v2/compliance/controls/CIS-1'));
+  assert.equal(result.routes['/api/v2/compliance/controls/synthetic-ref'].ok, 1);
+  assert.ok(!h.output.join('').includes('CIS-1'), 'short control id leaked into output');
+});
+
+test('last_run_id harvested from /api/v2/scripts resolves /api/v2/scripts/runs/synthetic-ref', async () => {
+  const h = multiRouteHarness({
+    routes: ['/api/v2/scripts', '/api/v2/scripts/synthetic-ref', '/api/v2/scripts/runs/synthetic-ref'],
+    respond: path => {
+      if (path === '/api/v2/scripts') {
+        return Response.json({ scripts: [{ id: 'scr-health-01', last_run_id: 90125 }] });
+      }
+      if (path === '/api/v2/scripts/scr-health-01') return Response.json({ id: 'scr-health-01' });
+      if (path === '/api/v2/scripts/runs/90125') return Response.json({ run_id: 90125, state: 'COMPLETED' });
+      return Response.json({ error: 'not found' }, { status: 404 });
+    },
+  });
+  const result = await run(args, env, h.io);
+  assert.ok(h.calls.includes('/api/v2/scripts/scr-health-01'));
+  assert.ok(h.calls.includes('/api/v2/scripts/runs/90125'));
+  assert.equal(result.routes['/api/v2/scripts/runs/synthetic-ref'].ok, 1);
+  assert.equal(result.routes['/api/v2/scripts/synthetic-ref'].ok, 1);
+  assert.equal(result.routes['/api/v2/scripts/synthetic-ref'].client_error, 0);
+  const text = h.output.join('');
+  assert.ok(!text.includes('90125') && !text.includes('scr-health-01'), 'script or run id leaked into output');
+});
+
+test('IdPool indexes byKey, rejects boolean/status/whitespace/non-positive numbers, and zero IDs leak in table, JSON, or errors', async () => {
+  const pool = new IdPool();
+  pool.harvest('/api/v2/cp-failover/units', 'application/json', JSON.stringify({
+    units: [
+      { id: 'true', cluster_id: 'active', unit_id: 'bad space', clusterId: 'cls-alpha-09' },
+      { id: 0, version_id: -7, run_id: 3.14, ref: 'x' },
+    ],
+  }));
+  assert.deepEqual(pool.candidates('/clusters/synthetic-ref/inventory', 'synthetic-ref'), ['cls-alpha-09']);
+  assert.equal(pool.byKey.has('unit_id'), false);
+  assert.equal(pool.byKey.has('version_id'), false);
+  assert.equal(pool.byKey.has('run_id'), false);
+
+  const SECRET_ID = 'id-secret-leak-check-731';
+  const h = multiRouteHarness({
+    routes: ['/api/v2/zone-matrix/versions', '/api/v2/zone-matrix/versions/synthetic-ref'],
+    failPath: path => path.includes(SECRET_ID),
+    respond: path => {
+      if (path === '/api/v2/zone-matrix/versions') {
+        return Response.json({ versions: [{ version_id: SECRET_ID }] });
+      }
+      return Response.json({ error: 'not found' }, { status: 404 });
+    },
+  });
+  const jsonOut = [];
+  const res = await run([...args, '--json'], env, { ...h.io, print: t => jsonOut.push(t) });
+  assert.equal(res.routes['/api/v2/zone-matrix/versions/synthetic-ref'].other, 1);
+  assert.ok(!jsonOut.join('').includes(SECRET_ID), 'harvested ID leaked in JSON after fetch error');
+
+  const tableOut = [];
+  await run(args, env, { ...h.io, print: t => tableOut.push(t) });
+  assert.ok(!tableOut.join('').includes(SECRET_ID), 'harvested ID leaked in table after fetch error');
+
+  const failing = multiRouteHarness({
+    routes: ['/api/v2/zone-matrix/versions'],
+    failPath: () => true,
+  });
+  failing.io.request = async () => { throw new Error(`connection refused for ${SECRET_ID}`); };
+  await assert.rejects(run(args, env, failing.io));
 });
