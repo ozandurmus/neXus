@@ -60,8 +60,10 @@ import com.securityexpert.nexus.ui2.service.security.AiviewReachableRoutes;
  * every route the shared {@link AiviewReachableRoutes} calls aiview-reachable, and every planted raw value is counted in
  * every body. Output names route, status and value <em>class</em> with a count -- never a value.
  *
- * <p>Planes seeded: device lifecycle and licence facts (a member reference naming a host, a serial and an address, a
- * catalog row whose note and importer name a host and the administrator, an upload row), SNMP metric samples (raw,
+ * <p>Planes seeded: device lifecycle, licence facts and advisories (a member reference naming a host, a serial and an
+ * address, a catalog row whose note and importer name a host and the administrator, an upload row, plus synthetic
+ * advisories, product rules, known-exploited CVE, Check Point Jumbo statements/page load and feed runs across
+ * Check Point, Palo Alto, Fortinet, Cisco ASA and CISA KEV), SNMP metric samples (raw,
  * hourly and poll state), configuration-override notifications (summary and paths in free text), backup size-anomaly
  * records (free-text summary), and a Palo Alto policy whose rules name raw zones with the stored virtual-system zone set
  * of its firewall (read both on the policy views and on {@code GET /api/v2/operations/policy-install/status}, fired
@@ -95,10 +97,13 @@ class AiviewUnseededPlanesSweepTest {
 
     /** Views that must show seeded rows (by marker), so a zero count is a count over real data and not an empty page. */
     static final Map<String, Set<String>> COVERAGE = Map.ofEntries(
-            Map.entry("GET /api/v2/lifecycle", Set.of("device", "license-item")),
-            Map.entry("GET /devices/*/lifecycle", Set.of("device", "license-item")),
+            Map.entry("GET /api/v2/lifecycle", Set.of("device", "license-item", "vulnerabilities-evaluated")),
+            Map.entry("GET /devices/*/lifecycle", Set.of("device", "license-item", "vulnerabilities-evaluated")),
             Map.entry("GET /api/v2/lifecycle/catalog", Set.of("catalog-entry")),
             Map.entry("GET /api/v2/lifecycle/catalog-sources", Set.of("catalog-upload")),
+            Map.entry("GET /api/v2/lifecycle/advisories", Set.of("advisory", "advisory-affected-count")),
+            Map.entry("GET /api/v2/lifecycle/advisories/*", Set.of("advisory", "device", "advisory-affected-verdict")),
+            Map.entry("GET /api/v2/lifecycle/advisory-sources", Set.of("advisory-feed-run", "advisory-source-fresh")),
             Map.entry("GET /notifications", Set.of("notification")),
             Map.entry("GET /api/v2/backups/deviations", Set.of("size-anomaly")),
             Map.entry("GET /api/v2/policy/policies/*", Set.of("pan-policy", "pan-rule")),
@@ -301,22 +306,31 @@ class AiviewUnseededPlanesSweepTest {
             String credential = Ui2Rows.insertCredentialReference(c);
             audited(c, Ui2Rows.ACTOR, () -> {
                 for (Device d : e.devices()) {
+                    String softwareVersion = switch (d.vendor()) {
+                        case "check_point" -> "R81.20";
+                        case "palo_alto" -> "11.1.4-h1";
+                        case "cisco_asa" -> "9.18(4)22";
+                        case "fortinet" -> "v7.4.8 build2795";
+                        default -> "R81.20";
+                    };
+                    String hotfixLevel = "check_point".equals(d.vendor()) ? "R81.20 Jumbo Take 119" : null;
                     exec(c, "insert into devices(device_id, vendor_hint, registration_source, is_test_target, enrollment_state, "
                             + "disabled, credential_reference_id, role, identity_mismatch_state, peer_follow_outcome, "
                             + "observed_hostname, observed_model, observed_software_version, observed_ha_role, "
                             + "recorded_identity_primary, recorded_identity_recorded_at, cluster_member_ref, backup_target, "
                             + "discovery_match_key) values (?, ?, 'manual', true, 'ENROLLED', false, ?, ?, 'NONE', ?, ?, "
-                            + "'synthetic-model', 'R81.20', ?, ?, now(), ?, true, ?)",
+                            + "'synthetic-model', ?, ?, ?, now(), ?, true, ?)",
                             d.id(), d.vendor(), credential, d.role(), d.cluster() == null ? "NONE" : "CORROBORATED",
-                            d.hostname(), d.cluster() == null ? null : "active", d.serial(), d.cluster(),
+                            d.hostname(), softwareVersion, d.cluster() == null ? null : "active", d.serial(), d.cluster(),
                             d.vendor() + "|" + d.serial());
                     exec(c, "insert into endpoints(endpoint_id, device_id, transport_kind, address_ref) values (?, ?, 'ssh_exec', ?)",
                             Ui2Rows.opaqueId("ep"), d.id(), d.address());
-                    exec(c, "insert into device_platform_facts(device_id, serial_number, platform_family, source_read) "
-                            + "values (?, ?, 'synthetic', 'synthetic_seed')", d.id(), d.serial());
+                    exec(c, "insert into device_platform_facts(device_id, serial_number, hotfix_level, platform_family, source_read) "
+                            + "values (?, ?, ?, 'synthetic', 'synthetic_seed')", d.id(), d.serial(), hotfixLevel);
                 }
             });
             seedLifecycle(c, e);
+            seedAdvisories(c, e);
             seedSnmpMetrics(c, e);
             seedBackupDeviation(c, e);
             seedPanPolicy(c, e);
@@ -356,6 +370,88 @@ class AiviewUnseededPlanesSweepTest {
             ids.put("uploadId", upload);
         });
         ids.put("licenseMarker", "Synthetic Blade " + ids.get("licenseTag"));
+    }
+
+    /**
+     * Advisories and advisory sources (V205, V214): synthetic public advisories, product rules, known-exploited CVE,
+     * Check Point Jumbo resolved-issues statement/page load, a Check Point Live Patch label row, and OK feed runs for
+     * every source matching the seeded estate devices.
+     */
+    private static void seedAdvisories(Connection c, Estate e) throws Exception {
+        String cpAdvId = "checkpoint:CVE-2026-99002";
+        String panAdvId = "paloalto:CVE-2026-99001";
+        String fgtAdvId = "fortinet:FG-IR-26-99003";
+        String ciscoAdvId = "cisco:cisco-sa-asa-synth-99004";
+
+        String cpRule = "{\"v\":1,\"rules\":[{\"k\":\"range\",\"status\":\"AFFECTED\",\"from\":null,"
+                + "\"to\":\"R81.20 Jumbo Take 119\",\"toInclusive\":true,\"changes\":[]}]}";
+        String panRule = "{\"v\":1,\"rules\":[{\"k\":\"range\",\"status\":\"AFFECTED\",\"from\":\"11.1.0\","
+                + "\"to\":\"11.1.10\",\"toInclusive\":false,\"changes\":[]}]}";
+        String fgtRule = "{\"v\":1,\"rules\":[{\"k\":\"range\",\"status\":\"AFFECTED\",\"from\":\"7.4.0\","
+                + "\"to\":\"7.4.9\",\"toInclusive\":false,\"changes\":[]}]}";
+        String ciscoRule = "{\"v\":1,\"rules\":[{\"k\":\"exact\",\"status\":\"AFFECTED\","
+                + "\"versions\":[\"9.18.4.22\"]}]}";
+
+        // Advisory tables carry no audit trigger (machine-ingested public data, V205 / V214).
+        for (String src : List.of("checkpoint", "paloalto", "fortinet", "cisco", "cisa_kev")) {
+            exec(c, "insert into advisory_feed_run(run_id, source, started_at, ended_at, outcome, "
+                    + "documents_received, rejected, advisories_stored, advisories_needing_review, "
+                    + "documents_fetched, documents_failed) values (?, ?, now() - interval '10 minutes', "
+                    + "now() - interval '9 minutes', 'OK', 1, 0, 1, 0, 1, 0)",
+                    "advrun-" + src + "-" + hex(4), src);
+        }
+
+        exec(c, "insert into checkpoint_jumbo_statement(train, take, cve_id, kind, product_text, sk_ref, evidence, "
+                + "source_url, content_sha256) values ('R81.20', 120, 'CVE-2026-99002', 'FIX', 'Security Gateway', "
+                + "'sk999999', 'Resolved CVE-2026-99002. Refer to sk999999.', "
+                + "'https://sc1.checkpoint.com/documents/Jumbo_HFA/R81.20/All_Resolved_Issues.html', ?)",
+                "c".repeat(64));
+        exec(c, "insert into checkpoint_jumbo_page_load(train, loaded_at, statements, source_url, content_sha256) "
+                + "values ('R81.20', now(), 1, "
+                + "'https://sc1.checkpoint.com/documents/Jumbo_HFA/R81.20/All_Resolved_Issues.html', ?)",
+                "c".repeat(64));
+
+        exec(c, "insert into advisory(advisory_id, source, title, severity, cvss_score, cve_ids, published_on, "
+                + "updated_on, source_url, parse_state, content_sha256) values "
+                + "(?, 'checkpoint', 'Synthetic Check Point Gaia Gateway Advisory', 'HIGH', 8.6, "
+                + "ARRAY['CVE-2026-99002'], current_date - 12, current_date - 6, "
+                + "'https://support.checkpoint.com/results/sk/sk999999', 'PARSED', ?), "
+                + "(?, 'paloalto', 'Synthetic PAN-OS Management Plane Advisory', 'CRITICAL', 9.8, "
+                + "ARRAY['CVE-2026-99001'], current_date - 10, current_date - 5, "
+                + "'https://security.paloaltonetworks.com/CVE-2026-99001', 'PARSED', ?), "
+                + "(?, 'fortinet', 'Synthetic FortiOS Advisory', 'HIGH', 8.1, "
+                + "ARRAY['CVE-2026-99003'], current_date - 9, current_date - 4, "
+                + "'https://www.fortiguard.com/psirt/FG-IR-26-99003', 'PARSED', ?), "
+                + "(?, 'cisco', 'Synthetic Cisco ASA Advisory', 'HIGH', 7.8, "
+                + "ARRAY['CVE-2026-99004'], current_date - 8, current_date - 3, "
+                + "'https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asa-synth-99004', "
+                + "'PARSED', ?)",
+                cpAdvId, "b".repeat(64),
+                panAdvId, "a".repeat(64),
+                fgtAdvId, "d".repeat(64),
+                ciscoAdvId, "e".repeat(64));
+
+        exec(c, "insert into advisory_product_rule(advisory_id, product_key, train, rule, fixed_text) values "
+                + "(?, 'checkpoint:gaia-gateway', 'R81.20', ?, 'R81.20 Jumbo Take 120'), "
+                + "(?, 'paloalto:pan-os', '11.1', ?, 'Upgrade to PAN-OS 11.1.10'), "
+                + "(?, 'fortinet:fortios', '7.4', ?, 'Upgrade to FortiOS 7.4.9 or above'), "
+                + "(?, 'cisco:asa', '9.18', ?, 'Upgrade to Cisco ASA 9.18.4.50')",
+                cpAdvId, cpRule,
+                panAdvId, panRule,
+                fgtAdvId, fgtRule,
+                ciscoAdvId, ciscoRule);
+
+        exec(c, "insert into known_exploited_cve(cve_id, date_added, ransomware_use) values "
+                + "('CVE-2026-99001', current_date - 7, true)");
+
+        exec(c, "insert into device_live_patch_item(device_id, patch_id, status, mode, pids_running, pids_total, refs) "
+                + "values (?, 'HF_SYNTH_01', 'armed', 'user', 2, 2, ARRAY['CVE-2026-99002'])", e.cpA().id());
+
+        ids.put("advisoryId", cpAdvId);
+        ids.put("cpAdvisoryId", cpAdvId);
+        ids.put("panAdvisoryId", panAdvId);
+        ids.put("fgtAdvisoryId", fgtAdvId);
+        ids.put("ciscoAdvisoryId", ciscoAdvId);
     }
 
     /** SNMP metrics (V268): poll state, 36 raw samples over three days and the hourly roll-up of each gateway. */
@@ -676,6 +772,7 @@ class AiviewUnseededPlanesSweepTest {
         byName.put("clusterMemberRef", e.cpA().cluster());
         byName.put("clusterRef", e.cpA().cluster());
         byName.put("clusterId", e.cpA().cluster());
+        if (template.startsWith("/api/v2/lifecycle/advisories/")) byName.put("id", ids.get("advisoryId"));
         if (template.startsWith("/api/v2/policy/policies/")) byName.put("id", e.policyId());
         if (template.startsWith("/api/v2/policy/devices/")) byName.put("id", e.panorama().id());
         if (template.startsWith("/api/v2/policy/domains/")) byName.put("id", e.domainId());
@@ -783,6 +880,12 @@ class AiviewUnseededPlanesSweepTest {
         markers.put(ids.get("licenseMarker"), "license-item");
         markers.put(e.catalogProduct(), "catalog-entry");
         markers.put(ids.get("uploadId"), "catalog-upload");
+        markers.put(ids.get("advisoryId"), "advisory");
+        markers.put("\"affected\":2", "advisory-affected-count");
+        markers.put("\"verdict\":\"AFFECTED\"", "advisory-affected-verdict");
+        markers.put("\"outcome\":\"OK\"", "advisory-feed-run");
+        markers.put("\"age_state\":\"OK\"", "advisory-source-fresh");
+        markers.put("\"state\":\"EVALUATED\"", "vulnerabilities-evaluated");
         markers.put(ids.get("notificationId"), "notification");
         markers.put(ids.get("deviationId"), "size-anomaly");
         markers.put("\"source\":\"SNMP\"", "snmp-metrics");
@@ -800,10 +903,16 @@ class AiviewUnseededPlanesSweepTest {
         // The planes' own routes go first: free-text masking learns names as responses mask them, so a plane read later
         // in a warm process proves less than the first read after the estate loaded (the cold case).
         List<Map.Entry<String, String>> ordered = new ArrayList<>();
-        for (String first : List.of("GET /notifications", "GET /api/v2/operations/policy-install/status")) {
+        List<String> coldFirst = List.of(
+                "GET /notifications",
+                "GET /api/v2/operations/policy-install/status",
+                "GET /api/v2/lifecycle/advisories",
+                "GET /api/v2/lifecycle/advisories/*",
+                "GET /api/v2/lifecycle/advisory-sources");
+        for (String first : coldFirst) {
             ordered.add(Map.entry(first, templates.get(first)));
         }
-        templates.forEach((key, template) -> { if (!List.of("GET /notifications", "GET /api/v2/operations/policy-install/status").contains(key)) ordered.add(Map.entry(key, template)); });
+        templates.forEach((key, template) -> { if (!coldFirst.contains(key)) ordered.add(Map.entry(key, template)); });
         for (var entry : ordered) {
             Resp resp = get(target(entry.getValue()), cookie);
             status.put(entry.getKey(), resp.status());
@@ -920,6 +1029,82 @@ class AiviewUnseededPlanesSweepTest {
                 "FortiGate hygiene CSV must include redundant shadow finding and covering rule ID");
         assertTrue(count(fgtCsv.body(), e.raw()).isEmpty(),
                 "FortiGate hygiene CSV leaked raw classes: " + count(fgtCsv.body(), e.raw()));
+    }
+
+    @Test
+    void allSeededVendorAdvisoriesAndLifecycleVulnerabilitiesLeakZeroRawValuesInAiview() throws Exception {
+        String cookie = login();
+        Estate e = estate;
+
+        Resp list = get("/api/v2/lifecycle/advisories", cookie);
+        assertEquals(200, list.status(), "advisories list");
+        for (String key : List.of("cpAdvisoryId", "panAdvisoryId", "fgtAdvisoryId", "ciscoAdvisoryId")) {
+            String advId = ids.get(key);
+            assertTrue(list.body().contains(advId), "advisories list must include " + advId);
+        }
+        assertTrue(list.body().contains("\"exploited\":true"), "KEV-flagged advisory must report exploited=true");
+        assertTrue(count(list.body(), e.raw()).isEmpty(),
+                "advisories list leaked raw classes: " + count(list.body(), e.raw()));
+
+        Map<String, String> expectedVersion = Map.of(
+                "cpAdvisoryId", "R81.20 Jumbo Take 119",
+                "panAdvisoryId", "11.1.4-h1",
+                "fgtAdvisoryId", "v7.4.8 build2795",
+                "ciscoAdvisoryId", "9.18(4)22");
+        for (var entry : expectedVersion.entrySet()) {
+            String advId = ids.get(entry.getKey());
+            Resp detail = get("/api/v2/lifecycle/advisories/"
+                    + java.net.URLEncoder.encode(advId, StandardCharsets.UTF_8), cookie);
+            assertEquals(200, detail.status(), "advisory detail " + advId);
+            var root = JSON.readTree(detail.body());
+            assertEquals(advId, root.path("advisory").path("advisory_id").asText(), "advisory_id");
+            assertTrue(root.path("advisory").path("source_url").asText("").startsWith("https://"),
+                    "allowed https source_url preserved for " + advId);
+            var devices = root.path("devices");
+            assertTrue(devices.isArray() && !devices.isEmpty(), "affected devices present for " + advId);
+            boolean sawAffected = false;
+            for (var d : devices) {
+                assertTrue(d.path("hostname").asText("").startsWith("FW-"),
+                        "advisory detail device hostname pseudonymized for " + advId);
+                assertEquals(entry.getValue(), d.path("version").asText(),
+                        "product version preserved intact for " + advId);
+                if ("AFFECTED".equals(d.path("verdict").asText())) sawAffected = true;
+            }
+            assertTrue(sawAffected, "at least one AFFECTED verdict for " + advId);
+            if ("cpAdvisoryId".equals(entry.getKey())) {
+                assertTrue(detail.body().contains("\"patch\":\"HF_SYNTH_01\""),
+                        "Check Point advisory detail must include live_patch label");
+            }
+            assertTrue(count(detail.body(), e.raw()).isEmpty(),
+                    "advisory detail " + advId + " leaked raw classes: " + count(detail.body(), e.raw()));
+        }
+
+        Resp sources = get("/api/v2/lifecycle/advisory-sources", cookie);
+        assertEquals(200, sources.status(), "advisory sources");
+        var srcArr = JSON.readTree(sources.body()).path("sources");
+        assertEquals(5, srcArr.size(), "all five advisory sources returned");
+        for (var s : srcArr) {
+            assertEquals("OK", s.path("outcome").asText(), "source outcome OK for " + s.path("source").asText());
+            assertEquals("OK", s.path("age_state").asText(), "source age_state OK for " + s.path("source").asText());
+        }
+        assertTrue(count(sources.body(), e.raw()).isEmpty(),
+                "advisory sources leaked raw classes: " + count(sources.body(), e.raw()));
+
+        Resp fleetLifecycle = get("/api/v2/lifecycle", cookie);
+        assertEquals(200, fleetLifecycle.status(), "fleet lifecycle");
+        assertTrue(fleetLifecycle.body().contains("\"vulnerabilities\"")
+                && fleetLifecycle.body().contains("\"state\":\"EVALUATED\""),
+                "fleet lifecycle must include evaluated vulnerabilities block");
+        assertTrue(count(fleetLifecycle.body(), e.raw()).isEmpty(),
+                "fleet lifecycle leaked raw classes: " + count(fleetLifecycle.body(), e.raw()));
+
+        Resp devLifecycle = get("/devices/" + e.cpA().id() + "/lifecycle", cookie);
+        assertEquals(200, devLifecycle.status(), "device lifecycle");
+        var devVuln = JSON.readTree(devLifecycle.body()).path("vulnerabilities");
+        assertEquals("EVALUATED", devVuln.path("state").asText(), "cpA vulnerabilities state EVALUATED");
+        assertEquals(1, devVuln.path("affected").asInt(), "cpA affected advisory count");
+        assertTrue(count(devLifecycle.body(), e.raw()).isEmpty(),
+                "device lifecycle leaked raw classes: " + count(devLifecycle.body(), e.raw()));
     }
 
     /** The counter itself: an address is not matched as the prefix of a longer address, names match case-insensitively. */

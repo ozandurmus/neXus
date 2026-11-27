@@ -15,6 +15,7 @@ import { StatePanel } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { TYPE } from "../../theme/tokens";
 import type { ZoneTabProps } from "./ZoneMatrixScreen";
+import { decomposeIpRange } from "./cidrDecomposition";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
   ZONE_ROLES, addressCount, createZone, deleteZone, getZoneVersion, lookupZoneAddress, updateZone, zoneErrorCode, zoneErrorLines,
@@ -329,9 +330,23 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
   const [description, setDescription] = useState(zone?.description ?? "");
   const [role, setRole] = useState(zone?.role ?? "");
   const [blocks, setBlocks] = useState((zone?.blocks ?? []).join("\n"));
+  const [rangeInput, setRangeInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<readonly string[]>([]);
   const lines = blockLines(blocks);
+  const decomposition = useMemo(
+    () => (rangeInput.trim() === "" ? null : decomposeIpRange(rangeInput)),
+    [rangeInput],
+  );
+  const appendDecomposed = () => {
+    if (!decomposition || !decomposition.ok) return;
+    const appended = decomposition.cidrs.join("\n");
+    setBlocks((prev) => {
+      if (prev.trim() === "") return appended;
+      return prev.endsWith("\n") ? `${prev}${appended}` : `${prev}\n${appended}`;
+    });
+    setRangeInput("");
+  };
   const save = async () => {
     const input = { name: name.trim(), description: description.trim() === "" ? null : description.trim(), role: role === "" ? null : role, blocks: lines };
     setBusy(true); setErrors([]);
@@ -363,6 +378,43 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
         </TextField>
         <TextField label="Blocks" multiline minRows={6} maxRows={16} value={blocks} onChange={(e) => setBlocks(e.target.value)}
           placeholder={"192.0.2.0/24\n2001:db8::/32"} helperText={`${lines.length} ${lines.length === 1 ? "block" : "blocks"}. ${CANONICAL_BLOCK_NOTE}`} InputProps={{ sx: mono }} />
+        <Box data-testid="cidr-decomposition-helper" sx={{ ...panelSx, p: 1.5 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>Decompose IP range</Typography>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+            Convert an inclusive start-end range into exact canonical CIDR blocks and review them before adding.
+          </Typography>
+          <TextField
+            size="small"
+            label="IP range (start-end)"
+            placeholder="192.0.2.10-192.0.2.25 or 2001:db8::1-2001:db8::10"
+            value={rangeInput}
+            onChange={(e) => setRangeInput(e.target.value)}
+            InputProps={{ sx: mono }}
+          />
+          {decomposition && !decomposition.ok ? (
+            <Typography variant="body2" role="alert" sx={{ color: m3.error }}>{decomposition.error}</Typography>
+          ) : null}
+          {decomposition && decomposition.ok ? (
+            <Box data-testid="cidr-decomposition-preview" sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }} title={decomposition.addressCount.toString()}>
+                {decomposition.cidrs.length} canonical {decomposition.cidrs.length === 1 ? "CIDR block" : "CIDR blocks"} (
+                {addressCount(decomposition.addressCount.toString())} {decomposition.addressCount === 1n ? "address" : "addresses"})
+              </Typography>
+              <Box component="ul" aria-label="Decomposed CIDR preview" sx={{ m: 0, pl: 2.5, ...mono }}>
+                {decomposition.cidrs.map((cidr) => <li key={cidr}>{cidr}</li>)}
+              </Box>
+            </Box>
+          ) : null}
+          <Stack direction="row" justifyContent="flex-start">
+            <M3Button
+              emphasis="tonal"
+              disabled={busy || !decomposition || !decomposition.ok}
+              onClick={appendDecomposed}
+            >
+              Add decomposed CIDRs to blocks
+            </M3Button>
+          </Stack>
+        </Box>
         {errors.length > 0 ? (
           <Box role="alert" sx={{ color: m3.error }}>
             {errors.map((line, index) => <Typography key={index} variant="body2" sx={{ fontWeight: index === 0 ? 600 : 400 }}>{line}</Typography>)}
