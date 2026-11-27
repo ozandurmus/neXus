@@ -3,6 +3,28 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0424",
+      "status": "automated_validated",
+      "title": "Policy change event trigger pure components (not wired), aiview sweep advisories, hygiene.csv and zone matrix refusal planes, zone matrix zone CIDR decomposition, runner fixes",
+      "summary": "Event trigger building blocks landed as pure Java and tooling with no listener, route, migration or deployed pod: webhook envelope verifier (866b8ff1), kill-switch and aiview projection (6bbde983), internal submit bearer verifier (3163afa7)",
+      "started": "2026-11-26",
+      "completed": "2026-11-27",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0424.md"
+    },
+    {
+      "build": "NXS-LOCAL-0423",
+      "status": "automated_validated",
+      "title": "Policy Insights proposal route and I5 merges, Palo Alto engine support, zone matrix Violations and Evaluate fixes, hygiene pins, real-environment checklists, aiview sweep round 10, V274/V275",
+      "summary": "Policy Insights gained the read-only proposal route (fd923900), I5 merges inside the reorder-only proposal engine (a845e91c) and Palo Alto pure-engine support (a9d144ed); zone matrix Violations and Evaluate tabs, Open in Trace links and neg",
+      "started": "2026-11-26",
+      "completed": "2026-11-26",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0423.md"
+    },
+    {
       "build": "NXS-LOCAL-0422",
       "status": "automated_validated",
       "title": "Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening",

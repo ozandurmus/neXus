@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-27T20:51:06Z
+Build: NXS-LOCAL-0424 · Track: PCP.x · Generated: 2026-11-27T22:13:57Z
 
 ## Now
-- NXS-LOCAL-0422 — Policy Insights I7 safe reorder and reorder-only proposal engine, zone matrix ZM-26 fix and traceability reconciliation, SarParser fix, aiview topology context masking, delivery runner hardening (automated_validated)
+- NXS-LOCAL-0424 — Policy change event trigger pure components (not wired), aiview sweep advisories, hygiene.csv and zone matrix refusal planes, zone matrix zone CIDR decomposition, runner fixes (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -165,8 +165,8 @@ Build: NXS-LOCAL-0422 · Track: PCP.x · Generated: 2026-11-27T20:51:06Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0424 (automated_validated)
+- NXS-LOCAL-0423 (automated_validated)
 - NXS-LOCAL-0422 (automated_validated)
 - NXS-LOCAL-0421 (automated_validated)
 - NXS-LOCAL-0420 (automated_validated)
-- NXS-LOCAL-0419 (automated_validated)
-- NXS-LOCAL-0418 (automated_validated)
