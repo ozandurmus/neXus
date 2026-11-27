@@ -572,4 +572,148 @@ class PanoramaPolicyCollectorTest {
             ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository).collect(normalized, scope, () -> true).size());
     }
 
+    @Test void optionsDefaultPreservesExistingAllDgAndHitCountBehaviour() throws Exception {
+        GateRegistryPort signed = key -> gates.findByCanonicalKey(key).stream().map(r -> r.gateId().equals("pan_policy_rule_hit_count")
+                ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                    r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                    r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        var replies = responses();
+        replies.add(success("<key>synthetic-member-key</key>"));
+        replies.add(success("<rule-hit-count><vsys><entry name='vsys1'><rule-base><entry name='security'><rules>"
+                + "<entry name='Synthetic child pre'><hit-count>5</hit-count><last-hit-timestamp>100</last-hit-timestamp></entry>"
+                + "</rules></entry></rule-base></entry></vsys></rule-hit-count>"));
+        when(repository.panTargets("run-1", "manager-1", "synthetic-member-01", "vsys1", "IN_SYNC"))
+                .thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "vsys1", "IN_SYNC")));
+        when(repository.panFirewall("device-1")).thenReturn(Optional.of(new PolicyCollectionRepository.FirewallEndpoint("192.0.2.20", "synthetic-ref")));
+        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+        var transport = mock(DeviceTransport.class);
+        var index = new AtomicInteger();
+        doAnswer(call -> {
+            int i = index.getAndIncrement();
+            var target = (ApiTarget) call.getArgument(0);
+            assertEquals(i < 6 ? "192.0.2.10" : "192.0.2.20", target.baseUrl());
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(replies.get(i).getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var snapshots = new PanoramaPolicyCollector(transport, signed, ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository)
+                .collect(run, scope, () -> true, PanoramaPolicyCollector.Options.DEFAULT);
+        assertEquals(2, snapshots.size());
+        var counted = snapshots.stream().flatMap(s -> s.sections().stream()).flatMap(s -> s.rules().stream())
+                .filter(r -> r.uuid().equals("uuid-03")).findFirst().orElseThrow();
+        assertEquals(5L, counted.hitCounts().hits());
+        assertEquals("device", counted.hitCounts().source());
+        assertEquals(8, index.get());
+    }
+
+    @Test void skipHitsProducesExpectedSnapshotWithZeroFirewallHitCountReads() throws Exception {
+        GateRegistryPort signed = key -> gates.findByCanonicalKey(key).stream().map(r -> r.gateId().equals("pan_policy_rule_hit_count")
+                ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                    r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                    r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        var replies = responses();
+        when(repository.panTargets("run-1", "manager-1", "synthetic-member-01", "vsys1", "IN_SYNC"))
+                .thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "vsys1", "IN_SYNC")));
+        when(repository.panFirewall("device-1")).thenReturn(Optional.of(new PolicyCollectionRepository.FirewallEndpoint("192.0.2.20", "synthetic-ref")));
+        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+        var transport = mock(DeviceTransport.class);
+        var index = new AtomicInteger();
+        var targetsSeen = new ArrayList<String>();
+        doAnswer(call -> {
+            int i = index.getAndIncrement();
+            var target = (ApiTarget) call.getArgument(0);
+            targetsSeen.add(target.baseUrl());
+            assertEquals("192.0.2.10", target.baseUrl(), "skipHits must contact Panorama only");
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(replies.get(i).getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var natSettings = new PolicyCompletenessSettings(Optional.empty(), Optional.empty(), Optional.of("device-1"));
+        var openWindow = new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
+                java.time.Clock.fixed(java.time.Instant.parse("2026-10-18T03:05:00Z"), java.time.ZoneOffset.UTC), 60);
+        var snapshots = new PanoramaPolicyCollector(transport, signed, ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository)
+                .withCompleteness(natSettings, openWindow, null)
+                .collect(run, scope, () -> true, new PanoramaPolicyCollector.Options(true, false));
+        assertEquals(2, snapshots.size());
+        assertTrue(snapshots.stream().allMatch(s -> s.failures().isEmpty()));
+        var child = snapshots.stream().filter(s -> s.metadata().containerName().equals("Synthetic child")).findFirst().orElseThrow();
+        assertEquals(List.of("uuid-01", "uuid-02", "uuid-03", "uuid-04", "uuid-05", "uuid-06"), child.sections().stream()
+                .flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
+        assertTrue(snapshots.stream().flatMap(s -> s.sections().stream()).flatMap(s -> s.rules().stream()).allMatch(r -> r.hitCounts() == null));
+        assertEquals(6, index.get());
+        assertEquals(Set.of("192.0.2.10"), new HashSet<>(targetsSeen));
+        verify(repository, never()).panFirewall(anyString());
+        verify(repository, never()).beginDomain(anyString(), anyString(), anyBoolean());
+    }
+
+    @Test void ancestorOnlyDownloadsSharedAndAncestorChainAndSkipsUnrelatedSibling() throws Exception {
+        String rule = "<pre-rulebase><security><rules><entry name='RULE-%s' uuid='uuid-%s'><from><member>ZONE-IN</member></from>"
+            + "<to><member>ZONE-OUT</member></to><source>%s</source><destination><member>any</member></destination>"
+            + "<service><member>any</member></service><application><member>any</member></application><action>allow</action>"
+            + "</entry></rules></security></pre-rulebase>";
+        java.util.function.BiFunction<String, String, String> address = (name, value) ->
+            "<entry name='" + name + "'><ip-netmask>" + value + "</ip-netmask></entry>";
+        Map<String, String> byXpath = Map.of(
+            "/config/shared", success("<shared><address>" + address.apply("OBJ-SHARED", "192.0.2.10/32") + "</address></shared>"),
+            "/config/devices/entry[@name='localhost.localdomain']/device-group/entry[@name='parent-dg']",
+                success("<entry name='parent-dg'><address>" + address.apply("OBJ-PARENT", "198.51.100.1/32") + "</address>"
+                    + String.format(rule, "PARENT", "parent", "<member>OBJ-PARENT</member>") + "</entry>"),
+            "/config/devices/entry[@name='localhost.localdomain']/device-group/entry[@name='child-dg']",
+                success("<entry name='child-dg'><address>" + address.apply("OBJ-CHILD", "198.51.100.2/32") + "</address>"
+                    + String.format(rule, "CHILD", "child", "<member>OBJ-SHARED</member><member>OBJ-PARENT</member><member>OBJ-CHILD</member>") + "</entry>")
+        );
+        var transport = mock(DeviceTransport.class);
+        List<XmlApiSpec> sent = new ArrayList<>();
+        doAnswer(call -> {
+            XmlApiSpec spec = call.getArgument(1);
+            sent.add(spec);
+            String reply;
+            if ("keygen".equals(spec.type())) reply = success("<key>synthetic-key</key>");
+            else if ("<show><devicegroups/></show>".equals(spec.formParams().get("cmd")))
+                reply = success("<devicegroups><entry name='parent-dg'/><entry name='child-dg'/><entry name='other-dg'/></devicegroups>");
+            else if ("<show><dg-hierarchy></dg-hierarchy></show>".equals(spec.formParams().get("cmd")))
+                reply = success("<dg-hierarchy><dg name='parent-dg'><dg name='child-dg'/></dg><dg name='other-dg'/></dg-hierarchy>");
+            else {
+                String xpath = spec.formParams().get("xpath");
+                assertFalse(xpath.contains("other-dg"), "other-dg must not be requested");
+                reply = Objects.requireNonNull(byXpath.get(xpath), "unexpected xpath: " + xpath);
+            }
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(reply.getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var targetScope = new PolicyCollectionRepository.Request("manager-1", PolicySnapshot.ref("manager-1", "device-group", "child-dg"), false);
+        var snapshots = new PanoramaPolicyCollector(transport, gates, ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository)
+                .collect(run, targetScope, () -> true, new PanoramaPolicyCollector.Options(true, true));
+        assertEquals(1, snapshots.size());
+        var child = snapshots.get(0);
+        assertEquals("child-dg", child.metadata().containerName());
+        assertTrue(child.failures().isEmpty());
+        assertEquals(List.of("RULE-PARENT", "RULE-CHILD"), child.sections().stream().flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::name).toList());
+        List<String> configXpaths = sent.stream().filter(s -> "config".equals(s.type())).map(s -> s.formParams().get("xpath")).toList();
+        assertEquals(List.of(
+                "/config/shared",
+                "/config/devices/entry[@name='localhost.localdomain']/device-group/entry[@name='parent-dg']",
+                "/config/devices/entry[@name='localhost.localdomain']/device-group/entry[@name='child-dg']"),
+                configXpaths);
+        assertTrue(sent.stream().noneMatch(s -> s.formParams().getOrDefault("xpath", "").contains("other-dg")));
+    }
+
+    @Test void ancestorOnlyWithEmptyDomainRefKeepsFullHierarchyBehaviour() throws Exception {
+        List<XmlApiSpec> sent = new ArrayList<>();
+        var snapshots = collector(responses(), sent, new char[0])
+                .collect(run, scope, () -> true, new PanoramaPolicyCollector.Options(false, true));
+        assertEquals(2, snapshots.size());
+        assertEquals(6, sent.size());
+    }
+
+    @Test void ancestorOnlyWithAbsentDomainRefFailsClosedBeforeConfigDownload() throws Exception {
+        List<XmlApiSpec> sent = new ArrayList<>();
+        List<PolicySnapshot> published = new ArrayList<>();
+        var absentScope = new PolicyCollectionRepository.Request("manager-1", PolicySnapshot.ref("manager-1", "device-group", "missing-dg"), false);
+        var error = assertThrows(IllegalStateException.class, () -> collector(responses(), sent, new char[0])
+                .collect(run, absentScope, () -> true, published::add, new PolicyObservations(), new PanoramaPolicyCollector.Options(true, true)));
+        assertTrue(error.getMessage().endsWith(": DEVICE_GROUP_NOT_FOUND"));
+        assertTrue(published.isEmpty());
+        assertEquals(3, sent.size(), "fails closed after dg-hierarchy without reading /config/shared or any DG");
+        assertTrue(sent.stream().noneMatch(s -> "config".equals(s.type())));
+    }
+
 }
