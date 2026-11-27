@@ -10,3 +10,5 @@ status: in_progress · target:
 
 2026-11-26 (P2c-2d): shipped `PolicyProposalMerges` (I5 merges inside the reorder-only proposal engine, pure Check Point engine + unit, differential and 10,000-rule scale tests; no route, change-list line, export, replay or Palo Alto), automated validation only (nothing REAL_ENV_VALIDATED).
 2026-11-26: P2c-2c read-only proposal route (GET /api/v2/policy/policies/{id}/proposal, POLICY_READ, PolicyProposalView with single-flight per-snapshot cache and 25-subject cap, PolicyPrivacy closed-vocabulary projection and aiview sweep, policy-proposal CLI parity) automated-validated; UI panel, export, I5 merge wiring into the proposal route, replay and real-environment validation remain open.
+
+2026-11-27 state sync: Palo Alto pure-engine support for G1/G3/I3/I4/I5/I7 and proposals landed with fail-closed log/profile signatures and Q8 work-budget scans (a9d144ed); read-only proposal route fd923900 and I5 merges a845e91c are on main. Automated validation only; nothing is REAL_ENV_VALIDATED.
