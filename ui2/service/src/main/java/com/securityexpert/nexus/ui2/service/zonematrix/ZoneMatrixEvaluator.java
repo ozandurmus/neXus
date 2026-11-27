@@ -252,6 +252,7 @@ public final class ZoneMatrixEvaluator {
             int severityRank,
             List<PortRange> tcpAllowed,
             List<PortRange> udpAllowed,
+            List<PortRange> icmpAllowed,
             Set<String> panApplications) {}
 
     /** Compiles a published {@link ZoneMatrixContent} version once; recomputes {@code sha256} ({@code ZM-3}). */
@@ -298,12 +299,17 @@ public final class ZoneMatrixEvaluator {
                 ZoneMatrixContent.Effective eff = statements.of(endpointIds[s], endpointIds[d]);
                 List<PortRange> tcp = new ArrayList<>();
                 List<PortRange> udp = new ArrayList<>();
+                List<PortRange> icmp = new ArrayList<>();
                 Set<String> apps = new TreeSet<>();
                 for (String entryText : eff.services()) {
                     ServiceEntry se = ServiceEntry.parse(entryText);
                     if (se.kind() == ServiceEntry.Kind.TCP) tcp.add(new PortRange(se.low(), se.high()));
                     else if (se.kind() == ServiceEntry.Kind.UDP) udp.add(new PortRange(se.low(), se.high()));
-                    else if (se.kind() == ServiceEntry.Kind.APP_PAN) apps.add(se.token()); // exact name (§4.3)
+                    else if (se.kind() == ServiceEntry.Kind.ICMP) {
+                        int low = se.high() < 0 ? se.low() * 256 : se.low() * 256 + se.high();
+                        int high = se.high() < 0 ? se.low() * 256 + 255 : low;
+                        icmp.add(new PortRange(low, high));
+                    } else if (se.kind() == ServiceEntry.Kind.APP_PAN) apps.add(se.token()); // exact name (§4.3)
                 }
                 grid[s][d] = new CellSpec(
                         endpointIds[s],
@@ -313,6 +319,7 @@ public final class ZoneMatrixEvaluator {
                         severityRank(eff.severity()),
                         ZoneMatrixPolicyBridge.mergePortRanges(tcp),
                         ZoneMatrixPolicyBridge.mergePortRanges(udp),
+                        ZoneMatrixPolicyBridge.mergePortRanges(icmp),
                         Collections.unmodifiableSet(apps));
             }
         }
@@ -617,7 +624,7 @@ public final class ZoneMatrixEvaluator {
         if (aAny) return b;
         if (bAny) return a;
         Map<String, List<PortRange>> out = new TreeMap<>();
-        for (String proto : List.of("tcp", "udp")) {
+        for (String proto : ZoneMatrixPolicyBridge.PORT_PROTOCOLS) {
             List<PortRange> inter = ZoneMatrixPolicyBridge.intersectPortRanges(
                     a.getOrDefault(proto, List.of()), b.getOrDefault(proto, List.of()));
             if (!inter.isEmpty()) out.put(proto, inter);
@@ -863,7 +870,9 @@ public final class ZoneMatrixEvaluator {
                 svc.upperPorts().getOrDefault("tcp", List.of()), cell.tcpAllowed);
         List<PortRange> udpDiff = ZoneMatrixPolicyBridge.subtractPortRanges(
                 svc.upperPorts().getOrDefault("udp", List.of()), cell.udpAllowed);
-        if (tcpDiff.isEmpty() && udpDiff.isEmpty()) return null;
+        List<PortRange> icmpDiff = ZoneMatrixPolicyBridge.subtractPortRanges(
+                svc.upperPorts().getOrDefault("icmp", List.of()), cell.icmpAllowed);
+        if (tcpDiff.isEmpty() && udpDiff.isEmpty() && icmpDiff.isEmpty()) return null;
         return svc.cpApplicationConstraint() ? "application constraint" : "denied";
     }
 
@@ -914,17 +923,18 @@ public final class ZoneMatrixEvaluator {
         if (svc.lowerPorts().isEmpty()) return null;
         List<PortRange> reqTcp = svc.lowerPorts().getOrDefault("tcp", List.of());
         List<PortRange> reqUdp = svc.lowerPorts().getOrDefault("udp", List.of());
+        List<PortRange> reqIcmp = svc.lowerPorts().getOrDefault("icmp", List.of());
         if ("DENY_ALL".equals(cell.statement)) {
-            List<String> parts = formatPortDiff(reqTcp, reqUdp);
-            String witnessSvc = !reqTcp.isEmpty() ? "tcp/" + reqTcp.get(0).low() : "udp/" + reqUdp.get(0).low();
-            return new LowerViolation(parts, witnessSvc);
+            List<String> parts = formatServiceDiff(reqTcp, reqUdp, reqIcmp);
+            if (parts.isEmpty()) return null;
+            return new LowerViolation(parts, pickWitnessService(reqTcp, reqUdp, reqIcmp));
         }
         List<PortRange> tcpDiff = ZoneMatrixPolicyBridge.subtractPortRanges(reqTcp, cell.tcpAllowed);
         List<PortRange> udpDiff = ZoneMatrixPolicyBridge.subtractPortRanges(reqUdp, cell.udpAllowed);
-        if (tcpDiff.isEmpty() && udpDiff.isEmpty()) return null;
-        List<String> parts = formatPortDiff(tcpDiff, udpDiff);
-        String witnessSvc = !tcpDiff.isEmpty() ? "tcp/" + tcpDiff.get(0).low() : "udp/" + udpDiff.get(0).low();
-        return new LowerViolation(parts, witnessSvc);
+        List<PortRange> icmpDiff = ZoneMatrixPolicyBridge.subtractPortRanges(reqIcmp, cell.icmpAllowed);
+        if (tcpDiff.isEmpty() && udpDiff.isEmpty() && icmpDiff.isEmpty()) return null;
+        List<String> parts = formatServiceDiff(tcpDiff, udpDiff, icmpDiff);
+        return new LowerViolation(parts, pickWitnessService(tcpDiff, udpDiff, icmpDiff));
     }
 
     private static List<CellViolation> mergeCellViolations(
@@ -1402,10 +1412,39 @@ public final class ZoneMatrixEvaluator {
     }
 
     private static List<String> formatPortDiff(List<PortRange> tcp, List<PortRange> udp) {
-        List<String> out = new ArrayList<>(tcp.size() + udp.size());
+        return formatServiceDiff(tcp, udp, List.of());
+    }
+
+    private static List<String> formatServiceDiff(List<PortRange> tcp, List<PortRange> udp, List<PortRange> icmp) {
+        List<String> out = new ArrayList<>(tcp.size() + udp.size() + icmp.size());
         for (PortRange r : tcp) out.add(r.low() == r.high() ? "tcp/" + r.low() : "tcp/" + r.low() + "-" + r.high());
         for (PortRange r : udp) out.add(r.low() == r.high() ? "udp/" + r.low() : "udp/" + r.low() + "-" + r.high());
+        for (PortRange r : icmp) {
+            int cursor = r.low();
+            while (cursor <= r.high()) {
+                int type = cursor / 256;
+                int typeStart = type * 256;
+                int typeEnd = typeStart + 255;
+                if (cursor == typeStart && r.high() >= typeEnd) {
+                    out.add("icmp/" + type);
+                    cursor = typeEnd + 1;
+                } else {
+                    int endInType = Math.min(r.high(), typeEnd);
+                    for (int v = cursor; v <= endInType; v++) {
+                        out.add("icmp/" + type + "/" + (v % 256));
+                    }
+                    cursor = endInType + 1;
+                }
+            }
+        }
         return List.copyOf(out);
+    }
+
+    private static String pickWitnessService(List<PortRange> tcp, List<PortRange> udp, List<PortRange> icmp) {
+        if (!tcp.isEmpty()) return "tcp/" + tcp.get(0).low();
+        if (!udp.isEmpty()) return "udp/" + udp.get(0).low();
+        int first = icmp.get(0).low();
+        return "icmp/" + (first / 256) + "/" + (first % 256);
     }
 
     private static String formatIpInterval(long start, long end) {

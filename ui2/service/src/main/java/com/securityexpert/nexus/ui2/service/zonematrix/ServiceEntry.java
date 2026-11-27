@@ -13,8 +13,10 @@ import java.util.regex.Pattern;
  * {@code set:<name>}, a named service set of the same version. A value that is not in canonical form is refused, never
  * corrected (the same rule as zone blocks, section 3.1): no upper case, no leading zero, no {@code tcp/443-443}.</p>
  *
- * <p>TCP and UDP entries are evaluable since the first delivery, and Palo Alto applications by name since delivery step 7
- * (section 4.3: by exact name, for Palo Alto {@code application-default} rules only); the others are stored as entered
+ * <p>TCP and UDP entries are evaluable since the first delivery, Palo Alto applications by name since delivery step 7b
+ * (section 4.3: by exact name, for Palo Alto {@code application-default} rules only), and IPv4 ICMP entries
+ * ({@code icmp/<type>}, {@code icmp/<type>/<code>}) since delivery step 7d ({@code A0-I1}, Check Point
+ * {@code service-icmp} with stored type and code); the others ({@code icmp6/*}, {@code ipproto/*}) are stored as entered
  * and marked with the prerequisite that makes them evaluable (section 4.2 table, section 10.1 step 7).</p>
  */
 public record ServiceEntry(Kind kind, String text, int low, int high, String token) {
@@ -66,11 +68,11 @@ public record ServiceEntry(Kind kind, String text, int low, int high, String tok
             throw new IllegalArgumentException("a service set name is 1-" + MAX_SET_NAME + " letters, digits, '_', '.' or '-'");
     }
 
-    /** Whether the first delivery's engine decides this entry, and if not, which prerequisite is missing (section 4.2). */
+    /** Whether the current engine decides this entry, and if not, which prerequisite is missing (section 4.2, section 10.1 step 7). */
     public String notEvaluableReason() {
         return switch (kind) {
-            case TCP, UDP, SET, APP_PAN -> null;
-            case ICMP, ICMP6 -> "ICMP is evaluated after hygiene model R1";
+            case TCP, UDP, SET, APP_PAN, ICMP -> null;
+            case ICMP6 -> "ICMPv6 is evaluated after IPv6 address evaluation";
             case IPPROTO -> "IP protocol numbers are evaluated after hygiene model R4 and collection fix C4";
         };
     }
