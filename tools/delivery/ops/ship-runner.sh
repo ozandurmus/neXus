@@ -92,7 +92,7 @@ inline_log_tail() {
 # Finish an in-flight batch whose shipq3 wrote DONE: SHIPPED items to done/, a failure back to the queue (retry, split,
 # blame or a fix lane). In-flight items live in ship-queue/inflight/<ID>/ so a pipelined batch cannot pick them again.
 finish_batch() {
-  local ID=$1 D="$SQ/inflight/$1" OUT="$L/ship-$1.out" ok=() names=() f i why culprit names_in hits br mb b n clean_why diag
+  local ID=$1 D="$SQ/inflight/$1" OUT="$L/ship-$1.out" ok=() names=() f i why culprit names_in hits br mb b n clean_why diag sec_summary="" sec_pregate_blocked=0 secfix=""
   grep -q '^DONE' "$OUT" 2>/dev/null || return 0
   for f in "$D"/*.ship; do [ -e "$f" ] || continue; ok+=("$f"); names+=("$(field name "$f")"); done
   [ ${#ok[@]} -eq 0 ] && { rm -rf "$D"; return 0; }
@@ -117,7 +117,16 @@ finish_batch() {
   # A preview e2e that names a failing test is the lane's fault, not infrastructure: the security pregate is then
   # "cancelled" because the preview failed (G778 paused the runner twice on 2026-11-26). A preview that fails without a
   # named test (VPN down, image pull) stays infrastructure.
+  # A security pregate summary with scan_errors=0 and blocking>0 is a code/secret finding on the branch, not infra.
+  sec_summary=$(grep '^SECURITY PREGATE SUMMARY:' "$L/ship-$ID.log" 2>/dev/null | tail -1 || true)
+  if [ -n "$sec_summary" ] \
+     && printf '%s\n' "$sec_summary" | grep -qE '"passed":[[:space:]]*false([^a-zA-Z0-9_]|$)' \
+     && printf '%s\n' "$sec_summary" | grep -qE '"scan_errors":[[:space:]]*0([^0-9]|$)' \
+     && printf '%s\n' "$sec_summary" | grep -qE '"blocking":[[:space:]]*[1-9][0-9]*([^0-9]|$)'; then
+    sec_pregate_blocked=1
+  fi
   if ! echo "$why" | grep -q 'unit tests did not pass' && ! grep -q '^PREVIEW E2E FAILED TEST:' "$L/ship-$ID.log" 2>/dev/null \
+     && [ "$sec_pregate_blocked" -eq 0 ] \
      && echo "$why" | grep -qiE 'preview e2e failed|security gate|still running|rebase|could not resolve|Connection|timed out|ssh|previous ship rolled back|GraphQL|api.github.com|pull request not merged|still pending|cancelled|could not open the pull request|HTTP (429|5[0-9][0-9])|Too Many Requests|Bad Gateway'; then
     infra=$((infra + 1))
     if [ "$infra" -ge 2 ]; then touch "$SQ/PAUSED"; log "PAUSED: two infrastructure failures in a row; items stay queued (rm $SQ/PAUSED to resume)"; fi
@@ -153,12 +162,13 @@ finish_batch() {
     # Pipeline fix lanes (NN-fix-<lane>) get no second fix; review-fix lanes (NN-fix-review-*) are new work and may.
     case "$n" in *[0-9]-port-[0-9]*|*[0-9]-fix-[0-9]*) log "ALERT no second fix for $n; left in failed/";;
       *) migfix=""; [[ "$why" == *"not above main"* ]] && migfix=$'\n'"This failure is a migration number clash: rebase onto origin/main, get a new number with bash $OPS_DIR/reserve-migration.sh fix-$n, git mv the migration to that V number, replace every reference to the old number in this branch's files, run the migration/schema tests, commit."
+         secfix=""; [ "$sec_pregate_blocked" -eq 1 ] && secfix=$'\n'"$(printf '%s' "$sec_summary" | strip_worktree_paths)"
          extra=""; grep -q '^allow_paths=1' "$SQ/failed/$(basename "$f")" && extra="allow_paths=1"   # a fix lane inherits the person's guarded-path approval (271 held 2026-11-23)
          clean_why=$(printf '%s' "$why" | strip_worktree_paths)
          diag=$(inline_log_tail "pretest-ship-$ID.out" "$L/pretest-ship-$ID.out"; inline_log_tail "ship-$ID.log" "$L/ship-$ID.log")
          lane_brief "fix-$n" "$br" "# Task: make lane $n pass the ship pipeline
 Always read/edit files using repo-relative paths inside your current worktree; never call read_file on paths outside it.
-This worktree is branch $br (finished lane $n). Shipping it failed: $clean_why
+This worktree is branch $br (finished lane $n). Shipping it failed: $clean_why${secfix}
 Find the failing test or check from the failure summary (and any inline diagnostic excerpts below), fix it in this branch's
 changes (not by weakening the test), run that test and the module's tests, commit.${migfix}${diag}" ${extra:+"$extra"};;
     esac; rm_lane_wt "$n"

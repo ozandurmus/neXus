@@ -96,6 +96,40 @@ def test_github_5xx_and_registry_429_are_infrastructure_not_the_lanes_fault(ops,
     assert (ops.sq / f"{LANE}.ship").exists() and list(ops.lq.glob("*-fix-*.brief")) == []
 
 
+def test_security_pregate_blocking_with_zero_scan_errors_is_not_infra_and_queues_fix_brief(ops):
+    summary = 'SECURITY PREGATE SUMMARY: {"passed": false, "scan_errors": 0, "blocking": 2, "counts": {"gitleaks": {"CRITICAL": {"new": 2}}}}'
+    for batch, suffix in (("B7", "a"), ("B8", "b")):
+        (ops.logs / f"ship-{batch}.log").write_text(summary + "\n")
+        inflight(ops, batch, [f"{LANE}-{suffix}"], [f"FAILED batch/{batch}: security gate FAIL"])
+    out = ops.source("ship-runner.sh", 'infra=1; finish_batch B7; echo "INFRA_B7=$infra"; finish_batch B8; echo "INFRA_B8=$infra"').stdout
+    assert "INFRA_B7=0" in out and "INFRA_B8=0" in out
+    assert not (ops.sq / "PAUSED").exists() and "PAUSED:" not in out
+    for suffix in ("a", "b"):
+        assert (ops.sq / "failed" / f"{LANE}-{suffix}.ship").exists()
+    briefs = sorted(ops.lq.glob("*-fix-*.brief"))
+    assert len(briefs) == 2
+    for brief in briefs:
+        assert summary in brief.read_text()
+
+
+@pytest.mark.parametrize("out_line,log_text", [
+    ("FAILED batch/{batch}: security gate FAIL",
+     'SECURITY PREGATE SUMMARY: {"passed": false, "scan_errors": 1, "blocking": 0}\n'),
+    ("FAILED batch/{batch}: security gate FAIL",
+     'SECURITY PREGATE SUMMARY: {"passed": false, "scan_errors": 1, "blocking": 2}\n'),
+    ("FAILED batch/{batch}: FAIL (pre-merge security gate timed out)", ""),
+])
+def test_security_pregate_scan_errors_or_timeout_still_trigger_infra_pause(ops, out_line, log_text):
+    for batch, suffix in (("B9", "a"), ("B10", "b")):
+        if log_text:
+            (ops.logs / f"ship-{batch}.log").write_text(log_text)
+        inflight(ops, batch, [f"{LANE}-{suffix}"], [out_line.format(batch=batch)])
+    out = ops.source("ship-runner.sh", 'finish_batch B9; finish_batch B10; echo "INFRA=$infra"').stdout
+    assert (ops.sq / "PAUSED").exists() and "PAUSED: two infrastructure failures" in out and "INFRA=2" in out
+    assert (ops.sq / f"{LANE}-a.ship").exists() and (ops.sq / f"{LANE}-b.ship").exists()
+    assert list(ops.lq.glob("*-fix-*.brief")) == []
+
+
 # ---- b-review: a BLOCK goes back to the author once ----------------------------------------------------------------
 
 def ship_entry(ops, extra=""):

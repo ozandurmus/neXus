@@ -12,7 +12,7 @@ identity, encryption, RBAC and mutation rules remain authoritative. Retain one i
 Resource figures in the plan are guidance: modest requests, no CPU limits and
 generous memory limits; measured sizing must preserve DB and device budgets.
 Closed roles: `policy`, `backup`, `inventory`, `failover`, `diagnostics`,
-`configuration`, `compliance`, `scheduler`, `general`. Unknown/conflicting roles
+`configuration`, `compliance`, `scheduler`, `event_intake`, `general`. Unknown/conflicting roles
 fail startup; compose only the selected role's executors and secret dependencies.
 
 | Owner role | Exact job_type = capability_id (37 total) |
@@ -27,7 +27,14 @@ fail startup; compose only the selected role's executors and secret dependencies
 | configuration (5) | `cp_configuration_collect`, `pan_configuration_collect`, `fgt_configuration_collect`, `asa_configuration_collect`, `proxysg_configuration_collect` |
 | compliance (0) | No durable claim types; evaluation and cache owner |
 | scheduler (0) | No durable claim types; producers/notifications only |
+| event_intake (0) | No durable claim types; event-intake listener only (zero device egress, zero credential/artefact keys; PO 2026-11-26 Q8) |
 | general (temporary) | Exactly the union of modules explicitly assigned to fallback below |
+
+Amendment (PO 2026-11-26, Q8): [PO_DECISION_RECORD_2026_11_26_POLICY_CHANGE_EVENT_TRIGGER.md](PO_DECISION_RECORD_2026_11_26_POLICY_CHANGE_EVENT_TRIGGER.md)
+(`FROZEN — PO APPROVED 2026-11-26`, Q8) adds `event_intake` as a zero-claim listener role
+(`ui2-event-intake` pod, zero device egress, zero credential/artefact keys, submitting matured
+triggers via internal HTTP to `ui2-service`); all existing roles' claim types and §§2–3 rules
+remain unchanged.
 
 Admission validates the exact pair. Atomic claim SQL requires BOTH allow-lists,
 `job_type = capability_id`, effective owner and non-draining ownership generation.
