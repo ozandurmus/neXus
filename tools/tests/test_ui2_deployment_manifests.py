@@ -1804,3 +1804,17 @@ def test_no_network_policy_opens_the_worker_probe_port():
             if doc.get("kind") in ("NetworkPolicy", "Service", "Ingress", "Route"):
                 text = json.dumps(doc)
                 assert "9405" not in text and '"health"' not in text, (path.name, doc["metadata"]["name"])
+
+
+def test_policy_deployment_enforces_60_minute_job_window_and_runtime_contract_includes_event_intake():
+    """PO_DECISION_RECORD_2026_11_26_POLICY_CHANGE_EVENT_TRIGGER.md Q6 safeguard 6 & Q8:
+    57-policy-deployment.yaml enforces UI2_JOB_WINDOW_MINUTES=60 (never "360"), and
+    MODULE_POD_RUNTIME_CONTRACT.md §1 lists event_intake as a zero-claim listener role."""
+    env = _container_env("57-policy-deployment.yaml", "policy")
+    assert env["UI2_JOB_WINDOW_MINUTES"] == {"name": "UI2_JOB_WINDOW_MINUTES", "value": "60"}
+    assert env["UI2_JOB_WINDOW_MINUTES"].get("value") != "360"
+
+    contract = (REPO_ROOT / "docs" / "design" / "MODULE_POD_RUNTIME_CONTRACT.md").read_text(encoding="utf-8")
+    section_1 = contract.split("## 1. Scope and ownership", 1)[1].split("\n## 2. ", 1)[0]
+    assert "`event_intake`" in section_1
+    assert "| event_intake (0) | No durable claim types;" in section_1
