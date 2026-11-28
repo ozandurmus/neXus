@@ -2574,6 +2574,31 @@ export interface PolicyInsightDetail {
 }
 export const getPolicyInsights = (id: string, page = 0, type = "", grade = "", days = 90) =>
   call<PolicyInsightsPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}/insights?page=${page}&${new URLSearchParams({ type, grade, days: String(days) })}`, "GET");
+export interface ProposalRuleRef { ruleId: string; ruleName: string; ruleNumber: number }
+export interface ProposalStep {
+  subject: ProposalRuleRef | null; above: ProposalRuleRef | null; result: string; reason?: string | null; accepted: boolean;
+  equivalence?: string | null; crossedRules?: ProposalRuleRef[] | number | null; inspectionChanges?: boolean;
+}
+export interface ProposalMerge {
+  surviving: ProposalRuleRef | null; merged: ProposalRuleRef | null; differingCell?: string | null; result?: string | null; reason?: string | null;
+  accepted: boolean; equivalence?: string | null;
+}
+export interface ProposalSectionOrder {
+  sectionId: string; offset: number; totalRules: number; before: string[]; after: string[]; moreRules: number; more?: string | null;
+}
+export interface PolicyProposalResponse {
+  vendor: string;
+  supported: boolean;
+  days?: number; collectedAt?: string; complete?: boolean;
+  packageVerdict?: string; label?: string | null; accepted?: number; refused?: Record<string, number>; inspectionChanges?: number;
+  budgetStopped?: boolean; emptyReason?: string | null; maxSubjects?: number; candidatesTotal?: number; tried?: number; notTried?: number;
+  truncated?: boolean; notTriedNote?: string | null;
+  steps?: ProposalStep[]; order?: ProposalSectionOrder[]; caveat?: string; insightCaveats?: string[];
+  merges?: ProposalMerge[]; mergesAccepted?: number; mergesRefused?: Record<string, number>; mergesBudgetStopped?: boolean; mergesEmptyReason?: string | null;
+}
+/** Read-only and can take seconds on a large package: call it only when the user asks. */
+export const getPolicyProposal = (id: string, days = 90) =>
+  call<PolicyProposalResponse>(`/api/v2/policy/policies/${encodeURIComponent(id)}/proposal?${new URLSearchParams({ days: String(days) })}`, "GET");
 export const getPolicyInsight = (id: string, insightId: string, days = 90) =>
   call<PolicyInsightDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/insight?${new URLSearchParams({ insightId, days: String(days) })}`, "GET");
 export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; section: PolicySection; objects: PolicyObject[] }
