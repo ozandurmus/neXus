@@ -88,6 +88,7 @@ describe("InventoryScreen device selection and panels", () => {
           "/devices/dev-1/lifecycle": { device_id: "dev-1", risk: "UNKNOWN", status: "NO_LIFECYCLE_DATA" },
           "/api/v2/ssh-trust?device_id=dev-1": { mode: "WARN", observations: [] },
           "/api/v2/backups/deviations": { active_major_deviations: [], total_deviations_checked: 0, asa_config_relations: [] },
+          "/api/v2/log-findings/chips": { enabled: false, shadow: false, shadow_until: null, phase: "P1", layers: ["A"], time_basis: "DEVICE_LOCAL", window_days: 7, counts: "", chips: [], truncated: false },
         };
         return Promise.resolve(jsonResponse(url in bodies ? 200 : 404, bodies[url] ?? { error: "NOT_FOUND" }));
       });
@@ -95,14 +96,16 @@ describe("InventoryScreen device selection and panels", () => {
       render(withTheme(<InventoryScreen />));
       fireEvent.click(await screen.findByText("FW-TANGO-04"));
       await screen.findByRole("tablist", { name: "Device detail" });
-      // A Cisco ASA fleet also reads the saved-vs-running relations (V253), once for the list and the Configuration tab.
-      const expectedCalls = vendor === "cisco_asa" ? 10 : 9;
+      // A Cisco ASA fleet also reads the saved-vs-running relations (V253); Check Point and Palo Alto fleets read log-finding chips.
+      const hasLogChips = vendor === "check_point" || vendor === "palo_alto";
+      const expectedCalls = 9 + (vendor === "cisco_asa" ? 1 : 0) + (hasLogChips ? 1 : 0);
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(expectedCalls));
       // The lifecycle is a cell of the Platform identity grid (the header's collapsible panel), so the header no longer reads it on its own; the
       // header's "Config read" age asks the small configuration summary route (F-9), and the state row (roadmap 2.1)
       // reads the backups and, for an assessed vendor, the device's compliance. No cluster inventory, no readiness.
       expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
         ...(vendor === "cisco_asa" ? ["/api/v2/backups/deviations"] : []),
+        ...(hasLogChips ? ["/api/v2/log-findings/chips"] : []),
         "/api/v2/overview", "/api/v2/ssh-trust?device_id=dev-1", "/devices", "/devices/dev-1", "/devices/dev-1/backups", "/devices/dev-1/compliance",
         "/devices/dev-1/configuration", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
       ].sort());

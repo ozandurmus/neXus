@@ -15,16 +15,18 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { MONO, m3 } from "../theme/m3Theme";
 import { LogFindingChip } from "./LogFindingChip";
 import {
-  countedFindings, coverageEvaluated, coverageLine, coverageWord, findingCounts, findingTitle, labelWord, severityTone, shadowNote,
+  countedFindings, coverageEvaluated, coverageLine, findingCounts, findingTitle, labelWord, layerBKindWord, layerBKinds,
+  layerBStatsLine, scoreLine, severityTone, shadowNote,
 } from "./logFindingsModel";
 import { sourceLabel } from "./DeviceLogsPanel";
 
 /**
- * Device > Logs > Findings (LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md section 9, P1). Layer A only: severity by rule and the
- * hardware and kernel markers. Read-only apart from the acknowledgement, which the server decides (role, audit).
+ * Device > Logs > Findings (LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md section 9, P1 & P2). Layer A (severity by rule and
+ * hardware/kernel markers) and Layer B (frozen template catalog, fleet rarity, rate spike, silence and ordering score).
+ * Read-only apart from the acknowledgement, which the server decides (role, audit).
  *
- *  - Every figure says what it counts; the evidence is pointers (chunk, offset) and counts, never a log line: a line is
- *    read through the masked log viewer.
+ *  - Every figure says what it counts; the evidence is pointers (chunk, offset), counts and closed-vocabulary templates,
+ *    never a raw log line: a line is read only through the masked log viewer.
  *  - Coverage is part of the answer: a device with an unevaluated window is UNKNOWN there, never green.
  *  - While the shadow period runs the findings are shown on this screen only.
  */
@@ -33,7 +35,9 @@ import { sourceLabel } from "./DeviceLogsPanel";
 export function chipFromAnswers(deviceId: string, findings: LogFindingsAnswer, coverage: LogCoverageAnswer): LogFindingChipData {
   const open = countedFindings(findings.findings.filter((f) => f.review_state === "OPEN"));
   const rank = (s: string) => (s === "CRITICAL" ? 2 : 1);
-  const worst = open.reduce<LogFinding | null>((a, f) => (a === null || rank(f.severity) > rank(a.severity) ? f : a), null);
+  const better = (a: LogFinding, f: LogFinding) =>
+    rank(f.severity) > rank(a.severity) || (rank(f.severity) === rank(a.severity) && (f.score.score ?? -1) > (a.score.score ?? -1));
+  const worst = open.reduce<LogFinding | null>((a, f) => (a === null || better(a, f) ? f : a), null);
   const allEvaluated = coverage.summary.windows_total > 0 && coverage.summary.windows_evaluated === coverage.summary.windows_total;
   if (worst) {
     return { device_id: deviceId, state: "FINDINGS", severity: worst.severity, count: open.length, text: findingTitle(worst), coverage: coverage.summary };
@@ -51,22 +55,43 @@ export function chipFromAnswers(deviceId: string, findings: LogFindingsAnswer, c
 function FindingCard({ finding, onAcknowledged }: { readonly finding: LogFinding; readonly onAcknowledged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kinds = layerBKinds(finding);
+  const stats = layerBStatsLine(finding);
   const acknowledge = () => {
     setBusy(true);
     setError(null);
     acknowledgeLogFinding(finding.finding_id).then(onAcknowledged, (err) => setError(describeApiError(err))).finally(() => setBusy(false));
   };
   return (
-    <Box data-finding={finding.finding_id} data-severity={finding.severity} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5 }}>
+    <Box data-finding={finding.finding_id} data-severity={finding.severity} data-layer={finding.layer} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5 }}>
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <StatusChip tone={severityTone(finding.severity)} label={finding.severity} dense title={`Severity by rule ${finding.severity_rule}`} />
+        {kinds.map((k) => <StatusChip key={k} tone="neutral" label={k} dense title={layerBKindWord(k)} />)}
         <Typography sx={{ fontFamily: MONO, fontWeight: 650, fontSize: 13.5 }}>{findingTitle(finding)}</Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{sourceLabel(finding.source_key)}</Typography>
         {finding.review_state !== "OPEN" && <StatusChip tone="neutral" label={finding.review_state} dense />}
       </Stack>
+      {finding.layer_b?.template_text && (
+        <Box sx={{ mt: 0.75 }}>
+          <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar }}>
+            {`Template (vocabulary form${finding.versions.catalog ? ` · catalog ${finding.versions.catalog}` : ""}${finding.versions.normaliser ? ` · ${finding.versions.normaliser}` : ""})`}
+          </Typography>
+          <Typography
+            data-testid="finding-template-text"
+            sx={{ mt: 0.25, fontFamily: MONO, fontSize: 12.5, bgcolor: m3.scLow, px: 1, py: 0.5, borderRadius: 1, overflowWrap: "anywhere" }}
+          >
+            {finding.layer_b.template_text}
+          </Typography>
+        </Box>
+      )}
       <Typography variant="body2" sx={{ mt: 0.75 }}>{findingCounts(finding)}</Typography>
-      <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 0.5 }}>
-        {`S ${finding.score.s} (severity weight, ${finding.provenance.toLowerCase()}) · rarity and change arrive with layer B · coverage: ${coverageWord(finding.coverage_state)}`}
+      {stats && (
+        <Typography data-testid="finding-layer-b-stats" variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 0.5 }}>
+          {stats}
+        </Typography>
+      )}
+      <Typography data-testid="finding-score" variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 0.5 }}>
+        {scoreLine(finding)}
       </Typography>
       {finding.labels.length > 0 && (
         <Stack direction="row" spacing={0.75} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
@@ -113,7 +138,7 @@ export function LogFindingsPanel({ deviceId }: { readonly deviceId: string }) {
         <Typography component="h3" sx={{ fontSize: 16, fontWeight: 650 }}>Log findings</Typography>
         <LogFindingChip chip={chip} />
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          {`layer A: severity and hardware markers · last ${f.days} days · ${f.time_basis === "DEVICE_LOCAL" ? "device-local times" : f.time_basis}`}
+          {`${f.layers.includes("B") ? "layers A & B: severity markers, template catalog, rarity and rate" : "layer A: severity and hardware markers"} · last ${f.days} days · ${f.time_basis === "DEVICE_LOCAL" ? "device-local times" : f.time_basis}`}
         </Typography>
       </Stack>
       {!f.enabled && (
