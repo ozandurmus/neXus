@@ -535,17 +535,58 @@ class ZoneMatrixRunStorageTest {
         }
     }
 
+    @Test void zm39_heapLimitFailureReasonPersistsAndGuardsPreventFindings() throws Exception {
+        try (Connection db = fixture.appConnection(); Statement s = db.createStatement()) {
+            ZoneMatrixRunRepository repository = new JooqZoneMatrixRunRepository(
+                    new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            String policy = "pol-heap-" + UUID.randomUUID();
+            String runId = UUID.randomUUID().toString();
+            repository.start(run(runId, policy));
+
+            assertTrue(repository.fail(runId, FailureReason.HEAP_LIMIT, FINISHED));
+            Run failed = repository.latestRun(policy).orElseThrow();
+            assertEquals(runId, failed.runId());
+            assertEquals("FAILED", failed.state());
+            assertEquals("HEAP_LIMIT", failed.failureReason());
+            assertTrue(repository.latestComplete(policy).isEmpty(), "a HEAP_LIMIT run is never latestComplete");
+            assertTrue(repository.runningRunOf(policy).isEmpty(), "a HEAP_LIMIT run releases the RUNNING slot");
+            assertEquals(List.of(), repository.findingsOf(runId));
+
+            List<Finding> findings = List.of(finding(policy, "uid-heap-1", "VIOLATION"));
+            assertFalse(repository.complete(runId, FINISHED, 1L, COUNTS, COVERAGE, findings),
+                    "a HEAP_LIMIT-failed run never accepts late completion");
+            assertEquals(0, scalar(s, "SELECT count(*) FROM zone_matrix_finding WHERE run_id = '" + runId + "'"));
+
+            // fn_zone_matrix_finding_insert_guard rejects any direct finding insert for the HEAP_LIMIT-failed run.
+            assertThrows(SQLException.class, () -> s.execute("INSERT INTO zone_matrix_finding (run_id, policy_source_id, "
+                    + "rule_uid, inline_parent_path, violated_pairs, target_device_ids, outcome, flags, violated_cells, "
+                    + "undecided_parts, first_observed_at, last_observed_at) VALUES ('" + runId + "', '" + policy
+                    + "', 'uid-heap-direct', '[]', '[]', '[]', 'VIOLATION', '[]', '[]', '[]', now(), now())"));
+            // fn_zone_matrix_run_guard rejects any state transition after FAILED/HEAP_LIMIT.
+            assertThrows(SQLException.class, () -> s.execute(
+                    "UPDATE zone_matrix_run SET state = 'COMPLETE', failure_reason = NULL WHERE run_id = '" + runId + "'"));
+            assertEquals(0, scalar(s, "SELECT count(*) FROM zone_matrix_finding WHERE run_id = '" + runId + "'"));
+        }
+    }
+
     @Test void migrationIsDryRunnableInsideATransaction() throws Exception {
-        String sql;
+        String v267;
+        String v278;
         try (var resource = getClass().getResourceAsStream("/db/migration/V267__zone_matrix_runs_and_findings.sql")) {
             assertNotNull(resource);
-            sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            v267 = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        try (var resource = getClass().getResourceAsStream(
+                "/db/migration/V278__zone_matrix_run_heap_limit_failure_reason.sql")) {
+            assertNotNull(resource);
+            v278 = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
         }
         try (Connection db = fixture.migrateConnection(); Statement s = db.createStatement()) {
             db.setAutoCommit(false);
             s.execute("DROP TABLE zone_matrix_finding, zone_matrix_run");
             s.execute("DROP FUNCTION fn_zone_matrix_run_guard, fn_zone_matrix_finding_insert_guard");
-            s.execute(sql);
+            s.execute(v267);
+            s.execute(v278);
             db.rollback();
             db.setAutoCommit(true);
             assertTrue(bool(s, "SELECT to_regclass('zone_matrix_finding') IS NOT NULL"));

@@ -21,7 +21,7 @@ public interface ZoneMatrixRunRepository {
     String STATE_FAILED = "FAILED";
 
     /** Fixed failure codes; never free text (section 8.2). */
-    enum FailureReason { TIME_LIMIT, INTERRUPTED_AT_STARTUP, ENGINE_ERROR, SNAPSHOT_MISSING, POOL_SATURATED, STORE_ERROR }
+    enum FailureReason { TIME_LIMIT, HEAP_LIMIT, INTERRUPTED_AT_STARTUP, ENGINE_ERROR, SNAPSHOT_MISSING, POOL_SATURATED, STORE_ERROR }
 
     /** What a new {@code RUNNING} row records about the version and snapshot it evaluates against. */
     record NewRun(String runId, String versionId, int versionNumber, String contentSha256, String policySourceId,

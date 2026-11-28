@@ -26,6 +26,8 @@ import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.Polic
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.PolicyStaleness;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.RunState;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixStaleness.StalenessThreshold;
+import com.sun.management.ThreadMXBean;
+import java.lang.management.ManagementFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -53,6 +55,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongUnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +75,10 @@ import org.slf4j.LoggerFactory;
  *       from the moment the run starts executing: on expiry a watchdog ends the run {@code FAILED} {@code TIME_LIMIT}
  *       and interrupts its thread; an evaluation that still finishes afterwards finds the run no longer
  *       {@code RUNNING} and writes nothing.</li>
+ *   <li><b>Heap ceiling</b> (section 9). The synchronous evaluation is measured by cumulative heap bytes allocated
+ *       by its own pool thread since the run started, not by JVM-wide usage or retained live heap. If thread
+ *       allocation accounting is unsupported or disabled, there is no measured heap failure; an
+ *       {@link OutOfMemoryError} still ends the run {@code FAILED} {@code HEAP_LIMIT}.</li>
  *   <li><b>One transaction with finding lifecycle</b> ({@code ZM-25}, {@code ZM-34}, {@code ZM-36}, {@code ZM-39},
  *       {@code ZM-42}). Prior {@code COMPLETE}-run findings of the policy source are read under the {@code FOR UPDATE}
  *       lock, passed through {@link ZoneMatrixFindingLifecycle#next}, resolved prior rows update only V267's granted
@@ -94,6 +102,10 @@ public final class ZoneMatrixRunService implements AutoCloseable {
     public static final int QUEUE_CAPACITY = 64;
     /** Section 9 hard ceiling for the largest policy. */
     public static final Duration DEFAULT_TIME_LIMIT = Duration.ofSeconds(30);
+    /** Section 9 hard additional-heap ceiling for the largest policy (512 MB). */
+    public static final long DEFAULT_HEAP_CEILING_BYTES = 512L * 1024L * 1024L;
+    /** Default interval between watchdog heap-ceiling samples during a run. */
+    public static final Duration DEFAULT_HEAP_SAMPLE_INTERVAL = Duration.ofMillis(25);
     /** Section 3.5 & 7.2: findings resolved by a version change are shown on the Overview for 7 days. */
     public static final Duration RESOLVED_BY_VERSION_OVERVIEW_WINDOW = Duration.ofDays(7);
     /** Section 5.8: fixed reason for non-evaluated ASA / FGT entries. */
@@ -302,12 +314,29 @@ public final class ZoneMatrixRunService implements AutoCloseable {
 
     private record CellKey(String sourceZone, String destinationZone) {}
 
+    private static final LongUnaryOperator DEFAULT_THREAD_ALLOCATED_BYTES = threadAllocationCounter();
+
+    private static LongUnaryOperator threadAllocationCounter() {
+        try {
+            if (ManagementFactory.getThreadMXBean() instanceof ThreadMXBean bean
+                    && bean.isThreadAllocatedMemorySupported()) {
+                return bean::getThreadAllocatedBytes; // Returns -1 if allocation accounting is disabled.
+            }
+        } catch (NoClassDefFoundError | SecurityException ignored) {
+            // Optional JDK extension unavailable (or access denied).
+        }
+        return threadId -> -1L;
+    }
+
     private final ZoneMatrixRunRepository runs;
     private final ZoneMatrixRepository versions;
     private final PolicyCatalog catalog;
     private final ObjectMapper mapper;
     private final Clock clock;
     private final Duration timeLimit;
+    private final long heapCeilingBytes;
+    private final Duration heapSampleInterval;
+    private final LongUnaryOperator threadAllocatedBytes;
     private final StalenessThreshold stalenessThreshold;
     private final ExecutorService pool;
     private final ScheduledExecutorService watchdog;
@@ -317,23 +346,60 @@ public final class ZoneMatrixRunService implements AutoCloseable {
     public ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
             ObjectMapper mapper, Clock clock, Duration timeLimit) {
         this(runs, versions, catalog, mapper, clock, timeLimit, ZoneMatrixStaleness.INTERIM_PO_2026_11_23,
+                DEFAULT_HEAP_CEILING_BYTES, DEFAULT_HEAP_SAMPLE_INTERVAL, DEFAULT_THREAD_ALLOCATED_BYTES,
                 newPool(), newWatchdog());
     }
 
     public ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
+            ObjectMapper mapper, Clock clock, Duration timeLimit, long heapCeilingBytes) {
+        this(runs, versions, catalog, mapper, clock, timeLimit, ZoneMatrixStaleness.INTERIM_PO_2026_11_23,
+                heapCeilingBytes, DEFAULT_HEAP_SAMPLE_INTERVAL, DEFAULT_THREAD_ALLOCATED_BYTES, newPool(), newWatchdog());
+    }
+
+    /** Injects cumulative allocated bytes by platform thread ID (negative when unavailable). */
+    public ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
+            ObjectMapper mapper, Clock clock, Duration timeLimit, long heapCeilingBytes, LongUnaryOperator threadAllocatedBytes) {
+        this(runs, versions, catalog, mapper, clock, timeLimit, ZoneMatrixStaleness.INTERIM_PO_2026_11_23,
+                heapCeilingBytes, DEFAULT_HEAP_SAMPLE_INTERVAL, threadAllocatedBytes, newPool(), newWatchdog());
+    }
+
+    public ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
             ObjectMapper mapper, Clock clock, Duration timeLimit, StalenessThreshold stalenessThreshold) {
-        this(runs, versions, catalog, mapper, clock, timeLimit, stalenessThreshold, newPool(), newWatchdog());
+        this(runs, versions, catalog, mapper, clock, timeLimit, stalenessThreshold, DEFAULT_HEAP_CEILING_BYTES,
+                DEFAULT_HEAP_SAMPLE_INTERVAL, DEFAULT_THREAD_ALLOCATED_BYTES, newPool(), newWatchdog());
+    }
+
+    public ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
+            ObjectMapper mapper, Clock clock, Duration timeLimit, StalenessThreshold stalenessThreshold,
+            long heapCeilingBytes) {
+        this(runs, versions, catalog, mapper, clock, timeLimit, stalenessThreshold, heapCeilingBytes,
+                DEFAULT_HEAP_SAMPLE_INTERVAL, DEFAULT_THREAD_ALLOCATED_BYTES, newPool(), newWatchdog());
     }
 
     ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
             ObjectMapper mapper, Clock clock, Duration timeLimit, ExecutorService pool,
             ScheduledExecutorService watchdog) {
         this(runs, versions, catalog, mapper, clock, timeLimit, ZoneMatrixStaleness.INTERIM_PO_2026_11_23,
-                pool, watchdog);
+                DEFAULT_HEAP_CEILING_BYTES, DEFAULT_HEAP_SAMPLE_INTERVAL, DEFAULT_THREAD_ALLOCATED_BYTES, pool, watchdog);
+    }
+
+    ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
+            ObjectMapper mapper, Clock clock, Duration timeLimit, long heapCeilingBytes, LongUnaryOperator threadAllocatedBytes,
+            ExecutorService pool, ScheduledExecutorService watchdog) {
+        this(runs, versions, catalog, mapper, clock, timeLimit, ZoneMatrixStaleness.INTERIM_PO_2026_11_23,
+                heapCeilingBytes, DEFAULT_HEAP_SAMPLE_INTERVAL, threadAllocatedBytes, pool, watchdog);
     }
 
     ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
             ObjectMapper mapper, Clock clock, Duration timeLimit, StalenessThreshold stalenessThreshold,
+            ExecutorService pool, ScheduledExecutorService watchdog) {
+        this(runs, versions, catalog, mapper, clock, timeLimit, stalenessThreshold, DEFAULT_HEAP_CEILING_BYTES,
+                DEFAULT_HEAP_SAMPLE_INTERVAL, DEFAULT_THREAD_ALLOCATED_BYTES, pool, watchdog);
+    }
+
+    ZoneMatrixRunService(ZoneMatrixRunRepository runs, ZoneMatrixRepository versions, PolicyCatalog catalog,
+            ObjectMapper mapper, Clock clock, Duration timeLimit, StalenessThreshold stalenessThreshold,
+            long heapCeilingBytes, Duration heapSampleInterval, LongUnaryOperator threadAllocatedBytes,
             ExecutorService pool, ScheduledExecutorService watchdog) {
         this.runs = Objects.requireNonNull(runs, "runs");
         this.versions = Objects.requireNonNull(versions, "versions");
@@ -344,6 +410,15 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             throw new IllegalArgumentException("the zone matrix run time limit must be positive");
         }
         this.timeLimit = timeLimit;
+        if (heapCeilingBytes <= 0L) {
+            throw new IllegalArgumentException("the zone matrix run heap ceiling must be positive");
+        }
+        this.heapCeilingBytes = heapCeilingBytes;
+        if (heapSampleInterval == null || heapSampleInterval.isNegative() || heapSampleInterval.isZero()) {
+            throw new IllegalArgumentException("the zone matrix run heap sample interval must be positive");
+        }
+        this.heapSampleInterval = heapSampleInterval;
+        this.threadAllocatedBytes = Objects.requireNonNull(threadAllocatedBytes, "threadAllocatedBytes");
         this.stalenessThreshold = stalenessThreshold == null
                 ? ZoneMatrixStaleness.INTERIM_PO_2026_11_23
                 : stalenessThreshold;
@@ -354,6 +429,11 @@ public final class ZoneMatrixRunService implements AutoCloseable {
     /** The configured staleness threshold (defaults to {@link ZoneMatrixStaleness#INTERIM_PO_2026_11_23}). */
     public StalenessThreshold stalenessThreshold() {
         return stalenessThreshold;
+    }
+
+    /** The configured additional-heap ceiling in bytes (defaults to {@value #DEFAULT_HEAP_CEILING_BYTES}). */
+    public long heapCeilingBytes() {
+        return heapCeilingBytes;
     }
 
     /** The own bounded pool: {@value #THREADS} daemon threads, a bounded queue, refusal when full. */
@@ -939,7 +1019,9 @@ public final class ZoneMatrixRunService implements AutoCloseable {
         private final String policy;
         private final Version version;
         private volatile Instant snapshotCollectedAt;
+        private final AtomicReference<FailureReason> limitTripped = new AtomicReference<>();
         private Thread thread;
+        private long baselineAllocatedBytes = -1L;
 
         RunTask(String runId, String policy, Version version, Instant initialSnapshotCollectedAt) {
             this.runId = runId;
@@ -950,15 +1032,31 @@ public final class ZoneMatrixRunService implements AutoCloseable {
 
         @Override public void run() {
             long t0 = System.nanoTime();
-            synchronized (this) { thread = Thread.currentThread(); }
-            ScheduledFuture<?> deadline = scheduleDeadline(t0);
+            ScheduledFuture<?> deadline = null;
+            ScheduledFuture<?> heapGuard = null;
             try {
+                Thread worker = Thread.currentThread();
+                synchronized (this) {
+                    thread = worker;
+                    baselineAllocatedBytes = threadAllocatedBytes.applyAsLong(worker.threadId());
+                }
+                deadline = scheduleDeadline(t0);
+                if (baselineAllocatedBytes >= 0L) heapGuard = scheduleHeapWatchdog(t0);
                 execute(t0);
+            } catch (OutOfMemoryError oom) {
+                limitTripped.compareAndSet(null, FailureReason.HEAP_LIMIT);
+                failAndLog(runId, policy, version, FailureReason.HEAP_LIMIT, millisSince(t0), snapshotCollectedAt, oom);
             } catch (Throwable t) {
                 // Anything the evaluation did not handle (an Error included) still ends the run, never leaves it RUNNING.
-                failAndLog(runId, policy, version, FailureReason.ENGINE_ERROR, millisSince(t0), snapshotCollectedAt, t);
+                FailureReason reason = trippedOrMeasuredLimit(t0);
+                if (reason != null) {
+                    failAndLog(runId, policy, version, reason, millisSince(t0), snapshotCollectedAt, null);
+                } else {
+                    failAndLog(runId, policy, version, FailureReason.ENGINE_ERROR, millisSince(t0), snapshotCollectedAt, t);
+                }
             } finally {
                 if (deadline != null) deadline.cancel(false);
+                if (heapGuard != null) heapGuard.cancel(false);
                 synchronized (this) {
                     thread = null;
                     Thread.interrupted();
@@ -969,14 +1067,31 @@ public final class ZoneMatrixRunService implements AutoCloseable {
 
         private ScheduledFuture<?> scheduleDeadline(long t0) {
             try {
-                return watchdog.schedule(() -> {
-                    if (failAndLog(runId, policy, version, FailureReason.TIME_LIMIT, millisSince(t0),
-                            snapshotCollectedAt, null)) {
-                        synchronized (this) { if (thread != null) thread.interrupt(); }
-                    }
-                }, timeLimit.toNanos(), TimeUnit.NANOSECONDS);
+                return watchdog.schedule(() -> triggerLimit(FailureReason.TIME_LIMIT, t0),
+                        timeLimit.toNanos(), TimeUnit.NANOSECONDS);
             } catch (RejectedExecutionException e) {
                 return null; // shutting down: the in-thread deadline check below still applies
+            }
+        }
+
+        private ScheduledFuture<?> scheduleHeapWatchdog(long t0) {
+            try {
+                long intervalNanos = heapSampleInterval.toNanos();
+                return watchdog.scheduleWithFixedDelay(() -> {
+                    if (limitTripped.get() != null) return;
+                    if (overHeap()) {
+                        triggerLimit(FailureReason.HEAP_LIMIT, t0);
+                    }
+                }, intervalNanos, intervalNanos, TimeUnit.NANOSECONDS);
+            } catch (RejectedExecutionException e) {
+                return null; // shutting down: the in-thread heap ceiling checks below still apply
+            }
+        }
+
+        private void triggerLimit(FailureReason reason, long t0) {
+            if (!limitTripped.compareAndSet(null, reason)) return;
+            if (failAndLog(runId, policy, version, reason, millisSince(t0), snapshotCollectedAt, null)) {
+                synchronized (this) { if (thread != null) thread.interrupt(); }
             }
         }
 
@@ -985,6 +1100,7 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             PolicySnapshot snapshot;
             try {
                 snapshot = catalog == null ? null : catalog.find(policy).orElse(null);
+                if (failIfLimitExceeded(t0)) return;
                 if (snapshot == null) {
                     failAndLog(runId, policy, version, FailureReason.SNAPSHOT_MISSING, millisSince(t0),
                             snapshotCollectedAt, null);
@@ -996,22 +1112,24 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                 }
                 ZoneMatrixEvaluator.CompiledVersion compiled = ZoneMatrixEvaluator.compile(
                         version.versionId(), version.number(), content(version));
+                if (failIfLimitExceeded(t0)) return;
                 result = ZoneMatrixEvaluator.evaluate(snapshot, compiled, clock.instant());
+            } catch (OutOfMemoryError oom) {
+                limitTripped.compareAndSet(null, FailureReason.HEAP_LIMIT);
+                failAndLog(runId, policy, version, FailureReason.HEAP_LIMIT, millisSince(t0),
+                        snapshotCollectedAt, oom);
+                return;
             } catch (RuntimeException e) {
-                if (overTime(t0)) {
-                    failAndLog(runId, policy, version, FailureReason.TIME_LIMIT, millisSince(t0),
-                            snapshotCollectedAt, null);
+                FailureReason reason = trippedOrMeasuredLimit(t0);
+                if (reason != null) {
+                    failAndLog(runId, policy, version, reason, millisSince(t0), snapshotCollectedAt, null);
                 } else {
                     failAndLog(runId, policy, version, FailureReason.ENGINE_ERROR, millisSince(t0),
                             snapshotCollectedAt, e);
                 }
                 return;
             }
-            if (overTime(t0)) {
-                failAndLog(runId, policy, version, FailureReason.TIME_LIMIT, millisSince(t0),
-                        snapshotCollectedAt, null);
-                return;
-            }
+            if (failIfLimitExceeded(t0)) return;
             Instant finishedAt = clock.instant();
             long duration = millisSince(t0);
             ZoneMatrixRunRepository.Coverage runCoverage = coverage(snapshot, result);
@@ -1025,8 +1143,17 @@ public final class ZoneMatrixRunService implements AutoCloseable {
                     completedGaps[0] = plan.zoneDefinitionGaps().size();
                     return plan;
                 });
+            } catch (OutOfMemoryError oom) {
+                limitTripped.compareAndSet(null, FailureReason.HEAP_LIMIT);
+                failAndLog(runId, policy, version, FailureReason.HEAP_LIMIT, duration, snapshotCollectedAt, oom);
+                return;
             } catch (RuntimeException e) {
-                failAndLog(runId, policy, version, FailureReason.STORE_ERROR, duration, snapshotCollectedAt, e);
+                FailureReason reason = trippedOrMeasuredLimit(t0);
+                if (reason != null) {
+                    failAndLog(runId, policy, version, reason, duration, snapshotCollectedAt, null);
+                } else {
+                    failAndLog(runId, policy, version, FailureReason.STORE_ERROR, duration, snapshotCollectedAt, e);
+                }
                 return;
             }
             if (written) {
@@ -1043,8 +1170,32 @@ public final class ZoneMatrixRunService implements AutoCloseable {
             }
         }
 
+        private boolean failIfLimitExceeded(long t0) {
+            FailureReason reason = trippedOrMeasuredLimit(t0);
+            if (reason == null) return false;
+            limitTripped.compareAndSet(null, reason);
+            failAndLog(runId, policy, version, reason, millisSince(t0), snapshotCollectedAt, null);
+            return true;
+        }
+
+        private FailureReason trippedOrMeasuredLimit(long t0) {
+            FailureReason tripped = limitTripped.get();
+            if (tripped != null) return tripped;
+            if (overHeap()) return FailureReason.HEAP_LIMIT;
+            if (overTime(t0)) return FailureReason.TIME_LIMIT;
+            return null;
+        }
+
+        private synchronized boolean overHeap() {
+            // A late watchdog sample must not count allocations after this worker has moved to another run.
+            if (thread == null || baselineAllocatedBytes < 0L) return false;
+            long allocatedBytes = threadAllocatedBytes.applyAsLong(thread.threadId());
+            return allocatedBytes >= baselineAllocatedBytes
+                    && allocatedBytes - baselineAllocatedBytes > heapCeilingBytes;
+        }
+
         private boolean overTime(long t0) {
-            return Thread.currentThread().isInterrupted() || System.nanoTime() - t0 > timeLimit.toNanos();
+            return System.nanoTime() - t0 > timeLimit.toNanos() || Thread.currentThread().isInterrupted();
         }
     }
 
