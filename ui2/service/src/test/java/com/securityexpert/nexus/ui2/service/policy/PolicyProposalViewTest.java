@@ -109,6 +109,138 @@ class PolicyProposalViewTest {
                 mapper.convertValue(stackedBody.path("order").get(0).path("after"), List.class));
     }
 
+    private static PolicySnapshot mergeOnlySnapshot() {
+        return PolicyProposalTest.snapshot(cpSection("s1", null,
+                cp("r1", 10, "Accept", "lo", "any"),
+                cp("r2", 20, "Accept", "hi", "any")));
+    }
+
+    @Test
+    void mergeOnlyPackageIsEquivalentWithNoBehaviourChangeLabelAndDropsTheMergedRuleFromOrder() {
+        var stored = mergeOnlySnapshot();
+        var body = json(new PolicyProposalView().response(stored, 90).body());
+
+        assertEquals(PolicyReorder.EQUIVALENT, body.path("packageVerdict").asText());
+        assertEquals(PolicyProposal.LABEL_NO_CHANGE, body.path("label").asText());
+        assertFalse(body.path("inspectionChanges").asBoolean());
+        assertEquals(0, body.path("accepted").asInt());
+        assertEquals(PolicyProposal.NO_SUBJECT, body.path("emptyReason").asText());
+        assertEquals(1, body.path("mergesAccepted").asInt());
+        assertFalse(body.path("mergesBudgetStopped").asBoolean());
+        assertTrue(body.path("mergesEmptyReason").isNull());
+        assertTrue(body.path("mergesNote").isNull());
+        assertEquals(1, body.path("merges").size());
+        var merge = body.path("merges").get(0);
+        assertEquals(json(Map.of("ruleId", "r1", "ruleName", stored.sections().getFirst().rules().getFirst().name(),
+                "ruleNumber", 10)), merge.path("surviving"));
+        assertEquals(json(Map.of("ruleId", "r2", "ruleName", stored.sections().getFirst().rules().getLast().name(),
+                "ruleNumber", 20)), merge.path("merged"));
+        assertEquals("source", merge.path("differingCell").asText());
+        assertEquals(PolicyMerge.MERGE_CANDIDATE, merge.path("result").asText());
+        assertTrue(merge.path("reason").isNull());
+        assertTrue(merge.path("accepted").asBoolean());
+        assertEquals(PolicyReorder.EQUIVALENT, merge.path("equivalence").asText());
+
+        var order = body.path("order").get(0);
+        assertEquals(2, order.path("totalRules").asInt());
+        assertEquals(json(List.of("r1", "r2")), order.path("before"));
+        assertEquals(json(List.of("r1")), order.path("after"));
+
+        var capped = json(PolicyProposalView.compute(stored, PolicyProposalView.MAX_SUBJECTS, 1,
+                PolicyProposal.TOTAL_WORK, PolicyProposal.RULE_WORK).fields()).path("order").get(0);
+        assertEquals(1, capped.path("offset").asInt());
+        assertEquals(json(List.of("r2")), capped.path("before"));
+        assertEquals(json(List.of()), capped.path("after"));
+        assertEquals("+1 more", capped.path("more").asText());
+    }
+
+    @Test
+    void movesAndMergesCombineIntoOneVerdictAndTheMergeSeesTheMovedOrder() {
+        // Promoting spec above broad makes m1 and m2 adjacent for the first time.
+        var stored = PolicyProposalMergesTest.snapshot(cpSection("s1", null,
+                PolicyMergeTest.ruleWithCells("broad", 1, "Accept", "lo", "lo", "svc-https", "any"),
+                PolicyMergeTest.ruleWithCells("m1", 2, "Accept", "hi-a", "other", "svc-http", "any"),
+                PolicyMergeTest.ruleWithCells("spec", 3, "Accept", "lo-a", "net", "svc-https", "any"),
+                PolicyMergeTest.ruleWithCells("m2", 4, "Accept", "hi-b", "other", "svc-http", "any")));
+        assertEquals(0, PolicyMerge.analyze(stored).candidates());
+
+        var body = json(new PolicyProposalView().response(stored, 90).body());
+        assertEquals(1, body.path("accepted").asInt());
+        assertEquals("spec", body.path("steps").get(0).path("subject").path("ruleId").asText());
+        assertEquals(PolicyReorder.SAFE, body.path("steps").get(0).path("result").asText());
+        assertEquals(1, body.path("mergesAccepted").asInt());
+        var merge = body.path("merges").get(0);
+        assertEquals("m1", merge.path("surviving").path("ruleId").asText());
+        assertEquals(2, merge.path("surviving").path("ruleNumber").asInt(), "stored number, not post-move position");
+        assertEquals("m2", merge.path("merged").path("ruleId").asText());
+        assertEquals(PolicyReorder.EQUIVALENT, body.path("packageVerdict").asText());
+        assertEquals(PolicyProposal.LABEL_NO_CHANGE, body.path("label").asText());
+        var order = body.path("order").get(0);
+        assertEquals(json(List.of("broad", "m1", "spec", "m2")), order.path("before"));
+        assertEquals(json(List.of("spec", "broad", "m1")), order.path("after"));
+    }
+
+    @Test
+    void aMergeBudgetStopMakesThePackageNotProvenWithNoLabel() {
+        var body = json(PolicyProposalView.compute(mergeOnlySnapshot(), PolicyProposalView.MAX_SUBJECTS,
+                PolicyProposalView.MAX_ORDER_RULES, PolicyProposal.TOTAL_WORK, PolicyProposal.RULE_WORK, 0, 0).fields());
+
+        assertTrue(body.path("mergesBudgetStopped").asBoolean());
+        assertTrue(body.path("budgetStopped").asBoolean());
+        assertEquals(PolicyReorder.NOT_PROVEN, body.path("packageVerdict").asText());
+        assertTrue(body.path("label").isNull());
+        assertEquals(0, body.path("mergesAccepted").asInt());
+        assertEquals(1, body.path("mergesRefused").path(PolicyMerge.NOT_PROVEN).asInt());
+        var merge = body.path("merges").get(0);
+        assertEquals(PolicyMerge.NOT_PROVEN, merge.path("result").asText());
+        assertEquals(PolicyMerge.BUDGET, merge.path("reason").asText());
+        assertEquals(PolicyMerge.NOT_PROVEN, merge.path("equivalence").asText());
+        assertFalse(merge.path("accepted").asBoolean());
+        assertTrue(body.path("order").isEmpty());
+    }
+
+    @Test
+    void mergesRefusedAlwaysCarriesEveryRefusalKey() {
+        var stored = PolicyProposalTest.snapshot(cpSection("s1", null, cp("r1", 1, "Accept", "lo", "any")));
+        var body = json(new PolicyProposalView().response(stored, 90).body());
+        assertEquals(PolicyProposalMerges.NO_CANDIDATE, body.path("mergesEmptyReason").asText());
+        var refused = body.path("mergesRefused");
+        List<String> keys = new ArrayList<>();
+        refused.fieldNames().forEachRemaining(keys::add);
+        assertEquals(PolicyProposalMerges.REFUSALS, keys);
+        for (String word : keys) assertEquals(0, refused.path(word).intValue(), word);
+    }
+
+    @Test
+    void nonCheckPointStillAnswersSupportedFalseWithoutRunningMerges() {
+        var view = new PolicyProposalView();
+        view.setComputer(snapshot -> { throw new AssertionError("unsupported vendor started a proposal"); });
+        var pan = PolicyHygieneTest.snapshot(
+                List.of(PolicyHygieneTest.rule("r1", "any", "any", "allow", true)), PolicyHygieneTest.objects());
+        var body = json(view.response(pan, 90).body());
+        assertFalse(body.path("supported").asBoolean());
+        assertFalse(body.has("merges"));
+        assertFalse(body.has("mergesAccepted"));
+        assertEquals(0, view.cacheSize());
+    }
+
+    @Test
+    void mergeCapCountsAllAttemptsAndSignalsOmittedRows() {
+        int total = PolicyProposalView.MAX_MERGE_STEPS + 2;
+        List<Section> sections = new ArrayList<>();
+        for (int i = 0; i < total; i++) {
+            sections.add(cpSection("s-" + i, null,
+                    cp("a-" + i, i * 2 + 1, "Accept", "lo", "any"),
+                    cp("b-" + i, i * 2 + 2, "Accept", "hi", "any")));
+        }
+        var stored = PolicyProposalTest.snapshot(sections.toArray(Section[]::new));
+        var body = json(new PolicyProposalView().response(stored, 90).body());
+        assertEquals(total, body.path("mergesAccepted").asInt());
+        assertEquals(PolicyProposalView.MAX_MERGE_STEPS, body.path("merges").size());
+        assertEquals("+2 more", body.path("mergesNote").asText());
+        assertEquals(total, body.path("order").size(), "display cap does not limit applied merges");
+    }
+
     @Test
     void unsupportedVendorAnswersSupportedFalseLikeInsights() {
         var view = new PolicyProposalView();
@@ -136,6 +268,7 @@ class PolicyProposalViewTest {
         assertEquals(PolicyProposal.NO_MOVES, body.path("packageVerdict").asText());
         assertTrue(body.path("label").isNull());
         assertEquals(PolicyProposal.INCOMPLETE, body.path("emptyReason").asText());
+        assertEquals(PolicyProposalMerges.INCOMPLETE, body.path("mergesEmptyReason").asText());
         assertEquals(0, body.path("accepted").asInt());
         assertEquals(0, body.path("candidatesTotal").asInt());
         assertEquals(0, body.path("tried").asInt());
@@ -146,7 +279,7 @@ class PolicyProposalViewTest {
 
         var noMoves = PolicyProposalTest.snapshot(cpSection("s1", null,
                 cp("r1", 1, "Accept", "lo", "any"),
-                cp("r2", 2, "Accept", "other", "any")));
+                cp("r2", 2, "Drop", "other", "any")));
         var emptyBody = json(new PolicyProposalView().response(noMoves, 90).body());
         assertEquals(PolicyProposal.NO_SUBJECT, emptyBody.path("emptyReason").asText());
         assertEquals(PolicyProposal.NO_MOVES, emptyBody.path("packageVerdict").asText());
@@ -165,8 +298,12 @@ class PolicyProposalViewTest {
         for (int i = 1; i <= totalCandidates; i++) {
             String unique = "u-" + i;
             objects.put(unique, object(unique, "address", "ip-netmask: 198.51.100." + i + "/32"));
-            rules.add(PolicyProposalTest.multi(cp("s" + i, i + 1, "Accept", "shared-host", "any"), "shared-host", unique));
+            // All subjects overlap b0, but each has a different destination, so they cannot merge with each other.
+            rules.add(PolicyProposalMergesTest.ruleWithCells("s" + i, i + 1, "Accept",
+                    List.of("shared-host", unique), List.of(unique), List.of("any"), "any"));
         }
+        rules.add(cp("merge-a", totalCandidates + 2, "Drop", "lo", "any"));
+        rules.add(cp("merge-b", totalCandidates + 3, "Drop", "hi", "any"));
         var base = PolicyReorderTest.snapshot(cpSection("s1", null, rules.toArray(Rule[]::new)));
         var stored = new PolicySnapshot(base.metadata(), base.sections(), objects, List.of());
 
@@ -181,6 +318,8 @@ class PolicyProposalViewTest {
         // Subjects are tried in stored rule order: s1..s25, never s26..s29.
         assertEquals("s1", body.path("steps").get(0).path("subject").path("ruleId").asText());
         assertEquals("s25", body.path("steps").get(24).path("subject").path("ruleId").asText());
+        assertEquals(1, body.path("mergesAccepted").asInt(), "truncating moves does not skip the merge pass");
+        assertEquals("merge-b", body.path("merges").get(0).path("merged").path("ruleId").asText());
 
         // Capped order list reports "+N more" and ids only.
         var orderCapped = json(PolicyProposalView.compute(stored, 3, 5,
@@ -368,6 +507,48 @@ class PolicyProposalViewTest {
             }
             assertEquals(PolicyProposalView.MAX_CACHED, view.cacheSize());
         } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void theMergePassSharesTheSingleFlightCache() throws Exception {
+        var view = new PolicyProposalView();
+        var stored = mergeOnlySnapshot();
+        var calls = new AtomicInteger();
+        var entered = new CountDownLatch(1);
+        var secondStarted = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        view.setComputer(snapshot -> {
+            calls.incrementAndGet();
+            entered.countDown();
+            try {
+                assertTrue(release.await(10, TimeUnit.SECONDS));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            return PolicyProposalView.compute(snapshot);
+        });
+
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> view.response(stored, 90));
+            assertTrue(entered.await(10, TimeUnit.SECONDS));
+            var second = pool.submit(() -> {
+                secondStarted.countDown();
+                return view.response(stored, 30);
+            });
+            assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
+            release.countDown();
+            var one = first.get(10, TimeUnit.SECONDS).body();
+            var two = second.get(10, TimeUnit.SECONDS).body();
+            assertEquals(1, one.get("mergesAccepted"));
+            assertSame(one.get("merges"), two.get("merges"), "both responses use the same computed merge rows");
+            assertEquals(1, calls.get());
+            assertEquals(1, view.cacheSize());
+        } finally {
+            release.countDown();
             pool.shutdownNow();
         }
     }

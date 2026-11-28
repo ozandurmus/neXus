@@ -17,15 +17,17 @@ import java.util.concurrent.Semaphore;
  * Calls {@link PolicyProposal#allOfferedMoves(PolicySnapshot)} up to {@link #MAX_SUBJECTS} candidates in rule order
  * (and {@link PolicyProposal#propose(PolicySnapshot, List, int, int)} on the first {@link #MAX_SUBJECTS} when a package
  * has more, reporting {@code candidatesTotal}, {@code tried}, {@code notTried}, {@code truncated} and
- * {@code notTriedNote} so a truncated run is never presented as the whole package). Stores nothing, contacts nothing
- * and generates no command text (Q7).
+ * {@code notTriedNote} so a truncated run is never presented as the whole package). Runs I5 merges on that proposal
+ * in the same cached computation. Stores nothing, contacts nothing and generates no command text (Q7).
  */
 public final class PolicyProposalView {
 
     /** Maximum candidate subjects tried in one proposal request, in stored rule order. */
     public static final int MAX_SUBJECTS = 25;
-    /** Maximum rule identifiers returned per moved section in {@code order}; remaining rules are counted as "+N more". */
+    /** Maximum rule identifiers returned per changed section in {@code order}; remaining rules are counted as "+N more". */
     public static final int MAX_ORDER_RULES = 200;
+    /** Maximum merge attempts shown in {@code merges}; counts include all attempts and {@code mergesNote} marks the cap. */
+    public static final int MAX_MERGE_STEPS = 25;
     static final int MAX_CACHED = 4;
     private static final int DAYS = 90;
 
@@ -138,6 +140,12 @@ public final class PolicyProposalView {
     }
 
     static Computed compute(PolicySnapshot stored, int maxSubjects, int maxOrderRules, int workLimit, int ruleLimit) {
+        return compute(stored, maxSubjects, maxOrderRules, workLimit, ruleLimit,
+                PolicyProposalMerges.TOTAL_WORK, PolicyProposalMerges.RULE_WORK);
+    }
+
+    static Computed compute(PolicySnapshot stored, int maxSubjects, int maxOrderRules, int workLimit, int ruleLimit,
+            int mergeWorkLimit, int mergeRuleLimit) {
         int cap = Math.max(1, maxSubjects);
         int orderCap = Math.max(1, maxOrderRules);
         List<String> candidates = !"CP".equals(stored.metadata().vendor()) || !stored.failures().isEmpty()
@@ -152,6 +160,8 @@ public final class PolicyProposalView {
         } else {
             result = PolicyProposal.propose(stored, candidates.subList(0, cap), workLimit, ruleLimit);
         }
+        var merges = PolicyProposalMerges.allOfferedMerges(result, mergeWorkLimit, mergeRuleLimit);
+        var combined = PolicyProposalMerges.combine(result, merges);
         int tried = result.steps().size();
         int notTried = Math.max(0, candidatesTotal - tried);
         boolean truncated = notTried > 0;
@@ -162,14 +172,16 @@ public final class PolicyProposalView {
             }
         }
         List<Map<String, Object>> steps = result.steps().stream().map(step -> stepView(step, byId)).toList();
-        List<Map<String, Object>> order = sectionOrders(stored, result.snapshot(), orderCap);
+        var mergeSteps = merges.steps().stream().limit(MAX_MERGE_STEPS).map(step -> mergeView(step, byId)).toList();
+        int moreMerges = merges.steps().size() - mergeSteps.size();
+        List<Map<String, Object>> order = sectionOrders(stored, combined.snapshot(), orderCap);
         Map<String, Object> fields = new LinkedHashMap<>();
-        fields.put("packageVerdict", result.packageVerdict());
-        fields.put("label", result.label());
+        fields.put("packageVerdict", combined.packageVerdict());
+        fields.put("label", combined.label());
         fields.put("accepted", result.accepted());
         fields.put("refused", result.refused());
-        fields.put("inspectionChanges", result.inspectionChanges());
-        fields.put("budgetStopped", result.budgetStopped());
+        fields.put("inspectionChanges", combined.inspectionChanges());
+        fields.put("budgetStopped", combined.budgetStopped());
         fields.put("emptyReason", result.emptyReason());
         fields.put("maxSubjects", cap);
         fields.put("candidatesTotal", candidatesTotal);
@@ -178,6 +190,12 @@ public final class PolicyProposalView {
         fields.put("truncated", truncated);
         fields.put("notTriedNote", truncated ? "+" + notTried + " more not tried" : null);
         fields.put("steps", steps);
+        fields.put("merges", mergeSteps);
+        fields.put("mergesNote", moreMerges > 0 ? "+" + moreMerges + " more" : null);
+        fields.put("mergesAccepted", merges.accepted());
+        fields.put("mergesRefused", merges.refused());
+        fields.put("mergesBudgetStopped", merges.budgetStopped());
+        fields.put("mergesEmptyReason", merges.emptyReason());
         fields.put("order", order);
         fields.put("caveat", CAVEAT);
         fields.put("insightCaveats", List.of(PolicyInsights.INSTALL_STATE_NOT_VERIFIED));
@@ -209,6 +227,18 @@ public final class PolicyProposalView {
         return Collections.unmodifiableMap(row);
     }
 
+    private static Map<String, Object> mergeView(PolicyProposalMerges.Step step, Map<String, Rule> byId) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("surviving", ruleRef(step.surviving(), byId));
+        row.put("merged", ruleRef(step.merged(), byId));
+        row.put("differingCell", step.differingCell());
+        row.put("result", step.result());
+        row.put("reason", step.reason());
+        row.put("accepted", step.accepted());
+        row.put("equivalence", step.equivalence());
+        return Collections.unmodifiableMap(row);
+    }
+
     private static Map<String, Object> ruleRef(String ruleId, Map<String, Rule> byId) {
         if (ruleId == null) return null;
         Rule rule = byId.get(ruleId);
@@ -234,7 +264,8 @@ public final class PolicyProposalView {
             if (beforeAll.equals(afterAll)) continue;
             int total = beforeAll.size();
             int firstDiff = 0;
-            while (firstDiff < total && beforeAll.get(firstDiff).equals(afterAll.get(firstDiff))) {
+            int sharedSize = Math.min(total, afterAll.size());
+            while (firstDiff < sharedSize && beforeAll.get(firstDiff).equals(afterAll.get(firstDiff))) {
                 firstDiff++;
             }
             int offset = total <= orderCap || firstDiff < orderCap ? 0 : firstDiff;
@@ -245,7 +276,7 @@ public final class PolicyProposalView {
             row.put("offset", offset);
             row.put("totalRules", total);
             row.put("before", List.copyOf(beforeAll.subList(offset, end)));
-            row.put("after", List.copyOf(afterAll.subList(offset, end)));
+            row.put("after", List.copyOf(afterAll.subList(offset, Math.min(end, afterAll.size()))));
             row.put("moreRules", moreRules);
             row.put("more", moreRules > 0 ? "+" + moreRules + " more" : null);
             out.add(Collections.unmodifiableMap(row));

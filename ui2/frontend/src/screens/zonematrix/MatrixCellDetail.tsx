@@ -15,6 +15,8 @@ import { m3 } from "../../theme/m3Theme";
 import { TYPE } from "../../theme/tokens";
 import type { ZoneNotice } from "./ZoneMatrixScreen";
 import { headlineProven } from "./ViolationsTab";
+import { ServiceObjectPortCopier } from "./ServiceObjectPortCopier";
+import { mergeCopiedServiceEntries } from "./serviceObjectPorts";
 import { Hash, Hint, SectionTitle, isKnownStatement, knownSeverityWord, knownStatementWord, mono, panelSx } from "./zoneMatrixUi";
 import {
   MATRIX_SEVERITIES, MATRIX_STATEMENTS, clearMatrixCell, confirmCellReference, getZoneMatrixTemplate,
@@ -98,7 +100,7 @@ export interface SelectedPair {
 }
 
 export function CellDetailPanel({
-  pair, explicitCell, matrix, isMasked, editable, canConfirm, revision, onRefresh, onChanged, notify,
+  pair, explicitCell, matrix, isMasked, editable, canCopyServicePorts = false, canConfirm, revision, onRefresh, onChanged, notify,
   openViolations = null, onOpenViolations = null,
 }: {
   readonly pair: SelectedPair;
@@ -106,6 +108,7 @@ export function CellDetailPanel({
   readonly matrix: ZoneMatrixView;
   readonly isMasked: boolean;
   readonly editable: boolean;
+  readonly canCopyServicePorts?: boolean;
   readonly canConfirm: boolean;
   readonly revision: number | null;
   readonly onRefresh: () => void;
@@ -289,11 +292,24 @@ export function CellDetailPanel({
             </TextField>
           </Stack>
           {statement === "ALLOW_LISTED" ? (
-            <TextField label="Services" multiline minRows={3} maxRows={8} value={servicesText}
-              onChange={(e) => setServicesText(e.target.value)}
-              placeholder={"tcp/443\ntcp/8000-8099\nset:web"}
-              helperText="One canonical entry per line: tcp/443, tcp/8000-8099, udp/53, icmp/8, icmp/8/0, icmp6/128, ipproto/50, app:pan:<name>, set:<name>."
-              InputProps={{ sx: mono }} />
+            <>
+              <TextField label="Services" multiline minRows={3} maxRows={8} value={servicesText}
+                onChange={(e) => setServicesText(e.target.value)}
+                placeholder={"tcp/443\ntcp/8000-8099\nset:web"}
+                helperText="One canonical entry per line: tcp/443, tcp/8000-8099, udp/53, icmp/8, icmp/8/0, icmp6/128, ipproto/50, app:pan:<name>, set:<name>."
+                InputProps={{ sx: mono }} />
+              {canCopyServicePorts ? (
+                <ServiceObjectPortCopier
+                  key={JSON.stringify([pair.sourceId, pair.destinationId])}
+                  disabled={busy}
+                  onCopyEntries={(entries) => {
+                    const merged = mergeCopiedServiceEntries(servicesText, entries);
+                    setServicesText(merged.text);
+                    return merged.added;
+                  }}
+                />
+              ) : null}
+            </>
           ) : (
             <Hint>Services are listed only for Allow listed (ALLOW_LISTED).</Hint>
           )}

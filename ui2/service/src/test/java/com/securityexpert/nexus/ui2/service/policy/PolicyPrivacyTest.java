@@ -53,6 +53,63 @@ class PolicyPrivacyTest {
     private final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(new byte[32]);
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(new byte[32]);
 
+    @Test void proposalMergesMaskBothRuleNamesAndKeepOnlyClosedVocabulary() {
+        String survivorName = "Synthetic surviving rule";
+        String mergedName = "Synthetic merged rule";
+        String comment = "Synthetic free-text comment";
+        String unknown = "Synthetic unknown word";
+        var survivor = Map.of("ruleId", "rule-1", "ruleName", survivorName, "ruleNumber", 10, "comment", comment);
+        var merged = Map.of("ruleId", "rule-2", "ruleName", mergedName, "ruleNumber", 20);
+        var body = Map.of(
+                "merges", List.of(
+                        Map.of("surviving", survivor, "merged", merged, "differingCell", "source",
+                                "result", PolicyMerge.MERGE_CANDIDATE, "accepted", true,
+                                "equivalence", PolicyReorder.EQUIVALENT, "comment", comment),
+                        Map.of("result", PolicyMerge.NOT_PROVEN, "reason", PolicyMerge.BUDGET,
+                                "equivalence", PolicyMerge.NOT_PROVEN, "accepted", false),
+                        Map.of("differingCell", unknown, "result", PolicyReorder.SAFE,
+                                "equivalence", PolicyReorder.CHANGES, "reason", "COLLECTION_SKIPPED"),
+                        Map.of("result", unknown, "equivalence", unknown, "reason", comment,
+                                "differingCell", Map.of("ruleId", comment))),
+                "steps", List.of(Map.of("result", PolicyMerge.MERGE_CANDIDATE)),
+                "mergesRefused", Map.of(PolicyMerge.NOT_PROVEN, 1, unknown, 3),
+                "mergesNote", "+2 more", "mergesEmptyReason", PolicyProposalMerges.NO_CANDIDATE);
+        var masked = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(PolicyPrivacy.mask(body, "", names, ips));
+        var rows = masked.path("merges");
+        for (String planted : List.of(survivorName, mergedName, comment, unknown)) {
+            assertFalse(masked.toString().contains(planted));
+        }
+        var accepted = rows.get(0);
+        assertEquals(names.maskPolicyName("rule", survivorName), accepted.path("surviving").path("ruleName").asText());
+        assertEquals(names.maskPolicyName("rule", mergedName), accepted.path("merged").path("ruleName").asText());
+        assertEquals("rule-1", accepted.path("surviving").path("ruleId").asText());
+        assertEquals(20, accepted.path("merged").path("ruleNumber").asInt());
+        assertFalse(accepted.has("comment"));
+        assertFalse(accepted.path("surviving").has("comment"));
+        assertTrue(accepted.path("accepted").asBoolean());
+        assertEquals("source", accepted.path("differingCell").asText());
+        assertEquals(PolicyMerge.MERGE_CANDIDATE, accepted.path("result").asText());
+        assertEquals(PolicyReorder.EQUIVALENT, accepted.path("equivalence").asText());
+        assertEquals(PolicyMerge.BUDGET, rows.get(1).path("reason").asText());
+        assertEquals(PolicyMerge.NOT_PROVEN, rows.get(1).path("result").asText());
+        assertEquals(PolicyMerge.NOT_PROVEN, rows.get(1).path("equivalence").asText());
+        for (String field : List.of("differingCell", "result", "reason", "equivalence")) {
+            assertEquals("UNKNOWN", rows.get(2).path(field).asText(), field);
+            assertEquals("UNKNOWN", rows.get(3).path(field).asText(), field);
+        }
+        assertEquals("UNKNOWN", masked.path("steps").get(0).path("result").asText());
+        assertEquals("+2 more", masked.path("mergesNote").asText());
+        assertEquals(PolicyProposalMerges.NO_CANDIDATE, masked.path("mergesEmptyReason").asText());
+        assertEquals("UNKNOWN", PolicyPrivacy.mask("+2 more " + comment, "mergesNote", names, ips));
+        assertEquals("UNKNOWN", PolicyPrivacy.mask(unknown, "mergesEmptyReason", names, ips));
+
+        var refused = masked.path("mergesRefused");
+        List<String> keys = new ArrayList<>();
+        refused.fieldNames().forEachRemaining(keys::add);
+        assertEquals(PolicyProposalMerges.REFUSALS, keys);
+        for (String key : keys) assertEquals(key.equals(PolicyMerge.NOT_PROVEN) ? 1 : 0, refused.path(key).intValue(), key);
+    }
+
     @Test void typedNamesAreStableCaseSensitiveAndUniqueBeyondTheTopologyDictionary() {
         for (String type : List.of("policy", "rule", "address", "group", "service", "application", "profile-setting/group", "tag")) {
             String label = names.maskPolicyName(type, "Synthetic label");
