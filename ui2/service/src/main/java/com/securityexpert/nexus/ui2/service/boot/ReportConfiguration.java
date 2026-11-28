@@ -13,6 +13,7 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportReadRepository;
 import com.securityexpert.nexus.ui2.persistence.report.JooqReportRunStore;
+import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository;
 import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
 import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleService;
 import com.securityexpert.nexus.ui2.service.privacy.ReportProjectionMasker;
@@ -23,13 +24,17 @@ import com.securityexpert.nexus.ui2.service.report.ReportAccess;
 import com.securityexpert.nexus.ui2.service.report.ReportDocumentMasker;
 import com.securityexpert.nexus.ui2.service.report.ReportExecutor;
 import com.securityexpert.nexus.ui2.service.report.ReportService;
+import com.securityexpert.nexus.ui2.service.report.ZoneMatrixEvidenceReportBuilder;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixRunService;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService;
 
 /**
  * Reports R1 composition (docs/design/REPORTS_R1_CONTRACT.md): the bounded executor, the read-only report queries, the
  * one masking pass over the existing pseudonymizer and address masker, and the service's own artefact store (absent
- * when the pod has no store mounted: generation then answers STORE_UNAVAILABLE, the preview still works).
+ * when the pod has no store mounted: generation then answers STORE_UNAVAILABLE, the preview still works). ZM-01 reads
+ * the stored zone matrix read models through the zone matrix beans; without them a ZM-01 build fails closed.
  */
 @Configuration
 public class ReportConfiguration {
@@ -44,12 +49,16 @@ public class ReportConfiguration {
     @Bean
     public ReportService reportService(TransactionBoundary transactionBoundary, DeviceRepository deviceRepository,
             ObjectProvider<CpFailoverService> failover, ObjectProvider<LifecycleService> lifecycle,
-            TopologyNamePseudonymizer names, SubnetPreservingIpMasker addresses,
+            ObjectProvider<ZoneMatrixService> zoneMatrix, ObjectProvider<ZoneMatrixRunService> zoneMatrixRuns,
+            ObjectProvider<ZoneMatrixRepository> zoneMatrixVersions, TopologyNamePseudonymizer names,
+            SubnetPreservingIpMasker addresses,
             DeviceCompositionConfiguration.ArtefactStoreAccess artefactStoreAccess, RbacEvaluator rbac,
             ActionRegistry registry, ReportExecutor executor) {
         ReportService service = new ReportService(
                 new JooqReportData(new JooqReportReadRepository(transactionBoundary), deviceRepository,
-                        failover.getIfAvailable(), lifecycle.getIfAvailable()),
+                        failover.getIfAvailable(), lifecycle.getIfAvailable(),
+                        zoneMatrixSource(zoneMatrix.getIfAvailable(), zoneMatrixRuns.getIfAvailable(),
+                                zoneMatrixVersions.getIfAvailable())),
                 new JooqReportRunStore(transactionBoundary), reportStore(artefactStoreAccess, transactionBoundary),
                 new ReportDocumentMasker(new ReportProjectionMasker(names, addresses)), executor,
                 new ReportAccess(rbac, registry), Clock.systemUTC());
@@ -60,6 +69,13 @@ public class ReportConfiguration {
             LOG.warning("[REPORTS] could not close runs left open by a restart: " + e.getMessage());
         }
         return service;
+    }
+
+    /** The ZM-01 source when every zone matrix bean is present; {@code null} otherwise (the build then fails closed). */
+    static ZoneMatrixEvidenceReportBuilder.Source zoneMatrixSource(ZoneMatrixService matrix, ZoneMatrixRunService runs,
+            ZoneMatrixRepository versions) {
+        if (matrix == null || runs == null || versions == null) return null;
+        return ZoneMatrixEvidenceReportBuilder.Source.of(matrix, runs, versions);
     }
 
     /**

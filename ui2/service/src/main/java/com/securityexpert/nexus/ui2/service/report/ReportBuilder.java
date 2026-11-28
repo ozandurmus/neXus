@@ -13,8 +13,39 @@ import com.securityexpert.nexus.ui2.service.report.ReportDocument.PlaneAsOf;
 /** One R1 report builder: stored evidence in, one unprojected {@link ReportDocument} out. Pure: no write, no I/O. */
 public interface ReportBuilder {
 
-    /** What a build knows about its run: the template, its parameters, the clock and the requesting actor. */
-    record Context(ReportTemplate template, ReportParameters parameters, Instant now, String actor) {
+    /**
+     * What a build knows about its run: the template, its parameters, the clock, the requesting actor and the caller's
+     * authorised view. Builders whose content does not depend on the view ignore {@code caller}; the one masking pass
+     * still projects their document.
+     */
+    record Context(ReportTemplate template, ReportParameters parameters, Instant now, String actor, Caller caller) {
+        public Context {
+            caller = caller == null ? Caller.NONE : caller;
+        }
+
+        public Context(ReportTemplate template, ReportParameters parameters, Instant now, String actor) {
+            this(template, parameters, now, actor, Caller.NONE);
+        }
+    }
+
+    /**
+     * The caller's view as {@link ReportService} authorised it before the build (ZONE_MATRIX_CONTRACT.md 3.4, 7.3;
+     * ZM-31, ZM-38): the projection, whether the session is a replay viewer, and the rights a view-dependent builder
+     * needs ({@code policy_read}, {@code zone_matrix_zones_read}, {@code report_raw_view}). {@link #NONE} holds no right
+     * and is masked.
+     */
+    record Caller(ProjectionMode projection, boolean replayViewer, boolean policyRead, boolean zonesRead,
+            boolean rawRight) {
+        public static final Caller NONE = new Caller(ProjectionMode.MASKED, false, false, false, false);
+
+        public Caller {
+            projection = projection == null ? ProjectionMode.MASKED : projection;
+        }
+
+        /** The masked screen view: a MASKED projection, or any replay viewer whatever it asked for. */
+        public boolean maskedView() {
+            return projection != ProjectionMode.RAW || replayViewer;
+        }
     }
 
     ReportTemplate template();
@@ -28,6 +59,7 @@ public interface ReportBuilder {
             case RPT_03 -> new BackupCoverageBuilder();
             case RPT_05 -> new HaReadinessBuilder();
             case RPT_17 -> new LifecycleLicensingBuilder();
+            case ZM_01 -> new ZoneMatrixEvidenceReportBuilder();
         };
     }
 

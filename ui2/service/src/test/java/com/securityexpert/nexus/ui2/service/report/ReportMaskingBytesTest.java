@@ -37,8 +37,13 @@ class ReportMaskingBytesTest {
     private static final List<ReportRenderer> RENDERERS =
             List.of(new PdfReportRenderer(), new XlsxReportRenderer(), new CsvReportRenderer());
 
+    /**
+     * ZM-01 is excluded here because the generic fixture ({@code ReportFixtures.Data}) has no zone matrix source and
+     * its builder masks per caller (the screen view, ZONE_MATRIX_CONTRACT.md 7.3) before the generic masking step;
+     * {@code ZoneMatrixEvidenceReportWiringTest} scans the MASKED PDF and CSV bytes of ZM-01 through the service.
+     */
     @ParameterizedTest
-    @EnumSource(ReportTemplate.class)
+    @EnumSource(value = ReportTemplate.class, mode = EnumSource.Mode.EXCLUDE, names = "ZM_01")
     void maskedFilesOfEveryReportCarryNoRawIdentity(ReportTemplate template) throws Exception {
         ReportDocument doc = ReportBuilder.forTemplate(template).build(ReportFixtures.context(template), new ReportFixtures.Data());
         ReportDocument masked = ReportFixtures.masker().project(doc, ProjectionMode.MASKED);

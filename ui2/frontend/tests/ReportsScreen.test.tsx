@@ -10,6 +10,7 @@ const templates = [
   { template_id: "RPT-03", title: "Backup coverage and anomalies", audience: "Operations", question: "Which targets have an archive?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: false, missing_reads: [] },
   { template_id: "RPT-05", title: "HA and failover readiness", audience: "Operations", question: "Which clusters are ready?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: false, missing_reads: ["cp_failover_read"] },
   { template_id: "RPT-17", title: "Lifecycle and licensing", audience: "Auditor", question: "Which licences, subscriptions and support contracts are expired or expiring within 30 or 90 days?", formats: ["PDF", "XLSX", "CSV"], framework_parameter: false, missing_reads: [] },
+  { template_id: "ZM-01", title: "Zone matrix segmentation evidence", audience: "Compliance / Auditor", question: "Which firewall rules conflict with the published zone matrix in the period?", formats: ["PDF", "CSV"], framework_parameter: false, missing_reads: [] },
 ] as const;
 
 function catalogue(rawView: boolean, masked: boolean): ReportCatalogue {
@@ -154,6 +155,18 @@ describe("Reports screen (Reports R1)", () => {
     const preview = calls.find(c => c.url === "/api/v2/reports/preview")!;
     expect(preview.method).toBe("POST");
     expect(preview.body).toMatchObject({ template_id: "RPT-01", projection: "MASKED" });
+  });
+
+  it("offers only the file formats the catalogue lists for a report (ZM-01: PDF and CSV)", async () => {
+    server();
+    render(<ReportsScreen />);
+    await screen.findByText("Zone matrix segmentation evidence");
+    const zmCard = document.querySelector("[data-report-card='ZM-01']") as HTMLElement;
+    expect(within(zmCard).getByText("On screen · PDF · CSV")).toBeInTheDocument();
+    fireEvent.click(within(zmCard).getByRole("button", { name: "Run & preview" }));
+    expect(screen.getByRole("button", { name: "Generate PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate CSV" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate XLSX" })).toBeNull();
   });
 
   it("asks for a framework only on RPT-02 and sends it with the request", async () => {

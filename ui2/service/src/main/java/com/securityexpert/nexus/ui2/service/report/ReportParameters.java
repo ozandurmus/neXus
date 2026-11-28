@@ -10,12 +10,25 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService;
+import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixSummaryView;
 
 /**
  * R1 report parameters (contract "UI": a date range; a framework for RPT-02). Dates are calendar days in the product
- * time zone (Europe/Istanbul); {@code to} is inclusive. Nothing here carries an identity.
+ * time zone (Europe/Istanbul); {@code to} is inclusive. Nothing here carries a name or an address.
+ *
+ * <p>ZM-01 (ZONE_MATRIX_CONTRACT.md 7.3) also takes an optional opaque {@code policyId} and {@code outcome} filter,
+ * validated as the zone matrix summary route validates them, and the opt-in {@code includeBlocksAppendix} (default
+ * {@code false}; ZM-38). Every other template refuses them (fail closed); an explicit {@code false} opt-in is the
+ * default and is accepted.</p>
  */
-public record ReportParameters(LocalDate from, LocalDate to, String framework) {
+public record ReportParameters(LocalDate from, LocalDate to, String framework, String policyId, String outcome,
+        boolean includeBlocksAppendix) {
+
+    /** The R1 parameters without any zone matrix parameter. */
+    public ReportParameters(LocalDate from, LocalDate to, String framework) {
+        this(from, to, framework, null, null, false);
+    }
 
     /** Default range: the last seven days, today included. */
     public static final int DEFAULT_DAYS = 7;
@@ -24,6 +37,8 @@ public record ReportParameters(LocalDate from, LocalDate to, String framework) {
     public static final String ALL_FRAMEWORKS = "ALL";
     /** The framework keys, primary first (PO decision 2026-11-05: CIS and NIST headline). */
     public static final List<String> FRAMEWORKS = List.of("CIS", "NIST_800_53", "PCI_DSS", "FINANCIAL_BASELINE");
+    /** The {@code parameters_json} key of the ZM-01 blocks appendix opt-in; present (as "true") only when opted in. */
+    public static final String INCLUDE_BLOCKS_APPENDIX = "include_blocks_appendix";
 
     public static final class Invalid extends RuntimeException {
         private final String code;
@@ -40,6 +55,16 @@ public record ReportParameters(LocalDate from, LocalDate to, String framework) {
 
     /** Parses and validates; blank values take their defaults. */
     public static ReportParameters parse(ReportTemplate template, String from, String to, String framework, Instant now) {
+        return parse(template, from, to, framework, null, null, null, now);
+    }
+
+    /**
+     * Parses and validates, with the zone matrix parameters of ZM-01 ({@code null}: not given). A blank
+     * {@code policyId} or an outcome outside the summary route's list is refused; a zone matrix parameter on any other
+     * template is refused with {@code INVALID_PARAMETER}.
+     */
+    public static ReportParameters parse(ReportTemplate template, String from, String to, String framework,
+            String policyId, String outcome, Boolean includeBlocksAppendix, Instant now) {
         LocalDate today = now.atZone(JobWindowPolicy.ZONE_ID).toLocalDate();
         LocalDate end = date(to).orElse(today);
         LocalDate start = date(from).orElse(end.minusDays(DEFAULT_DAYS - 1L));
@@ -57,7 +82,20 @@ public record ReportParameters(LocalDate from, LocalDate to, String framework) {
         } else if (framework != null && !framework.isBlank()) {
             throw new Invalid("INVALID_FRAMEWORK", "This report takes no framework");
         }
-        return new ReportParameters(start, end, fw);
+        boolean appendix = Boolean.TRUE.equals(includeBlocksAppendix);
+        if (!template.zoneMatrixParameters()) {
+            if (policyId != null || outcome != null || appendix) {
+                throw new Invalid("INVALID_PARAMETER", "This report takes no zone matrix parameter");
+            }
+            return new ReportParameters(start, end, fw);
+        }
+        ZoneMatrixSummaryView.Query query;
+        try {
+            query = ZoneMatrixSummaryView.Query.parse(policyId, outcome, null);
+        } catch (ZoneMatrixService.Refused e) {
+            throw new Invalid(e.code, e.getMessage());
+        }
+        return new ReportParameters(start, end, fw, query.policyId(), query.outcome(), appendix);
     }
 
     private static Optional<LocalDate> date(String value) {
@@ -85,6 +123,9 @@ public record ReportParameters(LocalDate from, LocalDate to, String framework) {
         m.put("from", from.toString());
         m.put("to", to.toString());
         if (framework != null) m.put("framework", framework);
+        if (policyId != null) m.put("policy_id", policyId);
+        if (outcome != null) m.put("outcome", outcome);
+        if (includeBlocksAppendix) m.put(INCLUDE_BLOCKS_APPENDIX, "true");
         return m;
     }
 }
