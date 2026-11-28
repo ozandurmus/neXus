@@ -14,7 +14,8 @@ import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleService;
 
 /**
  * Production {@link ReportData}: the read-only report queries (read-only transactions with a statement timeout), the
- * device list, and the failover and lifecycle summaries the screens show (database reads only; no job, no device contact).
+ * device list, the failover and lifecycle summaries the screens show, and the stored zone matrix read models (database
+ * reads only; no job, no device contact).
  */
 public final class JooqReportData implements ReportData {
 
@@ -22,6 +23,7 @@ public final class JooqReportData implements ReportData {
     private final DeviceRepository devices;
     private final CpFailoverService failover;
     private final LifecycleService lifecycle;
+    private final ZoneMatrixEvidenceReportBuilder.Source zoneMatrix;
 
     public JooqReportData(JooqReportReadRepository reads, DeviceRepository devices, CpFailoverService failover) {
         this(reads, devices, failover, null);
@@ -29,10 +31,16 @@ public final class JooqReportData implements ReportData {
 
     public JooqReportData(JooqReportReadRepository reads, DeviceRepository devices, CpFailoverService failover,
             LifecycleService lifecycle) {
+        this(reads, devices, failover, lifecycle, null);
+    }
+
+    public JooqReportData(JooqReportReadRepository reads, DeviceRepository devices, CpFailoverService failover,
+            LifecycleService lifecycle, ZoneMatrixEvidenceReportBuilder.Source zoneMatrix) {
         this.reads = Objects.requireNonNull(reads, "reads");
         this.devices = Objects.requireNonNull(devices, "devices");
         this.failover = failover;
         this.lifecycle = lifecycle;
+        this.zoneMatrix = zoneMatrix;
     }
 
     @Override
@@ -84,5 +92,14 @@ public final class JooqReportData implements ReportData {
             throw new IllegalStateException("Lifecycle service is unavailable; lifecycle evidence cannot be read");
         }
         return lifecycle.fleetSnapshot(today, now);
+    }
+
+    @Override
+    public ZoneMatrixEvidenceReportBuilder.Source zoneMatrixEvidence() {
+        if (zoneMatrix == null) {
+            // An absent source is not an empty matrix: fail the run instead of printing "no findings".
+            throw new IllegalStateException("Zone matrix service is unavailable; zone matrix evidence cannot be read");
+        }
+        return zoneMatrix;
     }
 }

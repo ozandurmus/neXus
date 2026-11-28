@@ -15,7 +15,7 @@ import Typography from "@mui/material/Typography";
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
-import { PLANE_ADMIN, PLANE_COLLECT } from "../shell/actionAccess";
+import { PLANE_ADMIN, PLANE_COLLECT, planeGranted } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
@@ -24,7 +24,10 @@ export { isDeviceLive } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
 import { usePreferenceFlag } from "../shell/preference";
-import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
+import { useSession } from "../auth/SessionContext";
+import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, getLogFindingChips, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode, type LogFindingChipData } from "../auth/adminApi";
+import { LogFindingChip } from "./LogFindingChip";
+import { clusterLogChip, normalizeLogChipsAnswer } from "./logFindingsModel";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
@@ -156,12 +159,14 @@ function DeviceRow({
   indented = false,
   selected = false,
   onSelect,
+  logChip,
   trailingExtra,
 }: {
   readonly device: DeviceSummary;
   readonly indented?: boolean;
   readonly selected?: boolean;
   readonly onSelect?: (device: DeviceSummary) => void;
+  readonly logChip?: LogFindingChipData;
   readonly trailingExtra?: React.ReactNode;
 }) {
   const isEnrolled = device.enrollment_state === "ENROLLED";
@@ -246,6 +251,7 @@ function DeviceRow({
               dense
             />
           )}
+          {logChip && <LogFindingChip chip={logChip} />}
           {trailingExtra}
         </Box>
       </Box>
@@ -439,6 +445,9 @@ export function DeviceList(props: DeviceListProps) {
                   {MANAGER_KIND[manager.vendor_hint] ?? "Management server"}
                 </Typography>
               </Box>
+              {rest.logChips?.get(manager.device_id) && (
+                <LogFindingChip chip={rest.logChips.get(manager.device_id)!} />
+              )}
               {/* Listed manager inventory is external; Infoblox rows count their listed grid members. */}
               {manager.vendor_hint === "infoblox" ? (
                 <StatusChip tone="neutral" label={plural(listed.length, "member")} dense />
@@ -505,6 +514,7 @@ function FlatDeviceList({
   clusterOnly = false,
   showVirtualSystems = true,
   showMembers = true,
+  logChips,
   onSelectDevice,
   onSelectCluster,
 }: {
@@ -517,6 +527,8 @@ function FlatDeviceList({
   readonly showVirtualSystems?: boolean;
   /** Member rows under a cluster that has no virtual systems (UI review 2026-10-18, F-18); a VSX cluster lists its virtual systems instead. */
   readonly showMembers?: boolean;
+  /** Log detection chips outside the shadow period, keyed by opaque `device_id`. */
+  readonly logChips?: ReadonlyMap<string, LogFindingChipData>;
   readonly onSelectDevice: (device: DeviceSummary, selectedVs?: string) => void;
   readonly onSelectCluster: (ref: string, members: DeviceSummary[], selectedVs?: string) => void;
 }) {
@@ -596,6 +608,7 @@ function FlatDeviceList({
         const memberMode = showMembers && clusterVsList.length === 0;
         const membersOpen = openMembers.has(ref);
         const hasChevron = memberMode || (showVirtualSystems && clusterVsList.length > 0);
+        const clusterChip = clusterLogChip(members, logChips);
 
         return (
           <Box key={ref} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -658,6 +671,7 @@ function FlatDeviceList({
                       dense
                     />
                   )}
+                  {clusterChip && <LogFindingChip chip={clusterChip} />}
                   {hasChevron && (
                     <span data-testid="tree-child-count">
                       <StatusChip tone="neutral" dense
@@ -806,6 +820,7 @@ function FlatDeviceList({
                     device={member}
                     indented
                     selected={member.device_id === selectedDeviceId && !selectedVs}
+                    logChip={logChips?.get(member.device_id)}
                     onSelect={(dev) => onSelectDevice(dev)}
                   />
                 ))}
@@ -829,6 +844,7 @@ function FlatDeviceList({
               key={device.device_id}
               device={device}
               selected={isDeviceSelected && !selectedVs}
+              logChip={logChips?.get(device.device_id)}
               onSelect={(dev) => onSelectDevice(dev)}
               trailingExtra={standaloneVsList.length > 0
                 ? <StatusChip tone="neutral" label={`${standaloneVsList.length} ${childCountLabel}`} dense />
@@ -842,6 +858,7 @@ function FlatDeviceList({
             <DeviceRow
               device={device}
               selected={isDeviceSelected && !selectedVs}
+              logChip={logChips?.get(device.device_id)}
               onSelect={(dev) => onSelectDevice(dev)}
               trailingExtra={
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1057,6 +1074,38 @@ export function InventoryScreen() {
   const [savedDiffers, setSavedDiffers] = useState(false);
   const asaRelations = useAsaConfigRelations(data?.some((d) => d.vendor_hint === "cisco_asa") === true);
   const savedDiffersIds = useMemo(() => savedConfigDiffersIds(asaRelations), [asaRelations]);
+  // Log detection chips (LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md §9, §10): fetched for Check Point / Palo Alto fleets when
+  // the session has log-read access, and rendered in the Devices list ONLY outside the shadow period (`enabled && !shadow`).
+  const session = useSession();
+  const canReadLogFindings = planeGranted(session?.permissions, "PacketAnalysis");
+  const hasSystemLogDevices = data?.some((d) => d.vendor_hint === "check_point" || d.vendor_hint === "palo_alto") === true;
+  const [logChips, setLogChips] = useState<ReadonlyMap<string, LogFindingChipData>>(() => new Map());
+  const [logChipsTruncated, setLogChipsTruncated] = useState<string | null>(null);
+  const [logChipsError, setLogChipsError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasSystemLogDevices || !canReadLogFindings) {
+      setLogChips((prev) => (prev.size === 0 ? prev : new Map()));
+      setLogChipsTruncated(null);
+      setLogChipsError(null);
+      return undefined;
+    }
+    let live = true;
+    Promise.resolve(getLogFindingChips())
+      .then((ans) => {
+        if (!live) return;
+        const normalized = normalizeLogChipsAnswer(ans);
+        setLogChips(normalized.chips);
+        setLogChipsTruncated(normalized.truncatedNote);
+        setLogChipsError(null);
+      })
+      .catch((err) => {
+        if (!live) return;
+        setLogChips(new Map());
+        setLogChipsTruncated(null);
+        setLogChipsError(describeApiError(err));
+      });
+    return () => { live = false; };
+  }, [hasSystemLogDevices, canReadLogFindings]);
   // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
   const [pendingClusterRef, setPendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(() => urlParam("device_id"));
@@ -1356,10 +1405,35 @@ export function InventoryScreen() {
             {!error && devices !== null && devices.length > 0 && filteredDevices.length === 0 && (
               <EmptyPanel title="No matches" body="No devices match the current search and filter criteria." />
             )}
+            {logChipsError && (
+              <Box
+                data-testid="log-chips-error"
+                role="status"
+                sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", px: 1, py: 0.5, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}
+              >
+                <StatusChip tone="unknown" label="LOG FINDINGS UNKNOWN" dense />
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                  {`Log detection chips could not be read (${logChipsError}).`}
+                </Typography>
+              </Box>
+            )}
+            {logChipsTruncated && (
+              <Box
+                data-testid="log-chips-truncated"
+                role="status"
+                sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", px: 1, py: 0.5, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}
+              >
+                <StatusChip tone="warn" label="LOG CHIPS PARTIAL" dense />
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                  {logChipsTruncated}
+                </Typography>
+              </Box>
+            )}
             {!error && devices !== null && filteredDevices.length > 0 && (
               <DeviceList
                 groupByManager={listView === "manager" && filteredDevices.length === (devices?.length ?? 0)}
                 devices={sortedDevices}
+                logChips={logChips}
                 selectedDeviceId={selectedDevice?.device_id ?? null}
                 selectedClusterRef={selectedCluster?.ref ?? null}
                 selectedVs={selectedCluster ? selectedCluster.initialVs : selectedDeviceVs}

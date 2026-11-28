@@ -38,6 +38,11 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
  * history) and {@code report_generate} (generate, download); {@link ReportService} then checks the underlying domain
  * reads and the RAW projection ({@code report_raw_view}, never a replay viewer). Every JSON body is either projected
  * already or identity-free, and travels as a {@link ReportResponse}.
+ *
+ * <p>ZM-01 (ZONE_MATRIX_CONTRACT.md 7.3) takes the optional {@code policy_id} and {@code outcome} filter and the
+ * opt-in {@code include_blocks_appendix}; {@link ReportParameters} refuses them on every other template and
+ * {@link ReportService} refuses the appendix (403 {@code BLOCKS_NOT_PERMITTED}) unless RAW, {@code report_raw_view}
+ * and {@code zone_matrix_zones_read}, never for a replay viewer.</p>
  */
 @RestController
 public final class ReportsController {
@@ -45,7 +50,7 @@ public final class ReportsController {
     private static final String BASE = "/api/v2/reports";
 
     public record ReportRequest(String template_id, String from, String to, String framework, String projection,
-            String format) {
+            String format, String policy_id, String outcome, Boolean include_blocks_appendix) {
     }
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -67,8 +72,9 @@ public final class ReportsController {
             m.put("title", t.title());
             m.put("audience", t.audience());
             m.put("question", t.question());
-            m.put("formats", List.of("PDF", "XLSX", "CSV"));
+            m.put("formats", t.fileFormatsOrdered().stream().map(Enum::name).toList());
             m.put("framework_parameter", t.frameworkParameter());
+            m.put("zone_matrix_parameters", t.zoneMatrixParameters());
             m.put("missing_reads", service.missingDomainReads(actor, t));
             templates.add(m);
         }
@@ -84,8 +90,7 @@ public final class ReportsController {
     public ResponseEntity<Object> preview(@RequestBody ReportRequest body, HttpServletRequest request) {
         try {
             ReportTemplate template = template(body);
-            ReportParameters parameters = ReportParameters.parse(template, body.from(), body.to(), body.framework(),
-                    service.now());
+            ReportParameters parameters = parameters(template, body);
             var doc = service.preview(actor(request), masked(request), template, parameters, projection(body));
             return ok(ReportJson.toMap(doc), "MASKED".equals(doc.projection()));
         } catch (ReportParameters.Invalid e) {
@@ -103,8 +108,7 @@ public final class ReportsController {
             ReportTemplate template = template(body);
             ReportFormat format = ReportFormat.parse(body.format())
                     .orElseThrow(() -> new ReportService.Refusal(400, "INVALID_FORMAT", "Format is PDF, XLSX or CSV"));
-            ReportParameters parameters = ReportParameters.parse(template, body.from(), body.to(), body.framework(),
-                    service.now());
+            ReportParameters parameters = parameters(template, body);
             RunRow row = service.submit(actor(request), masked(request), template, parameters, projection(body), format);
             return ResponseEntity.status(202).cacheControl(CacheControl.noStore())
                     .body(new ReportResponse(run(row, actor(request)), true));
@@ -206,6 +210,11 @@ public final class ReportsController {
         if (body == null) throw new ReportService.Refusal(400, "INVALID_TEMPLATE", "A template is required");
         return ReportTemplate.fromId(body.template_id())
                 .orElseThrow(() -> new ReportService.Refusal(400, "INVALID_TEMPLATE", "Unknown report template"));
+    }
+
+    private ReportParameters parameters(ReportTemplate template, ReportRequest body) {
+        return ReportParameters.parse(template, body.from(), body.to(), body.framework(), body.policy_id(), body.outcome(),
+                body.include_blocks_appendix(), service.now());
     }
 
     private static ProjectionMode projection(ReportRequest body) {

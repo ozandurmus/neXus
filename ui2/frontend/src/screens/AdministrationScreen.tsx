@@ -29,6 +29,7 @@ import { LocalSignInScopePanel } from "../components/settings/LocalSignInScopePa
 import { SamlSettingsPanel } from "../components/settings/SamlSettingsPanel";
 import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
 import { SystemLogSettingsPanel } from "../components/settings/SystemLogSettingsPanel";
+import { LogDetectionCatalogPanel } from "../components/settings/LogDetectionCatalogPanel";
 import { SnmpPollingPanel } from "../components/settings/SnmpPollingPanel";
 
 interface AdminSectionDef {
@@ -112,10 +113,11 @@ const PAGES: readonly AdminPageDef[] = [
     label: "Notifications and logging",
     tabList: "Notifications and logging sections",
     // System and Scheduled jobs are pages of their own (PO 2026-11-13 amendment); old addresses are rewritten in `legacyRoutes`.
-    blurb: "The product's own settings: where notifications go, and which system logs are collected from the devices.",
+    blurb: "The product's own settings: where notifications go, which system logs are collected from the devices, and the log detection engine and template catalog.",
     sections: [
       { slug: "notifications", administratorOnly: true, label: "Notifications", panel: <NotificationSettingsPanel /> },
       { slug: "system-logs", administratorOnly: true, label: "Log collection", panel: <SystemLogSettingsPanel /> },
+      { slug: "log-detection", administratorOnly: true, label: "Template catalog", panel: <LogDetectionCatalogPanel /> },
     ],
   },
   {

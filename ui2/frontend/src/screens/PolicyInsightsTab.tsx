@@ -3,6 +3,7 @@ import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell
 import { getPolicyInsights, responsesAreMasked, type InsightGrade, type InsightType, type PolicyInsight, type PolicyInsightCounts, type PolicyInsightsPage } from "../auth/adminApi";
 import { downloadText } from "./DeviceShared";
 import { ChangeListPanel, InsightDetail } from "./PolicyInsightDetail";
+import { PolicyProposalPanel } from "./PolicyProposalPanel";
 import { policyFailureText } from "./PolicyRuleViewer";
 import { GRADE_EXPLAIN, TYPE_LABEL, changeItem, changeListCsv, changeListText, insightGradeColor, insightSuggestion, loadChangeList, raiseText, saveChangeList, withChange, withoutChange,
   type ChangeItem, type SuggestedAction } from "./policyInsightActions";
@@ -186,6 +187,7 @@ export function PolicyInsightsTab({ policy, policyName, openRule, openObject = (
       <Stack direction="row" alignItems="center"><Button disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous insights page</Button>
         <Typography variant="caption">{n(data.total ?? 0)} matching insights · Page {page + 1}</Typography>
         <Button disabled={(page + 1) * (data.pageSize ?? 200) >= (data.total ?? 0)} onClick={() => setPage(p => p + 1)}>Next insights page</Button></Stack>
+      <PolicyProposalPanel policy={policy} days={days} />
       {/* Esc and the backdrop close through onClose; focus is handed back by the effect above, so the drawer does not restore it itself. */}
       <Drawer anchor="right" open={panel !== null} onClose={close} ModalProps={{ disableRestoreFocus: true }}
         PaperProps={{ sx: { width: { xs: "100%", md: 860 }, maxWidth: "100vw", bgcolor: m3.surface } }}>
