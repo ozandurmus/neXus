@@ -144,7 +144,7 @@ function AccountMenu({ initials, displayName, roles, onSignOut }: {
 function MaskChip() {
   const [masked, setMasked] = useState(responsesAreMasked());
   useEffect(() => {
-    const on = () => setMasked(true);
+    const on = () => setMasked(responsesAreMasked());
     window.addEventListener("nx-masked", on);
     return () => window.removeEventListener("nx-masked", on);
   }, []);

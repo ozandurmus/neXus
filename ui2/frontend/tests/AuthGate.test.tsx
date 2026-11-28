@@ -1,15 +1,19 @@
+import { ThemeProvider } from "@mui/material/styles";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useSession } from "../src/auth/SessionContext";
 import { AuthGate } from "../src/auth/AuthGate";
-import { listDevices } from "../src/auth/adminApi";
+import { listDevices, resetSharedApiCache, responsesAreMasked } from "../src/auth/adminApi";
+import { TopAppBar } from "../src/shell/TopAppBar";
+import { m3Theme } from "../src/theme/m3Theme";
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status });
+function jsonResponse(status: number, body: unknown, headers?: HeadersInit): Response {
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 afterEach(() => {
+  resetSharedApiCache();
   vi.unstubAllGlobals();
 });
 
@@ -193,5 +197,119 @@ describe("AuthGate", () => {
     render(<AuthGate><div>app</div></AuthGate>);
     await screen.findAllByRole("heading", { name: "Sign in" });
     expect(screen.getAllByRole("link", { name: "Sign in with SSO (ADFS)" })).toHaveLength(1);
+  });
+
+  it("clears the aiview masking badge and state on sign-out before a subsequent security_admin login", async () => {
+    let sessionKind: "aiview" | "signed_out" | "security_admin" = "aiview";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/session/status") {
+        if (sessionKind === "aiview") {
+          return jsonResponse(200, {
+            authenticated: true,
+            display_name: "aiview",
+            role_tokens: ["role:replay_viewer"],
+            csrf_token: "synthetic-csrf-aiview",
+          });
+        }
+        if (sessionKind === "security_admin") {
+          return jsonResponse(200, {
+            authenticated: true,
+            display_name: "secadmin",
+            role_tokens: ["role:security_admin"],
+            csrf_token: "synthetic-csrf-admin",
+          });
+        }
+        return jsonResponse(401, { authenticated: false });
+      }
+      if (url === "/session/logout") {
+        sessionKind = "signed_out";
+        return jsonResponse(200, { ok: true });
+      }
+      if (url === "/login") {
+        sessionKind = "security_admin";
+        return jsonResponse(200, { ok: true });
+      }
+      const headers = sessionKind === "aiview" ? { "X-Nexus-Masked": "true" } : undefined;
+      return jsonResponse(
+        200,
+        {
+          devices: [{ device_id: "dev-1", hostname: "FW-TANGO-04", management_address: "192.0.2.10" }],
+          notifications: [],
+          pods: [],
+        },
+        headers,
+      );
+    }));
+
+    render(
+      <AuthGate>
+        <ThemeProvider theme={m3Theme}>
+          <TopAppBar />
+        </ThemeProvider>
+      </AuthGate>,
+    );
+
+    expect(await screen.findByText("aiview · names masked")).toBeInTheDocument();
+    expect(responsesAreMasked()).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await screen.findByLabelText("Username");
+    expect(responsesAreMasked()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "secadmin" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "synthetic-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(await screen.findByText("secadmin")).toBeInTheDocument();
+    await listDevices();
+    expect(responsesAreMasked()).toBe(false);
+    expect(screen.queryByText("aiview · names masked")).toBeNull();
+  });
+
+  it("ignores a stale in-flight aiview response settling after sign-out and cache reset", async () => {
+    let resolveInFlight!: (response: Response) => void;
+    const inFlightDevices = new Promise<Response>((resolve) => {
+      resolveInFlight = resolve;
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/session/status") {
+        return jsonResponse(200, {
+          authenticated: true,
+          display_name: "aiview",
+          role_tokens: ["role:replay_viewer"],
+          csrf_token: "synthetic-csrf",
+        });
+      }
+      if (url === "/session/logout") return jsonResponse(200, { ok: true });
+      if (url === "/devices") return inFlightDevices;
+      return jsonResponse(200, {});
+    }));
+
+    function SignOutButton() {
+      const session = useSession();
+      return <button onClick={() => session?.onSignOut()}>sign out</button>;
+    }
+
+    render(<AuthGate><SignOutButton /></AuthGate>);
+    const signOutBtn = await screen.findByText("sign out");
+
+    const pendingDevices = listDevices();
+    fireEvent.click(signOutBtn);
+    await waitFor(() => expect(screen.queryByText("sign out")).toBeNull());
+    expect(responsesAreMasked()).toBe(false);
+
+    resolveInFlight(
+      jsonResponse(
+        200,
+        { devices: [{ device_id: "dev-1", hostname: "FW-TANGO-04", management_address: "192.0.2.10" }] },
+        { "X-Nexus-Masked": "true" },
+      ),
+    );
+    await pendingDevices;
+
+    expect(responsesAreMasked()).toBe(false);
   });
 });
