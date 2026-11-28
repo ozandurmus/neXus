@@ -89,6 +89,39 @@ inline_log_tail() {
   fi
   printf 'Last 30 lines:\n%s\n' "$tail_out"
 }
+# ci_log_filter: stdin = `gh run view --log-failed` text. Strips the job/step/timestamp columns, keeps lines matching the
+# failure markers plus the next 3, drops any line with token/password, caps at 60 lines and 6000 bytes.
+ci_log_filter() {
+  local T=$'\t'
+  sed -E "s/^[^$T]*$T[^$T]*$T//; s/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z ?//" \
+    | grep -E -A3 'FAILED|AssertionFailedError|Exception|expected:|Caused by|ERROR:' 2>/dev/null \
+    | grep -v -E '^--$' | grep -v -iE 'token|password' | head -n 60 | head -c 6000 || true
+}
+# ci_failed_excerpt <why>: when the failure reason names failed PR checks, a bounded excerpt of the failed GitHub Actions
+# logs. Never fails the caller: any gh problem becomes one "CI log excerpt unavailable" line.
+ci_failed_excerpt() {
+  local why=$1 pr runs rid out err
+  [[ "$why" == *"pull request checks failed ("* ]] || return 0
+  pr=$(printf '%s' "$why" | sed -nE 's#.*pull request checks failed \([^)]*/pull/([0-9]+)[^)]*\).*#\1#p' | head -1)
+  [ -n "$pr" ] || { printf '\n### CI failed test lines\nCI log excerpt unavailable: no PR number in the failure reason\n'; return 0; }
+  err=$(mktemp 2>/dev/null || echo /tmp/ci-excerpt.$$)
+  if ! runs=$(gh pr checks "$pr" --json name,state,link --jq '.[] | select(.state=="FAILURE" or .state=="FAILED" or .state=="ERROR") | .link' 2>"$err"); then
+    printf '\n### CI failed test lines\nCI log excerpt unavailable: %s\n' "$(head -c 200 "$err" | tr '\n' ' ')"; rm -f "$err"; return 0
+  fi
+  rm -f "$err"
+  runs=$(printf '%s\n' "$runs" | sed -nE 's#.*/actions/runs/([0-9]+).*#\1#p' | sort -u)
+  [ -n "$runs" ] || { printf '\n### CI failed test lines\nCI log excerpt unavailable: no failed check run found\n'; return 0; }
+  for rid in $runs; do
+    printf '\n### CI failed test lines (run %s)\n' "$rid"
+    if out=$(gh run view "$rid" --log-failed 2>&1); then
+      out=$(printf '%s\n' "$out" | ci_log_filter)
+      [ -n "$out" ] && printf '%s\n' "$out" || printf 'CI log excerpt unavailable: no matching lines\n'
+    else
+      printf 'CI log excerpt unavailable: %s\n' "$(printf '%s' "$out" | head -c 200 | tr '\n' ' ')"
+    fi
+  done
+  return 0
+}
 # Finish an in-flight batch whose shipq3 wrote DONE: SHIPPED items to done/, a failure back to the queue (retry, split,
 # blame or a fix lane). In-flight items live in ship-queue/inflight/<ID>/ so a pipelined batch cannot pick them again.
 finish_batch() {
@@ -165,7 +198,7 @@ finish_batch() {
          secfix=""; [ "$sec_pregate_blocked" -eq 1 ] && secfix=$'\n'"$(printf '%s' "$sec_summary" | strip_worktree_paths)"
          extra=""; grep -q '^allow_paths=1' "$SQ/failed/$(basename "$f")" && extra="allow_paths=1"   # a fix lane inherits the person's guarded-path approval (271 held 2026-11-23)
          clean_why=$(printf '%s' "$why" | strip_worktree_paths)
-         diag=$(inline_log_tail "pretest-ship-$ID.out" "$L/pretest-ship-$ID.out"; inline_log_tail "ship-$ID.log" "$L/ship-$ID.log")
+         diag=$(inline_log_tail "pretest-ship-$ID.out" "$L/pretest-ship-$ID.out"; inline_log_tail "ship-$ID.log" "$L/ship-$ID.log"; ci_failed_excerpt "$why" || true)
          lane_brief "fix-$n" "$br" "# Task: make lane $n pass the ship pipeline
 Always read/edit files using repo-relative paths inside your current worktree; never call read_file on paths outside it.
 This worktree is branch $br (finished lane $n). Shipping it failed: $clean_why${secfix}
