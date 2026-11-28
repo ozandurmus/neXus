@@ -13,3 +13,4 @@ status: in_progress · target:
 
 2026-11-27 state sync: Palo Alto pure-engine support for G1/G3/I3/I4/I5/I7 and proposals landed with fail-closed log/profile signatures and Q8 work-budget scans (a9d144ed); read-only proposal route fd923900 and I5 merges a845e91c are on main. Automated validation only; nothing is REAL_ENV_VALIDATED.
 2026-11-28: Insights tab has a collapsed, click-to-load read-only Reorder proposal panel (moves, merges, order view, change list); automated validation only; no real-environment claim.
+I5 merges now run in the cached Check Point proposal after the move pass; the route reports the combined proof and final order, and AIView projects only masked rule references and closed vocabulary. Automated validation only; no real-environment claim. The PO session runs the Java tests on HOST-A.

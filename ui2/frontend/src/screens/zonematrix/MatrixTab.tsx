@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
@@ -12,6 +12,7 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
+import { responsesAreMasked } from "../../auth/adminApi";
 import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button } from "../../shell/M3Widgets";
 import { StatePanel } from "../../shell/States";
@@ -21,6 +22,8 @@ import {
   CellDetailPanel, StatementShape, TemplateDialog, cellCountsCapNote, openViolationsLine, type OpenViolationsLine,
   type SelectedPair,
 } from "./MatrixCellDetail";
+import { ServiceObjectPortCopier } from "./ServiceObjectPortCopier";
+import { mergeCopiedServiceEntries } from "./serviceObjectPorts";
 import type { ZoneTabProps } from "./ZoneMatrixScreen";
 import type { ZoneSummaryHandle } from "./zoneMatrixSummaryUi";
 import { Hash, Hint, SectionTitle, isKnownStatement, knownSeverityWord, knownStatementWord, mono, panelSx } from "./zoneMatrixUi";
@@ -63,6 +66,11 @@ function OpenViolations({ line, testId }: { readonly line: OpenViolationsLine; r
       {line.text}
     </Typography>
   );
+}
+
+function subscribeToMasking(onChange: () => void) {
+  window.addEventListener("nx-masked", onChange);
+  return () => window.removeEventListener("nx-masked", onChange);
 }
 
 export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations }: MatrixTabProps) {
@@ -129,6 +137,10 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
 
   const isRetired = Boolean(viewed && viewed.state === "RETIRED");
   const editable = can.edit && !isRetired;
+  const responsesMasked = useSyncExternalStore(subscribeToMasking, responsesAreMasked);
+  // The Violations tab uses policy_names_masked for the same policy-read affordance.
+  const canCopyServicePorts = editable && !responsesMasked && summary.data?.masked === false
+    && summary.data.policy_names_masked === false;
   const canConfirm = Boolean(can.confirm_reference) && !isRetired;
   const revision = draft ? draft.revision : null;
 
@@ -363,12 +375,12 @@ export function MatrixTab({ data, refresh, notify, summary, onOpenCellViolations
 
       {activePair ? (
         <CellDetailPanel pair={activePair} explicitCell={selectedExplicit} matrix={matrix} isMasked={isMasked}
-          editable={editable} canConfirm={canConfirm} revision={revision} onRefresh={afterWrite} onChanged={refresh} notify={notify}
+          editable={editable} canCopyServicePorts={canCopyServicePorts} canConfirm={canConfirm} revision={revision} onRefresh={afterWrite} onChanged={refresh} notify={notify}
           openViolations={viewingActive ? lineOf(activePair.sourceId, activePair.destinationId) : null}
           onOpenViolations={viewingActive ? () => onOpenCellViolations(activePair.sourceId, activePair.destinationId) : null} />
       ) : null}
 
-      <ServiceSetsSection sets={matrix.service_sets} editable={editable} revision={revision}
+      <ServiceSetsSection sets={matrix.service_sets} editable={editable} canCopyServicePorts={canCopyServicePorts} revision={revision}
         onRefresh={afterWrite} onChanged={refresh} notify={notify} />
 
       {editable ? (
@@ -440,10 +452,11 @@ function VersionDefaultSection({
 }
 
 function ServiceSetsSection({
-  sets, editable, revision, onRefresh, onChanged, notify,
+  sets, editable, canCopyServicePorts, revision, onRefresh, onChanged, notify,
 }: {
   readonly sets: readonly ServiceSetView[];
   readonly editable: boolean;
+  readonly canCopyServicePorts: boolean;
   readonly revision: number | null;
   readonly onRefresh: () => void;
   readonly onChanged: () => void;
@@ -530,6 +543,16 @@ function ServiceSetsSection({
             inputProps={{ maxLength: 64 }} helperText="Letters, digits, _, . or -, up to 64 characters" sx={{ maxWidth: 320 }} />
           <TextField label="Service set entries" multiline minRows={2} maxRows={6} value={entriesText}
             onChange={(e) => setEntriesText(e.target.value)} placeholder={"tcp/443\ntcp/8443"} InputProps={{ sx: mono }} />
+          {canCopyServicePorts ? (
+            <ServiceObjectPortCopier
+              disabled={busy}
+              onCopyEntries={(entries) => {
+                const merged = mergeCopiedServiceEntries(entriesText, entries);
+                setEntriesText(merged.text);
+                return merged.added;
+              }}
+            />
+          ) : null}
           <Box>
             <M3Button emphasis="tonal" disabled={busy || name.trim() === ""} onClick={() => { void saveSet(); }}>
               Save service set

@@ -23,7 +23,18 @@ public final class PolicyPrivacy {
             "FGT implicit deny", "FGT VIP", "FGT central SNAT", "FGT not evaluated");
     private static final Set<String> HYGIENE_REASONS = PolicyHygiene.REASONS;
     private static final Set<String> HYGIENE_EVIDENCE = PolicyHygiene.EVIDENCE;
+    private static final Set<String> MERGE_EMPTY_REASONS = Set.of(PolicyProposalMerges.UNSUPPORTED_VENDOR,
+            PolicyProposalMerges.INCOMPLETE, PolicyProposalMerges.NO_CANDIDATE);
+    private static final Set<String> MERGE_EQUIVALENCE = Set.of(PolicyReorder.EQUIVALENT, PolicyMerge.NOT_PROVEN);
+
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
+        if (key.equals("merges")) return value instanceof List<?> steps ? maskMerges(steps, names) : List.of();
+        if (key.equals("mergesRefused")) return maskMergesRefused(value instanceof Map<?, ?> map ? map : Map.of());
+        if (key.equals("mergesAccepted")) return value instanceof Number ? value : null;
+        if (key.equals("mergesBudgetStopped")) return value instanceof Boolean ? value : null;
+        if (key.equals("mergesEmptyReason")) return closedWord(value, MERGE_EMPTY_REASONS);
+        if (key.equals("mergesNote")) return value == null ? null
+                : value instanceof String note && note.matches("\\+[0-9]+ more") ? note : "UNKNOWN";
         if (value == null || value instanceof Boolean || value instanceof Number) return value;
         if (key.equals("changes") && value instanceof List<?> changes) return changes.stream().map(change -> {
             if (!(change instanceof Map<?, ?> row)) return Map.of();
@@ -123,7 +134,7 @@ public final class PolicyPrivacy {
         if (key.equals("result")) return PolicyProposalView.STEP_RESULTS.contains(text) ? text : "UNKNOWN";
         if (key.equals("refused") || key.equals("refusal")) return PolicyProposal.REFUSALS.contains(text) ? text : "UNKNOWN";
         if (key.equals("notTriedNote")) return text.matches("\\+[0-9]+ more not tried") ? text : "UNKNOWN";
-        if (key.equals("ruleName")) return "UNKNOWN".equals(text) ? "UNKNOWN" : names.maskPolicyName("rule", text);
+        if (key.equals("ruleName")) return maskRuleName(text, names);
         // Lookup addresses are user-entered or bounded subdivisions in the viewer's address space.
         if (key.equals("querySource") || key.equals("queryDestination")) return text.matches("[0-9./-]{7,35}") ? text : "Withheld in AIView";
         if (key.equals("queryService")) return text.matches("any|(?:tcp|udp)/[0-9]{1,5}") ? text : "UNKNOWN";
@@ -221,6 +232,53 @@ public final class PolicyPrivacy {
             return ips.maskText(text);
         return names.maskPolicyName(key, text);
     }
+    private static Map<String, Object> maskMergesRefused(Map<?, ?> refused) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (String word : PolicyProposalMerges.REFUSALS) {
+            out.put(word, refused.get(word) instanceof Number n ? n : 0);
+        }
+        return out;
+    }
+
+    /** Project only the merge row and rule-reference fields; never recurse into arbitrary extensions. */
+    private static List<Map<String, Object>> maskMerges(List<?> steps, TopologyNamePseudonymizer names) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object item : steps) {
+            if (!(item instanceof Map<?, ?> step)) continue;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("surviving", maskMergeRuleRef(step.get("surviving"), names));
+            row.put("merged", maskMergeRuleRef(step.get("merged"), names));
+            row.put("differingCell", closedWord(step.get("differingCell"), PolicyMerge.CELLS));
+            Object result = step.get("result");
+            row.put("result", result instanceof String word
+                    && (PolicyMerge.MERGE_CANDIDATE.equals(word) || PolicyProposalMerges.REFUSALS.contains(word))
+                    ? word : "UNKNOWN");
+            row.put("reason", closedWord(step.get("reason"), Set.of(PolicyMerge.BUDGET)));
+            row.put("accepted", Boolean.TRUE.equals(step.get("accepted")));
+            row.put("equivalence", closedWord(step.get("equivalence"), MERGE_EQUIVALENCE));
+            out.add(row);
+        }
+        return List.copyOf(out);
+    }
+
+    private static Map<String, Object> maskMergeRuleRef(Object value, TopologyNamePseudonymizer names) {
+        if (!(value instanceof Map<?, ?> ref)) return null;
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (ref.get("ruleId") instanceof String id) out.put("ruleId", id);
+        out.put("ruleName", ref.get("ruleName") instanceof String name ? maskRuleName(name, names) : "UNKNOWN");
+        out.put("ruleNumber", ref.get("ruleNumber") instanceof Number n ? n : 0);
+        return out;
+    }
+
+    private static String maskRuleName(String name, TopologyNamePseudonymizer names) {
+        return name.isEmpty() || "UNKNOWN".equals(name) ? name : names.maskPolicyName("rule", name);
+    }
+
+    private static String closedWord(Object value, Collection<String> words) {
+        if (value == null) return null;
+        return value instanceof String word && words.contains(word) ? word : "UNKNOWN";
+    }
+
     /** A blocker-split row (PolicyBlockerSplit): numbers and fixed schema tokens only; each token is re-checked against its closed vocabulary or pattern. */
     private static Map<String, Object> blockerSplitRow(Map<?, ?> row) {
         Map<String, Object> out = new LinkedHashMap<>();
