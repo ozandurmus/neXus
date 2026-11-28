@@ -3249,16 +3249,34 @@ export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslo
 export const getSystemLogSpikeData = (deviceId: string) => call<SystemLogSpikeData>(`${syslogBase(deviceId)}/spike-data`, "GET");
 
 // ---------------------------------------------------------------------------------------------------------------
-// Log detection engine, phase P1 (`/api/v2/log-findings`, docs/design/LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md section 9).
-// Findings carry counts, device-local times, closed-vocabulary labels and pointers; never a log line.
+// Log detection engine, phases P1 & P2 (`/api/v2/log-findings`, `/api/v2/config/log-detection`,
+// docs/design/LOG_DETECTION_ENGINE_DESIGN_2026_11_24.md section 9).
+// Findings carry counts, device-local times, closed-vocabulary templates/labels and pointers; never a raw log line.
 export type LogFindingSeverity = "CRITICAL" | "ATTENTION" | "INFO" | "UNKNOWN";
+
+export type LogFindingLayerBKind = "NEW_ON_DEVICE" | "FLEET_RARE" | "RATE_SPIKE" | "SILENCE" | "BOOT_BURST" | (string & {});
+
+export interface LogFindingLayerB {
+  readonly template_id: string;
+  /** Closed-vocabulary template text only (non-vocabulary words replaced by `<W>`, variables by typed placeholders). */
+  readonly template_text: string;
+  readonly kinds: readonly LogFindingLayerBKind[];
+  readonly z: number | null;
+  readonly baseline_median: number | null;
+  readonly baseline_mad: number | null;
+  readonly device_first_seen: string | null;
+  readonly fleet_first_seen: string | null;
+  readonly prevalence: string;
+}
 
 export interface LogFinding {
   readonly finding_id: string;
   readonly device_id: string;
   readonly source_key: string;
+  readonly phase?: string;
   readonly layer: string;
   readonly rule_id: string;
+  readonly rule_version?: string;
   readonly kind: string;
   readonly marker_id: string;
   readonly key_token: string;
@@ -3269,6 +3287,7 @@ export interface LogFinding {
   readonly severity: LogFindingSeverity;
   readonly severity_rule: string;
   readonly score: { readonly s: number; readonly r: number | null; readonly c: number | null; readonly score: number | null; readonly note: string };
+  readonly layer_b?: LogFindingLayerB | null;
   readonly provenance: string;
   readonly counts: {
     readonly lines: number; readonly peak_bucket_lines: number; readonly history_days: number; readonly baseline_days: number;
@@ -3280,7 +3299,13 @@ export interface LogFinding {
   readonly incident_group: string;
   readonly coverage_state: string;
   readonly evidence_pointers: readonly { readonly chunk_id: string; readonly offset: number; readonly length: number }[];
-  readonly versions: { readonly masking_rule_set: string; readonly marker_list: string; readonly config: string; readonly catalog: string | null };
+  readonly versions: {
+    readonly masking_rule_set: string;
+    readonly marker_list: string;
+    readonly config: string;
+    readonly catalog: string | null;
+    readonly normaliser?: string | null;
+  };
   readonly review_state: "OPEN" | "ACKNOWLEDGED" | "SUPPRESSED" | "CLOSED";
   readonly review_at: string | null;
   readonly first_raised_at: string | null;
@@ -3293,6 +3318,7 @@ export interface LogFindingEnvelope {
   readonly shadow_until: string | null;
   readonly phase: string;
   readonly layers: readonly string[];
+  readonly p2_enabled?: boolean;
   readonly time_basis: string;
 }
 
@@ -3327,6 +3353,14 @@ export interface LogFindingChipData {
   readonly coverage: LogCoverageSummary;
 }
 
+export interface LogFindingChipsAnswer extends LogFindingEnvelope {
+  readonly window_days: number;
+  readonly counts: string;
+  readonly chips: readonly LogFindingChipData[];
+  readonly truncated: boolean;
+  readonly truncated_note?: string;
+}
+
 export const getLogFindings = (deviceId: string, days = 7) =>
   call<LogFindingsAnswer>(`/api/v2/log-findings?device_id=${encodeURIComponent(deviceId)}&days=${days}`, "GET");
 
@@ -3334,12 +3368,157 @@ export const getLogCoverage = (deviceId: string) =>
   call<LogCoverageAnswer>(`/api/v2/log-findings/coverage?device_id=${encodeURIComponent(deviceId)}`, "GET");
 
 export const getLogFindingChips = () =>
-  call<LogFindingEnvelope & { readonly window_days: number; readonly counts: string; readonly chips: readonly LogFindingChipData[]; readonly truncated: boolean; readonly truncated_note?: string }>(
-    "/api/v2/log-findings/chips", "GET");
+  call<LogFindingChipsAnswer>("/api/v2/log-findings/chips", "GET");
 
 export const acknowledgeLogFinding = (findingId: string, note?: string) =>
   call<LogFindingEnvelope & { readonly finding: LogFinding }>(
     `/api/v2/log-findings/${encodeURIComponent(findingId)}/acknowledge`, "POST", note ? { note } : {});
+
+export interface LogDetectionSettings {
+  readonly enabled: boolean;
+  readonly shadow_until: string | null;
+  readonly shadow: boolean;
+  readonly p2_enabled: boolean;
+  readonly p2_runs: boolean;
+  readonly updated_at: string | null;
+  readonly updated_by: string | null;
+  readonly can_write?: boolean;
+}
+
+export interface LogDetectionSettingsPatch {
+  readonly enabled?: boolean;
+  readonly shadow_days?: number;
+  readonly p2_enabled?: boolean;
+}
+
+export interface LogCatalogSummary {
+  readonly catalog_version: string;
+  readonly state: "DRAFT" | "FROZEN" | (string & {});
+  readonly previous_version: string | null;
+  readonly template_count: number;
+  readonly digest: string;
+  readonly created_at: string | null;
+  readonly frozen_at: string | null;
+}
+
+export interface LogCatalogBuildState {
+  readonly state: "IDLE" | "RUNNING" | "DONE" | "REFUSED" | "FAILED" | (string & {});
+  readonly from?: string;
+  readonly to?: string;
+  readonly started_at?: string;
+  readonly finished_at?: string;
+  readonly reason?: string;
+  readonly catalog_version?: string | null;
+  readonly templates?: number;
+  readonly chunks_read?: number;
+  readonly chunks_skipped?: number;
+  readonly digest?: string | null;
+}
+
+export interface LogCatalogListAnswer {
+  readonly catalogs: readonly LogCatalogSummary[];
+  readonly active: string | null;
+  readonly build: LogCatalogBuildState;
+  readonly note: string;
+}
+
+export interface LogCatalogDiffShareEntry {
+  readonly template_id: string;
+  readonly source_key: string;
+  readonly line_share: number;
+}
+
+export interface LogCatalogDiffPayload {
+  readonly from_version?: string | null;
+  readonly to_version?: string;
+  readonly added?: readonly LogCatalogDiffShareEntry[];
+  readonly removed?: readonly LogCatalogDiffShareEntry[];
+  readonly merged?: readonly (LogCatalogDiffShareEntry & { readonly from: readonly string[] })[];
+  readonly split?: readonly (LogCatalogDiffShareEntry & { readonly into: readonly string[]; readonly history: string })[];
+  readonly class_changes?: readonly {
+    readonly template_id: string;
+    readonly class_from: string;
+    readonly class_to: string;
+    readonly s_from: number;
+    readonly s_to: number;
+    readonly marker_from: string | null;
+    readonly marker_to: string | null;
+  }[];
+  readonly mapping?: Readonly<Record<string, readonly string[]>>;
+  readonly marker_list?: { readonly from: string; readonly to: string };
+  readonly normaliser?: { readonly from: string; readonly to: string };
+  readonly masking_rule_set?: { readonly from: string; readonly to: string };
+  readonly counts?: {
+    readonly templates_from: number;
+    readonly templates_to: number;
+    readonly added: number;
+    readonly removed: number;
+    readonly merged: number;
+    readonly split: number;
+    readonly class_changes: number;
+  };
+}
+
+export interface LogCatalogManifest {
+  readonly catalog_version?: string;
+  readonly normaliser_version?: string;
+  readonly vocabulary_version?: string;
+  readonly masking_rule_set?: string;
+  readonly marker_list_version?: string;
+  readonly drain?: { readonly depth: number; readonly similarity: number; readonly max_children?: number; readonly max_clusters_per_source?: number; readonly max_tokens?: number };
+  readonly training_window?: { readonly from: string; readonly to: string; readonly time_basis: string };
+  readonly sources?: readonly string[];
+  readonly source_lines?: Readonly<Record<string, number>>;
+  readonly cohort_devices?: Readonly<Record<string, number>>;
+  readonly chunks?: number;
+  readonly lines?: number;
+  readonly unparsed_lines?: number;
+  readonly overflow_lines?: number;
+  readonly outside_window_lines?: number;
+  readonly truncated?: boolean;
+  readonly truncated_reason?: string | null;
+  readonly template_count?: number;
+  readonly baseline_grain?: string;
+  readonly segments?: string;
+}
+
+export interface LogCatalogDetailAnswer {
+  readonly catalog_version?: string;
+  readonly state?: string;
+  readonly previous_version?: string | null;
+  readonly manifest?: LogCatalogManifest | null;
+  readonly diff: LogCatalogDiffPayload | null;
+  readonly class_counts?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+}
+
+export interface LogCatalogFreezeAnswer {
+  readonly catalog_version: string;
+  readonly state: string;
+  readonly previous_version: string | null;
+  readonly digest: string;
+  readonly diff: LogCatalogDiffPayload | null;
+}
+
+export const getLogDetectionSettings = () =>
+  call<LogDetectionSettings>("/api/v2/config/log-detection", "GET");
+
+export const saveLogDetectionSettings = (patch: LogDetectionSettingsPatch) =>
+  call<LogDetectionSettings>("/api/v2/config/log-detection", "PUT", patch);
+
+export const listLogCatalogs = () =>
+  call<LogCatalogListAnswer>("/api/v2/config/log-detection/catalogs", "GET");
+
+export const getLogCatalogDetail = (version: string, from?: string) =>
+  call<LogCatalogDetailAnswer>(
+    `/api/v2/config/log-detection/catalogs/${encodeURIComponent(version)}${from ? `?from=${encodeURIComponent(from)}` : ""}`,
+    "GET",
+  );
+
+export const startLogCatalogBuild = (window: { readonly from: string; readonly to: string }) =>
+  call<LogCatalogBuildState>("/api/v2/config/log-detection/catalogs", "POST", window);
+
+export const freezeLogCatalog = (version: string) =>
+  call<LogCatalogFreezeAnswer>(`/api/v2/config/log-detection/catalogs/${encodeURIComponent(version)}/freeze`, "POST", {});
 
 // ---------------------------------------------------------------------------------------------------------------
 // Operations › Device health (`GET /api/v2/system-logs/health`, `syslog-health`; docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md).
