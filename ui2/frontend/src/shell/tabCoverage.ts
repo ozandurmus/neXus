@@ -27,7 +27,7 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
     query: "screen=administration&tab=registry", heading: "Device registry" },
   { screen: "administration", tabList: "Access and identity sections", labels: ["Local identities", "Sessions", "Roles and permissions", "LDAP settings", "SAML sign-in", "Local sign-in"],
     query: "screen=administration&tab=access", heading: "Access and identity" },
-  { screen: "administration", tabList: "Notifications and logging sections", labels: ["Notifications", "Log collection"],
+  { screen: "administration", tabList: "Notifications and logging sections", labels: ["Notifications", "Log collection", "Template catalog"],
     query: "screen=administration&tab=platform", heading: "Notifications and logging" },
   // Trace is two modes of one screen; Changes is two views of one question (C3).
   { screen: "trace", tabList: "Trace modes", labels: ["Topology path", "Policy rule lookup"] },
