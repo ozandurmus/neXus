@@ -192,73 +192,25 @@
       "tool": "trivy",
       "rule": "CVE-2026-88647",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnutls",
-      "reason": "gnutls 3.8.10-9.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat lists RHEL 9 gnutls as Under investigation, no fixed package. Exposure: hostname verification in gnutls clients; the service's TLS is Java JSSE, so gnutls is not on any request path. Remove when Red Hat ships a fixed gnutls in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Fix deferred for RHEL 9 gnutls as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-88647.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-88648",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnutls",
-      "reason": "gnutls 3.8.10-9.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat lists RHEL 9 gnutls as Affected, no fixed package. Exposure: certificate name-constraint handling in gnutls clients; the service's TLS is Java JSSE, so gnutls is not on any request path. Remove when Red Hat ships a fixed gnutls in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Affected for RHEL 9 gnutls as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-88648.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-76641",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
-      "reason": "expat 2.5.0-6.el9_8.7 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat lists RHEL 9 expat as Affected with no fixed package for this CVE. Exposure: XML entity handling in expat; the service parses XML with the JDK's own parser, and expat is used only by base OS tooling. Remove when Red Hat ships a fixed expat in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Affected for RHEL 9 expat as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-76641.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-75804",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
-      "reason": "openssl-libs 3.5.8-2.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in openssl-3.5.9-1.el9_9 (RHSA-2026:98484, 2026-11-11); no published base digest carries it yet. Exposure: denial of service of an OpenSSL QUIC endpoint; the service's TLS is Java JSSE and nothing in the image serves QUIC. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-53615",
-      "location": "ui2/Containerfile runtime image: util-linux libs",
-      "reason": "util-linux libraries 2.37.4-28.el9_9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in util-linux-2.37.4-28.el9_9.1 (RHSA-2026:98519, 2026-11-11); no published base digest carries it yet. Exposure: partition-metadata handling when probing block devices; the service runs as a non-root JVM with no block-device access and never probes or mounts. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-53615",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libblkid",
-      "reason": "util-linux libraries 2.37.4-28.el9_9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in util-linux-2.37.4-28.el9_9.1 (RHSA-2026:98519, 2026-11-11); no published base digest carries it yet. Exposure: partition-metadata handling when probing block devices; the service runs as a non-root JVM with no block-device access and never probes or mounts. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-53615",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libmount",
-      "reason": "util-linux libraries 2.37.4-28.el9_9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in util-linux-2.37.4-28.el9_9.1 (RHSA-2026:98519, 2026-11-11); no published base digest carries it yet. Exposure: partition-metadata handling when probing block devices; the service runs as a non-root JVM with no block-device access and never probes or mounts. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-53615",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libsmartcols",
-      "reason": "util-linux libraries 2.37.4-28.el9_9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in util-linux-2.37.4-28.el9_9.1 (RHSA-2026:98519, 2026-11-11); no published base digest carries it yet. Exposure: partition-metadata handling when probing block devices; the service runs as a non-root JVM with no block-device access and never probes or mounts. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-53615",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libuuid",
-      "reason": "util-linux libraries 2.37.4-28.el9_9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in util-linux-2.37.4-28.el9_9.1 (RHSA-2026:98519, 2026-11-11); no published base digest carries it yet. Exposure: partition-metadata handling when probing block devices; the service runs as a non-root JVM with no block-device access and never probes or mounts. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "gitleaks",
@@ -321,9 +273,9 @@
       "tool": "trivy",
       "rule": "CVE-2026-91403",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
-      "reason": "java-21-openjdk-headless 1:21.0.13.0.9-1.2.el9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). CRITICAL: the flaw is trusting intermediate CAs issued under the eMudhra (emSign) roots. Red Hat marks java-21-openjdk 'Will not fix' because RHEL's OpenJDK reads the system trust store and the remedy belongs in ca-certificates (CVE-2026-114406), so trivy will keep reporting this package version. Exposure in neXus: the image build blocklists every emSign root in the system trust store, from which Java cacerts is generated, and fails if any emSign entry is still trusted in tls-ca-bundle.pem or cacerts (ui2/Containerfile, PO 2026-10-23); device HTTPS/XML API and LDAP clients use that trust store plus the corporate CA, so no chain under those roots is trusted. Remove when Red Hat ships ca-certificates without the emSign roots and the blocklist step goes. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Will not fix for RHEL 9 java-21-openjdk as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-91403.json. No fix listed for this RHEL 9 package or stream. The runtime build still blocklists the emSign roots and verifies they are not trusted by the system or JVM.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "gitleaks",
@@ -378,137 +330,49 @@
       "tool": "trivy",
       "rule": "CVE-2026-119373",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
-      "reason": "sqlite-libs 3.34.1-11.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). Red Hat lists the RHEL 9 sqlite package as Affected with no fixed package. Exposure: neXus never opens SQLite databases (packet analysis uses DuckDB); the library is in the base for the package database. Remove when Red Hat ships a fixed sqlite in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Affected for RHEL 9 sqlite as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119373.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119586",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
-      "reason": "sqlite-libs 3.34.1-11.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). Red Hat lists the RHEL 9 sqlite package as Affected with no fixed package. Exposure: neXus never opens SQLite databases (packet analysis uses DuckDB); the library is in the base for the package database. Remove when Red Hat ships a fixed sqlite in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Affected for RHEL 9 sqlite as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119586.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-120194",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: json-glib",
-      "reason": "json-glib 1.6.6-1.el9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat lists RHEL 9 json-glib as Affected with no fixed package. Exposure: an infinite loop in json_path_query(); no neXus process links json-glib (base OS tooling only). Remove when Red Hat ships a fixed package in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Affected for RHEL 9 json-glib as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-120194.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-115506",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
-      "reason": "expat 2.5.0-6.el9_8.7 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat lists RHEL 9 expat as Affected with no fixed package for this CVE. Exposure: XML entity handling in expat; the service parses XML with the JDK's own parser, and expat is used only by base OS tooling. Remove when Red Hat ships a fixed expat in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-118131",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnupg2",
-      "reason": "gnupg2 2.3.3-5.el9_7 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). The Red Hat security data API returned no record for this CVE on 2026-11-14 (it listed RHEL 9 as Affected with no fix on 2026-11-09). Exposure: local code execution through insecure directory permissions; only gpgme (package-manager signature support) requires gnupg2 and neXus never runs gpg. Remove when Red Hat ships a fixed package in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat CVE API returned HTTP 404 as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-118131.json. Red Hat CVE page reports RHEL 9 gnupg2 Not affected (Component not Present), source https://access.redhat.com/security/cve/cve-2026-118131; the UBI runtime RPM manifest includes gnupg2. Applicability to the scanned image is UNKNOWN; no fixed build verified.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119374",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
-      "reason": "sqlite-libs 3.34.1-11.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). Red Hat lists the RHEL 9 sqlite package as Affected with no fixed package. Exposure: neXus never opens SQLite databases (packet analysis uses DuckDB); the library is in the base for the package database. Remove when Red Hat ships a fixed sqlite in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Not affected for RHEL 9 sqlite as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119374.json. This conflicts with the existing image finding; applicability to that finding is UNKNOWN until the image is rescanned.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119379",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
-      "reason": "sqlite-libs 3.34.1-11.el9_8 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). Red Hat lists the RHEL 9 sqlite package as Affected with no fixed package. Exposure: neXus never opens SQLite databases (packet analysis uses DuckDB); the library is in the base for the package database. Remove when Red Hat ships a fixed sqlite in the base. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
+      "reason": "Red Hat package_state Affected for RHEL 9 sqlite as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119379.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112315",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112316",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112317",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112318",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112319",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112320",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112321",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112322",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-112323",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-119079",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
-      "reason": "krb5-libs 1.21.1-10.el9_8.1 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14). Red Hat fixed it in krb5-1.21.1-10.el9_9.2 (RHSA-2026:99715, 2026-11-12); no published base digest carries it yet and the build cannot reach the UBI package repos. Exposure: denial of service in the kadmind/KDC servers; neither daemon exists in the service or packet-analysis image, which only carry the client library. Remove with the first base digest that carries the RHSA. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
@@ -1274,169 +1138,169 @@
       "tool": "trivy",
       "rule": "CVE-2026-123864",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123864.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123864",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123864.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123865",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123865.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123865",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123865.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123866",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123866.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123866",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123866.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123872",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123872.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-123872",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-123872.json. No fix listed for this RHEL 9 package or stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-132825",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: ruby",
-      "reason": "ruby in the script-execution image (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8): heap overflow via string case conversion, Red Hat Critical, all RHEL 9 ruby streams Affected, no fix released (checked 2026-11-21). Reachable only through operator-authored Ruby scripts run by Script Execution; the image already live since 2026-11-21 09:40 carries it. Re-evaluated daily; remove as soon as a fix appears, or drop ruby from the image if none by the review date.",
+      "reason": "Red Hat affected_release lists RHEL 9 ruby-0:3.0.7-171.el9_9 (RHSA-2026:102854) as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-132825.json. Ruby is installed separately from the UBI runtime base; the fixed RPM in the built Script Execution image is UNKNOWN. Keep Ruby for the supported .rb script kind; retire this acceptance after the fixed RPM is verified in that image.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-132825",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: ruby-libs",
-      "reason": "ruby in the script-execution image (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8): heap overflow via string case conversion, Red Hat Critical, all RHEL 9 ruby streams Affected, no fix released (checked 2026-11-21). Reachable only through operator-authored Ruby scripts run by Script Execution; the image already live since 2026-11-21 09:40 carries it. Re-evaluated daily; remove as soon as a fix appears, or drop ruby from the image if none by the review date.",
+      "reason": "Red Hat affected_release lists RHEL 9 ruby-0:3.0.7-171.el9_9 (RHSA-2026:102854) as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-132825.json. Ruby is installed separately from the UBI runtime base; the fixed RPM in the built Script Execution image is UNKNOWN. Keep Ruby for the supported .rb script kind; retire this acceptance after the fixed RPM is verified in that image.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-129483",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: cyrus-sasl-lib",
-      "reason": "cyrus-sasl-lib in the Red Hat UBI9 openjdk-21-runtime base (service image and the images built from it): SRP authentication bypass in a SASL plugin, Red Hat Important, RHEL 9 Affected, no fix released (checked 2026-11-21). The service does not use SASL SRP. Re-evaluated daily; remove as soon as a fix appears.",
+      "reason": "Red Hat package_state Not affected for RHEL 9 cyrus-sasl as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-129483.json. This conflicts with the existing image finding; applicability to that finding is UNKNOWN until the image is rescanned.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119373",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119373.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119373",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119373.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119374",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119374.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119374",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119374.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119379",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119379.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-119379",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Affected for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-119379.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-84961",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Will not fix for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-84961.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, nodejs:26, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-84961",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Will not fix for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-84961.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, nodejs:26, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-85152",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Will not fix for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-85152.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, nodejs:26, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-85152",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "reason": "Red Hat package_state Will not fix for RHEL 9 nodejs:22/nodejs as of 2026-11-28, source https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-85152.json. No fix listed for this RHEL 9 package or stream. Red Hat lists fixes for nodejs:24, nodejs:26, not the Script Execution image's nodejs:22 stream.",
       "owner": "PO",
-      "review_date": "2026-11-28"
+      "review_date": "2026-12-12"
     }
   ]
 }

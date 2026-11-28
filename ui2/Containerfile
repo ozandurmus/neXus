@@ -106,11 +106,11 @@ RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true :service:bootJ
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime
 # ---------------------------------------------------------------------------
-# Version 1.24 release 5 (built 2026-11-19), the digest `latest` resolved to on 2026-11-21: the 2026-11-21 gate reported
-# four new fixed curl-minimal/libcurl-minimal HIGHs (CVE-2026-8286, -8458, -8927, -9547) on the 2026-11-10 base.
+# Version 1.24 release 5.1795165349 (built 2026-11-20), the digest `latest` resolved to on 2026-11-28:
+# Red Hat RPM manifests confirm the expat fix (RHSA-2026:100679) and retain the prior runtime fixes.
 # Refresh rule: PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md,
 # amended by PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md.
-FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:80663340693d8863d518116b9382f758364c5394a41cf549eef6240ebd9e67af
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:e4190dfd1088220a0e3a63713e0cf9d5e42c277d2a06583db477b4baa60d4693
 
 # Ownership is by group 0, never by a uid: the uid this process runs as is
 # assigned at admission time and is not knowable here (§3.3). Group 0 is the
