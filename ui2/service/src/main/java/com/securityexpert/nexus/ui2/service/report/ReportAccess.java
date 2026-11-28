@@ -18,6 +18,8 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
  *   <li>the read action of every underlying domain a template uses (a missing one refuses the report);</li>
  *   <li>RAW: only a session holding {@code report_raw_view}, and never a replay viewer (aiview), even one also bound
  *       to an admin role.</li>
+ *   <li>ZM-01 blocks appendix (ZONE_MATRIX_CONTRACT.md 3.4, 7.3; ZM-38): a RAW projection, {@code report_raw_view}
+ *       and {@code zone_matrix_zones_read}, never a replay viewer.</li>
  * </ul>
  */
 public final class ReportAccess {
@@ -58,5 +60,11 @@ public final class ReportAccess {
     /** RAW authority: never a replay viewer. */
     public boolean mayRaw(String actor, boolean replayViewer) {
         return !replayViewer && holds(actor, ActionRegistry.REPORT_RAW_VIEW);
+    }
+
+    /** Blocks appendix authority (ZM-38): RAW projection, raw report right and the zone blocks right; never aiview. */
+    public boolean mayBlocksAppendix(String actor, boolean replayViewer, ProjectionMode mode) {
+        return mode == ProjectionMode.RAW && mayRaw(actor, replayViewer)
+                && holds(actor, ActionRegistry.ZONE_MATRIX_ZONES_READ);
     }
 }

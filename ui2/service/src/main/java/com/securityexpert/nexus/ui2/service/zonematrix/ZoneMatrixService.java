@@ -177,6 +177,18 @@ public final class ZoneMatrixService {
     }
 
     /**
+     * Step 6b-2 (sections 3.4, 7.3; {@code ZM-33}, {@code ZM-38}): the zones and blocks of one version for the opt-in
+     * blocks appendix of the evidence report, on record first ({@code BLOCKS_VIEW}); a view whose audit row cannot be
+     * written is refused. The Reports R1 service has already checked {@code zone_matrix_zones_read},
+     * {@code report_raw_view}, the RAW projection and that the caller is not a replay viewer.
+     */
+    public List<ZoneMatrixContent.Zone> blocksForReport(String actor, String versionId) {
+        Version version = repository.find(versionId).orElseThrow(() -> new Refused(404, "NOT_FOUND", "no such version"));
+        record(actor, "BLOCKS_VIEW", versionId);
+        return content(version).zones();
+    }
+
+    /**
      * The draft (or {@code draft: null}), its diff against the active version, and the publish check for this caller.
      * A reader who may neither edit nor publish learns only that a draft exists (section 7.1: the draft is shown to
      * editors).

@@ -44,4 +44,12 @@ public interface ReportData {
     default LifecycleService.FleetSnapshot lifecycleSnapshot(LocalDate today, Instant now) {
         return LifecycleService.FleetSnapshot.EMPTY;
     }
+
+    /**
+     * The stored zone matrix read models for ZM-01. Without a zone matrix source the build fails closed: an absent
+     * source is never printed as "no findings".
+     */
+    default ZoneMatrixEvidenceReportBuilder.Source zoneMatrixEvidence() {
+        throw new IllegalStateException("Zone matrix evidence is unavailable; the evidence report cannot be built");
+    }
 }

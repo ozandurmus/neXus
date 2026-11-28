@@ -163,7 +163,12 @@ class ReportsApiTest {
         JsonNode aiview = jsonOf(mvc.perform(read(BASE + "/catalogue", "synthetic-aiview")).andReturn());
         assertTrue(aiview.path("permissions").path("masked").asBoolean());
         assertFalse(aiview.path("permissions").path("raw_view").asBoolean());
-        assertEquals(5, aiview.path("templates").size());
+        assertEquals(6, aiview.path("templates").size());
+        JsonNode zm01 = aiview.path("templates").get(5);
+        assertEquals("ZM-01", zm01.path("template_id").asText());
+        assertEquals("[\"PDF\",\"CSV\"]", zm01.path("formats").toString(), "ZM-01 is CSV and PDF only (contract 7.3)");
+        assertTrue(zm01.path("zone_matrix_parameters").asBoolean());
+        assertEquals(0, zm01.path("missing_reads").size(), "aiview holds zone_matrix_read (masked)");
         JsonNode admin = jsonOf(mvc.perform(read(BASE + "/catalogue", "synthetic-secadmin")).andReturn());
         assertTrue(admin.path("permissions").path("raw_view").asBoolean());
     }

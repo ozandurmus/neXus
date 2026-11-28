@@ -177,7 +177,7 @@ function RunPanel({ catalogue, error, template, onTemplate, onGenerated }: {
       </Stack>
       <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
         <M3Button emphasis="filled" disabled={busy || card.missing_reads.length > 0} onClick={runPreview}>Preview</M3Button>
-        {REPORT_FORMATS.map(f => <M3Button key={f} emphasis="tonal" disabled={busy || card.missing_reads.length > 0}
+        {card.formats.map(f => <M3Button key={f} emphasis="tonal" disabled={busy || card.missing_reads.length > 0}
           onClick={() => runGenerate(f)}>Generate {f}</M3Button>)}
       </Stack>
       {card.missing_reads.length > 0 && <Alert severity="warning">This report needs read access to: {card.missing_reads.join(", ")}</Alert>}

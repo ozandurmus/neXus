@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.report;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -7,9 +8,10 @@ import java.util.Set;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
- * The closed R1 catalogue (Reports R1 contract "Scope"): RPT-01, RPT-02, RPT-03 and RPT-05. Nothing else is
- * generatable in R1 (V190 {@code report_run.template_id} check). Each template names the read action of every
- * underlying domain it uses (contract "Masking and RBAC": generating a report also requires those reads).
+ * The closed catalogue (Reports R1 contract "Scope"): RPT-01, RPT-02, RPT-03 and RPT-05, RPT-17 (V270) and the zone
+ * matrix evidence report ZM-01 (V277; ZONE_MATRIX_CONTRACT.md 7.3). Nothing else is generatable
+ * ({@code report_run.template_id} check). Each template names the read action of every underlying domain it uses
+ * (contract "Masking and RBAC": generating a report also requires those reads).
  */
 public enum ReportTemplate {
     RPT_01("RPT-01", "Executive weekly summary", "Executive",
@@ -32,7 +34,11 @@ public enum ReportTemplate {
             "Which licences, subscriptions and support contracts are expired or expiring within 30 or 90 days, which "
                     + "devices match exploited or critical/high advisories, what Live Patch and hotfix levels are stored, "
                     + "and which devices have no lifecycle read?",
-            List.of(ActionRegistry.DEVICE_READ), false);
+            List.of(ActionRegistry.DEVICE_READ), false),
+    ZM_01("ZM-01", "Zone matrix segmentation evidence", "Compliance / Auditor",
+            "Which firewall rules conflict with the published zone matrix in the period, which policies were evaluated and "
+                    + "how current they are, and how many referenced matrix cells compliance has confirmed?",
+            List.of(ActionRegistry.ZONE_MATRIX_READ), false);
 
     private final String id;
     private final String title;
@@ -75,9 +81,27 @@ public enum ReportTemplate {
         return frameworkParameter;
     }
 
-    /** The file formats R1 generates; the on-screen JSON preview is not a file. */
+    /**
+     * The file formats this template generates; the on-screen JSON preview is not a file. ZM-01 is CSV and PDF only
+     * (ZONE_MATRIX_CONTRACT.md 7.3); an XLSX request for it is refused with {@code INVALID_FORMAT}.
+     */
     public Set<ReportFormat> fileFormats() {
+        if (this == ZM_01) return Set.of(ReportFormat.PDF, ReportFormat.CSV);
         return Set.of(ReportFormat.PDF, ReportFormat.XLSX, ReportFormat.CSV);
+    }
+
+    /** {@link #fileFormats()} in the stable {@link ReportFormat} order, for the catalogue and refusal texts. */
+    public List<ReportFormat> fileFormatsOrdered() {
+        List<ReportFormat> out = new ArrayList<>();
+        for (ReportFormat f : ReportFormat.values()) {
+            if (fileFormats().contains(f)) out.add(f);
+        }
+        return List.copyOf(out);
+    }
+
+    /** True for the template that takes the zone matrix parameters (policy, outcome, blocks appendix opt-in). */
+    public boolean zoneMatrixParameters() {
+        return this == ZM_01;
     }
 
     /** Fail-closed lookup by the persisted id; an unknown id is empty, never a default template. */
