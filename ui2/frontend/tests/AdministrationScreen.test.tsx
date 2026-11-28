@@ -188,7 +188,7 @@ describe("AdministrationScreen tabs", () => {
   it.each([
     ["tab=registry", "Device registry", "Device registry sections", ["Device management", "Inventory exclusions", "Credentials", "SNMP polling", "SSH trust"]],
     ["tab=access", "Access and identity", "Access and identity sections", ["Local identities", "Sessions", "Roles and permissions", "LDAP settings", "SAML sign-in", "Local sign-in"]],
-    ["tab=platform", "Notifications and logging", "Notifications and logging sections", ["Notifications", "Log collection"]],
+    ["tab=platform", "Notifications and logging", "Notifications and logging sections", ["Notifications", "Log collection", "Template catalog"]],
   ])("%s is one screen: its own heading and exactly one tab strip, with no second side menu", (query, heading, tabList, tabs) => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
     renderAt(query);
