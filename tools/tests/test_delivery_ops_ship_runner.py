@@ -529,3 +529,37 @@ def test_ship_fix_brief_inlines_bounded_logs_strips_worktree_paths_and_adds_guar
     assert "PREVIEW E2E FAILED TEST: ui2/e2e/login.spec.ts" in brief
     assert "step-02" not in brief
     assert "nexus-q-" not in brief and "nexus-shiprun" not in brief and "file://" not in brief and "/Users/dev" not in brief
+
+
+# ---- fix brief carries the failing CI test lines -------------------------------------------------------------------
+def test_ci_log_filter_filters_strips_and_caps(ops):
+    lines = ["integ\tRun tests\t2026-11-28T10:00:00.1234567Z noise line"]
+    lines += ["integ\tRun tests\t2026-11-28T10:00:01.0000000Z FooTest > bar() FAILED",
+              "integ\tRun tests\t2026-11-28T10:00:01.0000000Z   AssertionFailedError: expected: <1> but was: <2>",
+              "integ\tRun tests\t2026-11-28T10:00:01.0000000Z   leaked token=abc",
+              "integ\tRun tests\t2026-11-28T10:00:01.0000000Z   Password is x"]
+    lines += [f"integ\tRun tests\t2026-11-28T10:00:02.0000000Z Exception line {i}" for i in range(100)]
+    (ops.tmp / "ci.log").write_text("\n".join(lines) + "\n")
+    r = ops.source("ship-runner.sh", f'ci_log_filter < "{ops.tmp / "ci.log"}"')
+    assert r.returncode == 0, r.stderr
+    out = r.stdout.splitlines()
+    assert "FooTest > bar() FAILED" in out[0]
+    assert not any("noise line" in x or "2026-11-28" in x or "integ" in x for x in out)
+    assert not any(("token" in x.lower()) or ("password" in x.lower()) for x in out)
+    assert len(out) <= 60 and len(r.stdout.encode()) <= 6000
+
+
+def test_ci_failed_excerpt_unavailable_when_gh_fails(ops):
+    why = "pull request checks failed (https://github.com/o/r/pull/42): integration; not merged"
+    r = ops.source("ship-runner.sh", f'gh() {{ echo boom >&2; return 1; }}\nci_failed_excerpt "{why}"; echo rc=$?')
+    assert "CI log excerpt unavailable: boom" in r.stdout and "rc=0" in r.stdout
+    r = ops.source("ship-runner.sh", 'ci_failed_excerpt "something else"; echo rc=$?')
+    assert r.stdout.strip() == "rc=0"
+
+
+def test_ci_failed_excerpt_uses_failed_runs(ops):
+    why = "pull request checks failed (https://github.com/o/r/pull/42): integration; not merged"
+    stub = ('gh() { case "$1 $2" in "pr checks") echo https://github.com/o/r/actions/runs/777/job/1;; '
+            '"run view") printf "j\\ts\\t2026-11-28T10:00:00.0Z X FAILED\\n";; esac; }')
+    r = ops.source("ship-runner.sh", f'{stub}\nci_failed_excerpt "{why}"')
+    assert "run 777" in r.stdout and "X FAILED" in r.stdout

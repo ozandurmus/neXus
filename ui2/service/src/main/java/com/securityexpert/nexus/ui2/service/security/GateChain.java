@@ -180,6 +180,15 @@ public final class GateChain {
         return decision.outcome().proceeds() && !RbacEvaluator.ROOT_AUTHORITY.equals(decision.authority().orElse(null));
     }
 
+    /**
+     * True when the actor is the root identity (break-glass {@code nexusadmin}): it holds every role token, including
+     * {@code role:replay_viewer} (ROLE-1), yet it is the unmasked administrator and never the masked persona.
+     */
+    public boolean isRootAuthority(String actorFingerprint) {
+        RbacEvaluator.Decision decision = rbacEvaluator.evaluate(actorFingerprint, Optional.empty(), Instant.now());
+        return RbacEvaluator.ROOT_AUTHORITY.equals(decision.authority().orElse(null));
+    }
+
     public Optional<GateOutcome.Refused> machineWriteRefusal(Optional<String> rawCookie, String method, Instant now) {
         return machineWriteRefusal(rawCookie, method, now, null);
     }

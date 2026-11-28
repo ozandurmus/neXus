@@ -119,6 +119,11 @@ public final class RouteActionGate {
                             if (identity.isPresent()) {
                                 replayViewer = localRoleTokenResolver.resolve(identity.get().localIdentityId())
                                         .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
+                                // The root identity is bound to every role token (ROLE-1), replay_viewer included; like
+                                // GateChain.isReplayViewer, it is never the masked persona.
+                                if (replayViewer && gateChain != null && gateChain.isRootAuthority(proceed.actorFingerprint())) {
+                                    replayViewer = false;
+                                }
                             } else if (gateChain != null) {
                                 replayViewer = gateChain.isReplayViewer(proceed.actorFingerprint());
                             }
