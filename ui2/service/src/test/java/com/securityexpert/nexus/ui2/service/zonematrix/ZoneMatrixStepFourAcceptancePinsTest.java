@@ -381,11 +381,18 @@ class ZoneMatrixStepFourAcceptancePinsTest {
         String runId = env.runService.submit(policy, null).runId();
         FakeRuns.Row row = env.runs.rows.get(runId);
         assertEquals("FAILED", row.state);
-        assertEquals("ENGINE_ERROR", row.failureReason);
+        assertEquals("HEAP_LIMIT", row.failureReason);
         assertEquals(0, env.runs.completeCalls.get(), "no findings write was attempted");
         assertTrue(env.runs.findings.isEmpty());
         assertTrue(env.runs.runningRunOf(policy).isEmpty(), "the policy is free for the next run");
         assertTrue(env.runs.latestComplete(policy).isEmpty(), "a failed run is never read");
+
+        env.catalog.error = new AssertionError("synthetic non-oom error");
+        String otherRunId = env.runService.submit(policy, null).runId();
+        FakeRuns.Row otherRow = env.runs.rows.get(otherRunId);
+        assertEquals("FAILED", otherRow.state);
+        assertEquals("ENGINE_ERROR", otherRow.failureReason);
+        assertEquals(0, env.runs.completeCalls.get(), "no findings write was attempted");
 
         env.catalog.error = null;
         assertEquals("COMPLETE", env.runs.rows.get(env.runService.submit(policy, null).runId()).state);

@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.zonematrix;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -10,7 +11,11 @@ import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunReposito
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRunRepository.FailureReason;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
+import com.securityexpert.nexus.ui2.service.boot.ZoneMatrixConfiguration;
+import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService.*;
+import com.sun.management.ThreadMXBean;
+import java.lang.management.ManagementFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -19,10 +24,13 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.LongUnaryOperator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * Zone matrix delivery step 4b-1 & 4b-2a: durable runs on the own bounded pool (docs/design/ZONE_MATRIX_CONTRACT.md
@@ -131,6 +139,15 @@ class ZoneMatrixRunServiceTest {
     private ZoneMatrixRunService direct(Matrix m, FakeRuns runs) {
         return service(m, runs, m.catalog(), Duration.ofMinutes(5), new DirectExecutor(),
                 ZoneMatrixRunService.newWatchdog());
+    }
+
+    private ZoneMatrixRunService serviceWithHeap(Matrix m, FakeRuns runs, PolicyCatalog catalog, Duration limit,
+            long heapCeilingBytes, LongUnaryOperator threadAllocatedBytes, ExecutorService pool,
+            ScheduledExecutorService watchdog) {
+        var s = new ZoneMatrixRunService(runs, m.versions, catalog, MAPPER, Clock.fixed(NOW, ZoneOffset.UTC), limit,
+                heapCeilingBytes, threadAllocatedBytes, pool, watchdog);
+        services.add(s);
+        return s;
     }
 
     // ------------------------------------------------------------------ tests
@@ -475,6 +492,243 @@ class ZoneMatrixRunServiceTest {
         } finally {
             logger.detachAppender(appender);
         }
+    }
+
+    @Test
+    void zm39_heapCeilingExceededDuringEvaluationEndsRunFailedWithoutFindings() {
+        var m = new Matrix();
+        m.snapshots.put(POLICY, snapshot(POLICY));
+        var runs = new FakeRuns();
+        long baseline = 100L * 1024L * 1024L;
+        long ceiling = 16L * 1024L * 1024L;
+        AtomicLong allocatedBytes = new AtomicLong(baseline);
+        PolicyCatalog spiking = new PolicyCatalog() {
+            @Override public List<Map<String, Object>> catalogViews() { return List.of(); }
+            @Override public Optional<PolicySnapshot> find(String policyId) {
+                allocatedBytes.set(baseline + ceiling + 1L);
+                try {
+                    Thread.sleep(2_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt(); // the heap watchdog interrupted the run
+                }
+                return Optional.ofNullable(m.snapshots.get(policyId));
+            }
+        };
+        var service = serviceWithHeap(m, runs, spiking, Duration.ofMinutes(5), ceiling, threadId -> allocatedBytes.get(),
+                ZoneMatrixRunService.newPool(), ZoneMatrixRunService.newWatchdog());
+
+        long t0 = System.nanoTime();
+        var submission = service.submit(POLICY, null);
+        service.close();
+        assertTrue(System.nanoTime() - t0 < 1_500_000_000L, "the heap watchdog interrupts the run once over ceiling");
+        FakeRuns.Row row = runs.rows.get(submission.runId());
+        assertEquals("FAILED", row.state);
+        assertEquals("HEAP_LIMIT", row.failureReason);
+        assertEquals(0, runs.completeCalls.get(), "a run over its heap ceiling never reaches the findings write");
+        assertTrue(runs.findings.isEmpty());
+        assertTrue(runs.latestComplete(POLICY).isEmpty());
+        assertTrue(runs.runningRunOf(POLICY).isEmpty());
+    }
+
+    @Test
+    void zm39_heapCeilingExceededAfterEvaluationEndsRunFailedWithoutFindings() {
+        var m = new Matrix();
+        m.snapshots.put(POLICY, snapshot(POLICY));
+        var runs = new FakeRuns();
+        long baseline = 50L * 1024L * 1024L;
+        long ceiling = 8L * 1024L * 1024L;
+        AtomicInteger samples = new AtomicInteger();
+        // Sample 1 = baseline at run start; sample 2 = post-find (within ceiling); sample 3 = post-compile (within);
+        // sample 4 = post-evaluate (exceeds ceiling by 1 byte -> must fail HEAP_LIMIT before runs.complete).
+        LongUnaryOperator heap = threadId -> Thread.currentThread().threadId() == threadId
+                && samples.incrementAndGet() >= 4 ? baseline + ceiling + 1L : baseline;
+        var service = serviceWithHeap(m, runs, m.catalog(), Duration.ofMinutes(5), ceiling, heap,
+                new DirectExecutor(), ZoneMatrixRunService.newWatchdog());
+
+        var submission = service.submit(POLICY, null);
+        FakeRuns.Row row = runs.rows.get(submission.runId());
+        assertEquals("FAILED", row.state);
+        assertEquals("HEAP_LIMIT", row.failureReason);
+        assertEquals(0, runs.completeCalls.get(), "post-evaluate heap check blocks complete()");
+        assertTrue(runs.findings.isEmpty());
+        assertTrue(runs.latestComplete(POLICY).isEmpty());
+    }
+
+    @Test
+    void zm39_runWithinHeapCeilingCompletes() {
+        var m = new Matrix();
+        m.snapshots.put(POLICY, snapshot(POLICY));
+        var runs = new FakeRuns();
+        long baseline = 64L * 1024L * 1024L;
+        long ceiling = 16L * 1024L * 1024L;
+        AtomicInteger samples = new AtomicInteger();
+        // Baseline on first read, exactly at ceiling (not exceeding) thereafter.
+        LongUnaryOperator heap = threadId -> samples.getAndIncrement() == 0 ? baseline : baseline + ceiling;
+        var service = serviceWithHeap(m, runs, m.catalog(), Duration.ofMinutes(5), ceiling, heap,
+                new DirectExecutor(), ZoneMatrixRunService.newWatchdog());
+
+        var submission = service.submit(POLICY, null);
+        FakeRuns.Row row = runs.rows.get(submission.runId());
+        assertEquals("COMPLETE", row.state);
+        assertNull(row.failureReason);
+        assertEquals(2, runs.findingsOf(submission.runId()).size());
+        assertEquals(submission.runId(), runs.latestComplete(POLICY).orElseThrow().runId());
+    }
+
+    @Test
+    void zm39_realThreadAllocationsTripOnlyTheAllocatingRun() throws InterruptedException {
+        assumeTrue(ManagementFactory.getThreadMXBean() instanceof ThreadMXBean bean
+                && bean.isThreadAllocatedMemorySupported() && bean.isThreadAllocatedMemoryEnabled(),
+                "requires JVM thread allocation accounting");
+        var m = new Matrix();
+        var runs = new FakeRuns();
+        String allocatingPolicy = "pol-allocating";
+        m.snapshots.put(POLICY, snapshot(POLICY));
+        m.snapshots.put(allocatingPolicy, snapshot(allocatingPolicy));
+        int ceiling = 8 * 1024 * 1024;
+        int allocationBytes = 2 * ceiling;
+        // Keep the allocation live across both runs' checks, and make it escape so it cannot be optimized away.
+        var allocation = new AtomicReference<byte[]>();
+        var quietEntered = new CountDownLatch(1);
+        var allocatingInterrupted = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        PolicyCatalog catalog = new PolicyCatalog() {
+            @Override public List<Map<String, Object>> catalogViews() { return List.of(); }
+            @Override public Optional<PolicySnapshot> find(String policyId) {
+                boolean allocating = allocatingPolicy.equals(policyId);
+                if (allocating) allocation.set(new byte[allocationBytes]);
+                else quietEntered.countDown();
+                try {
+                    release.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    if (allocating) allocatingInterrupted.countDown();
+                }
+                return Optional.of(m.snapshots.get(policyId));
+            }
+        };
+        var service = new ZoneMatrixRunService(runs, m.versions, catalog, MAPPER, Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofMinutes(5), ceiling);
+        services.add(service);
+
+        String quietRun = service.submit(POLICY, null).runId();
+        String allocatingRun;
+        try {
+            assertTrue(quietEntered.await(5, TimeUnit.SECONDS), "the quiet run takes its baseline first");
+            allocatingRun = service.submit(allocatingPolicy, null).runId();
+            assertTrue(allocatingInterrupted.await(5, TimeUnit.SECONDS), "the watchdog sees the worker's allocation");
+            assertEquals(Optional.of(quietRun), runs.runningRunOf(POLICY));
+        } finally {
+            release.countDown();
+        }
+        service.close();
+        assertEquals("FAILED", runs.rows.get(allocatingRun).state);
+        assertEquals("HEAP_LIMIT", runs.rows.get(allocatingRun).failureReason);
+        assertTrue(runs.findingsOf(allocatingRun).isEmpty());
+        assertEquals("COMPLETE", runs.rows.get(quietRun).state);
+        assertEquals(2, runs.findingsOf(quietRun).size());
+        assertEquals(allocationBytes, allocation.get().length);
+    }
+
+    @Test
+    void zm39_unavailableAllocationBaselineDoesNotFabricateHeapLimit() {
+        var m = new Matrix();
+        m.snapshots.put(POLICY, snapshot(POLICY));
+        var runs = new FakeRuns();
+        AtomicInteger samples = new AtomicInteger();
+        // If a counter becomes available mid-run, its lifetime total cannot substitute for a missing baseline.
+        LongUnaryOperator heap = threadId -> samples.getAndIncrement() == 0 ? -1L : Long.MAX_VALUE;
+        var service = serviceWithHeap(m, runs, m.catalog(), Duration.ofMinutes(5),
+                ZoneMatrixRunService.DEFAULT_HEAP_CEILING_BYTES, heap,
+                new DirectExecutor(), ZoneMatrixRunService.newWatchdog());
+
+        String runId = service.submit(POLICY, null).runId();
+        assertEquals("COMPLETE", runs.rows.get(runId).state);
+        assertNull(runs.rows.get(runId).failureReason);
+        assertEquals(2, runs.findingsOf(runId).size());
+    }
+
+    @Test
+    void zm39_outOfMemoryErrorEndsRunFailedHeapLimitWithoutFindings() {
+        var m = new Matrix();
+        var runs = new FakeRuns();
+        PolicyCatalog oomCatalog = new PolicyCatalog() {
+            @Override public List<Map<String, Object>> catalogViews() { return List.of(); }
+            @Override public Optional<PolicySnapshot> find(String policyId) {
+                throw new OutOfMemoryError("PLANTED-OOM-192.0.2.99");
+            }
+        };
+        var service = serviceWithHeap(m, runs, oomCatalog, Duration.ofMinutes(5),
+                ZoneMatrixRunService.DEFAULT_HEAP_CEILING_BYTES, threadId -> -1L,
+                new DirectExecutor(), ZoneMatrixRunService.newWatchdog());
+
+        var submission = service.submit(POLICY, null);
+        FakeRuns.Row row = runs.rows.get(submission.runId());
+        assertEquals("FAILED", row.state);
+        assertEquals("HEAP_LIMIT", row.failureReason);
+        assertEquals(0, runs.completeCalls.get());
+        assertTrue(runs.findings.isEmpty());
+    }
+
+    @Test
+    void zm10_heapLimitFailureLogsCarryIdsAndFailureCodeOnly() {
+        var m = new Matrix();
+        m.snapshots.put(POLICY, snapshot(POLICY));
+        var runs = new FakeRuns();
+        long baseline = 32L * 1024L * 1024L;
+        long ceiling = 4L * 1024L * 1024L;
+        AtomicInteger samples = new AtomicInteger();
+        LongUnaryOperator heap = threadId -> samples.getAndIncrement() == 0 ? baseline : baseline + ceiling + 1024L;
+        Logger logger = (Logger) LoggerFactory.getLogger(ZoneMatrixRunService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            var service = serviceWithHeap(m, runs, m.catalog(), Duration.ofMinutes(5), ceiling, heap,
+                    new DirectExecutor(), ZoneMatrixRunService.newWatchdog());
+            String runId = service.submit(POLICY, null).runId();
+
+            List<String> lines = appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+            assertTrue(lines.stream().anyMatch(l -> l.startsWith("zone_matrix_run_failed")
+                    && l.contains("run_id=" + runId)
+                    && l.contains("policy_id=" + POLICY)
+                    && l.contains("version_id=" + m.versionId)
+                    && l.contains("version_number=" + m.versionNumber)
+                    && l.contains("content_sha256=" + m.contentSha256)
+                    && l.contains("state=FAILED")
+                    && l.contains("failure_reason=HEAP_LIMIT")
+                    && l.contains("findings=0")
+                    && l.contains("duration_ms=")), lines.toString());
+            for (String line : lines) {
+                for (String planted : List.of("ZONE-ALPHA", "ZONE-BRAVO", "192.0.2.", "198.51.100.", "PLANTED-",
+                        "FW-TANGO-04", "FW-JULIET-06", "DOM-BRAVO-02", "tcp/22", "web tier")) {
+                    assertFalse(line.contains(planted), "log line carries " + planted + ": " + line);
+                }
+            }
+            for (ILoggingEvent event : appender.list) assertNull(event.getThrowableProxy(), "no stack trace or message");
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void configurationValidatesAndWiresHeapCeilingMb() {
+        var m = new Matrix();
+        var runs = new FakeRuns();
+        var config = new ZoneMatrixConfiguration();
+        ObjectProvider<PolicyQueryService> emptyPolicies = new ObjectProvider<>() {
+            @Override public PolicyQueryService getObject() { return null; }
+            @Override public PolicyQueryService getObject(Object... args) { return null; }
+            @Override public PolicyQueryService getIfAvailable() { return null; }
+            @Override public PolicyQueryService getIfUnique() { return null; }
+        };
+        assertThrows(IllegalArgumentException.class,
+                () -> config.zoneMatrixRunService(runs, m.versions, emptyPolicies, 30L, 0L));
+        assertThrows(IllegalArgumentException.class,
+                () -> config.zoneMatrixRunService(runs, m.versions, emptyPolicies, 30L, -5L));
+        ZoneMatrixRunService wired = config.zoneMatrixRunService(runs, m.versions, emptyPolicies, 30L, 512L);
+        services.add(wired);
+        assertEquals(ZoneMatrixRunService.DEFAULT_HEAP_CEILING_BYTES, wired.heapCeilingBytes());
     }
 
     // ------------------------------------------------------------------ fakes

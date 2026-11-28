@@ -237,4 +237,54 @@ class ZoneMatrixSchemaTest {
             }
         }
     }
+
+    @Test void v278WidensFailureReasonCheckForHeapLimitAndIsDryRunnable() throws Exception {
+        try (Connection db = fixture.migrateConnection(); var s = db.createStatement()) {
+            try (var rows = s.executeQuery("SELECT convalidated, pg_get_constraintdef(oid) "
+                    + "FROM pg_constraint WHERE conrelid = 'public.zone_matrix_run'::regclass "
+                    + "AND conname = 'chk_zone_matrix_run_failure_reason'")) {
+                assertTrue(rows.next(), "V278 named failure_reason CHECK constraint must exist");
+                assertTrue(rows.getBoolean(1), "chk_zone_matrix_run_failure_reason must be validated");
+                String def = rows.getString(2);
+                assertTrue(def.contains("HEAP_LIMIT"), def);
+                assertTrue(def.contains("TIME_LIMIT"), def);
+                assertTrue(def.contains("STORE_ERROR"), def);
+            }
+            String v278;
+            try (var resource = getClass().getResourceAsStream(
+                    "/db/migration/V278__zone_matrix_run_heap_limit_failure_reason.sql")) {
+                assertNotNull(resource);
+                v278 = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            db.setAutoCommit(false);
+            s.execute(v278);
+            db.rollback();
+            db.setAutoCommit(true);
+        }
+        try (Connection db = fixture.appConnection(); var s = db.createStatement()) {
+            db.setAutoCommit(false);
+            s.execute("INSERT INTO zone_matrix_version (version_id, number, state, revision, content, content_sha256, "
+                    + "created_by, updated_by, published_by, published_at) VALUES ('" + ID + "', 1, 'ACTIVE', 1, '{}', '"
+                    + SHA + "', 'synthetic-a', 'synthetic-a', 'synthetic-b', now())");
+            String runId = "00000000-0000-4000-8000-000000000276";
+            s.execute("INSERT INTO zone_matrix_run (run_id, version_id, version_number, content_sha256, policy_source_id, "
+                    + "engine_version, state, failure_reason, started_at, finished_at) VALUES ('" + runId + "', '" + ID
+                    + "', 1, '" + SHA + "', 'pol-v276', 'step3-v1', 'FAILED', 'HEAP_LIMIT', now(), now())");
+            s.execute("SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute(
+                    "INSERT INTO zone_matrix_run (run_id, version_id, version_number, content_sha256, policy_source_id, "
+                            + "engine_version, state, failure_reason, started_at, finished_at) VALUES "
+                            + "('00000000-0000-4000-8000-000000000277', '" + ID + "', 1, '" + SHA
+                            + "', 'pol-v276-bad', 'step3-v1', 'FAILED', 'UNKNOWN_CODE', now(), now())"));
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute(
+                    "INSERT INTO zone_matrix_run (run_id, version_id, version_number, content_sha256, policy_source_id, "
+                            + "engine_version, state, failure_reason, started_at, finished_at) VALUES "
+                            + "('00000000-0000-4000-8000-000000000278', '" + ID + "', 1, '" + SHA
+                            + "', 'pol-v276-null', 'step3-v1', 'FAILED', NULL, now(), now())"),
+                    "V267 (state = 'FAILED') = (failure_reason IS NOT NULL) constraint must stay intact");
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            db.rollback();
+        }
+    }
 }

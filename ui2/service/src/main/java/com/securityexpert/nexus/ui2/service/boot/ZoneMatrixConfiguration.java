@@ -81,9 +81,14 @@ public class ZoneMatrixConfiguration {
             ZoneMatrixRunRepository runs,
             ZoneMatrixRepository versions,
             ObjectProvider<PolicyQueryService> policies,
-            @Value("${ui2.zone-matrix.run-time-limit-seconds:30}") long timeLimitSeconds) {
+            @Value("${ui2.zone-matrix.run-time-limit-seconds:30}") long timeLimitSeconds,
+            @Value("${ui2.zone-matrix.run-heap-ceiling-mb:512}") long heapCeilingMb) {
+        if (heapCeilingMb < 1L) {
+            throw new IllegalArgumentException("ui2.zone-matrix.run-heap-ceiling-mb must be at least 1");
+        }
         return new ZoneMatrixRunService(runs, versions, ZoneMatrixRunService.catalogOf(policies.getIfAvailable()),
-                new ObjectMapper(), Clock.systemUTC(), Duration.ofSeconds(timeLimitSeconds));
+                new ObjectMapper(), Clock.systemUTC(), Duration.ofSeconds(timeLimitSeconds),
+                Math.multiplyExact(heapCeilingMb, 1024L * 1024L));
     }
 
     /** Section 5.1: a run left RUNNING by a pod kill is set FAILED at startup; only the count is logged. */
